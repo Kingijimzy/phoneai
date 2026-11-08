@@ -28,7 +28,7 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.PYTHON -> OrionPythonCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.SHELL -> tool in setOf("shell", "termux_command")
-        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty", "project_create", "project_list", "project_inspect", "project_plan", "project_verify", "document_extract")
+        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty", "project_create", "project_list", "project_inspect", "project_plan", "project_verify", "document_extract", "image_read", "image_generate")
         OrionCapabilityAdapters.Backend.BROWSER -> tool in setOf(
             "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
             "browser_click", "browser_click_verify", "browser_type", "browser_scroll",
@@ -207,11 +207,9 @@ internal object OrionRuntimeCapabilityExecutor {
                 val state = OrionSoulLifecycle.state(service)
                 "Soul Engine: ${OrionSoulLifecycle.label(service)} (${OrionSoulLifecycle.millisInState(service)} ms in state; last: ${OrionSoulLifecycle.lastAction(service)})"
             }
-            "document_extract" -> {
-                val uri = args.optString("uri", "")
-                if (uri.isBlank()) "error: document_extract requires a content URI from the file picker; use the attachment UI to select a document first."
-                else "error: document_extract requires the file-picker activity to pass a content URI; call it from the document attachment flow, not directly from chat."
-            }
+            "document_extract" -> OrionMediaTools.readDocument(service, args.optString("path").ifBlank { args.optString("uri") })
+            "image_read" -> OrionMediaTools.readImage(service, args.optString("path").ifBlank { args.optString("uri") })
+            "image_generate" -> OrionMediaTools.generateImage(service, args.optString("prompt"), args.optString("model"), args.optString("size"))
             else -> null
         }
         else -> null

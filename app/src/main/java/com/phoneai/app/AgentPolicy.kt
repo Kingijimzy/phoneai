@@ -122,7 +122,7 @@ object AgentPolicy {
         "model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state",
         "proactive_check", "proactive_status", "followup_add", "followup_list", "followup_done", "quiet_period_set" -> "orion_core"
         "chronos_awareness", "calendar_events", "voice_speak", "voice_listen" -> "phone_control"
-        "document_extract", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty",
+        "document_extract", "image_read", "image_generate", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty",
         "dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan", "dev_summary",
         "macro_save", "macro_run", "macro_list", "macro_delete" -> "workspace_shell"
         "github_account_read", "gmail_list_messages" -> "connected_services"
@@ -140,7 +140,7 @@ object AgentPolicy {
         "key", "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify", "browser_click",
         "browser_click_verify", "browser_type", "browser_scroll", "browser_navigate", "browser_back", "browser_tabs",
         "browser_upload", "browser_handoff", "browser_wait", "browser_close", "settings", "dial", "alarm", "timer",
-        "volume", "flashlight", "copy", "clipboard_read", "battery", "time", "device_info", "integration_status", "mcp_status",
+        "volume", "flashlight", "copy", "clipboard_read", "call_status", "call_place", "call_answer", "call_end", "battery", "time", "device_info", "integration_status", "mcp_status",
         "mcp_list_tools", "mcp_call", "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt", "record_screen" -> "phone_control"
         "remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "knowledge_search", "ask_agent", "queue_agent", "specialist_job_status", "undo_last", "undo_status",
         "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "ask_user" -> "orion_core"

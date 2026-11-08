@@ -23,7 +23,7 @@ internal object OrionCapabilityAdapters {
             "python_exec", "workspace_list", "extension_list", "extension_create", "extension_update", "extension_test",
             "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback"
         ),
-        Backend.FILES to setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty", "project_create", "project_list", "project_inspect", "project_plan", "project_verify", "document_extract"),
+        Backend.FILES to setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty", "project_create", "project_list", "project_inspect", "project_plan", "project_verify", "document_extract", "image_read", "image_generate"),
         Backend.BROWSER to setOf(
             "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
             "browser_click", "browser_click_verify", "browser_type", "browser_scroll",
@@ -52,7 +52,7 @@ internal object OrionCapabilityAdapters {
             "proactive_check", "proactive_status", "followup_add", "followup_list", "followup_done", "quiet_period_set"),
         Backend.RESEARCH to setOf("web_search", "live_news", "live_web_search", "fetch_url", "research_web",
             "weather", "github_public", "github_search_repositories", "bybit_public_ticker", "live_sports"),
-        Backend.UTILITIES to setOf("settings", "alarm", "timer", "volume", "flashlight", "copy", "clipboard_read",
+        Backend.UTILITIES to setOf("settings", "alarm", "timer", "volume", "flashlight", "copy", "clipboard_read", "call_status", "call_place", "call_answer", "call_end",
             "battery", "time", "wait", "device_info", "device_location"),
         Backend.TRADING_READONLY to setOf("trade_history_summary"),
         Backend.TRADING_DESK to setOf("trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan", "strategy_backtest", "market_forecast", "market_conditions", "strategy_list", "strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch", "positions_monitor", "bybit_sync", "habit_report", "crypto_derivatives", "memecoin_check", "memecoin_watch", "wallet_check", "wallet_watch", "chain_overview"),

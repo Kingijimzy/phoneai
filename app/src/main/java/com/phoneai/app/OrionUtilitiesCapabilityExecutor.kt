@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 internal object OrionUtilitiesCapabilityExecutor {
     private val supportedTools = setOf(
-        "settings", "alarm", "timer", "volume", "flashlight", "copy", "clipboard_read", "battery",
+        "settings", "alarm", "timer", "volume", "flashlight", "copy", "clipboard_read", "call_status", "call_place", "call_answer", "call_end", "battery",
         "time", "wait", "device_info", "device_location"
     )
 
@@ -45,6 +45,10 @@ internal object OrionUtilitiesCapabilityExecutor {
             "flashlight" -> tools.flashlight(args.optBoolean("on", true))
             "copy" -> tools.copy(args.optString("text"))
             "clipboard_read" -> tools.clipboardRead()
+            "call_status" -> tools.callStatus()
+            "call_place" -> tools.callPlace(args.optString("number"))
+            "call_answer" -> tools.callAnswer()
+            "call_end" -> tools.callEnd()
             "battery" -> tools.battery()
             "time" -> tools.time()
             "device_info" -> tools.deviceInfo()
