@@ -161,7 +161,7 @@ class TermuxBridgeActivity : Activity() {
             append("Termux app: ").append(if (installed) "installed" else "not installed").append("\n")
             append("Bridge pack: ").append(if (enabled) "enabled" else "OFF").append("\n")
             append("RUN_COMMAND permission: ").append(if (permission) "granted" else "not granted").append("\n")
-            append("Approval mode: ").append(AgentPolicy.mode(this@TermuxBridgeActivity).label).append("\n")
+            append("Approval mode: ").append(ToolPermissionPolicy.levelLabel(ToolPermissions.level(this@TermuxBridgeActivity))).append("\n")
             append("Session budget: ").append(commandsThisSession).append("/")
                 .append(minOf(AgentPolicy.maxCalls(this@TermuxBridgeActivity), AgentPolicy.maxSteps(this@TermuxBridgeActivity)))
                 .append(" commands · ").append(AgentPolicy.maxMinutes(this@TermuxBridgeActivity)).append(" min")

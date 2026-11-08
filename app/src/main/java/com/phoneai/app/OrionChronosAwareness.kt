@@ -149,6 +149,10 @@ internal object OrionChronosAwareness {
         val batteryLevel: Int?,
         val isCharging: Boolean,
         val networkType: String?,
-        val isPowerSaveMode: Boolean
+        val isPowerSaveMode: Boolean,
+        val currentAppPackage: String? = null,
+        val screenState: ScreenState = ScreenState.UNKNOWN
     )
+
+    enum class ScreenState { ON, OFF, UNKNOWN }
 }

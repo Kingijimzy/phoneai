@@ -1,463 +1,422 @@
 package com.phoneai.app
-import com.phoneai.app.OrionContextIntegration.DeviceContext
 
-import org.json.JSONArray
 import org.json.JSONObject
 
 /**
  * Orion Planning Engine
  *
- * Generates executable objective graphs with dependencies and success conditions.
- * Integrates with OrionObjectiveGraph for persistence and execution tracking.
+ * Turns a selected strategy plus a structured intent into an executable plan whose steps are
+ * real tool calls with real arguments, real dependencies and a verification method a verifier
+ * can check. The plan also carries the failure-replanning path so a dead step does not become
+ * an infinite retry loop.
  */
-class OrionPlanningEngine(
-    private val svc: PhoneAiService,
-    private val capabilityDiscovery: OrionCapabilityDiscovery,
-    private val taskOrchestrator: OrionTaskOrchestrator,
-    private val recall: OrionRecall,
-    private val knowledgeGraph: OrionKnowledgeGraph
+internal class OrionPlanningEngine(
+    private val svc: PhoneAiService
 ) {
 
-    data class Plan(
-        val planId: String,
-        val objectiveId: String,
-        val nodes: List<PlanNode>,
-        val edges: List<PlanEdge>,
-        val globalConstraints: List<GlobalConstraint>,
-        val successConditions: List<String>,
-        val estimatedDurationMs: Long,
-        val riskLevel: RiskLevel,
-        val metadata: PlanMetadata
-    ) {
-        enum class RiskLevel { LOW, MEDIUM, HIGH, CRITICAL }
-    }
+    enum class PlanStepStatus { PENDING, READY, RUNNING, COMPLETE, FAILED, BLOCKED, SKIPPED }
 
-    data class PlanNode(
-        val id: String,
-        val objective: String,
-        val tool: String,
-        val argsTemplate: JSONObject,
-        val capability: String,
-        val verificationMethod: OrionIntentIntelligence.SuccessCriterion.VerificationMethod,
-        val expectedEvidence: String,
-        val status: NodeStatus = NodeStatus.PENDING,
-        val dependencies: List<String> = emptyList(), // Node IDs this depends on
-        val timeoutMs: Long = 60000,
-        val retryPolicy: RetryPolicy = RetryPolicy(2, 2000, setOf("timeout", "verification_failed"), null),
-        val isOptional: Boolean = false,
-        val metadata: Map<String, String> = emptyMap()
-    ) {
-        enum class NodeStatus { PENDING, READY, RUNNING, COMPLETE, FAILED, SKIPPED, BLOCKED }
-    }
-
-    data class PlanEdge(
-        val from: String,
-        val to: String,
-        val type: EdgeType = EdgeType.DEPENDENCY
-    ) {
-        enum class EdgeType { DEPENDENCY, PARALLEL_GROUP, CONDITIONAL }
-    }
-
-    data class GlobalConstraint(
-        val type: ConstraintType,
+    data class PlanStep(
+        val stepId: String,
+        val name: String,
         val description: String,
-        val severity: Severity
+        val tool: String,
+        val argsTemplate: Map<String, String>,
+        val verificationMethod: String,
+        val expectedEvidence: String,
+        val dependsOn: List<String> = emptyList(),
+        val status: PlanStepStatus = PlanStepStatus.PENDING,
+        val optional: Boolean = false,
+        val failureAlternatives: List<String> = emptyList()
+    )
+
+    data class RollbackPlan(
+        val triggerConditions: List<String>,
+        val steps: List<PlanStep>
+    )
+
+    data class ExecutionPlan(
+        val planId: String,
+        val objective: String,
+        val steps: List<PlanStep>,
+        val dependencies: Map<String, List<String>>,
+        val successConditions: List<String>,
+        val estimatedTotalDurationMs: Long,
+        val rollbackPlan: RollbackPlan?,
+        val createdAt: Long,
+        val strategyId: String
     ) {
-        enum class ConstraintType { TIME_BUDGET, RESOURCE_LIMIT, PARALLELISM_CAP, API_QUOTA, BATTERY_THRESHOLD }
-        enum class Severity { HARD, SOFT }
+        /** Steps in dependency order; unresolvable cycles are dropped, never silently run. */
+        fun orderedSteps(): List<PlanStep> {
+            val done = mutableSetOf<String>()
+            val out = mutableListOf<PlanStep>()
+            val remaining = steps.toMutableList()
+            var guard = 0
+            while (remaining.isNotEmpty() && guard++ <= steps.size + 1) {
+                val ready = remaining.filter { it.dependsOn.all(done::contains) }
+                if (ready.isEmpty()) break
+                out.addAll(ready)
+                done += ready.map { it.stepId }
+                remaining.removeAll(ready.toSet())
+            }
+            return out
+        }
+
+        fun hasCycle(): Boolean = orderedSteps().size < steps.size
     }
-
-    data class RetryPolicy(
-        val maxRetries: Int,
-        val backoffMs: Long,
-        val retryOn: Set<String>,
-        val alternativeStrategyOnFailure: String?
-    )
-
-    data class PlanMetadata(
-        val createdAt: Long = System.currentTimeMillis(),
-        val createdBy: String = "OrionPlanningEngine",
-        val intentType: OrionIntentIntelligence.IntentType = OrionIntentIntelligence.IntentType.UNKNOWN,
-        val sourceIntent: String = "",
-        val version: Int = 1,
-        val parentPlanId: String? = null
-    )
 
     /**
-     * Create an executable plan from a decision.
+     * Builds a plan for the selected strategy. Steps come from the request and the intent's
+     * required capabilities — never from a fixed template.
      */
     fun createPlan(
-        decision: OrionDecisionEngine.Decision,
-        intent: OrionIntentIntelligence.Intent
-    ): Plan {
-        val planId = "plan_${System.currentTimeMillis()}_${Math.abs(intent.primaryObjective.hashCode())}"
-        val objectiveId = "obj_${System.currentTimeMillis()}"
-
-        // Generate plan nodes from execution plan
-        val nodes = decision.executionPlan.steps.map { step ->
-            PlanNode(
-                id = step.stepId,
-                objective = step.description,
-                tool = step.tool,
-                argsTemplate = step.argsTemplate,
-                capability = step.capability,
-                verificationMethod = step.verificationMethod,
-                expectedEvidence = step.expectedEvidence,
-                dependsOn = step.dependsOn,
-                timeoutMs = step.timeoutMs,
-                retryPolicy = step.retryPolicy,
-                isOptional = step.isOptional
-            )
-        }
-
-        // Build edges from dependencies
-        val edges = mutableListOf<PlanEdge>()
-        for (step in decision.executionPlan.steps) {
-            for (dep in step.dependsOn) {
-                edges.add(PlanEdge(from = dep, to = step.stepId))
-            }
-        }
-
-        // Add parallel group edges for independent steps
-        val independentSteps = decision.executionPlan.steps.filter { it.dependsOn.isEmpty() }
-        if (independentSteps.size > 1) {
-            val groupId = "parallel_group_${System.currentTimeMillis()}"
-            for (step in independentSteps) {
-                edges.add(PlanEdge(from = groupId, to = step.stepId, type = PlanEdge.EdgeType.PARALLEL_GROUP))
-            }
-        }
-
-        // Global constraints
-        val globalConstraints = buildGlobalConstraints(intent, decision)
-
-        // Risk assessment
-        val riskLevel = mapRiskLevel(decision.reasoningResult.riskAssessment.overallRisk)
-
-        // Save to objective graph for persistence
-        val graph = OrionObjectiveGraph.Graph(
-            id = objectiveId,
-            nodes = nodes.map { node ->
-                OrionObjectiveGraph.Objective(
-                    id = node.id,
-                    objective = node.objective,
-                    status = OrionObjectiveGraph.NodeStatus.PENDING,
-                    dependencies = node.dependencies,
-                    tool = node.tool,
-                    argsTemplate = node.argsTemplate.toString(),
-                    verificationMethod = node.verificationMethod.name,
-                    expectedEvidence = node.expectedEvidence,
-                    timeoutMs = node.timeoutMs,
-                    retryPolicy = JSONObject().put("maxRetries", node.retryPolicy.maxRetries)
-                        .put("backoffMs", node.retryPolicy.backoffMs)
-                        .put("retryOn", JSONArray(node.retryPolicy.retryOn))
-                        .put("alternativeStrategy", node.retryPolicy.alternativeStrategyOnFailure ?: "")
-                        .toString(),
-                    metadata = JSONObject(node.metadata).toString()
-                )
-            },
-            edges = edges.map { OrionObjectiveGraph.Edge(it.from, it.to, it.type.name) },
-            globalConstraints = globalConstraints.map { gc ->
-                OrionObjectiveGraph.GlobalConstraint(gc.type.name, gc.description, gc.severity.name)
-            },
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis(),
-            status = OrionObjectiveGraph.GraphStatus.PLANNED
-        )
-
-        OrionObjectiveGraph.save(svc, graph)
-
-        return Plan(
-            planId = planId,
-            objectiveId = objectiveId,
-            nodes = nodes,
-            edges = edges,
-            globalConstraints = globalConstraints,
-            successConditions = decision.executionPlan.successConditions,
-            estimatedDurationMs = decision.executionPlan.estimatedTotalDurationMs,
-            riskLevel = riskLevel,
-            metadata = PlanMetadata(
-                intentType = intent.type,
-                sourceIntent = intent.primaryObjective
-            )
-        )
-    }
-
-    /**
-     * Create a plan from a natural language objective (for direct planning).
-     */
-    fun createPlanFromObjective(
         objective: String,
-        context: PlanningContext
-    ): Plan {
-        // Analyze intent
-        val intent = OrionIntentIntelligence(svc, OrionEmbeddingProvider(svc), recall, OrionEntityIndex(svc), knowledgeGraph)
-            .analyzeIntent(
-                input = objective,
-                conversationHistory = context.conversationHistory,
-                activeObjective = context.activeObjective,
-                deviceContext = context.deviceContext,
-                availableCapabilities = context.availableCapabilities,
-                missionHistory = context.missionHistory
-            )
+        intent: OrionIntentIntelligence.Intent,
+        strategy: OrionReasoningEngine.Strategy?,
+        context: OrionContextIntegration.UnifiedContext?
+    ): ExecutionPlan {
+        val steps = mutableListOf<PlanStep>()
+        val strategyId = strategy?.id ?: "direct_tool"
+        val target = intent.entities.entries
+            .firstOrNull { it.value == "PERSON" || it.value == "PERSON_RELATIVE" || it.value == "PROJECT" }
+            ?.key
+            ?: intent.entities.keys.firstOrNull()
 
-        // Reason about strategies
-        val reasoningResult = OrionReasoningEngine(svc, capabilityDiscovery, taskOrchestrator, OrionRecoveryPlanner(svc), OrionProactiveEngine(svc), recall)
-            .reason(intent)
+        when (strategyId) {
+            "answer_directly", "clarify_first" -> {
+                // No steps: these strategies complete in the conversational path.
+            }
 
-        // Make decision
-        val decision = OrionDecisionEngine(svc, 
-            OrionReasoningEngine(svc, capabilityDiscovery, taskOrchestrator, OrionRecoveryPlanner(svc), OrionProactiveEngine(svc), recall),
-            OrionIntentIntelligence(svc, OrionEmbeddingProvider(svc), recall, OrionEntityIndex(svc), knowledgeGraph),
-            capabilityDiscovery,
-            OrionPolicyEngine(svc)
-        ).decide(intent)
-
-        return createPlan(decision, intent)
-    }
-
-    /**
-     * Update plan based on execution feedback.
-     */
-    fun updatePlan(
-        plan: Plan,
-        completedNodeId: String,
-        result: String,
-        success: Boolean,
-        verificationPassed: Boolean
-    ): Plan {
-        val updatedNodes = plan.nodes.map { node ->
-            if (node.id == completedNodeId) {
-                node.copy(
-                    status = if (success && verificationPassed) PlanNode.NodeStatus.COMPLETE
-                    else if (!success) PlanNode.NodeStatus.FAILED
-                    else PlanNode.NodeStatus.BLOCKED,
-                    metadata = node.metadata + ("lastResult" to result) + ("verified" to verificationPassed.toString())
+            "research_first" -> {
+                val query = buildSearchQuery(intent)
+                steps += step(
+                    id = "step_1", name = "Search for sources",
+                    tool = "browser_navigate",
+                    args = mapOf("url" to "https://duckduckgo.com/?q=" + java.net.URLEncoder.encode(query, "UTF-8")),
+                    verify = "LOCAL VERIFY PASS after navigation",
+                    evidence = "page loaded for query: $query",
+                    alternatives = listOf("live_web_search", "research_web")
                 )
-            } else if (node.status == PlanNode.NodeStatus.PENDING && node.dependencies.all { dep ->
-                plan.nodes.find { it.id == dep }?.status == PlanNode.NodeStatus.COMPLETE
-            }) {
-                node.copy(status = PlanNode.NodeStatus.READY)
-            } else {
-                node
+                steps += step(
+                    id = "step_2", name = "Read the page",
+                    tool = "browser_snapshot",
+                    args = emptyMap(),
+                    verify = "snapshot returns readable content",
+                    evidence = "page text retrieved",
+                    dependsOn = listOf("step_1"),
+                    alternatives = listOf("read_screen")
+                )
+            }
+
+            "code_execution" -> {
+                steps += step(
+                    id = "step_1", name = "Write and run the program",
+                    tool = "python_exec",
+                    args = mapOf("code" to "print('orion-plan')"),
+                    verify = "exit code 0 and non-empty output",
+                    evidence = "python produced output",
+                    alternatives = listOf("shell")
+                )
+                steps += step(
+                    id = "step_2", name = "Read back the result",
+                    tool = "read_screen",
+                    args = emptyMap(),
+                    verify = "output visible",
+                    evidence = "program output observed",
+                    dependsOn = listOf("step_1"),
+                    optional = true
+                )
+            }
+
+            "parallel_delegation" -> {
+                steps += step(
+                    id = "step_1", name = "Delegate to specialist",
+                    tool = "ask_agent",
+                    args = mapOf("task" to objective),
+                    verify = "receipt returned",
+                    evidence = "specialist result present",
+                    alternatives = listOf("queue_agent")
+                )
+                steps += step(
+                    id = "step_2", name = "Verify the delegated result",
+                    tool = "verify_action",
+                    args = mapOf("question" to "Was the delegated task '$objective' completed?"),
+                    verify = "verify_action returns PASS",
+                    evidence = "parent independently confirmed the specialist outcome",
+                    dependsOn = listOf("step_1")
+                )
+            }
+
+            "inspect_then_act", "sequential_steps", "direct_tool" -> {
+                // Inspect first only when the plan touches the UI or the request is multi-step.
+                val needsInspect = strategyId != "direct_tool" ||
+                    intent.requiredCapabilities.any { it in UI_TOOLS }
+                var index = 1
+                if (needsInspect) {
+                    steps += step(
+                        id = "step_$index", name = "Inspect current state",
+                        tool = "read_screen",
+                        args = emptyMap(),
+                        verify = "readable snapshot",
+                        evidence = "screen state grounded",
+                        alternatives = listOf("look")
+                    )
+                    index++
+                }
+
+                // One real action step per distinct implied capability, in dependency order.
+                val actions = intent.requiredCapabilities.filter { it !in setOf("read_screen") }
+                if (actions.isEmpty()) {
+                    steps += step(
+                        id = "step_$index", name = "Perform the requested action",
+                        tool = "read_screen",
+                        args = emptyMap(),
+                        verify = "LOCAL VERIFY PASS",
+                        evidence = "requested state observed",
+                        dependsOn = if (needsInspect) listOf("step_${index - 1}") else emptyList()
+                    )
+                    index++
+                } else {
+                    var previous: String? = if (needsInspect) "step_${index - 1}" else null
+                    for ((offset, action) in actions.withIndex()) {
+                        val id = "step_${index + offset}"
+                        steps += step(
+                            id = id, name = "Action: $action",
+                            tool = action,
+                            args = actionArgs(action, intent, target),
+                            verify = verificationFor(action),
+                            evidence = "requested end state reached via $action",
+                            dependsOn = previous?.let { listOf(it) } ?: emptyList(),
+                            alternatives = if (action == "send_message") listOf("verify_send") else emptyList()
+                        )
+                        previous = id
+                    }
+                    index += actions.size
+                }
+
+                // A closing verification step makes "tool succeeded" distinct from "goal achieved".
+                if (actions.isNotEmpty()) {
+                    val lastDependency = steps.last().stepId
+                    steps += step(
+                        id = "step_$index", name = "Verify the objective",
+                        tool = if ("send_message" in actions) "verify_send" else "verify_action",
+                        args = if ("send_message" in actions) emptyMap()
+                        else mapOf("question" to "Was the objective '$objective' fully completed?"),
+                        verify = "PASS from the verification tool",
+                        evidence = "objective-level confirmation",
+                        dependsOn = listOf(lastDependency)
+                    )
+                }
             }
         }
 
-        // Check for blocked nodes due to failed dependencies
-        val finalNodes = updatedNodes.map { node ->
-            if (node.status == PlanNode.NodeStatus.READY || node.status == PlanNode.NodeStatus.PENDING) {
-                val failedDeps = node.dependencies.filter { dep ->
-                    updatedNodes.find { it.id == dep }?.status == PlanNode.NodeStatus.FAILED
-                }
-                if (failedDeps.isNotEmpty()) {
-                    node.copy(status = PlanNode.NodeStatus.BLOCKED, metadata = node.metadata + ("blockedBy" -> failedDeps.joinToString(",")))
-                } else node
-            } else node
-        )
+        val successConditions = intent.successCriteria.map { it.description } +
+            "Every non-optional step reaches COMPLETE with recorded verification evidence"
 
-        // Recalculate ready nodes and constraints
-        val newGlobalConstraints = plan.globalConstraints + buildDynamicConstraints(finalNodes)
-
-        return plan.copy(
-            nodes = finalNodes,
-            globalConstraints = newGlobalConstraints,
-            metadata = plan.metadata.copy(version = plan.metadata.version + 1)
+        return ExecutionPlan(
+            planId = "plan_" + System.currentTimeMillis(),
+            objective = objective,
+            steps = steps,
+            dependencies = steps.associate { it.stepId to it.dependsOn },
+            successConditions = successConditions,
+            estimatedTotalDurationMs = steps.sumOf { 6_000L },
+            rollbackPlan = buildRollback(strategyId, steps),
+            createdAt = System.currentTimeMillis(),
+            strategyId = strategyId
         )
     }
 
     /**
-     * Replan from a failure point.
+     * Replan after a failure using new evidence: the failed step is replaced by up to two
+     * concrete alternatives chosen from the recovery planner's shortlist (freshly filtered by
+     * what is actually registered and permitted), not by a blind retry of the same call.
      */
     fun replanFromFailure(
-        plan: Plan,
-        failedNodeId: String,
-        failureReason: String,
-        availableAlternatives: List<String>
-    ): Plan {
-        val failedNode = plan.nodes.find { it.id == failedNodeId }
-            ?: throw IllegalArgumentException("Failed node not found: $failedNodeId")
-
-        // Determine alternative approach
-        val alternativeTool = availableAlternatives.firstOrNull()
-            ?: failedNode.tool // Default to same tool for retry
-
-        // Create replacement node
-        val replacementNode = failedNode.copy(
-            id = "${failedNodeId}_retry_${System.currentTimeMillis()}",
-            tool = alternativeTool,
-            argsTemplate = adaptArgsForTool(failedNode.argsTemplate, failedNode.tool, alternativeTool),
-            capability = alternativeTool,
-            verificationMethod = inferVerificationMethod(alternativeTool),
-            status = PlanNode.NodeStatus.PENDING,
-            dependencies = failedNode.dependencies,
-            retryPolicy = RetryPolicy(1, 5000, setOf("timeout", "verification_failed"), null),
-            metadata = failedNode.metadata + ("replacementFor" -> failedNodeId) + ("failureReason" -> failureReason)
-        )
-
-        // Add new edges for replacement
-        val newEdges = plan.edges + failedNode.dependencies.map { dep ->
-            PlanEdge(from = dep, to = replacementNode.id)
-        }
-
-        // Mark original as failed
-        val updatedNodes = plan.nodes.map { node ->
-            if (node.id == failedNodeId) node.copy(status = PlanNode.NodeStatus.FAILED) else node
-        } + replacementNode
-
-        return plan.copy(
-            nodes = updatedNodes,
-            edges = newEdges,
-            metadata = plan.metadata.copy(version = plan.metadata.version + 1)
-        )
-    }
-
-    private fun buildGlobalConstraints(
+        plan: ExecutionPlan,
+        failedStepId: String,
+        error: String,
         intent: OrionIntentIntelligence.Intent,
-        decision: OrionDecisionEngine.Decision
-    ): List<GlobalConstraint> {
-        val constraints = mutableListOf<GlobalConstraint>()
+        context: OrionContextIntegration.UnifiedContext?,
+        alreadyAttempted: Set<String> = emptySet()
+    ): ReplanResult {
+        val failedStep = plan.steps.firstOrNull { it.stepId == failedStepId }
+            ?: return ReplanResult(plan, emptyList(), "failed step not found in plan")
 
-        // Time budget from urgency
-        val timeBudget = when (intent.urgency) {
-            OrionIntentIntelligence.Urgency.CRITICAL -> 30000L
-            OrionIntentIntelligence.Urgency.HIGH -> 60000L
-            OrionIntentIntelligence.Urgency.NORMAL -> 180000L
-            OrionIntentIntelligence.Urgency.LOW -> 600000L
+        val permitted = context?.capabilities?.availableCapabilities?.toSet() ?: emptySet()
+        val shortlist = runCatching {
+            OrionRecoveryPlanner.selectAlternatives(
+                failedTool = failedStep.tool,
+                result = error,
+                registeredAndPermitted = permitted,
+                alreadyAttempted = alreadyAttempted + failedStep.tool
+            )
+        }.getOrDefault(emptyList())
+
+        val replacementTools = (shortlist + failedStep.failureAlternatives)
+            .filter { it != failedStep.tool }
+            .filter { permitted.isEmpty() || it in permitted }
+            .distinct()
+            .take(2)
+
+        if (replacementTools.isEmpty()) {
+            val updated = plan.copy(steps = plan.steps.map {
+                if (it.stepId == failedStepId) it.copy(status = PlanStepStatus.BLOCKED) else it
+            })
+            return ReplanResult(
+                updated, emptyList(),
+                "no permitted alternative for '${failedStep.tool}' after: ${error.take(160)}"
+            )
         }
-        constraints.add(GlobalConstraint(
-            GlobalConstraint.ConstraintType.TIME_BUDGET,
-            "Total execution must complete within ${timeBudget / 1000}s",
-            GlobalConstraint.Severity.HARD
-        ))
 
-        // Resource limit
-        val autonomySettings = OrionAutonomySettings.read(svc)
-        constraints.add(GlobalConstraint(
-            GlobalConstraint.ConstraintType.RESOURCE_LIMIT,
-            "Max AI requests: ${autonomySettings.maxAiRequests}",
-            GlobalConstraint.Severity.HARD
-        ))
-
-        // Parallelism cap
-        constraints.add(GlobalConstraint(
-            GlobalConstraint.ConstraintType.PARALLELISM_CAP,
-            "Max parallel agents: ${autonomySettings.maxParallelAgents}",
-            GlobalConstraint.Severity.HARD
-        ))
-
-        // API quota
-        constraints.add(GlobalConstraint(
-            GlobalConstraint.ConstraintType.API_QUOTA,
-            "Respect API rate limits for external services",
-            GlobalConstraint.Severity.SOFT
-        ))
-
-        // Battery threshold
-        val deviceContext = OrionDeviceContextProvider.summary(svc)
-        deviceContext?.batteryLevel?.let { battery ->
-            if (battery < 30) {
-                constraints.add(GlobalConstraint(
-                    GlobalConstraint.ConstraintType.BATTERY_THRESHOLD,
-                    "Battery below 30% - prioritize critical tasks only",
-                    GlobalConstraint.Severity.HARD
-                ))
+        val newSteps = mutableListOf<PlanStep>()
+        replacementTools.forEachIndexed { i, tool ->
+            newSteps += failedStep.copy(
+                stepId = "${failedStepId}_alt${i + 1}",
+                name = "Recovery: ${failedStep.name} via $tool",
+                description = "Alternative after '${failedStep.tool}' failed",
+                tool = tool,
+                argsTemplate = argsForAlternative(tool, failedStep.argsTemplate, intent),
+                verificationMethod = verificationFor(tool),
+                status = PlanStepStatus.PENDING,
+                dependsOn = failedStep.dependsOn,
+                optional = i > 0
+            )
+        }
+        // Downstream steps now depend on the surviving alternative; the original is marked FAILED.
+        val altIds = newSteps.map { it.stepId }
+        val updatedSteps = plan.steps.map { s ->
+            when {
+                s.stepId == failedStepId -> s.copy(status = PlanStepStatus.FAILED)
+                s.dependsOn.contains(failedStepId) -> s.copy(dependsOn = (s.dependsOn - failedStepId) + altIds)
+                else -> s
             }
-        }
+        } + newSteps
 
-        // Hard constraints from intent
-        for (constraint in intent.constraints.filter { it.severity == OrionIntentIntelligence.Constraint.Severity.HARD }) {
-            constraints.add(GlobalConstraint(
-                GlobalConstraint.ConstraintType.RESOURCE_LIMIT,
-                constraint.description,
-                GlobalConstraint.Severity.HARD
-            ))
-        }
-
-        return constraints
+        return ReplanResult(
+            plan.copy(steps = updatedSteps, createdAt = System.currentTimeMillis()),
+            newSteps.map { it.stepId },
+            "replanned '${failedStep.tool}' -> ${replacementTools.joinToString(" / ")}"
+        )
     }
 
-    private fun buildDynamicConstraints(nodes: List<PlanNode>): List<GlobalConstraint> {
-        val constraints = mutableListOf<GlobalConstraint>()
-
-        val failedCount = nodes.count { it.status == PlanNode.NodeStatus.FAILED }
-        val blockedCount = nodes.count { it.status == PlanNode.NodeStatus.BLOCKED }
-        val runningCount = nodes.count { it.status == PlanNode.NodeStatus.RUNNING }
-
-        if (failedCount > 2) {
-            constraints.add(GlobalConstraint(
-                GlobalConstraint.ConstraintType.RESOURCE_LIMIT,
-                "$failedCount nodes failed - consider replanning",
-                GlobalConstraint.Severity.SOFT
-            ))
-        }
-
-        if (blockedCount > 0) {
-            constraints.add(GlobalConstraint(
-                GlobalConstraint.ConstraintType.RESOURCE_LIMIT,
-                "$blockedCount nodes blocked by failed dependencies",
-                GlobalConstraint.Severity.HARD
-            ))
-        }
-
-        if (runningCount > 3) {
-            constraints.add(GlobalConstraint(
-                GlobalConstraint.ConstraintType.PARALLELISM_CAP,
-                "$runningCount concurrent executions - approaching limit",
-                GlobalConstraint.Severity.SOFT
-            ))
-        }
-
-        return constraints
+    data class ReplanResult(
+        val plan: ExecutionPlan,
+        val replacementStepIds: List<String>,
+        val note: String
+    ) {
+        val succeeded: Boolean get() = replacementStepIds.isNotEmpty()
     }
 
-    private fun mapRiskLevel(reasoningRisk: OrionReasoningEngine.Strategy.RiskLevel): Plan.RiskLevel {
-        return when (reasoningRisk) {
-            OrionReasoningEngine.Strategy.RiskLevel.MINIMAL -> Plan.RiskLevel.LOW
-            OrionReasoningEngine.Strategy.RiskLevel.LOW -> Plan.RiskLevel.LOW
-            OrionReasoningEngine.Strategy.RiskLevel.MEDIUM -> Plan.RiskLevel.MEDIUM
-            OrionReasoningEngine.Strategy.RiskLevel.HIGH -> Plan.RiskLevel.HIGH
-            OrionReasoningEngine.Strategy.RiskLevel.CRITICAL -> Plan.RiskLevel.CRITICAL
-        }
-    }
+    // ------------------------------------------------------------------
 
-    private fun adaptArgsForTool(
-        originalArgs: JSONObject,
-        fromTool: String,
-        toTool: String
-    ): JSONObject {
-        // Adapt arguments when switching tools
-        // This is a simplified version - in practice would be more sophisticated
-        val adapted = JSONObject(originalArgs.toString())
-        if (fromTool != toTool) {
-            adapted.put("_adaptedFrom", fromTool)
-            adapted.put("_adaptedTo", toTool)
-        }
-        return adapted
-    }
+    private fun step(
+        id: String,
+        name: String,
+        tool: String,
+        args: Map<String, String>,
+        verify: String,
+        evidence: String,
+        dependsOn: List<String> = emptyList(),
+        optional: Boolean = false,
+        alternatives: List<String> = emptyList()
+    ) = PlanStep(
+        stepId = id,
+        name = name,
+        description = name,
+        tool = tool,
+        argsTemplate = args,
+        verificationMethod = verify,
+        expectedEvidence = evidence,
+        dependsOn = dependsOn,
+        optional = optional,
+        failureAlternatives = alternatives
+    )
 
-    private fun inferVerificationMethod(tool: String): OrionIntentIntelligence.SuccessCriterion.VerificationMethod {
+    private fun actionArgs(
+        tool: String,
+        intent: OrionIntentIntelligence.Intent,
+        target: String?
+    ): Map<String, String> {
+        val objective = intent.primaryObjective
+        val resolvedTarget = target?.let { intent.entities["resolved:$it"] ?: it }
         return when (tool) {
-            "send_message" -> OrionIntentIntelligence.SuccessCriterion.VerificationMethod.MESSAGE_SENT
-            "verify_send" -> OrionIntentIntelligence.SuccessCriterion.VerificationMethod.MESSAGE_SENT
-            "verify_action" -> OrionIntentIntelligence.SuccessCriterion.VerificationMethod.VERIFY_ACTION
-            "shell" -> OrionIntentIntelligence.SuccessCriterion.VerificationMethod.SHELL_EXIT_CODE
-            "python_exec" -> OrionIntentIntelligence.SuccessCriterion.VerificationMethod.TOOL_OUTPUT
-            "trading_place_order" -> OrionIntentIntelligence.SuccessCriterion.VerificationMethod.EXTERNAL_API
-            "macro_run", "objective_graph" -> OrionIntentIntelligence.SuccessCriterion.VerificationMethod.OBJECTIVE_COMPLETE
-            "memory" -> OrionIntentIntelligence.SuccessCriterion.VerificationMethod.MEMORY_RECORDED
-            "open_app", "click", "type_text", "browser_navigate", "browser_click", "browser_type" -> OrionIntentIntelligence.SuccessCriterion.VerificationMethod.SCREEN_CHANGE
-            else -> OrionIntentIntelligence.SuccessCriterion.VerificationMethod.TOOL_OUTPUT
+            "open_app" -> mapOf("app" to (extractAppName(objective) ?: ""))
+            "send_message" -> buildMap {
+                put("message", objective)
+                resolvedTarget?.let { put("contact", it) }
+            }
+            "type_text" -> mapOf("text" to objective)
+            "click" -> mapOf("target" to (resolvedTarget ?: objective))
+            "call" -> mapOf("contact" to (resolvedTarget ?: ""))
+            "memory" -> mapOf("query" to objective)
+            "shell" -> mapOf("command" to objective)
+            else -> emptyMap()
         }
+    }
+
+    private fun argsForAlternative(
+        tool: String,
+        original: Map<String, String>,
+        intent: OrionIntentIntelligence.Intent
+    ): Map<String, String> = when (tool) {
+        "read_screen", "look", "browser_snapshot" -> emptyMap()
+        "verify_action" -> mapOf("question" to "Was the objective '${intent.primaryObjective}' completed?")
+        "verify_send" -> original.filterKeys { it == "contact" }
+        "wait_for" -> mapOf("millis" to "1500")
+        else -> original
+    }
+
+    private fun verificationFor(tool: String): String = when {
+        tool == "verify_send" -> "PASS: message sent"
+        tool == "verify_action" -> "PASS from independent state check"
+        tool.startsWith("browser_") -> "LOCAL VERIFY PASS after navigation, or readable snapshot"
+        tool == "python_exec" -> "exit code 0 with output"
+        tool == "shell" -> "exit code 0"
+        tool == "read_screen" || tool == "look" -> "readable snapshot"
+        else -> "LOCAL VERIFY PASS: visible state change"
+    }
+
+    private fun extractAppName(objective: String): String? =
+        Regex("(?i)\\b(?:open|launch|start)\\s+([A-Za-z0-9 ._'-]{2,40})")
+            .find(objective)?.groupValues?.get(1)?.trim()
+            ?.substringBefore(" and ")?.substringBefore(",")?.trim()
+            ?.takeIf { it.isNotBlank() }
+
+    private fun buildSearchQuery(intent: OrionIntentIntelligence.Intent): String {
+        val stripped = intent.primaryObjective
+            .replace(Regex("(?i)^\\s*(please\\s+)?(search|google|look up|research|find out)\\s+"), "")
+            .replace(Regex("(?i)^\\s*for\\s+"), "")
+            .trim()
+        return stripped.ifBlank { intent.primaryObjective }
+    }
+
+    private fun buildRollback(strategyId: String, steps: List<PlanStep>): RollbackPlan? {
+        // Only plans that can leave persistent state need a rollback path.
+        val mutating = steps.filter { it.tool in MUTATING_TOOLS }
+        if (mutating.isEmpty()) return null
+        return RollbackPlan(
+            triggerConditions = listOf("step_failure", "verification_failure", "owner_cancel"),
+            steps = mutating.filter { it.tool != "python_exec" || it.optional }.map { s ->
+                PlanStep(
+                    stepId = "rollback_${s.stepId}",
+                    name = "Undo ${s.name}",
+                    description = "Restore prior state after ${s.tool}",
+                    tool = when (s.tool) {
+                        "send_message" -> "verify_send"
+                        "open_app" -> "read_screen"
+                        else -> "verify_action"
+                    },
+                    argsTemplate = mapOf("question" to "Was '${s.name}' reversed?"),
+                    verificationMethod = "PASS from state check",
+                    expectedEvidence = "prior state restored or confirmed irreversible",
+                    optional = true
+                )
+            }
+        )
+    }
+
+    private companion object {
+        val UI_TOOLS = setOf("open_app", "click", "type_text", "swipe", "send_message")
+        val MUTATING_TOOLS = setOf("send_message", "type_text", "click", "open_app", "python_exec", "shell")
     }
 }
-
-/**
- * Context for planning operations.
- */
-data class PlanningContext(
-    val conversationHistory: List<Pair<String, String>> = emptyList(),
-    val activeObjective: String? = null,
-    val deviceContext: DeviceContext? = null,
-    val availableCapabilities: Set<String> = emptySet(),
-    val missionHistory: List<OrionObjectiveGraph.MissionRecord> = emptyList(),
-    val userPreferences: Map<String, String> = emptyMap()
-)

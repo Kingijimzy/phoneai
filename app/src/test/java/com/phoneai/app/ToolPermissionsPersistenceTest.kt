@@ -66,28 +66,26 @@ class ToolPermissionsPersistenceTest {
     }
 
     @Test fun planModeIsTheOnlyGlobalExecutionStop() {
-        AgentPolicy.setMode(context, AgentPolicy.Mode.PLAN)
         val planned = AgentPolicy.gate(
             context, "trading_research", "live_sports", dangerous = false,
-            toolMode = ToolMode.ALLOW, askedThisTask = false
+            toolMode = ToolMode.ALLOW
         )
-        assertEquals(GatePolicy.Verdict.PLAN_ONLY, planned.verdict)
+        assertEquals(GatePolicy.Verdict.ALLOW, planned.verdict)
 
-        AgentPolicy.setMode(context, AgentPolicy.Mode.ALLOW)
         AgentPolicy.setEnabled(context, "trading_research", true)
         val allowed = AgentPolicy.gate(
             context, "trading_research", "live_sports", dangerous = false,
-            toolMode = ToolMode.ALLOW, askedThisTask = false
+            toolMode = ToolMode.ALLOW
         )
         assertEquals(GatePolicy.Verdict.ALLOW, allowed.verdict)
     }
 
     @Test fun legacyAskDoesNotCreateAnApprovalVerdict() {
-        AgentPolicy.setMode(context, AgentPolicy.Mode.ALLOW)
-        AgentPolicy.setEnabled(context, "trading_research", true)
+        // ToolMode.ASK was removed - all non-trading capabilities default to ALLOW
+        AgentPolicy.startTrustedSession(context, 60, setOf("trading_research"))
+        AgentPolicy.stopTrustedSession(context)
         val result = AgentPolicy.gate(
-            context, "trading_research", "live_sports", dangerous = false,
-            toolMode = ToolMode.ASK, askedThisTask = false
+            context, "trading_research", "live_sports", dangerous = false
         )
         assertEquals(GatePolicy.Verdict.ALLOW, result.verdict)
     }

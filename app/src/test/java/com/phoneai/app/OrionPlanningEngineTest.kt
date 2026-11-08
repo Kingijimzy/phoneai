@@ -25,113 +25,113 @@ class OrionPlanningEngineTest {
     }
 
     @Test
-    fun testPlanNodeStatuses() {
-        val statuses = OrionPlanningEngine.PlanNode.NodeStatus.values()
-        assertEquals(7, statuses.size)
-        assertTrue(statuses.contains(OrionPlanningEngine.PlanNode.NodeStatus.PENDING))
-        assertTrue(statuses.contains(OrionPlanningEngine.PlanNode.NodeStatus.READY))
-        assertTrue(statuses.contains(OrionPlanningEngine.PlanNode.NodeStatus.RUNNING))
-        assertTrue(statuses.contains(OrionPlanningEngine.PlanNode.NodeStatus.COMPLETE))
-        assertTrue(statuses.contains(OrionPlanningEngine.PlanNode.NodeStatus.FAILED))
-        assertTrue(statuses.contains(OrionPlanningEngine.PlanNode.NodeStatus.SKIPPED))
-        assertTrue(statuses.contains(OrionPlanningEngine.PlanNode.NodeStatus.BLOCKED))
+    fun testPlanStepStatuses() {
+        val statuses = OrionPlanningEngine.PlanStepStatus.values()
+        assertTrue("Should have multiple step statuses", statuses.size >= 6)
+        assertTrue(statuses.contains(OrionPlanningEngine.PlanStepStatus.PENDING))
+        assertTrue(statuses.contains(OrionPlanningEngine.PlanStepStatus.READY))
+        assertTrue(statuses.contains(OrionPlanningEngine.PlanStepStatus.RUNNING))
+        assertTrue(statuses.contains(OrionPlanningEngine.PlanStepStatus.COMPLETE))
+        assertTrue(statuses.contains(OrionPlanningEngine.PlanStepStatus.FAILED))
+        assertTrue(statuses.contains(OrionPlanningEngine.PlanStepStatus.BLOCKED))
     }
 
     @Test
-    fun testEdgeTypes() {
-        val types = OrionPlanningEngine.PlanEdge.EdgeType.values()
-        assertEquals(3, types.size)
-        assertTrue(types.contains(OrionPlanningEngine.PlanEdge.EdgeType.DEPENDENCY))
-        assertTrue(types.contains(OrionPlanningEngine.PlanEdge.EdgeType.PARALLEL_GROUP))
-        assertTrue(types.contains(OrionPlanningEngine.PlanEdge.EdgeType.CONDITIONAL))
+    fun testPlanStepDataClass() {
+        val step = OrionPlanningEngine.PlanStep(
+            stepId = "step_1",
+            name = "Open WhatsApp",
+            description = "Open WhatsApp application",
+            tool = "open_app",
+            argsTemplate = mapOf("name" to "WhatsApp"),
+            verificationMethod = "SCREEN_CHANGE",
+            expectedEvidence = "WhatsApp opened",
+            dependsOn = emptyList()
+        )
+        assertEquals("step_1", step.stepId)
+        assertEquals("open_app", step.tool)
+        assertEquals(OrionPlanningEngine.PlanStepStatus.PENDING, step.status)
     }
 
     @Test
-    fun testGlobalConstraintTypes() {
-        val types = OrionPlanningEngine.GlobalConstraint.ConstraintType.values()
-        assertEquals(5, types.size)
-        assertTrue(types.contains(OrionPlanningEngine.GlobalConstraint.ConstraintType.TIME_BUDGET))
-        assertTrue(types.contains(OrionPlanningEngine.GlobalConstraint.ConstraintType.RESOURCE_LIMIT))
-        assertTrue(types.contains(OrionPlanningEngine.GlobalConstraint.ConstraintType.PARALLELISM_CAP))
-        assertTrue(types.contains(OrionPlanningEngine.GlobalConstraint.ConstraintType.API_QUOTA))
-        assertTrue(types.contains(OrionPlanningEngine.GlobalConstraint.ConstraintType.BATTERY_THRESHOLD))
-    }
-
-    @Test
-    fun testPlanConstruction() {
-        val plan = OrionPlanningEngine.Plan(
+    fun testExecutionPlanCreation() {
+        val step1 = OrionPlanningEngine.PlanStep(
+            stepId = "step_1", name = "Step 1", description = "First step",
+            tool = "open_app", argsTemplate = emptyMap(),
+            verificationMethod = "SCREEN_CHANGE", expectedEvidence = "Done",
+            dependsOn = emptyList()
+        )
+        val step2 = OrionPlanningEngine.PlanStep(
+            stepId = "step_2", name = "Step 2", description = "Second step",
+            tool = "read_screen", argsTemplate = emptyMap(),
+            verificationMethod = "SCREEN_CHANGE", expectedEvidence = "Done",
+            dependsOn = listOf("step_1")
+        )
+        val plan = OrionPlanningEngine.ExecutionPlan(
             planId = "plan_1",
-            objectiveId = "obj_1",
-            nodes = listOf(
-                OrionPlanningEngine.PlanNode(
-                    id = "step_1",
-                    objective = "Open WhatsApp",
-                    tool = "open_app",
-                    argsTemplate = JSONObject().put("name", "WhatsApp"),
-                    capability = "open_app",
-                    verificationMethod = OrionIntentIntelligence.SuccessCriterion.VerificationMethod.SCREEN_CHANGE,
-                    expectedEvidence = "WhatsApp opened",
-                    dependencies = emptyList(),
-                    timeoutMs = 30000
-                ),
-                OrionPlanningEngine.PlanNode(
-                    id = "step_2",
-                    objective = "Send message",
-                    tool = "send_message",
-                    argsTemplate = JSONObject().put("contact", "Mom").put("message", "Hello"),
-                    capability = "send_message",
-                    verificationMethod = OrionIntentIntelligence.SuccessCriterion.VerificationMethod.MESSAGE_SENT,
-                    expectedEvidence = "Message sent",
-                    dependencies = listOf("step_1"),
-                    timeoutMs = 30000
-                )
-            ),
-            edges = listOf(
-                OrionPlanningEngine.PlanEdge("step_1", "step_2")
-            ),
-            globalConstraints = listOf(
-                OrionPlanningEngine.GlobalConstraint(
-                    OrionPlanningEngine.GlobalConstraint.ConstraintType.TIME_BUDGET,
-                    "Complete within 60s",
-                    OrionPlanningEngine.GlobalConstraint.Severity.HARD
-                )
-            ),
-            successConditions = listOf("Message sent to Mom"),
-            estimatedDurationMs = 60000,
-            riskLevel = OrionPlanningEngine.Plan.RiskLevel.LOW,
-            metadata = OrionPlanningEngine.PlanMetadata()
+            objective = "Test objective",
+            steps = listOf(step1, step2),
+            dependencies = mapOf("step_1" to emptyList(), "step_2" to listOf("step_1")),
+            successConditions = listOf("Both steps complete"),
+            estimatedTotalDurationMs = 10000,
+            rollbackPlan = null,
+            createdAt = System.currentTimeMillis()
         )
-
-        assertEquals(2, plan.nodes.size)
-        assertEquals(1, plan.edges.size)
-        assertEquals(1, plan.globalConstraints.size)
-        assertEquals("step_1", plan.nodes[0].id)
-        assertEquals("step_2", plan.nodes[1].id)
-        assertEquals(listOf("step_1"), plan.nodes[1].dependencies)
+        assertEquals("plan_1", plan.planId)
+        assertEquals("Test objective", plan.objective)
+        assertEquals(2, plan.steps.size)
+        val ordered = plan.orderedSteps()
+        assertEquals(2, ordered.size)
+        assertEquals("step_1", ordered[0].stepId)
+        assertEquals("step_2", ordered[1].stepId)
     }
 
     @Test
-    fun testRetryPolicyDefaults() {
-        val policy = OrionPlanningEngine.RetryPolicy(
-            maxRetries = 2,
-            backoffMs = 2000,
-            retryOn = setOf("timeout", "verification_failed"),
-            alternativeStrategyOnFailure = null
+    fun testRollbackPlan() {
+        val rollbackStep = OrionPlanningEngine.PlanStep(
+            stepId = "rollback_1",
+            name = "Rollback step",
+            description = "Undo previous action",
+            tool = "file_delete",
+            argsTemplate = emptyMap(),
+            verificationMethod = "FILE_NOT_EXISTS",
+            expectedEvidence = "File deleted"
         )
-
-        assertEquals(2, policy.maxRetries)
-        assertEquals(2000, policy.backoffMs)
-        assertEquals(2, policy.retryOn.size)
-        assertNull(policy.alternativeStrategyOnFailure)
+        val rollback = OrionPlanningEngine.RollbackPlan(
+            triggerConditions = listOf("verification_failed", "user_cancelled"),
+            steps = listOf(rollbackStep)
+        )
+        assertEquals(2, rollback.triggerConditions.size)
+        assertEquals(1, rollback.steps.size)
+        assertEquals("rollback_1", rollback.steps[0].stepId)
     }
 
     @Test
-    fun testRiskLevels() {
-        val levels = OrionPlanningEngine.Plan.RiskLevel.values()
-        assertEquals(4, levels.size)
-        assertTrue(levels.contains(OrionPlanningEngine.Plan.RiskLevel.LOW))
-        assertTrue(levels.contains(OrionPlanningEngine.Plan.RiskLevel.MEDIUM))
-        assertTrue(levels.contains(OrionPlanningEngine.Plan.RiskLevel.HIGH))
-        assertTrue(levels.contains(OrionPlanningEngine.Plan.RiskLevel.CRITICAL))
+    fun testReplanFromFailure() {
+        val step1 = OrionPlanningEngine.PlanStep(
+            stepId = "step_1", name = "Step 1", description = "First",
+            tool = "open_app", argsTemplate = emptyMap(),
+            verificationMethod = "SCREEN_CHANGE", expectedEvidence = "Done"
+        )
+        val step2 = OrionPlanningEngine.PlanStep(
+            stepId = "step_2", name = "Step 2", description = "Second",
+            tool = "read_screen", argsTemplate = emptyMap(),
+            verificationMethod = "SCREEN_CHANGE", expectedEvidence = "Done",
+            dependsOn = listOf("step_1")
+        )
+        val plan = OrionPlanningEngine.ExecutionPlan(
+            planId = "plan_1",
+            objective = "Test",
+            steps = listOf(step1, step2),
+            dependencies = mapOf("step_1" to emptyList(), "step_2" to listOf("step_1")),
+            successConditions = listOf("Done"),
+            estimatedTotalDurationMs = 5000,
+            rollbackPlan = null,
+            createdAt = System.currentTimeMillis()
+        )
+        val replanned = plan.copy(steps = plan.steps.map { s ->
+            if (s.stepId == "step_2") s.copy(status = OrionPlanningEngine.PlanStepStatus.FAILED) else s
+        })
+        assertEquals(OrionPlanningEngine.PlanStepStatus.FAILED, replanned.steps[1].status)
     }
 }

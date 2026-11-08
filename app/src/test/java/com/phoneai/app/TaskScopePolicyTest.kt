@@ -133,8 +133,7 @@ class TaskScopePolicyTest {
         val blocked = AgentDispatchPolicy.blockReason(
             request = "Open WhatsApp",
             tool = "open_app",
-            args = org.json.JSONObject().put("name", "WhatsApp"),
-            executionMode = "PLAN"
+            args = org.json.JSONObject().put("name", "WhatsApp")
         )
         assertNotNull(blocked)
         assertTrue(blocked!!.contains("Plan mode"))
@@ -144,8 +143,7 @@ class TaskScopePolicyTest {
         val result = AgentDispatchPolicy.blockReason(
             request = "Open WhatsApp and read my last chat",
             tool = "read_screen",
-            args = org.json.JSONObject(),
-            executionMode = "PLAN"
+            args = org.json.JSONObject()
         )
         assertNull(result)
     }
@@ -154,8 +152,7 @@ class TaskScopePolicyTest {
         val result = AgentDispatchPolicy.blockReason(
             request = "Explain how Bluetooth works",
             tool = "open_app",
-            args = org.json.JSONObject().put("name", "WhatsApp"),
-            executionMode = "FULL"
+            args = org.json.JSONObject().put("name", "WhatsApp")
         )
         assertNull(result)
     }

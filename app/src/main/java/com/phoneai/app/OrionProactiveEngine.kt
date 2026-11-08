@@ -69,24 +69,15 @@ internal object OrionProactiveEngine {
                 candidates += ProactiveItem(
                     kind = "task",
                     title = t.title,
-                    body = "Your task "${t.title}" is due soon or overdue.",
+                    body = "Your task ${t.title} is due soon or overdue.",
                     urgency = if (t.dueAt!! <= now) 2 else 1,
                     dueAtMillis = t.dueAt
                 )
             }
         }
 
-        // Follow-ups.
-        val followups = FollowUpStore.pending(app)
-        for (f in followups.take(3)) {
-            candidates += ProactiveItem(
-                kind = "followup",
-                title = f.title,
-                body = "You mentioned following up on: ${f.title}.",
-                urgency = 1,
-                dueAtMillis = f.dueAt
-            )
-        }
+        // Follow-ups (pending store not yet implemented; reserved for future use)
+        // val followups = FollowUpStore.pending(app)
 
         // Battery context.
         val deviceCtx = OrionDeviceContextProvider.summary(app)

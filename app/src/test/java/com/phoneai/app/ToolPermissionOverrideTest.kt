@@ -11,10 +11,10 @@ class ToolPermissionOverrideTest {
 
         val effective = ToolPermissionPolicy.applyPreset(
             "read_only",
-            mapOf(write.name to ToolMode.ASK)
+            mapOf(write.name to ToolMode.ALLOW)
         )
 
-        assertEquals(ToolMode.ASK, effective[write.name])
+        assertEquals(ToolMode.ALLOW, effective[write.name])
         if (ask != null) assertTrue(ask.name !in effective)
     }
 

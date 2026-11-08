@@ -252,8 +252,7 @@ object LifeLoop {
                     pack = "proactive",
                     toolId = "standing_order",
                     dangerous = false,
-                    toolMode = ToolPermissions.mode(c, "standing_order"),
-                    askedThisTask = true
+                    toolMode = ToolPermissions.mode(c, "standing_order")
                 )
             }.getOrNull()
             if (gate == null || gate.verdict != GatePolicy.Verdict.ALLOW) {

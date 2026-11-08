@@ -8,25 +8,18 @@ class GatePolicyTest {
         packOn: Boolean = true,
         tool: String = "open_app",
         pack: String = "orion_core",
-        mode: AgentPolicy.Mode = AgentPolicy.Mode.ALLOW,
         toolMode: ToolMode = ToolMode.ALLOW,
         dangerous: Boolean = false
     ) = GatePolicy.Input(
-        pack, packOn, tool, mode, toolMode, false, dangerous,
-        false, false, false, true, null
+        pack, packOn, tool, toolMode, false, dangerous, false, null
     )
 
     @Test fun defaultPermissionAllowsToolsImmediately() {
         assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input()).verdict)
         assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(dangerous = true)).verdict)
-        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(toolMode = ToolMode.ASK)).verdict)
     }
 
-    @Test fun onlyPlanModeIsAGlobalExecutionStop() {
-        assertEquals(GatePolicy.Verdict.PLAN_ONLY, GatePolicy.decide(input(mode = AgentPolicy.Mode.PLAN)).verdict)
-    }
-
-    @Test fun explicitToolDenyAndDisabledPacksStillApply() {
+    @Test fun toolDenyAndDisabledPacksStillApply() {
         assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(toolMode = ToolMode.DENY)).verdict)
         assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(packOn = false)).verdict)
     }

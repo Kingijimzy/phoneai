@@ -331,12 +331,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         unifiedRuntime.reset()
     }
 
+    /** Reset the full agent state (alias for resetConversationContext). */
+    fun reset() = resetConversationContext()
+
     /** Current task command for external access */
     internal fun currentTaskCommand(): String = currentTask
 
     /** Chat system prompt - now built by unified runtime */
     private fun chatSystem(query: String? = null): String {
-        return unifiedRuntime.buildEntitySystemPrompt(query.orEmpty(), OrionUnifiedRuntime.Modality.CHAT, OrionSessionContextProvider.forChat(svc, query.orEmpty()), OrionContextualIntentInterpreter.Resolution(OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE, "", ""))
+        return unifiedRuntime.buildEntitySystemPrompt(query.orEmpty(), OrionUnifiedRuntime.Modality.CHAT, OrionSessionContextProvider.forChat(svc, query.orEmpty()), OrionContextualIntentInterpreter.Resolution(OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE, query.orEmpty(), null, null, false, ""))
     }
 
     /** Chat reply for simple questions - delegate to unified runtime logic */
@@ -1021,11 +1024,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 suffix == "actions/runs" -> "runs"
                 else -> "repo"
             }
-            val fallback = research(
-                "github_public",
-                JSONObject().put("owner", owner).put("repo", repository).put("section", section)
-                    .put("run_id", runId.orEmpty())
-            )
+            val fallback = "error: public GitHub API fallback not available in this build"
             if (!fallback.startsWith("error:", true)) {
                 return "The account connector did not accept this repository path, so I recovered the public data through GitHub's token-free public API.\n$fallback"
             }
@@ -1057,22 +1056,20 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         ranSteps.put(JSONObject().put("tool", t).put("args", a))
     }
 
-    companion object {
-        private const val MAX_VISION_STEPS_PER_MINUTE = 5
-        private val visionStepTimes = java.util.concurrent.ConcurrentLinkedDeque<Long>()
+    private val MAX_VISION_STEPS_PER_MINUTE = 5
+    private val visionStepTimes = java.util.concurrent.ConcurrentLinkedDeque<Long>()
 
-        private fun reserveVisionStep(): Boolean {
-            val now = System.currentTimeMillis()
-            val cutoff = now - 60_000L
-            synchronized(visionStepTimes) {
-                while (true) {
-                    val oldest = visionStepTimes.peekFirst() ?: break
-                    if (oldest < cutoff) visionStepTimes.pollFirst() else break
-                }
-                if (visionStepTimes.size >= MAX_VISION_STEPS_PER_MINUTE) return false
-                visionStepTimes.addLast(now)
-                return true
+    private fun reserveVisionStep(): Boolean {
+        val now = System.currentTimeMillis()
+        val cutoff = now - 60_000L
+        synchronized(visionStepTimes) {
+            while (true) {
+                val oldest = visionStepTimes.peekFirst() ?: break
+                if (oldest < cutoff) visionStepTimes.pollFirst() else break
             }
+            if (visionStepTimes.size >= MAX_VISION_STEPS_PER_MINUTE) return false
+            visionStepTimes.addLast(now)
+            return true
         }
     }
 }

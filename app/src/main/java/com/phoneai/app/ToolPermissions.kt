@@ -75,7 +75,7 @@ object ToolPermissions {
 
     internal fun applyLevel(c: Context, level: String) {
         val p = sp(c)
-        val selected = level.takeIf { it in ToolPermissionPolicy.levels } ?: "balanced"
+        val selected = level.takeIf { it in levels } ?: "balanced"
         val userOverrides = overrides(c)
         val effective = ToolPermissionPolicy.applyPreset(selected, userOverrides)
         p.edit()

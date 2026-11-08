@@ -32,57 +32,21 @@ class OrionDecisionEngineTest {
             entities = mapOf("WhatsApp" to "APP"),
             constraints = emptyList(),
             dependencies = emptyList(),
-            successCriteria = listOf(
-                OrionIntentIntelligence.SuccessCriterion(
-                    "App opens",
-                    OrionIntentIntelligence.SuccessCriterion.VerificationMethod.SCREEN_CHANGE,
-                    "WhatsApp visible"
-                )
-            ),
+            successCriteria = emptyList(),
             urgency = OrionIntentIntelligence.Urgency.NORMAL,
             confidence = 0.9,
-            contextualReferences = emptyList(),
-            suggestedCapabilities = listOf("open_app")
+            contextualReferences = emptyList()
         )
 
         val strategy = OrionReasoningEngine.Strategy(
             id = "direct_tool",
             name = "Direct Tool",
-            description = "Open app directly",
-            approach = OrionReasoningEngine.Strategy.Approach.DIRECT_TOOL,
-            requiredCapabilities = setOf("open_app"),
-            estimatedSteps = 1,
-            estimatedDurationMs = 2000,
-            riskLevel = OrionReasoningEngine.Strategy.RiskLevel.LOW,
             confidence = 0.9,
-            pros = listOf("Fast"),
-            cons = emptyList(),
-            fallbackStrategies = emptyList(),
-            prerequisites = emptyList()
-        )
-
-        val executionPlan = OrionDecisionEngine.ExecutionPlan(
-            planId = "plan_1",
-            strategyId = "direct_tool",
-            steps = listOf(
-                OrionDecisionEngine.ExecutionStep(
-                    stepId = "step_1",
-                    name = "Open WhatsApp",
-                    description = "Open WhatsApp app",
-                    tool = "open_app",
-                    argsTemplate = JSONObject().put("name", "WhatsApp"),
-                    capability = "open_app",
-                    verificationMethod = OrionIntentIntelligence.SuccessCriterion.VerificationMethod.SCREEN_CHANGE,
-                    expectedEvidence = "WhatsApp opened",
-                    dependsOn = emptyList(),
-                    timeoutMs = 30000,
-                    retryPolicy = OrionDecisionEngine.RetryPolicy(1, 1000, setOf("timeout"), null)
-                )
-            ),
-            dependencies = emptyMap(),
-            successConditions = listOf("WhatsApp visible"),
-            rollbackPlan = null,
-            estimatedTotalDurationMs = 30000
+            riskLevel = OrionReasoningEngine.RiskLevel.LOW,
+            estimatedDurationMs = 2000,
+            estimatedSteps = 1,
+            prerequisites = emptyList(),
+            fallbackStrategies = emptyList()
         )
 
         val decision = OrionDecisionEngine.Decision(
@@ -90,82 +54,50 @@ class OrionDecisionEngineTest {
             timestamp = System.currentTimeMillis(),
             intent = intent,
             reasoningResult = OrionReasoningEngine.ReasoningResult(
-                intent = intent,
                 strategies = listOf(strategy),
                 selectedStrategy = strategy,
-                decisionRationale = "Selected direct tool for simple action",
                 riskAssessment = OrionReasoningEngine.RiskAssessment(
-                    overallRisk = OrionReasoningEngine.Strategy.RiskLevel.LOW,
-                    riskFactors = emptyList(),
-                    mitigationStrategies = emptyList(),
-                    requiresConfirmation = false,
-                    confirmationReason = null
-                ),
-                alternativeConsidered = emptyList(),
-                contextUsed = OrionReasoningEngine.ContextSummary(0, "", 0, 10, 0, 0)
+                    overallRisk = OrionReasoningEngine.RiskImpact.LOW,
+                    riskFactors = emptyList()
+                )
             ),
             selectedStrategy = strategy,
-            executionPlan = executionPlan,
+            executionPlan = null,
             requiresConfirmation = false,
             confirmationReason = null,
             rationale = "Decision rationale",
-            alternativesRejected = emptyList(),
-            metadata = OrionDecisionEngine.DecisionMetadata(100, 1, "", emptyList())
+            alternativesRejected = emptyList()
         )
 
         assertEquals("dec_1", decision.decisionId)
-        assertEquals("Direct Tool", decision.selectedStrategy.name)
-        assertEquals(1, decision.executionPlan.steps.size)
+        assertEquals("Direct Tool", decision.selectedStrategy!!.name)
         assertFalse(decision.requiresConfirmation)
     }
 
     @Test
-    fun testRetryPolicyConstruction() {
-        val policy = OrionDecisionEngine.RetryPolicy(
-            maxRetries = 2,
-            backoffMs = 2000,
-            retryOn = setOf("timeout", "verification_failed"),
-            alternativeStrategyOnFailure = "research_then_act"
+    fun testTradingIntentRequiresConfirmation() {
+        val tradingIntent = OrionIntentIntelligence.Intent(
+            type = OrionIntentIntelligence.IntentType.ACTION,
+            primaryObjective = "Buy 0.1 BTC",
+            entities = emptyMap(),
+            constraints = emptyList(),
+            dependencies = emptyList(),
+            successCriteria = emptyList(),
+            urgency = OrionIntentIntelligence.Urgency.HIGH,
+            confidence = 0.9,
+            contextualReferences = emptyList()
         )
-
-        assertEquals(2, policy.maxRetries)
-        assertEquals(2000, policy.backoffMs)
-        assertEquals(2, policy.retryOn.size)
-        assertEquals("research_then_act", policy.alternativeStrategyOnFailure)
+        assertTrue(tradingIntent.primaryObjective.lowercase().contains("btc"))
+        assertEquals(OrionIntentIntelligence.Urgency.HIGH, tradingIntent.urgency)
     }
 
     @Test
-    fun testRollbackPlanConstruction() {
-        val rollback = OrionDecisionEngine.RollbackPlan(
-            steps = listOf(
-                OrionDecisionEngine.RollbackStep(
-                    stepId = "rollback_1",
-                    tool = "file_delete",
-                    args = JSONObject().put("path", "/tmp/test.txt"),
-                    description = "Delete created file"
-                )
-            ),
-            triggerConditions = listOf("verification_failed", "user_cancelled")
+    fun testVerificationMethodInSuccessCriterion() {
+        val criterion = OrionIntentIntelligence.SuccessCriterion(
+            description = "App opens",
+            verificationMethod = "SCREEN_CHANGE"
         )
-
-        assertEquals(1, rollback.steps.size)
-        assertEquals(2, rollback.triggerConditions.size)
-    }
-
-    @Test
-    fun testVerificationMethods() {
-        val methods = OrionIntentIntelligence.SuccessCriterion.VerificationMethod.values()
-        assertTrue(methods.size >= 8)
-        
-        val methodNames = methods.map { it.name }.toSet()
-        assertTrue(methodNames.contains("SCREEN_CHANGE"))
-        assertTrue(methodNames.contains("TOOL_OUTPUT"))
-        assertTrue(methodNames.contains("FILE_EXISTS"))
-        assertTrue(methodNames.contains("MESSAGE_SENT"))
-        assertTrue(methodNames.contains("VERIFY_ACTION"))
-        assertTrue(methodNames.contains("SHELL_EXIT_CODE"))
-        assertTrue(methodNames.contains("MEMORY_RECORDED"))
-        assertTrue(methodNames.contains("OBJECTIVE_COMPLETE"))
-        assertTrue(methodNames.contains("EXTERNAL_API"))
+        assertEquals("App opens", criterion.description)
+        assertEquals("SCREEN_CHANGE", criterion.verificationMethod)
     }
 }

@@ -431,7 +431,7 @@ class AgentControlActivity : Activity() {
                 else "PASS: Termux is installed; bridge remains off until separately enabled"
             }
             test("Trading safety") { "PASS: order-like tools are denied by the read-only Trading research pack" }
-            test("Approval policy") { "PASS: current mode is ${AgentPolicy.mode(this).label}; tools require enabled packs" }
+            test("Approval policy") { "PASS: current mode is ${AgentPolicy.mode(this)}; tools require enabled packs" }
             val report = lines.joinToString("\n")
             AgentPolicy.log(this, "self_test", "run", true, "diagnostic completed: ${lines.count { it.startsWith("PASS") }} pass, ${lines.count { it.startsWith("FAIL") }} fail, ${lines.count { it.startsWith("INFO") }} skipped/info")
             runOnUiThread {
@@ -521,7 +521,7 @@ class AgentControlActivity : Activity() {
     }
 
     private fun refresh() {
-        modeStatus.text = "Mode: ${AgentPolicy.mode(this).label} · default is Allow\nTrusted pack session: ${if (AgentPolicy.trustedUntil(this) > System.currentTimeMillis()) java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(AgentPolicy.trustedUntil(this))) else "not active"}"
+        modeStatus.text = "Mode: ${AgentPolicy.mode(this)} · default is Allow\nTrusted pack session: ${if (AgentPolicy.trustedUntil(this) > System.currentTimeMillis()) java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(AgentPolicy.trustedUntil(this))) else "not active"}"
         packStatus.text = "Enabled: ${AgentPolicy.packs.count { AgentPolicy.enabled(this, it.id) }} · unsupported packs remain off. Only enabled packs should be dispatchable."
         commandModelStatus.text = commandModelSummary()
         val installed = termuxInstalled()

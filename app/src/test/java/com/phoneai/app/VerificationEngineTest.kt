@@ -74,8 +74,8 @@ class VerificationEngineTest {
     fun testCompletionGateRequiresVerifiedEvidence() {
         // AgentHooks.completionDecision should require verified evidence
         val runEvidence = listOf(
-            AgentHooks.Proof("open_app", "result", true, false), // success but not verified
-            AgentHooks.Proof("click", "result", true, true) // success and verified
+            AgentHooks.Proof("open_app", true, false, "not verified"),
+            AgentHooks.Proof("click", true, true, "verified")
         )
 
         // Should require verified evidence, not just success

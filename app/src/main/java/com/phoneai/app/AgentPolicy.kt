@@ -148,4 +148,17 @@ object AgentPolicy {
             }.getOrNull()
         }
     }
+
+    /** Trusted session management for AgentControlActivity UI. */
+    fun stopTrustedSession(c: Context) {
+        p(c).edit().putLong("trusted_until", 0).apply()
+    }
+
+    fun startTrustedSession(c: Context, minutes: Int, packs: Set<String>) {
+        p(c).edit().putLong("trusted_until", System.currentTimeMillis() + minutes * 60_000L).putString("trusted_packs", packs.joinToString(",")).apply()
+    }
+
+    fun trustedUntil(c: Context): Long = p(c).getLong("trusted_until", 0L)
+
+    fun mode(c: Context): String = ToolPermissions.level(c)
 }

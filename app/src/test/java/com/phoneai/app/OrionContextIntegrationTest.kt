@@ -26,60 +26,48 @@ class OrionContextIntegrationTest {
     @Test
     fun testScreenStates() {
         val states = OrionContextIntegration.DeviceContext.ScreenState.values()
-        assertEquals(4, states.size)
+        assertEquals(3, states.size)
         assertTrue(states.contains(OrionContextIntegration.DeviceContext.ScreenState.ON))
         assertTrue(states.contains(OrionContextIntegration.DeviceContext.ScreenState.OFF))
-        assertTrue(states.contains(OrionContextIntegration.DeviceContext.ScreenState.AMBIENT))
         assertTrue(states.contains(OrionContextIntegration.DeviceContext.ScreenState.UNKNOWN))
     }
 
     @Test
-    fun testCapabilityHealthStatuses() {
-        val statuses = OrionContextIntegration.CapabilityContext.CapabilityHealth.Status.values()
-        assertEquals(4, statuses.size)
-        assertTrue(statuses.contains(OrionContextIntegration.CapabilityContext.CapabilityHealth.Status.HEALTHY))
-        assertTrue(statuses.contains(OrionContextIntegration.CapabilityContext.CapabilityHealth.Status.DEGRADED))
-        assertTrue(statuses.contains(OrionContextIntegration.CapabilityContext.CapabilityHealth.Status.UNHEALTHY))
-        assertTrue(statuses.contains(OrionContextIntegration.CapabilityContext.CapabilityHealth.Status.UNKNOWN))
+    fun testCapabilityHealthHasStatusString() {
+        val health = OrionContextIntegration.CapabilityContext.CapabilityHealth(
+            status = "HEALTHY",
+            lastError = null,
+            successRate = 1.0,
+            avgLatencyMs = 100
+        )
+        assertEquals("HEALTHY", health.status)
+        assertEquals(1.0, health.successRate, 0.001)
+        assertEquals(100L, health.avgLatencyMs)
     }
 
     @Test
     fun testSessionDataConstruction() {
         val sessionData = OrionContextIntegration.SessionData(
-            sessionId = "session_1",
-            interactionTraceId = "trace_1",
+            command = "test command",
             modality = "CHAT",
-            conversationHistory = listOf("user" to "Hello", "assistant" to "Hi"),
             activeObjective = "Test objective",
-            userPreferences = mapOf("persona" to "NEXUS"),
-            activeSkills = listOf("skill_1"),
-            budgetUsed = 5,
-            budgetRemaining = 10,
-            budgetMax = 15
+            sessionStart = System.currentTimeMillis()
         )
-
-        assertEquals("session_1", sessionData.sessionId)
-        assertEquals("trace_1", sessionData.interactionTraceId)
+        assertEquals("test command", sessionData.command)
         assertEquals("CHAT", sessionData.modality)
-        assertEquals(2, sessionData.conversationHistory.size)
         assertEquals("Test objective", sessionData.activeObjective)
-        assertEquals(5, sessionData.budgetUsed)
-        assertEquals(10, sessionData.budgetRemaining)
-        assertEquals(15, sessionData.budgetMax)
     }
 
     @Test
-    fun testUnifiedContextSummary() {
-        // This test verifies the context summary method exists and returns a string
-        // Full integration test would require all dependencies
-        val method = OrionContextIntegration::class.java.getDeclaredMethod("getContextSummary", 
+    fun testUnifiedContextSummaryMethodExists() {
+        val method = OrionContextIntegration::class.java.getDeclaredMethod("getContextSummary",
             OrionContextIntegration.UnifiedContext::class.java)
         assertEquals(String::class.java, method.returnType)
     }
 
     @Test
-    fun testCondensedContextForPrompt() {
-        val method = OrionContextIntegration::class.java.getDeclaredMethod("getCondensedContextForPrompt", 
+    fun testCondensedContextForPromptMethodExists() {
+        val method = OrionContextIntegration::class.java.getDeclaredMethod("getCondensedContextForPrompt",
             OrionContextIntegration.UnifiedContext::class.java, Int::class.java)
         assertEquals(String::class.java, method.returnType)
     }

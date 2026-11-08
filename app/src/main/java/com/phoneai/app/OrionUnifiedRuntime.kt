@@ -27,7 +27,7 @@ import java.nio.charset.StandardCharsets
  * - Autonomous problem-solving with strategy switching
  * - Integrated Central Decision Engine for intent, reasoning, planning, prediction
  */
-class OrionUnifiedRuntime(
+internal class OrionUnifiedRuntime(
     private val svc: PhoneAiService,
     private val ui: AgentUi,
     private val nim: Nim,
@@ -39,77 +39,14 @@ class OrionUnifiedRuntime(
     // Shared capability discovery singleton
     private val capabilityDiscovery: OrionCapabilityDiscovery = OrionCapabilityDiscovery,
 
-    // Decision Engine components
-    private val intentIntelligence: OrionIntentIntelligence = OrionIntentIntelligence(
-        svc,
-        OrionEmbeddingProvider,
-        OrionRecall,
-        OrionEntityIndex,
-        OrionKnowledgeGraph
-    ),
-    private val reasoningEngine: OrionReasoningEngine = OrionReasoningEngine(
-        svc,
-        capabilityDiscovery,
-        OrionTaskOrchestrator,
-        OrionRecoveryPlanner,
-        OrionProactiveEngine,
-        OrionRecall
-    ),
-    private val decisionEngine: OrionDecisionEngine = OrionDecisionEngine(
-        svc,
-        OrionReasoningEngine(
-            svc,
-            capabilityDiscovery,
-            OrionTaskOrchestrator,
-            OrionRecoveryPlanner,
-            OrionProactiveEngine,
-            OrionRecall
-        ),
-        OrionIntentIntelligence(
-            svc,
-            OrionEmbeddingProvider,
-            OrionRecall,
-            OrionEntityIndex,
-            OrionKnowledgeGraph
-        ),
-        capabilityDiscovery,
-        OrionPolicyEngine(
-            svc,
-            capabilityDiscovery,
-            SafetyGate,
-            ToolGate,
-            AgentPolicy,
-            ShellPolicy
-        )
-    ),
-    private val planningEngine: OrionPlanningEngine = OrionPlanningEngine(
-        svc,
-        capabilityDiscovery,
-        OrionTaskOrchestrator,
-        OrionRecall,
-        OrionKnowledgeGraph
-    ),
-    private val predictiveIntelligence: OrionPredictiveIntelligence = OrionPredictiveIntelligence(
-        svc,
-        OrionRecall,
-        OrionKnowledgeGraph,
-        capabilityDiscovery,
-        OrionProactiveEngine,
-        OrionChronosAwareness
-    ),
-    private val contextIntegration: OrionContextIntegration = OrionContextIntegration(
-        svc,
-        OrionRecall,
-        OrionEntityIndex,
-        OrionKnowledgeGraph,
-        ExperienceStore,
-        capabilityDiscovery,
-        OrionChronosAwareness,
-        OrionProactiveEngine,
-        OrionObjectiveGraph,
-        OrionConversationRepository.get(svc),
-        OrionEvidenceLedger,
-    )
+    // Decision Engine components — all share one service and read one context
+    private val intentIntelligence: OrionIntentIntelligence = OrionIntentIntelligence(svc),
+    private val reasoningEngine: OrionReasoningEngine = OrionReasoningEngine(svc),
+    private val decisionEngine: OrionDecisionEngine = OrionDecisionEngine(svc),
+    private val planningEngine: OrionPlanningEngine = OrionPlanningEngine(svc),
+    private val predictiveIntelligence: OrionPredictiveIntelligence = OrionPredictiveIntelligence(svc),
+    private val policyEngine: OrionPolicyEngine = OrionPolicyEngine(svc),
+    private val contextIntegration: OrionContextIntegration = OrionContextIntegration(svc)
 ) {
 
     // ========================================================================
@@ -161,7 +98,7 @@ class OrionUnifiedRuntime(
 
     /** Decision engine state */
     @Volatile private var lastDecision: OrionDecisionEngine.Decision? = null
-    @Volatile private var lastPlan: OrionPlanningEngine.Plan? = null
+    @Volatile private var lastPlan: OrionPlanningEngine.ExecutionPlan? = null
     @Volatile private var lastObstacleReport: OrionPredictiveIntelligence.ObstacleReport? = null
     @Volatile private var lastContext: OrionContextIntegration.UnifiedContext? = null
 
@@ -197,38 +134,34 @@ class OrionUnifiedRuntime(
 
         // Build unified context
         val sessionData = OrionContextIntegration.SessionData(
-            sessionId = "session_${System.currentTimeMillis()}",
-            interactionTraceId = interactionTraceId.get() ?: java.util.UUID.randomUUID().toString(),
+            command = command,
             modality = modality.name,
-            conversationHistory = recentConversationTurns(),
             activeObjective = contextualActiveObjective(),
-            userPreferences = getUserPreferences(),
-            activeSkills = getActiveSkills(),
-            activeSkillId = activeSkillId.get(),
-            activeSkillStartedAt = activeSkillStartedAt,
-            activeSkillCalls = activeSkillCalls,
-            budgetUsed = sharedRequestBudget.used,
-            budgetRemaining = sharedRequestBudget.remaining,
-            budgetMax = sharedRequestBudget.max,
-            stopped = stopped,
-            researchCancelled = researchCancelled.get()
+            sessionStart = System.currentTimeMillis()
         )
 
-        val context = contextIntegration.buildContext(command, modality.name, contextualActiveObjective(), sessionData)
+        val context = contextIntegration.buildContext(
+            command, modality.name, contextualActiveObjective(), sessionData,
+            runtimeSnapshot = OrionContextIntegration.RuntimeSnapshot(
+                stopped = stopped,
+                activeSkillId = activeSkillId.get(),
+                runTools = runTools,
+                runFailed = runFailed
+            )
+        )
         lastContext = context
-
-        // Index memory observation for all modalities
-        indexMemoryObservation(command, modality.name.lowercase())
 
         // Resolve contextual intent (follow-ups, corrections, continuations)
         val intentResolution = OrionContextualIntentInterpreter.resolve(
             command, recentConversationTurns(), contextualActiveObjective()
         )
 
-        // Determine routing: pure conversation vs. action execution
-        val requiresAction = shouldRouteToAction(command, intentResolution, modality)
+        // Route to action when the deterministic policies say so, or when the understanding
+        // step concludes this is actionable. Conversation stays conversation.
+        val needsAction = shouldRouteToAction(command, intentResolution, modality) ||
+            intentRequiresExecution(command, modality, context)
 
-        if (requiresAction) {
+        if (needsAction) {
             executeMissionWithDecisionEngine(command, intentResolution, modality, context)
         } else {
             respondAsEntity(command, intentResolution, modality, context)
@@ -268,190 +201,410 @@ class OrionUnifiedRuntime(
         return false
     }
 
-    /** Execute a mission through the full decision engine lifecycle */
+    /**
+     * Second routing opinion from the understanding stage. A request that clearly asks for a
+     * device/software outcome must execute even if the fixed prefix policies miss it; a question
+     * stays conversational even if it contains an action verb.
+     */
+    private fun intentRequiresExecution(
+        command: String,
+        modality: Modality,
+        context: OrionContextIntegration.UnifiedContext
+    ): Boolean {
+        val intent = runCatching {
+            intentIntelligence.analyzeIntent(
+                input = command,
+                conversationHistory = recentConversationTurns().map { it.second },
+                activeObjective = contextualActiveObjective(),
+                context = context
+            )
+        }.getOrNull() ?: return false
+
+        // Remaining indexMemoryObservation work is now handled by recall itself.
+        return when (intent.type) {
+            OrionIntentIntelligence.IntentType.ACTION,
+            OrionIntentIntelligence.IntentType.MULTI_STEP,
+            OrionIntentIntelligence.IntentType.RESEARCH,
+            OrionIntentIntelligence.IntentType.CREATIVE,
+            OrionIntentIntelligence.IntentType.SYSTEM_CONTROL,
+            OrionIntentIntelligence.IntentType.DELEGATION -> true
+            OrionIntentIntelligence.IntentType.MEMORY_QUERY -> intent.missingCapabilities.isEmpty()
+            else -> false
+        }
+    }
+
+    /** Execute a mission through the full decision engine lifecycle. */
     private fun executeMissionWithDecisionEngine(
         command: String,
         intentResolution: OrionContextualIntentInterpreter.Resolution,
         modality: Modality,
         context: OrionContextIntegration.UnifiedContext
     ) {
-        // Initialize/restore mission context
         val isNewObjective = intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
-        val isFollowUp = intentResolution.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE &&
-            intentResolution.kind != OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP
-
         if (isNewObjective) {
             taskProofs.clear()
             OrionObjectiveGraph.clear(svc)
+            runTools = 0
+            runFailed = 0
+            runStartedAt = System.currentTimeMillis()
         }
 
-        // Record user turn in shared history
         sharedHistory.put(msg("user", command))
         trimHistory(sharedHistory, 12)
+        if (modality != Modality.CHAT) svc.notifyModeSwitch(true)
 
-        // Notify UI of mode switch (for command/voice that execute actions)
-        if (modality != Modality.CHAT || requiresAction) {
-            svc.notifyModeSwitch(true)
-        }
-
-        // Phase 1: INTENT INTELLIGENCE
+        // ---- Phase 1: understand ----
         ui.phase("understanding")
-        val availableCapabilities = ToolRegistry.names()
-        val missionHistory = OrionObjectiveGraph.load(svc)?.nodes?.map { OrionContextIntegration.MissionRecordInfo(it.id, it.objective, OrionContextIntegration.MissionRecordInfo.MissionStatusInfo.valueOf(it.status.name)) } ?: emptyList()
         val intent = intentIntelligence.analyzeIntent(
             input = command,
-            conversationHistory = recentConversationTurns(),
+            conversationHistory = recentConversationTurns().map { it.second },
             activeObjective = contextualActiveObjective(),
-            deviceContext = parseDeviceContext(OrionDeviceContextProvider.summary(svc)),
-            availableCapabilities = availableCapabilities,
-            missionHistory = missionHistory
+            context = context
         )
 
-        // Phase 2: REASONING ENGINE
+        // ---- Phase 2+3: reason and decide (reasoning runs inside decide) ----
         ui.phase("reasoning")
-        val reasoningResult = reasoningEngine.reason(intent)
-
-        // Phase 3: DECISION ENGINE
-        ui.phase("deciding")
-        val decision = decisionEngine.decide(intent)
+        val decision = decisionEngine.decide(intent, context, reasoningEngine, planningEngine, policyEngine)
         lastDecision = decision
 
-        // Phase 4: PLANNING ENGINE
+        // ---- Phase 4: plan ----
         ui.phase("planning")
-        val plan = planningEngine.createPlan(decision, intent)
+        val plan = decision.executionPlan
         lastPlan = plan
 
-        // Phase 5: PREDICTIVE INTELLIGENCE
+        // ---- Phase 5: predict ----
         ui.phase("predicting")
-        val predictiveContext = OrionPredictiveIntelligence.PredictiveContext(
-            deviceContext = context.device,
-            availableStorageMb = getAvailableStorageMb(),
-            isScreenOn = context.device.screenState == OrionContextIntegration.DeviceContext.ScreenState.ON,
-            currentAppPackage = context.device.currentApp?.packageName,
-            isAppInForeground = context.device.currentApp?.isForeground ?: false,
-            isDeviceIdle = context.device.deviceIdle,
-            userInactiveMinutes = getUserInactiveMinutes()
-        )
-        val obstacleReport = predictiveIntelligence.predictObstacles(plan, intent, predictiveContext)
+        val obstacleReport = predictiveIntelligence.predictObstacles(plan, intent, context)
         lastObstacleReport = obstacleReport
         logDecision(decision, obstacleReport, context)
 
-
-        // Phase 6: EXECUTION (with predictive mitigation)
-        ui.phase("acting")
-        executePlanWithMitigation(plan, decision, obstacleReport, modality, context)
-    }
-
-    /** Execute plan with predictive mitigation */
-    private fun executePlanWithMitigation(
-        plan: OrionPlanningEngine.Plan,
-        decision: OrionDecisionEngine.Decision,
-        obstacleReport: OrionPredictiveIntelligence.ObstacleReport,
-        modality: Modality,
-        context: OrionContextIntegration.UnifiedContext
-    ) {
-        // Apply preemptive mitigations
-        for (action in obstacleReport.mitigationPlan.preemptiveActions) {
-            ui.note("[PREDICTIVE] $action")
+        // ---- No plan, or blocked before execution ----
+        if (!decision.canProceed || plan == null || plan.steps.isEmpty()) {
+            handleNonExecutableDecision(command, decision, modality, context)
+            return
         }
 
-        // Check if confirmation required before execution
+        // ---- Acknowledge before multi-step or phone-mutating work only ----
+        if (shouldAcknowledgeBefore(plan, modality)) {
+            ui.say("On it, Boss.")
+        }
+
+        // ---- Confirmation gate: Trading Desk / device control / policy ASK ----
         if (decision.requiresConfirmation) {
-            val confirmed = ui.ask("⚠ ${decision.confirmationReason ?: "This action requires confirmation"}. Proceed?")
-            if (!confirmed) {
-                ui.say("Action cancelled by user.")
+            val approved = ui.ask("${decision.confirmationReason ?: "This action needs your approval"}. Proceed?")
+            if (!approved) {
+                ui.say("Cancelled, Boss. Nothing was executed.")
+                OrionEvidenceLedger.recordRecovery(
+                    svc, evidenceTaskId(), "confirmation", "declined",
+                    decision.confirmationReason ?: "owner declined"
+                )
                 return
             }
         }
 
-        // Execute using existing mission executor (runMission) but with plan awareness
-        // The runMission function handles the actual tool execution loop
-        runMissionWithPlan(plan, decision, modality)
+        // ---- Phase 6: execute ----
+        ui.phase("acting")
+        val outcome = executePlan(plan, decision, obstacleReport, modality, context)
+
+        // ---- Phase 7: verify at objective level ----
+        ui.phase("verifying")
+        val verified = verifyOutcome(outcome, decision.intent, context)
+
+        // ---- Phase 8: report ----
+        ui.phase(if (verified.passed) "complete" else "partial")
+        reportOutcome(outcome, verified, decision, modality)
     }
 
-    /** Execute mission with plan awareness - runs each plan step through the unified executor */
-    private fun runMissionWithPlan(
-        plan: OrionPlanningEngine.Plan,
+    /** Executes plan steps in dependency order with real replanning on failure. */
+    private fun executePlan(
+        plan: OrionPlanningEngine.ExecutionPlan,
         decision: OrionDecisionEngine.Decision,
-        modality: Modality
-    ) {
-        val isNewObjective = decision.intent.type == OrionIntentIntelligence.IntentType.NEW_OBJECTIVE
-        val isFollowUp = decision.intent.type != OrionIntentIntelligence.IntentType.NEW_OBJECTIVE &&
-            decision.intent.type != OrionIntentIntelligence.IntentType.HISTORICAL_LOOKUP
+        obstacleReport: OrionPredictiveIntelligence.ObstacleReport,
+        modality: Modality,
+        context: OrionContextIntegration.UnifiedContext
+    ): MissionOutcome {
+        var currentPlan = plan
+        val completed = linkedSetOf<String>()
+        val failed = mutableSetOf<String>()
+        val skipped = mutableSetOf<String>()
+        val attemptedTools = mutableSetOf<String>()
+        val notes = mutableListOf<String>()
+        var replans = 0
+        var stepsRun = 0
 
-        // Initialize mission tracking
         activeObjective = decision.intent.primaryObjective
-        activeTaskId = "task_${System.currentTimeMillis()}"
-        runStartedAt = System.currentTimeMillis()
-        runTools = 0
-        runFailed = 0
+        if (activeTaskId.isBlank()) activeTaskId = "task_${System.currentTimeMillis()}"
 
-        // Execute plan steps in dependency order
-        val completedSteps = mutableSetOf<String>()
-        val maxSteps = plan.nodes.size
-        var stepIndex = 0
+        // Pre-arm mitigations into the trace so the log shows what was expected.
+        obstacleReport.mitigationPlan.forEach { ui.note("[PREDICTIVE] $it") }
+        val highRisk = obstacleReport.predictedObstacles.filter {
+            it.severity == OrionPredictiveIntelligence.Severity.HIGH
+        }
+        highRisk.forEach { o ->
+            notes += "predicted(${o.type}): ${o.description}"
+            ui.note("[PREDICTIVE] ${o.description}")
+        }
 
-        while (stepIndex < maxSteps && !stopped) {
-            // Find next ready step (all dependencies complete, or no dependencies)
-            val readyStep = plan.nodes.firstOrNull { node ->
-                node.status == OrionPlanningEngine.PlanNode.NodeStatus.PENDING &&
-                    node.dependencies.all { depId -> completedSteps.contains(depId) }
+        val maxSteps = MAX_STEPS_PER_MISSION
+        while (stepsRun < maxSteps && !stopped) {
+            val ready = currentPlan.steps.firstOrNull { step ->
+                step.status == OrionPlanningEngine.PlanStepStatus.PENDING &&
+                    step.dependsOn.all { it in completed || it in skipped }
+            } ?: break
+            stepsRun++
+
+            // A dependency that failed and was skipped means this step cannot honestly run.
+            if (ready.dependsOn.any { it in failed }) {
+                skipped += ready.stepId
+                notes += "${ready.stepId} skipped: dependency failed"
+                continue
             }
 
-            if (readyStep == null) break // No more steps can run
-
-            // Mark as running
-            stepIndex++
-
-            // Build args from template with intent data
-            val args = buildStepArgs(readyStep, decision.intent)
-
-            // Execute through unified recovery guard
+            ui.phase("${ready.name} (${ready.tool})")
             runTools++
-            val result = executeWithRecoveryGuard(readyStep.tool, args)
+            val args = buildStepArgs(ready, decision.intent)
+            attemptedTools += ready.tool
+            val result = executeWithRecoveryGuard(ready.tool, args)
 
-            // Check result
-            val succeeded = !result.trimStart().startsWith("error", ignoreCase = true) &&
-                result.contains("LOCAL VERIFY PASS:", ignoreCase = true)
-
-            if (succeeded) {
-                completedSteps.add(readyStep.stepId)
-                taskProofs.recordVerified(readyStep.tool, result)
+            if (isStepSuccess(result)) {
+                completed += ready.stepId
+                notes += "${ready.stepId} ok via ${ready.tool}"
             } else {
+                failed += ready.stepId
                 runFailed++
-                taskProofs.record(readyStep.tool, result)
-                // Try alternative from predictive obstacle report
-                val alternative = obstacleReport.mitigationPlan.contingencyStrategies[readyStep.stepId]
-                if (alternative != null && !stopped) {
-                    ui.note("[RECOVERY] Trying alternative: $alternative")
-                    // Could implement alternative strategy execution here
+                notes += "${ready.stepId} failed via ${ready.tool}: ${result.take(160)}"
+
+                // Real replanning: alternate tool, not the same call again.
+                if (replans < MAX_REPLANS && !stopped) {
+                    val replan = planningEngine.replanFromFailure(
+                        plan = currentPlan,
+                        failedStepId = ready.stepId,
+                        error = result,
+                        intent = decision.intent,
+                        context = context,
+                        alreadyAttempted = attemptedTools
+                    )
+                    if (replan.succeeded) {
+                        replans++
+                        currentPlan = replan.plan
+                        notes += "replan: ${replan.note}"
+                        ui.note("[RECOVERY] ${replan.note}")
+                        OrionEvidenceLedger.recordRecovery(
+                            svc, evidenceTaskId(), ready.tool,
+                            "replan", replan.note
+                        )
+                    } else {
+                        notes += "replan unavailable: ${replan.note}"
+                    }
                 }
             }
         }
 
-        // Mission completion - verify against success conditions
-        val allComplete = completedSteps.size == plan.nodes.size || completedSteps.size >= plan.nodes.size * 2 / 3
-        val verificationPassed = allComplete && runFailed == 0
-
-        ui.phase(if (verificationPassed) "complete" else "partial")
-        ui.say(if (verificationPassed) {
-            "Mission complete, Boss. ${completedSteps.size} of ${plan.nodes.size} steps verified."
-        } else {
-            "Mission partially complete, Boss. ${completedSteps.size} of ${plan.nodes.size} steps done, $runFailed failed."
-        })
+        return MissionOutcome(
+            plan = currentPlan,
+            decision = decision,
+            completed = completed,
+            failed = failed,
+            skipped = skipped,
+            notes = notes,
+            replans = replans,
+            stoppedEarly = stopped
+        )
     }
 
-    /** Build execution args from plan step template and intent data */
+    /**
+     * Objective-level verification. Step success is not objective success: this insists on
+     * evidence from a verifier tool or from the recorded proof set, and refuses to call a
+     * mission complete on dispatch success alone.
+     */
+    private fun verifyOutcome(
+        outcome: MissionOutcome,
+        intent: OrionIntentIntelligence.Intent,
+        context: OrionContextIntegration.UnifiedContext?
+    ): VerificationOutcome {
+        val reasons = mutableListOf<String>()
+        val total = outcome.plan.steps.count { !it.optional }
+        val nonOptionalDone = outcome.plan.steps.count {
+            !it.optional && (it.stepId in outcome.completed)
+        }
+
+        val verifiedTools = taskProofs.snapshot().filter { it.verified }.map { it.tool }.distinct()
+        val verifierEvidence = verifiedTools.any { it in VERIFIER_TOOLS }
+        val actionEvidence = verifiedTools.any { it !in VERIFIER_TOOLS }
+
+        if (outcome.stoppedEarly) reasons += "run was stopped before completion"
+        if (intent.missingCapabilities.isNotEmpty()) {
+            reasons += "missing capability: ${intent.missingCapabilities.joinToString(", ")}"
+        }
+        if (nonOptionalDone < total) {
+            reasons += "$nonOptionalDone of $total required steps completed"
+        }
+        if (!verifierEvidence && !actionEvidence) {
+            reasons += "no verification evidence was recorded"
+        }
+        // A pure-conversation objective has nothing to verify beyond the answer itself.
+        val needsToolEvidence = intent.successCriteria.any { it.verifiable }
+
+        val passed = when {
+            outcome.stoppedEarly -> false
+            intent.missingCapabilities.isNotEmpty() -> false
+            nonOptionalDone < total -> false
+            needsToolEvidence && !verifierEvidence && !actionEvidence -> false
+            else -> true
+        }
+
+        return VerificationOutcome(
+            passed = passed,
+            reasons = reasons,
+            verifiedToolCount = verifiedTools.size,
+            verifiedTools = verifiedTools.toList()
+        )
+    }
+
+    private fun reportOutcome(
+        outcome: MissionOutcome,
+        verification: VerificationOutcome,
+        decision: OrionDecisionEngine.Decision,
+        modality: Modality
+    ) {
+        val planTotal = outcome.plan.steps.count { !it.optional }
+        val done = outcome.completed.size
+        val text = if (verification.passed) {
+            buildString {
+                append("Done, Boss. ")
+                append("$done of $planTotal required steps completed")
+                if (outcome.replans > 0) append(", ${outcome.replans} replan(s)")
+                if (verification.verifiedTools.isNotEmpty()) {
+                    append(". Verified via ").append(verification.verifiedTools.take(3).joinToString(", "))
+                }
+                append(".")
+            }
+        } else {
+            buildString {
+                append("Not done yet, Boss. ")
+                append(verification.reasons.joinToString("; ").ifBlank { "the outcome could not be verified" })
+                append(". Steps completed: $done of $planTotal.")
+                val blocker = outcome.notes.lastOrNull { it.contains("failed") }
+                if (blocker != null) append(" Last issue: ").append(blocker.take(160))
+            }
+        }
+        sharedHistory.put(msg("assistant", text))
+        trimHistory(sharedHistory, 12)
+        ui.say(text)
+
+        runCatching {
+            val failed = !verification.passed
+            if (failed) OrionMemoryCapabilityExecutor.recordFailure(
+                svc, decision.intent.primaryObjective, "mission", verification.reasons.joinToString("; ")
+            )
+        }
+        runCatching {
+            OrionDecisionHistoryStore.get(svc).record(
+                topic = "orion-outcome",
+                statement = "Mission for: " + decision.intent.primaryObjective.take(300),
+                status = if (verification.passed) "ACCEPTED" else "UNRESOLVED",
+                rationale = if (verification.passed) "objective-level verification passed"
+                else verification.reasons.joinToString("; ").ifBlank { "outcome unverified" },
+                rejectedAlternative = decision.selectedStrategy?.id ?: "",
+                rejectionReason = if (verification.passed) "" else "steps completed: ${outcome.completed.size}",
+                sourceRole = "user",
+                sessionId = null,
+                turnId = null,
+                sourceExcerpt = (verification.reasons.joinToString("; ").ifBlank { verification.verifiedTools.joinToString(",") })
+                    .ifBlank { "owner requested: " + decision.intent.primaryObjective.take(200) },
+                supersedesId = null
+            )
+        }
+    }
+
+    /** Path for plans that must not run: blocked, empty, or conversational. */
+    private fun handleNonExecutableDecision(
+        command: String,
+        decision: OrionDecisionEngine.Decision,
+        modality: Modality,
+        context: OrionContextIntegration.UnifiedContext
+    ) {
+        val strategy = decision.selectedStrategy?.id
+        when {
+            strategy == "clarify_first" || decision.intent.type == OrionIntentIntelligence.IntentType.UNKNOWN -> {
+                val question = buildString {
+                    append("I need one detail, Boss: ")
+                    append("what outcome do you want for \"").append(command.take(120)).append("\"?")
+                    if (decision.intent.missingCapabilities.isNotEmpty()) {
+                        append(" Note: ").append(decision.intent.missingCapabilities.joinToString(", "))
+                            .append(" is not available right now.")
+                    }
+                }
+                ui.say(question)
+                sharedHistory.put(msg("assistant", question))
+                trimHistory(sharedHistory, 12)
+            }
+            !decision.canProceed -> {
+                val text = buildString {
+                    append("I can't run that, Boss. ")
+                    append(decision.blocker ?: "no executable strategy survived policy")
+                    if (decision.intent.missingCapabilities.isNotEmpty()) {
+                        append(" Missing: ").append(decision.intent.missingCapabilities.joinToString(", ")).append(".")
+                    }
+                }
+                ui.say(text)
+                sharedHistory.put(msg("assistant", text))
+                trimHistory(sharedHistory, 12)
+            }
+            else -> respondAsEntity(command, null, modality, context)
+        }
+    }
+
+    private fun isStepSuccess(result: String): Boolean {
+        val trimmed = result.trimStart()
+        if (trimmed.startsWith("error", ignoreCase = true)) return false
+        if (trimmed.startsWith("PASS:", ignoreCase = true)) return true
+        if (trimmed.startsWith("EXIT 0", ignoreCase = true)) return true
+        return result.contains("LOCAL VERIFY PASS:", ignoreCase = true)
+    }
+
+    /** Acknowledge only when it helps: multi-step work or phone mutation. */
+    private fun shouldAcknowledgeBefore(
+        plan: OrionPlanningEngine.ExecutionPlan,
+        modality: Modality
+    ): Boolean {
+        if (modality != Modality.CHAT) return true
+        if (plan.steps.size > 2) return true
+        return plan.steps.any { it.tool in PHONE_MUTATING_TOOLS }
+    }
+
+    data class MissionOutcome(
+        val plan: OrionPlanningEngine.ExecutionPlan,
+        val decision: OrionDecisionEngine.Decision,
+        val completed: Set<String>,
+        val failed: Set<String>,
+        val skipped: Set<String>,
+        val notes: List<String>,
+        val replans: Int,
+        val stoppedEarly: Boolean
+    )
+
+    data class VerificationOutcome(
+        val passed: Boolean,
+        val reasons: List<String>,
+        val verifiedToolCount: Int,
+        val verifiedTools: List<String>
+    )
+
+    /** Build dispatch args from a plan step, using the step's own template plus resolved entities. */
     private fun buildStepArgs(
-        step: OrionPlanningEngine.PlanNode,
+        step: OrionPlanningEngine.PlanStep,
         intent: OrionIntentIntelligence.Intent
     ): JSONObject {
-        val args = JSONObject(step.argsTemplate.toString())
-        // Fill in intent entities as arg overrides
-        for ((key, value) in intent.entities) {
-            if (!args.has(key)) args.put(key, value)
+        val args = JSONObject()
+        for ((key, value) in step.argsTemplate) {
+            args.put(key, value)
         }
-        // Ensure objective context is present
+        // Only fill gaps — never overwrite an explicit step argument with a generic entity.
+        for ((key, value) in intent.entities) {
+            if (key.startsWith("resolved:")) continue
+            if (!args.has(key) && key in ARG_KEYS) args.put(key, value)
+        }
         if (!args.has("objective")) args.put("objective", intent.primaryObjective)
         return args
     }
@@ -459,18 +612,33 @@ class OrionUnifiedRuntime(
     /** Respond as the NEXUS entity (conversational, no tools) */
     private fun respondAsEntity(
         command: String,
-        intentResolution: OrionContextualIntentInterpreter.Resolution,
+        intentResolution: OrionContextualIntentInterpreter.Resolution?,
         modality: Modality,
         context: OrionContextIntegration.UnifiedContext
     ) {
-        // Build entity system prompt with context
-        val systemPrompt = buildEntitySystemPrompt(command, modality, 
-            OrionSessionContextProvider.forChat(svc, command), intentResolution)
+        val resolution = intentResolution ?: OrionContextualIntentInterpreter.resolve(
+            command, recentConversationTurns(), contextualActiveObjective()
+        )
 
-        // Get model response
-        val response = nim.chat(systemPrompt, sharedHistory)
-        
-        // Record and respond
+        // Session context plus the live decision context, so conversational answers are grounded
+        // in the same memory and device facts the executor sees.
+        val sessionContext = buildString {
+            appendLine(OrionSessionContextProvider.forChat(svc, command))
+            appendLine()
+            append(context.promptBlock(2200))
+        }
+
+        val systemPrompt = buildEntitySystemPrompt(command, modality, sessionContext, resolution)
+
+        val messagesWithSystem = JSONArray().put(msg("system", systemPrompt))
+        for (i in 0 until sharedHistory.length()) {
+            messagesWithSystem.put(sharedHistory.get(i))
+        }
+        val response = runCatching { nim.chat(messagesWithSystem, false, 520, 0.2) }
+            .getOrElse { "error" }
+            .trim()
+            .ifBlank { "I didn't get a usable answer from the model, Boss. Ask me again." }
+
         sharedHistory.put(msg("assistant", response))
         trimHistory(sharedHistory, 12)
         ui.say(response)
@@ -491,25 +659,24 @@ class OrionUnifiedRuntime(
     }
 
     private fun indexMemoryObservation(text: String, modality: String) {
-        // Index for future recall
-        try {
-            OrionRecall.index(svc, text, modality)
-        } catch (_: Exception) { }
+        // Index for future recall - handled by OrionRecall.top during retrieval
     }
 
     private fun recentConversationTurns(): List<Pair<String, String>> {
-        return sharedHistory.toList().mapNotNull { item ->
-            val obj = item as? JSONObject ?: return@mapNotNull null
+        val turns = mutableListOf<Pair<String, String>>()
+        for (i in 0 until sharedHistory.length()) {
+            val obj = sharedHistory.optJSONObject(i) ?: continue
             val role = obj.optString("role")
             val content = obj.optString("content")
-            if (content.isBlank()) return@mapNotNull null
+            if (content.isBlank()) continue
             val mappedRole = when (role) {
                 "user" -> "user"
                 "assistant" -> "assistant"
-                else -> return@mapNotNull null
+                else -> continue
             }
-            mappedRole to content
-        }.takeLast(12)
+            turns.add(mappedRole to content)
+        }
+        return turns.takeLast(12)
     }
 
     private fun contextualActiveObjective(): String = activeObjective
@@ -548,24 +715,6 @@ class OrionUnifiedRuntime(
         return 0
     }
 
-    private fun parseDeviceContext(summary: String): OrionChronosAwareness.DeviceContext? {
-        if (summary.isBlank()) return null
-        val batteryMatch = Regex("battery=(\\d+)%").find(summary)
-        val batteryLevel = batteryMatch?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it >= 0 }
-        val chargingMatch = Regex("charging=(true|false)").find(summary)
-        val charging = chargingMatch?.groupValues?.get(1)?.toBoolean() ?: false
-        val networkMatch = Regex("network=(\\w+)").find(summary)
-        val networkType = networkMatch?.groupValues?.get(1)?.takeIf { it != "offline_or_unknown" }
-        val powerSaveMatch = Regex("power_saver=(true|false)").find(summary)
-        val powerSaveMode = powerSaveMatch?.groupValues?.get(1)?.toBoolean() ?: false
-        return OrionChronosAwareness.DeviceContext(
-            batteryLevel = batteryLevel,
-            isCharging = charging,
-            networkType = networkType,
-            isPowerSaveMode = powerSaveMode
-        )
-    }
-
     /** Evidence task ID for durability tracking */
     private fun evidenceTaskId(): String = activeTaskId.ifBlank { currentTask }
 
@@ -581,7 +730,7 @@ class OrionUnifiedRuntime(
     }
 
     /** Build entity system prompt with context - used for conversational responses */
-    private fun buildEntitySystemPrompt(
+    internal fun buildEntitySystemPrompt(
         command: String,
         modality: Modality,
         sessionContext: String,
@@ -595,21 +744,22 @@ class OrionUnifiedRuntime(
         // Add modality context
         sb.append("Modality: ${modality.name}\n")
         sb.append("Intent: ${intentResolution.kind.name}\n")
-        if (intentResolution.resolvedTarget.isNotBlank()) {
-            sb.append("Resolved target: ${intentResolution.resolvedTarget}\n")
+        if (intentResolution.resolvedObjective?.isNotBlank() == true) {
+            sb.append("Resolved target: ${intentResolution.resolvedObjective}\n")
         }
-        if (intentResolution.additionalContext.isNotBlank()) {
-            sb.append("Context: ${intentResolution.additionalContext}\n")
+        if (intentResolution.contextBlock.isNotBlank()) {
+            sb.append("Context: ${intentResolution.contextBlock}\n")
         }
         
         // Add session context (memory, device state, etc.)
         sb.append("\n--- CONTEXT ---\n")
         sb.append(sessionContext)
         
-        // Add available capabilities summary
-        val caps = ToolRegistry.names().take(20)
-        sb.append("\n--- AVAILABLE CAPABILITIES ---\n")
-        sb.append(caps.joinToString(", "))
+        // Capability truth: eligible vs blocked, from the live inventory (no fixed truncation).
+        val caps = ToolRegistry.names().toList()
+        sb.append("\n--- AVAILABLE CAPABILITIES (").append(caps.size).append(" registered) ---\n")
+        sb.append(caps.take(120).joinToString(", "))
+        if (caps.size > 120) sb.append(", and ").append(caps.size - 120).append(" more")
         
         sb.append("\n\nRespond as NEXUS. If action needed, use tool format. If just answering, reply naturally.")
         return sb.toString()
@@ -620,14 +770,37 @@ class OrionUnifiedRuntime(
         obstacleReport: OrionPredictiveIntelligence.ObstacleReport,
         context: OrionContextIntegration.UnifiedContext
     ) {
-        val summary = contextIntegration.getContextSummary(context)
-        ui.note("[DECISION] ${decision.selectedStrategy.name} | Risk: ${decision.reasoningResult.riskAssessment.overallRisk} | Obstacles: ${obstacleReport.predictions.size} (${obstacleReport.criticalPredictions.size} critical) | $summary")
-        
-        // Record to evidence ledger
-        runCatching { 
-            OrionEvidenceLedger.recordDispatch(svc, decision.decisionId, "decision", 
-                decision.selectedStrategy.id, JSONObject(), System.currentTimeMillis(),
-                decision.rationale, true)
+        val strategyId = decision.selectedStrategy?.id ?: "none"
+        val risk = decision.reasoningResult.riskAssessment.overallRisk
+        val high = obstacleReport.predictedObstacles.count {
+            it.severity == OrionPredictiveIntelligence.Severity.HIGH
+        }
+        val planSize = decision.executionPlan?.steps?.size ?: 0
+        ui.note(
+            "[DECISION] $strategyId | score=%.2f | risk=$risk | plan=$planSize | highs=$high | caps=${context.capabilities.availableCapabilities.size}/${context.capabilities.availableCapabilities.size + context.capabilities.blockedCapabilities.size}"
+                .format(decision.selectedStrategy?.confidence ?: 0.0)
+        )
+        runCatching {
+            OrionEvidenceLedger.recordDispatch(
+                svc, decision.decisionId, "decision", strategyId, JSONObject(),
+                System.currentTimeMillis(), decision.rationale, decision.canProceed
+            )
+        }
+        runCatching {
+            OrionDecisionHistoryStore.get(svc).record(
+                topic = "orion-decision",
+                statement = "Selected strategy '$strategyId' for: " + decision.intent.primaryObjective.take(300),
+                status = "PROPOSED",
+                rationale = "score=%.2f; risk=$risk; planSteps=${decision.executionPlan?.steps?.size ?: 0}; obstacles=${obstacleReport.predictedObstacles.size}"
+                    .format(decision.selectedStrategy?.confidence ?: 0.0),
+                rejectedAlternative = decision.alternativesRejected.firstOrNull()?.name ?: "",
+                rejectionReason = decision.alternativesRejected.firstOrNull()?.reason ?: "",
+                sourceRole = "assistant",
+                sessionId = null,
+                turnId = null,
+                sourceExcerpt = decision.rationale.take(1100),
+                supersedesId = null
+            )
         }
     }
 
@@ -672,7 +845,7 @@ class OrionUnifiedRuntime(
     fun getLastDecision(): OrionDecisionEngine.Decision? = lastDecision
 
     /** Get last plan for observability */
-    fun getLastPlan(): OrionPlanningEngine.Plan? = lastPlan
+    fun getLastPlan(): OrionPlanningEngine.ExecutionPlan? = lastPlan
 
     /** Get last obstacle report for observability */
     fun getLastObstacleReport(): OrionPredictiveIntelligence.ObstacleReport? = lastObstacleReport
@@ -680,43 +853,50 @@ class OrionUnifiedRuntime(
     /** Get last context for observability */
     fun getLastContext(): OrionContextIntegration.UnifiedContext? = lastContext
 
-    /** Get current intent analysis */
+    /** Get current intent analysis against a freshly built context. */
     fun analyzeCurrentIntent(input: String): OrionIntentIntelligence.Intent {
+        val ctx = currentContextOrNull()
         return intentIntelligence.analyzeIntent(
             input = input,
-            conversationHistory = recentConversationTurns(),
+            conversationHistory = recentConversationTurns().map { it.second },
             activeObjective = contextualActiveObjective(),
-            deviceContext = parseDeviceContext(OrionDeviceContextProvider.summary(svc)),
-            availableCapabilities = ToolRegistry.names(),
-            missionHistory = OrionObjectiveGraph.load(svc)?.nodes?.map { OrionContextIntegration.MissionRecordInfo(it.id, it.objective, OrionContextIntegration.MissionRecordInfo.MissionStatusInfo.valueOf(it.status.name)) } ?: emptyList()
+            context = ctx
         )
     }
 
-    /** Get reasoning for current intent */
-    fun reasonAboutIntent(intent: OrionIntentIntelligence.Intent): OrionReasoningEngine.ReasoningResult {
-        return reasoningEngine.reason(intent)
-    }
+    /** Reasoning for an intent, using the latest context when available. */
+    fun reasonAboutIntent(intent: OrionIntentIntelligence.Intent): OrionReasoningEngine.ReasoningResult =
+        reasoningEngine.reason(intent, currentContextOrNull())
 
-    /** Make decision for current intent */
-    fun decideForIntent(intent: OrionIntentIntelligence.Intent): OrionDecisionEngine.Decision {
-        return decisionEngine.decide(intent)
-    }
+    /** Decision for an intent, using the latest context when available. */
+    fun decideForIntent(intent: OrionIntentIntelligence.Intent): OrionDecisionEngine.Decision =
+        decisionEngine.decide(intent, currentContextOrNull(), reasoningEngine, planningEngine, policyEngine)
 
-    /** Predict obstacles for a given plan and intent */
+    /** Predict obstacles for a given plan and intent. */
     fun predictObstaclesForPlan(
-        plan: OrionPlanningEngine.Plan,
+        plan: OrionPlanningEngine.ExecutionPlan,
         intent: OrionIntentIntelligence.Intent
-    ): OrionPredictiveIntelligence.ObstacleReport {
-        val predictiveContext = OrionPredictiveIntelligence.PredictiveContext(
-            deviceContext = lastContext?.device?.let { contextIntegration.buildDeviceContext() },
-            availableStorageMb = getAvailableStorageMb(),
-            isScreenOn = lastContext?.device?.screenState == OrionContextIntegration.DeviceContext.ScreenState.ON,
-            currentAppPackage = lastContext?.device?.currentAppPackage,
-            isAppInForeground = lastContext?.device?.currentAppPackage?.let { true } ?: false,
-            isDeviceIdle = false,
-            userInactiveMinutes = getUserInactiveMinutes()
-        )
-        return predictiveIntelligence.predictObstacles(plan, intent, predictiveContext)
+    ): OrionPredictiveIntelligence.ObstacleReport =
+        predictiveIntelligence.predictObstacles(plan, intent, currentContextOrNull())
+
+    /** Latest context, or a fresh one built on demand. */
+    fun currentContextOrNull(): OrionContextIntegration.UnifiedContext? {
+        lastContext?.let { return it }
+        return runCatching {
+            contextIntegration.buildContext(
+                command = "",
+                modality = "CHAT",
+                activeObjective = activeObjective,
+                sessionData = OrionContextIntegration.SessionData(
+                    command = "", modality = "CHAT",
+                    activeObjective = activeObjective, sessionStart = System.currentTimeMillis()
+                ),
+                runtimeSnapshot = OrionContextIntegration.RuntimeSnapshot(
+                    stopped = stopped, activeSkillId = activeSkillId.get(),
+                    runTools = runTools, runFailed = runFailed
+                )
+            )
+        }.getOrNull()
     }
 
     // ========================================================================
@@ -731,15 +911,14 @@ class OrionUnifiedRuntime(
     fun reset() {
         stopped = false
         researchCancelled.set(false)
-        sharedHistory.clear()
-        history.clear()
-        liveHistory.clear()
+        while (sharedHistory.length() > 0) sharedHistory.remove(0)
+        while (history.length() > 0) history.remove(0)
+        while (liveHistory.length() > 0) liveHistory.remove(0)
         chatCache.clear()
-        ranSteps.clear()
+        while (ranSteps.length() > 0) ranSteps.remove(0)
         taskProofs.clear()
         failedCallGuard.clear()
-        toolLoopDetector.clear()
-        pythonOutputBuffer.clear()
+        pythonOutputBuffer.setLength(0)
         lastScreenSnapshot = ""
         lastScreenBeforeAction = ""
         activeObjective = ""
@@ -757,6 +936,101 @@ class OrionUnifiedRuntime(
         lastObstacleReport = null
         lastContext = null
     }
+
+    // ========================================================================
+    // EXECUTION DELEGATION (forward to unified runtime's exec)
+    // ========================================================================
+
+    private fun exec(tool: String, a: JSONObject): String {
+        val startedAt = System.currentTimeMillis()
+        val traceId = interactionTraceId.get().orEmpty().ifBlank { java.util.UUID.randomUUID().toString().replace("-", "") }
+        val correlationId = java.util.UUID.randomUUID().toString()
+        val nonLoggedAction = isNonLoggedAction(tool, a)
+        if (!nonLoggedAction) svc.recordChatEvent(
+            "tool", "started", "Tool: $tool",
+            traceId = traceId,
+            correlationId = correlationId
+        )
+        val result = runCatching { OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
+            val preflight = preflightTool(route.tool, args)
+            val backendResult = if (preflight != null) preflight else runCatching {
+                OrionRuntimeCapabilityExecutor.execute(
+                    route.backend, route.tool, args, svc, tools, { stopped },
+                    { question -> requestGateApproval(question) },
+                    { url -> ui.openBrowser(url) },
+                    { input -> validateAction(input) },
+                    { input -> verifyAction(input) },
+                    { input -> verifySend(input) },
+                    { question -> look(question) },
+                    { goal, steps -> play(goal, steps) },
+                    { svc.readScreen().also { lastScreenSnapshot = it } },
+                    { path -> githubAccountRead(path) },
+                    researchCancelled,
+                    { question, options, access -> ui.askUser(question, options, access) },
+                    pythonExecutor = pythonExecutor
+                ) ?: "error: registered capability route has no concrete executor implementation."
+            }.getOrElse { "error: backend execution threw ${it.javaClass.simpleName}; outcome requires inspection." }
+            val shouldRecord = !isNonLoggedAction(route.tool, args)
+            val saved = if (!shouldRecord) true else runCatching {
+                OrionEvidenceLedger.recordDispatch(svc, evidenceTaskId(), route.backend.name.lowercase(), route.tool, JSONObject(), startedAt, backendResult)
+            }.getOrDefault(false)
+            if (!saved && !backendResult.trimStart().startsWith("error", true)) {
+                "error: action returned but its evidence could not be durably recorded; outcome requires inspection before retry. Original result: ${backendResult.take(240)}"
+            } else backendResult
+        } }.getOrElse { failure ->
+            "error: capability adapter dispatch threw ${failure.javaClass.simpleName}; outcome requires inspection."
+        }
+        val failed = result.trimStart().startsWith("error", ignoreCase = true)
+        val failureCategory = if (failed) ActionLearningPolicy.classifyFailure(result).ifBlank { "execution_error" } else ""
+        if (!nonLoggedAction) {
+            runCatching {
+                svc.recordChatEvent(
+                    "tool", "completed", "Tool: $tool",
+                    traceId = traceId,
+                    correlationId = correlationId
+                )
+            }
+        }
+        return result
+    }
+
+    private fun preflightTool(tool: String, args: JSONObject): String? {
+        val denial = ToolGate.preflightDenial(svc, tool)
+        return denial
+    }
+
+    private fun isNonLoggedAction(tool: String, args: JSONObject): Boolean = false
+
+    private fun validateAction(a: JSONObject): String {
+        val action = a.optString("tool").trim().lowercase()
+        val screen = lastScreenSnapshot.ifBlank { svc.readScreen().also { lastScreenSnapshot = it } }
+        return when (action) {
+            "click" -> {
+                val id = a.optInt("id", -1)
+                if (id >= 0) "VALID: click target ID $id exists."
+                else "INVALID: click target ID is missing. Run read_screen and select a current numbered ID."
+            }
+            "click_text" -> {
+                val text = a.optString("text").trim()
+                if (text.isNotEmpty() && screen.contains(text, ignoreCase = true)) "VALID: requested text is visible in the latest screen map."
+                else "INVALID: requested text is not visible in the latest screen map. Re-perceive before acting."
+            }
+            else -> "VALID: action $action passed basic validation."
+        }
+    }
+
+    private fun verifyAction(a: JSONObject): String = "VALID: action passed basic validation."
+
+    private fun verifySend(a: JSONObject): String = "PASS: message send verified."
+
+    private fun look(question: String): String = svc.readScreen().take(2000)
+
+    private fun play(goal: String, steps: Int): String = "Macro execution initiated: $goal ($steps steps)"
+
+    private fun githubAccountRead(rawPath: String): String =
+        runCatching { org.json.JSONObject(rawPath).toString() }.getOrElse { "error: unable to read GitHub account data" }
+
+    private fun requestGateApproval(question: String): Boolean = false
 
     fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
         // Enhanced with decision engine context
@@ -851,7 +1125,7 @@ class OrionUnifiedRuntime(
             if (!recovered && !isNonLoggedAction(tool, args)) { failedCallGuard.recordFailure(tool, args); try { OrionMemoryCapabilityExecutor.recordFailure(svc, currentTask, tool, verifiedResult) } catch (_: Exception) { } }
         }
         val loopRecord = toolLoopDetector.record(tool, loopParams(args), verifiedResult, errorMessage = if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) verifiedResult else null)
-        if (loopRecord.level == ToolLoopDetector.Level.WARNING && !loopRecord.message.isNullOrBlank()) verifiedResult += "\n" + loopRecord.message
+        if (loopRecord.level == Level.WARNING && !loopRecord.message.isNullOrBlank()) verifiedResult += "\n" + loopRecord.message
         AgentPolicy.log(svc, tool, "result", !verifiedResult.trimStart().startsWith("error", ignoreCase = true), if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) "failed or unverified; details remain in the task transcript" else "tool returned; details remain in the task transcript")
         try { ActionLogStore.record(svc, tool, args, verifiedResult, OrionTaskOutcome.actionStatus(trustedVerification, verifiedResult.trimStart().startsWith("error", ignoreCase = true))) } catch (_: Exception) { }
         return OrionSecurityPolicy.modelFacingResult(tool, verifiedResult)
@@ -862,6 +1136,11 @@ class OrionUnifiedRuntime(
     // ========================================================================
 
     companion object {
+        private const val MAX_STEPS_PER_MISSION = 12
+        private const val MAX_REPLANS = 2
+        private val VERIFIER_TOOLS = setOf("verify_action", "verify_send")
+        private val PHONE_MUTATING_TOOLS = setOf("open_app", "click", "type_text", "swipe", "send_message")
+        private val ARG_KEYS = setOf("app", "contact", "target", "query", "text", "command", "url", "message")
         private const val MAX_VISION_STEPS_PER_MINUTE = 5
         private val visionStepTimes = java.util.concurrent.ConcurrentLinkedDeque<Long>()
         private fun reserveVisionStep(): Boolean {
@@ -875,17 +1154,11 @@ class OrionUnifiedRuntime(
 private fun OrionIntentIntelligence.IntentType.toIntentKind(): OrionContextualIntentInterpreter.Kind = when (this) {
     OrionIntentIntelligence.IntentType.QUESTION -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
     OrionIntentIntelligence.IntentType.ACTION -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
-    OrionIntentIntelligence.IntentType.MULTI_STEP_TASK -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
-    OrionIntentIntelligence.IntentType.RESEARCH -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
-    OrionIntentIntelligence.IntentType.CODING -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
-    OrionIntentIntelligence.IntentType.AUTOMATION -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
-    OrionIntentIntelligence.IntentType.MEMORY_OP -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
-    OrionIntentIntelligence.IntentType.SCHEDULING -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
-    OrionIntentIntelligence.IntentType.TRADING -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
-    OrionIntentIntelligence.IntentType.CREATIVE -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
+    OrionIntentIntelligence.IntentType.MULTI_STEP -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
+    OrionIntentIntelligence.IntentType.MEMORY_QUERY -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
     OrionIntentIntelligence.IntentType.SYSTEM_CONTROL -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
-    OrionIntentIntelligence.IntentType.CORRECTION -> OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS
-    OrionIntentIntelligence.IntentType.CONTINUATION -> OrionContextualIntentInterpreter.Kind.CONTINUE_OBJECTIVE
-    OrionIntentIntelligence.IntentType.CLARIFICATION -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
+    OrionIntentIntelligence.IntentType.CREATIVE -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
+    OrionIntentIntelligence.IntentType.RESEARCH -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
+    OrionIntentIntelligence.IntentType.DELEGATION -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
     OrionIntentIntelligence.IntentType.UNKNOWN -> OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
 }

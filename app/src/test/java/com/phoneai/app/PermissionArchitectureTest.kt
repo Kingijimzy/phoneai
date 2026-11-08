@@ -96,7 +96,7 @@ class PermissionArchitectureTest {
 
         for (cmd in normalCommands) {
             val risk = ShellPolicy.classify(cmd)
-            assertEquals("Normal command should be ALLOWED: $cmd", ShellRisk.ALLOWED, risk)
+            assertEquals("Normal command should be SAFE: $cmd", ShellRisk.SAFE, risk)
         }
     }
 
