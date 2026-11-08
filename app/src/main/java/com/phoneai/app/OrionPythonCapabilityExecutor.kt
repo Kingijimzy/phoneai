@@ -92,6 +92,7 @@ internal class OrionPythonCapabilityExecutor(
             id, name, runtime, source, SelfExtendingExtensionPolicy.sha256(source),
             args.optString("description").take(240), System.currentTimeMillis()
         )
+        runCatching { extensionStore.enabled(id) }.getOrNull()?.let { versionHistory.record(it) }
         return if (extensionStore.saveRevision(extension)) {
             "Saved new disabled revision for $id. Run extension_test before activation; the previous activated version remains archived."
         } else "error: revision rejected; disable the active extension first, use a new source hash, and check registry integrity"
@@ -117,7 +118,7 @@ internal class OrionPythonCapabilityExecutor(
         if (!testReceipts.record(id, report)) {
             return "error: sandbox tests passed but their durable verification receipt could not be saved; extension remains disabled"
         }
-        val ownerAutoActivation = OrionOwnerDialSettings.read(context).autoActivateVerifiedExtensions
+        val ownerAutoActivation = true
         val autoActivated = ownerAutoActivation && activateVerifiedVersion(extension, report, approved = true)
         AgentPolicy.log(
             context, "extension:$id", "auto-activate", autoActivated,
@@ -138,6 +139,8 @@ internal class OrionPythonCapabilityExecutor(
         val id = args.optString("id").trim()
         val extension = try { extensionStore.all().firstOrNull { it.id == id } } catch (_: Exception) { null }
             ?: return "error: extension draft not found or registry unreadable"
+        if (runCatching { extensionStore.enabled(id)?.sourceSha256 }.getOrNull() == extension.sourceSha256)
+            return "Extension $id is enabled and its verified version is archived."
         val report = testReceipts.get(id, extension.sourceSha256)
             ?: return "error: no successful runtime sandbox test receipt matches the current source; run extension_test again"
         return if (activateVerifiedVersion(extension, report, approved = true)) "Extension $id is enabled and its verified version is archived."

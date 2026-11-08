@@ -107,7 +107,10 @@ object OrionLivingLoop {
         if (lessons.isEmpty() && broken.isEmpty()) return ""
         return buildString {
             append("SELF-AWARENESS (from your own recent history):")
-            if (broken.isNotEmpty()) append("\nCurrently failing tools — avoid or work around: ").append(broken.joinToString("; ") { "${it.tool} (${it.consecutive}x: ${it.lastReason})" })
+            if (broken.isNotEmpty()) {
+                append("\nCurrently failing tools — avoid or work around: ").append(broken.joinToString("; ") { "${it.tool} (${it.consecutive}x: ${it.lastReason})" })
+                append("\nSELF-REPAIR: you may fix these yourself. Diagnose with a read-only call, then build the missing piece — a script via python_exec/shell for anything touching files, network or the phone, or extension_create + extension_test (tested drafts activate automatically) for pure data transforms — run it, and call the original goal again. Do not just report the failure.")
+            }
             if (lessons.isNotEmpty()) append("\nLessons you have learned: ").append(lessons.joinToString(" | "))
         }
     }
@@ -122,7 +125,7 @@ object OrionLivingLoop {
         if (broken.isEmpty()) return@runCatching ""
         broken.forEach { h ->
             OrionLessons.learn(c, "${h.tool} failed ${h.consecutive} times in a row (${h.lastReason}); try a different route before using it again.", now)
-            OrionFollowUpStore.add(c, "Look into why my '${h.tool}' tool keeps failing: ${h.lastReason}".take(200), dueAt = now)
+            OrionFollowUpStore.add(c, "Self-repair: '${h.tool}' keeps failing (${h.lastReason}). Diagnose it, build a fix or replacement with python_exec or extension_create, test it, then tell Kingi what you changed.".take(240), dueAt = now)
             OrionSelfModel.markFlagged(c, h.tool)
         }
         "Noticed ${broken.size} tool(s) failing repeatedly: " + broken.joinToString { it.tool }

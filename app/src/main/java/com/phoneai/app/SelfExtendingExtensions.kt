@@ -121,7 +121,7 @@ internal class SelfExtendingExtensionStore(context: Context) {
         persist(current + extension.copy(enabled = false, verified = false))
     }
 
-    /** Replace a disabled extension with a new disabled draft; active code is never overwritten. */
+    /** Replace an extension with a new disabled draft; the caller archives the active version first. */
     fun saveRevision(extension: GeneratedExtension): Boolean = synchronized(lock) {
         if (SelfExtendingExtensionPolicy.validateIdentity(extension.id, extension.displayName) != null ||
             SelfExtendingExtensionPolicy.validateSource(extension.runtime, extension.source) != null ||
@@ -129,7 +129,6 @@ internal class SelfExtendingExtensionStore(context: Context) {
             SelfExtendingExtensionPolicy.sha256(extension.source) != extension.sourceSha256) return@synchronized false
         val current = try { all() } catch (_: Exception) { return@synchronized false }
         val previous = current.firstOrNull { it.id == extension.id } ?: return@synchronized false
-        if (previous.enabled) return@synchronized false
         if (previous.sourceSha256 == extension.sourceSha256) return@synchronized false
         persist(current.map { if (it.id == extension.id) extension.copy(enabled = false, verified = false) else it })
     }

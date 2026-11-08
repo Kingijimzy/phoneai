@@ -620,6 +620,7 @@ class SettingsActivity : Activity() {
         add(s2, cliRuntimeBtn, 8)
         add(s2, text("Choose Muse Code, Cursor Agent, or OpenCode for terminal-based coding sessions. Orion saves your choice and guides setup; a CLI must be installed and authenticated in a compatible terminal before it can run.", 12f, Theme.MUTED), 4)
         add(s2, text("OpenRouter supports account sign-in that securely returns an API key to Orion. Other providers keep their API-key flow unless they offer a compatible authorization method.", 12f, Theme.MUTED), 4)
+        add(s2, button("Add a custom API provider", true) { customProviderDialog() }, 8)
         add(s2, button("Add or change an API key", false) { keyDialog() }, 8)
         chatBtn = button("", false) { providerDialog(false) }
         add(s2, chatBtn, 8)
@@ -2158,6 +2159,42 @@ class SettingsActivity : Activity() {
                     { v.shutdown() })
             }
         }, 1000)
+    }
+
+    /** Any OpenAI- or Anthropic-compatible endpoint: name, base URL, model, key. Saved providers appear in every picker. */
+    private fun customProviderDialog() {
+        fun field(h: String, secret: Boolean = false) = EditText(this).apply {
+            hint = h; setSingleLine(true); setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or
+                (if (secret) InputType.TYPE_TEXT_VARIATION_PASSWORD else 0)
+        }
+        val name = field("Name (e.g. WusRouter)"); val base = field("Base URL (e.g. https://wusrouter.com/v1)")
+        val model = field("Model id (e.g. deepseek-v4.1-flash)"); val key = field("API key (blank if none)", true)
+        val anth = android.widget.CheckBox(this).apply { text = "Anthropic-style (/messages) instead of OpenAI-style"; setTextColor(Theme.TEXT) }
+        val col = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(8), dp(18), dp(4))
+            listOf<View>(name, base, model, key, anth).forEach { addView(it) }
+            val existing = Providers.custom
+            if (existing.isNotEmpty()) addView(text("Saved: " + existing.joinToString { it.label }, 12f, Theme.MUTED))
+        }
+        AlertDialog.Builder(this).setTitle("Add a custom API provider").setView(col)
+            .setPositiveButton("Save") { _, _ ->
+                val id = Prefs.addCustomProvider(this, name.text.toString(), base.text.toString(), model.text.toString(),
+                    anth.isChecked, key.text.toString())
+                if (id == null) Toast.makeText(this, "Need a name and a URL starting with http(s)://", Toast.LENGTH_LONG).show()
+                else {
+                    Prefs.setProvider(this, false, id)
+                    Toast.makeText(this, "Saved. It is now your chat AI; it also shows in every provider list.", Toast.LENGTH_LONG).show()
+                    refresh()
+                }
+            }
+            .setNeutralButton("Remove one") { _, _ ->
+                val list = Providers.custom
+                if (list.isEmpty()) Toast.makeText(this, "No custom providers saved.", Toast.LENGTH_SHORT).show()
+                else AlertDialog.Builder(this).setTitle("Remove which?")
+                    .setItems(list.map { it.label }.toTypedArray()) { _, i -> Prefs.removeCustomProvider(this, list[i].id); refresh() }.show()
+            }
+            .setNegativeButton("Cancel", null).show()
     }
 
     private fun localDialog(p: Provider) {

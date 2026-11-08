@@ -104,6 +104,7 @@ internal object ToolRegistry {
         tool("volume", ToolAccess.WRITE, "volume {action, percent}: action up, down, mute, unmute, or set"),
         tool("flashlight", ToolAccess.WRITE, "flashlight {on}: turn flashlight on or off"),
         tool("copy", ToolAccess.WRITE, "copy {text}: copy text to clipboard"),
+        tool("clipboard_read", ToolAccess.READ, "clipboard_read {}: read the text currently on the clipboard"),
         tool("battery", ToolAccess.READ, "battery {}: report battery status"),
         tool("chronos_awareness", ToolAccess.READ, "chronos_awareness {}: report coarse app category and focus duration from owner-granted Chronos context; no app identifier or screen content is retained"),
         tool("soul_state", ToolAccess.READ, "soul_state {}: report the Soul Engine lifecycle state (Stopped, Starting, Monitoring, Thinking, Acting, Recovering, Paused) and time in state"),

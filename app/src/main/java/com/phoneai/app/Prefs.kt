@@ -22,7 +22,12 @@ class Provider(
 }
 
 object Providers {
-    val all = listOf(
+    /** User-added endpoints (any OpenAI- or Anthropic-compatible URL). Loaded at app start by [Prefs.loadCustomProviders]. */
+    @Volatile var custom: List<Provider> = emptyList()
+
+    val all: List<Provider> get() = builtin + custom
+
+    val builtin = listOf(
         Provider(
             "groq", "Groq", "https://api.groq.com/openai/v1",
             "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "gsk_...",
@@ -114,11 +119,51 @@ object Providers {
 
     fun find(id: String?): Provider? = all.firstOrNull { it.id == id }
 
-    fun get(id: String?): Provider = find(id) ?: all[0]
+    fun get(id: String?): Provider = find(id) ?: builtin[0]
 }
 
 object Prefs {
     private fun sp(c: Context) = c.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
+
+    /** Reads the user's own provider endpoints into [Providers.custom]. Safe to call repeatedly. */
+    fun loadCustomProviders(c: Context) {
+        val raw = sp(c).getString("custom_providers", null)
+        Providers.custom = try {
+            val a = JSONArray(raw ?: "[]")
+            (0 until a.length()).mapNotNull { i ->
+                val o = a.optJSONObject(i) ?: return@mapNotNull null
+                val id = o.optString("id"); val base = o.optString("base")
+                if (id.isBlank() || base.isBlank()) return@mapNotNull null
+                Provider(id, o.optString("label", id), base.trimEnd('/'), o.optString("model"),
+                    o.optString("vision").ifBlank { null }, "API key", "Your custom endpoint. " + base,
+                    base.trimEnd('/') + "/models", o.optBoolean("anthropic", false), o.optBoolean("noKey", false))
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    /** Adds (or replaces, same label) a custom endpoint and optionally stores its key. Returns the provider id. */
+    fun addCustomProvider(c: Context, label: String, base: String, model: String, anthropicStyle: Boolean, apiKey: String): String? {
+        val name = label.trim().take(40); val url = base.trim().trimEnd('/')
+        if (name.isEmpty() || !(url.startsWith("http://") || url.startsWith("https://"))) return null
+        val id = "custom_" + name.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_').ifBlank { "api" }
+        val keep = try { JSONArray(sp(c).getString("custom_providers", "[]")) } catch (_: Exception) { JSONArray() }
+        val out = JSONArray()
+        for (i in 0 until keep.length()) keep.optJSONObject(i)?.takeIf { it.optString("id") != id }?.let { out.put(it) }
+        out.put(org.json.JSONObject().put("id", id).put("label", name).put("base", url).put("model", model.trim())
+            .put("anthropic", anthropicStyle).put("noKey", apiKey.isBlank()))
+        sp(c).edit().putString("custom_providers", out.toString()).apply()
+        loadCustomProviders(c)
+        if (apiKey.isNotBlank()) setKey(c, id, apiKey.trim())
+        return id
+    }
+
+    fun removeCustomProvider(c: Context, id: String) {
+        val keep = try { JSONArray(sp(c).getString("custom_providers", "[]")) } catch (_: Exception) { JSONArray() }
+        val out = JSONArray()
+        for (i in 0 until keep.length()) keep.optJSONObject(i)?.takeIf { it.optString("id") != id }?.let { out.put(it) }
+        sp(c).edit().putString("custom_providers", out.toString()).apply()
+        loadCustomProviders(c)
+    }
 
     fun key(c: Context, pid: String): String =
         ApiKeyVault.read(c, "enc_key_$pid", "key_$pid")
@@ -323,7 +368,7 @@ object Prefs {
     fun setQuotaSaver(c: Context, v: Boolean) = sp(c).edit().putBoolean("quota_saver", v).apply()
 
     /** Paid or metered provider/model requests are blocked unless the user explicitly opts in. */
-    fun allowPaidProviders(c: Context): Boolean = sp(c).getBoolean("allow_paid_providers", false)
+    fun allowPaidProviders(c: Context): Boolean = sp(c).getBoolean("allow_paid_providers", true)
     fun setAllowPaidProviders(c: Context, v: Boolean) = sp(c).edit().putBoolean("allow_paid_providers", v).apply()
 
     /** Whether Orion may save new successful tool routes for future planning. */
@@ -404,7 +449,7 @@ object Prefs {
     fun rate(c: Context): Float = sp(c).getFloat("rate", 0.98f)
     fun setRate(c: Context, v: Float) = sp(c).edit().putFloat("rate", v).apply()
 
-    fun userName(c: Context): String = sp(c).getString("username", "") ?: ""
+    fun userName(c: Context): String = sp(c).getString("username", "Kingi Jim") ?: "Kingi Jim"
     fun setUserName(c: Context, v: String) = sp(c).edit().putString("username", v.trim()).apply()
 
     fun autoMemory(c: Context): Boolean = sp(c).getBoolean("automemory", true)

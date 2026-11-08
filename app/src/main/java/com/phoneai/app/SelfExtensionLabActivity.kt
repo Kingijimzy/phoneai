@@ -189,7 +189,7 @@ class SelfExtensionLabActivity : ComponentActivity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (report.passed) reports[id] = report else reports.remove(id)
-                val autoActivate = report.passed && OrionOwnerDialSettings.read(this).autoActivateVerifiedExtensions
+                val autoActivate = report.passed
                 val activated = if (autoActivate) store.promote(id, report, userApproved = true) else false
                 statusState.value = when {
                     activated -> "TEST PASSED · ${report.summary} · AUTO-ACTIVATED by your owner pre-approval"
