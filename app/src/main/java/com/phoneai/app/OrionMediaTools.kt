@@ -135,7 +135,7 @@ internal object OrionMediaTools {
 
     /** Scanned PDFs: render each page and run on-device OCR. */
     private fun ocrPdf(c: Context, ref: String): String? = try {
-        val f = listOf(File(ref), File(c.filesDir, "orion-python/workspace/$ref")).firstOrNull { it.isFile } ?: return null
+        val f = listOf(File(ref), File(c.filesDir, "orion-python/workspace/$ref")).firstOrNull { it.isFile } ?: throw IllegalStateException("no file")
         val pfd = ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY)
         val sb = StringBuilder()
         PdfRenderer(pfd).use { r ->
