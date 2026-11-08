@@ -82,7 +82,8 @@ internal object OrionRuntimeCapabilityExecutor {
             else -> null
         }
         OrionCapabilityAdapters.Backend.PYTHON -> pythonExecutor?.execute(tool, args, confirm, stopped)
-        OrionCapabilityAdapters.Backend.FILES -> when (tool) {
+        // RUNTIME_STATE tools (model_status, model_offline_mode, model_decision_*, soul_state) are implemented in this block.
+        OrionCapabilityAdapters.Backend.FILES, OrionCapabilityAdapters.Backend.RUNTIME_STATE -> when (tool) {
             "find_files" -> tools.findFiles(args.optString("query"))
             "open_file" -> tools.openFile(args.optString("id"))
             "save_file" -> tools.saveFile(args.optString("filename"), args.optString("content"), args.optString("folder", "Orion"))
