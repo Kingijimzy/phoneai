@@ -28,4 +28,11 @@ class OrionPersonaTest {
         assertTrue(p.contains("Never narrate the machinery"))
         assertTrue(p.contains("take another without asking"))
     }
+
+    @Test fun thinksDecidesAndTakesInitiative() {
+        assertTrue(p.contains("HOW YOU THINK DEEPER"))
+        assertTrue(p.contains("Decide."))
+        assertTrue(p.contains("Be creative"))
+        assertTrue(p.contains("initiative"))
+    }
 }

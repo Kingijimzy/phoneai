@@ -216,6 +216,23 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         return "[TASK:${if (failed) "FAILED" else "RESULT"}]\n$tool — $detail"
     }
 
+    /**
+     * One short inner-monologue pass before real work: intent, what Orion can find out itself, best route,
+     * a smarter alternative, and the fallback. Skipped for tiny commands; any failure just skips it.
+     */
+    private fun deliberate(command: String): String? {
+        if (command.trim().split(Regex("\\s+")).size < 4) return null
+        return try {
+            val facts = runCatching { OrionLivingLoop.promptBlock(svc) }.getOrDefault("")
+            val m = JSONArray()
+                .put(msg("system", "You are Orion's inner voice, thinking before acting for Kingi. Reply in at most 6 short lines, no preamble:\n" +
+                    "INTENT: what he really wants.\nFIND MYSELF: what I can look up or work out instead of asking.\nROUTE: the best first tool/action and why.\n" +
+                    "SMARTER: a better or more creative approach, or something he'll want next.\nIF IT FAILS: the second route.\nASK: only if a wrong guess is costly, else 'none'.\n" + facts.take(600)))
+                .put(msg("user", command.take(1200)))
+            commandNim.chat(m, false, 320, 0.6).trim().takeIf { it.length > 20 }?.take(1200)
+        } catch (_: Exception) { null }
+    }
+
     private fun aiOneShot(instruction: String, data: String): String {
         val msgs = JSONArray().put(msg("system", instruction)).put(msg("user", data.take(4000)))
         return commandNim.chat(msgs, false, 450, 0.3).trim()
@@ -878,10 +895,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
 
     private fun chatReplyBody(command: String): String? {
         val key = MacroStore.norm(command)
-        val hit = chatCache[key]
-        if (hit != null && System.currentTimeMillis() - hit.first < 600000L) return hit.second
         val msgs = JSONArray().put(msg("system", chatSystem(command)))
-        val from = maxOf(0, chatHist.length() - 6)
+        val from = maxOf(0, chatHist.length() - 16)
         for (i in from until chatHist.length()) msgs.put(chatHist.getJSONObject(i))
         msgs.put(msg("user", command))
         // Stream ordinary conversational replies into the live assistant bubble. Keep the
@@ -889,7 +904,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // Suppress the internal ACTION routing sentinel so it is never flashed to the user.
         val visiblePrefix = StringBuilder()
         var visibleStarted = false
-        val raw = talkNim.chat(msgs, false, 220, 0.6, onDelta = { delta ->
+        val raw = talkNim.chat(msgs, false, 1000, 0.75, onDelta = { delta ->
             if (!stopped && delta.isNotEmpty()) {
                 if (visibleStarted) {
                     ui.stream(delta)
@@ -919,8 +934,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         if (raw.isEmpty() || raw.uppercase().startsWith("ACTION")) return null
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", raw))
-        while (chatHist.length() > 12) chatHist.remove(0)
-        if (command.length < 80) chatCache[key] = Pair(System.currentTimeMillis(), raw)
+        while (chatHist.length() > 28) chatHist.remove(0)
+        // No reply cache: Orion answers each message fresh, with the whole conversation in mind.
         return raw
     }
 
@@ -1050,7 +1065,7 @@ RESPONSE QUALITY AND FORMAT:
         val runawayStream = java.util.concurrent.atomic.AtomicBoolean(false)
         val streamWatch = HermesRepetitionGuard.RunawayStreamWatch()
         val answer = try {
-            talkNim.chat(messages, false, 420, 0.55, onDelta = { delta ->
+            talkNim.chat(messages, false, 900, 0.7, onDelta = { delta ->
                 if (!stopped && !runawayStream.get()) {
                     if (streamWatch.feed(delta)) {
                         runawayStream.set(true)
@@ -2446,6 +2461,9 @@ Rules:
         // Command-mode model output is structured JSON and must not be exposed token-by-token.
         // Give the user one natural live progress line while the guarded planner works; tool
         // details remain in the single compact activity card and the final assistant bubble.
+        if (!resumeRequest) deliberate(command)?.let { brief ->
+            history.put(msg("user", "[ORION INNER THOUGHT — your own analysis of this request; use it to pick the first action, do not recite it]\n" + brief))
+        }
         ui.stream("I’m working through this now. I’ll check each result before moving on.")
         val stall = SessionStall()
         var promiseNudged = false
@@ -2466,7 +2484,7 @@ Rules:
             }
             ui.phase("thinking")
             val raw = try {
-                commandNim.chat(history, false, 800)
+                commandNim.chat(history, false, 1400)
             } catch (e: Exception) {
                 if (stopped) break
                 OrionTasksCapabilityExecutor.pauseRun(svc)
