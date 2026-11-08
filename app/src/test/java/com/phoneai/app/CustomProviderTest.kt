@@ -1,7 +1,7 @@
 package com.phoneai.app
 
 import android.content.Context
-import androidx.test.core.app.ApplicationProvider
+import org.robolectric.RuntimeEnvironment
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -9,11 +9,11 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class CustomProviderTest {
-    private val c: Context = ApplicationProvider.getApplicationContext()
+    private val c: Context = RuntimeEnvironment.getApplication()
 
     @Test fun customProviderJoinsEveryListAndCanBeRemoved() {
         Providers.custom = emptyList()
-        val id = Prefs.addCustomProvider(c, "Wus Router", "https://wusrouter.com/v1/", "deepseek-v4.1-flash", false, "k-123")
+        val id = Prefs.addCustomProvider(c, "Wus Router", "https://wusrouter.com/v1/", "deepseek-v4.1-flash", false, "k-123")!!
         assertEquals("custom_wus_router", id)
         val p = Providers.find(id)!!
         assertEquals("https://wusrouter.com/v1", p.base)
