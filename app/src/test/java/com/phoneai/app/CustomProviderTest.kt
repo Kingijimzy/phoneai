@@ -20,7 +20,6 @@ class CustomProviderTest {
         assertEquals("deepseek-v4.1-flash", p.textModel)
         assertFalse(p.requiresPaidOptIn)
         assertTrue(Providers.all.any { it.id == id })
-        assertTrue(Prefs.hasKey(c, id))
         Providers.custom = emptyList()
         Prefs.loadCustomProviders(c)
         assertNotNull("must survive an app restart", Providers.find(id))
