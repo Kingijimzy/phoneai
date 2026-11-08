@@ -25,7 +25,10 @@ internal class OrionMissionController(
     private val localExecutor: Local,
     private val pythonExecutor: OrionPythonCapabilityExecutor,
     private val commandNim: Nim,
-    private val capabilityBroker: OrionCapabilityBroker
+    private val capabilityBroker: OrionCapabilityBroker,
+    private val capabilityIntelligence: OrionCapabilityIntelligence,
+    private val acquisitionEngine: OrionCapabilityAcquisitionEngine,
+    private val undoStack: OrionUndoStack
 ) {
 
     private val store = OrionMissionStore(context)
@@ -38,11 +41,14 @@ internal class OrionMissionController(
         pythonExecutor = pythonExecutor,
         commandNim = commandNim,
         controller = this,
-        capabilityBroker = capabilityBroker
+        capabilityBroker = capabilityBroker,
+        undoStack = undoStack
     )
 
-    // Expose capability broker for dynamic tool expansion
+    // Expose capability broker and intelligence for dynamic tool expansion
     val capabilityBroker: OrionCapabilityBroker = capabilityBroker
+    val capabilityIntelligence: OrionCapabilityIntelligence = capabilityIntelligence
+    val acquisitionEngine: OrionCapabilityAcquisitionEngine = acquisitionEngine
 
     // Current mission state
     @Volatile private var currentMission: OrionMission? = null
@@ -228,10 +234,29 @@ internal class OrionMissionController(
             val args = unifiedRuntime.buildStepArgs(ready, decision.intent)
             attemptedTools += ready.tool
 
-            // Check preflight
-            val preflight = ToolGate.preflightDenial(svc, ready.tool)
-            var result = if (preflight != null) "error: preflight blocked $ready.tool. $preflight"
-            else unifiedRuntime.executeWithRecoveryGuard(ready.tool, args)
+            // Check if tool is authorized; if not, attempt autonomous capability acquisition
+            var execResult: String
+            if (!unifiedRuntime.isToolAuthorizedPublic(ready.tool)) {
+                ui.note("[ACQUIRING] Attempting to acquire capability: ${ready.tool}")
+                val acquired = runCatching {
+                    unifiedRuntime.attemptCapabilityAcquisition(ready.tool)
+                }.getOrDefault(false)
+                if (!acquired) {
+                    execResult = "error: tool '${ready.tool}' is not authorized and could not be acquired autonomously. This may be due to: disabled capability pack, missing Android permission, or security policy."
+                } else {
+                    ui.note("[ACQUIRED] Capability ${ready.tool} is now available")
+                    // Re-check preflight after acquisition
+                    val preflight = ToolGate.preflightDenial(svc, ready.tool)
+                    execResult = if (preflight != null) "error: preflight blocked $ready.tool. $preflight"
+                    else unifiedRuntime.executeWithRecoveryGuard(ready.tool, args)
+                }
+            } else {
+                // Normal execution path
+                val preflight = ToolGate.preflightDenial(svc, ready.tool)
+                execResult = if (preflight != null) "error: preflight blocked $ready.tool. $preflight"
+                else unifiedRuntime.executeWithRecoveryGuard(ready.tool, args)
+            }
+            var result = execResult
 
             if (unifiedRuntime.isStepSuccess(result)) {
                 completed += ready.stepId

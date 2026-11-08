@@ -88,9 +88,14 @@ internal class OrionSpecialistRuntime(
         return session
     }
 
-    /** Build a minimal unified runtime with only the specialist's allowed tools. */
+    /** Build a unified runtime for this specialist using the Central Brain's full capability set.
+     * Specialists are NOT tool-restricted at runtime — they use the same Central Brain runtime
+     * with all registered capabilities, and security boundaries are enforced at dispatch time
+     * (Android perms, trading confirmation, irreversible actions, shell destructive blocks).
+     * Dynamic expansion happens via OrionCapabilityBroker.requestCapabilities. */
     private fun buildScopedRuntime(session: OrionAgentFactory.SpecialistSession): OrionUnifiedRuntime {
-        // Create a filtered capability registry for this specialist
+        // Create a runtime with the same capabilities as the Central Brain
+        // No allowedTools filter — specialists expand via broker, not pre-restriction
         return OrionUnifiedRuntime(
             svc = svc,
             ui = object : AgentUi {
@@ -107,7 +112,11 @@ internal class OrionSpecialistRuntime(
             localExecutor = localExecutor,
             pythonExecutor = pythonExecutor,
             commandNim = commandNim,
-            allowedTools = session.allowedTools
+            capabilityBroker = null, // Specialists use broker via AgentFactory path, not here
+            capabilityIntelligence = null,
+            acquisitionEngine = null,
+            extensionStore = null,
+            extensionSandbox = null
         )
     }
 

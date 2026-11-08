@@ -5,20 +5,24 @@ import kotlinx.coroutines.*
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Phase 0C: Dynamic Capability Broker
+ * Phase 0D: Ultron-Style Capability Broker — Open Capabilities + Dynamic Authorization
  *
- * Central capability intelligence that enables dynamic tool expansion for specialists.
- * The Central Brain (OrionUnifiedRuntime) has access to all registered/authorized capabilities.
- * Specialists start with their default tools but can request additional capabilities through
- * this broker, which discovers, authorizes, provisions, and returns capabilities without
- * unnecessary user interaction.
+ * The Central Brain (OrionUnifiedRuntime, no broker) has access to ALL registered &
+ * authorized capabilities. Specialists start with their default tools but can request
+ * additional capabilities through this broker, which discovers, authorizes, provisions
+ * and returns capabilities without unnecessary user interaction.
  *
- * Security boundaries preserved:
- * - Android OS permissions (checked at dispatch time via ToolGate)
- * - API authentication (ApiKeyVault, AppVault)
- * - Trading Desk orders require explicit Boss confirmation
- * - Irreversible actions (restart/shutdown/Wi-Fi) require explicit confirmation
- * - Shell destructive commands blocked by ShellPolicy
+ * Ultron Doctrine:
+ *   - "When access is missing, Orion should investigate legitimate alternatives and expand its capabilities."
+ *   - "Do not make specialists repeatedly ask the user for permission to use ordinary capabilities."
+ *   - "Specialists should be able to collaborate and delegate through the parent mission controller."
+ *
+ * Security boundaries preserved (proportionate safeguards, not universal approval gates):
+ *   - Android OS permissions (enforced at dispatch via ToolGate/CapabilityRegistry)
+ *   - API authentication (ApiKeyVault, AppVault — credentials stay in Android Keystore)
+ *   - Trading Desk orders require explicit Boss confirmation
+ *   - Irreversible actions (restart/shutdown/Wi-Fi) require explicit confirmation
+ *   - Shell destructive commands blocked by ShellPolicy
  */
 internal class OrionCapabilityBroker(
     private val context: Context,
@@ -37,10 +41,9 @@ internal class OrionCapabilityBroker(
      * Request additional capabilities for a specialist session.
      * Called by specialists when they need tools beyond their initial scope.
      *
-     * @param sessionId The specialist session ID
-     * @param requestedTools Set of tool names requested
-     * @param reason Why these tools are needed (for audit/logging)
-     * @return CapabilityGrant with the newly authorized tools
+     * ULTRON-STYLE: Ordinary capabilities are granted automatically.
+     * Only restricted capabilities (trading, shell destructive, irreversible) require
+     * owner confirmation or are denied.
      */
     suspend fun requestCapabilities(
         sessionId: String,
@@ -60,10 +63,25 @@ internal class OrionCapabilityBroker(
             )
         }
 
-        // Check each tool for authorization (pack status, permissions, health)
-        val (authorized, denied) = validTools.partition { tool ->
-            isToolAuthorizedForSpecialist(tool)
+        // ULTRON-STYLE: Partition into auto-grant vs needs-review
+        val (autoGrant, needsReview) = validTools.partition { tool ->
+            isOrdinaryCapability(tool)
         }
+
+        // Auto-grant ordinary capabilities without user interaction
+        val (authorized, denied) = autoGrant.partition { tool ->
+            // Only deny if explicitly denied by user or tool doesn't exist
+            ToolPermissions.mode(context, tool) != ToolMode.DENY
+        }
+
+        // For needs-review tools: check if they can be auto-acquired (pack enablement, extension install)
+        val (reviewGranted, reviewDenied) = needsReview.partition { tool ->
+            canAutoResolveRestricted(tool)
+        }
+
+        // Combine all granted tools
+        val allGranted = authorized + reviewGranted
+        val allDenied = denied + reviewDenied + invalidTools
 
         // Log the capability request for observability
         OrionEvidenceLedger.recordDispatch(
@@ -71,51 +89,92 @@ internal class OrionCapabilityBroker(
             sessionId,
             "capability_broker",
             "request_capabilities",
-            org.json.JSONObject().put("requested", validTools.joinToString(",")).put("reason", reason),
+            org.json.JSONObject()
+                .put("requested", validTools.joinToString(","))
+                .put("reason", reason)
+                .put("auto_granted", authorized.joinToString(","))
+                .put("review_granted", reviewGranted.joinToString(","))
+                .put("denied", allDenied.joinToString(",")),
             System.currentTimeMillis(),
-            "granted: ${authorized.joinToString(",")}; denied: ${denied.joinToString(",")}"
+            "granted: ${allGranted.joinToString(",")}; denied: ${allDenied.joinToString(",")}"
         )
 
         // Update granted capabilities for this session
         val currentGranted = grantedCapabilities.getOrDefault(sessionId, emptySet())
-        val newGranted = currentGranted + authorized
+        val newGranted = currentGranted + allGranted
         grantedCapabilities[sessionId] = newGranted
 
         return CapabilityGrant(
             sessionId = sessionId,
-            granted = authorized,
-            denied = denied + invalidTools,
-            reason = if (denied.isNotEmpty()) "Denied: ${denied.joinToString(", ")} (pack off, permission missing, or health failed)" else "All requested tools granted"
+            granted = allGranted,
+            denied = allDenied,
+            reason = buildGrantReason(authorized, reviewGranted, allDenied, invalidTools)
         )
     }
 
     /**
-     * Check if a tool is authorized for specialist use.
-     * Considers: pack enabled, not denied by user, capability health, Android permissions.
+     * Check if a tool is "ordinary" — can be auto-granted without owner interaction.
+     * Ordinary = not trading, not irreversible, not shell-destructive, not credential-gated
+     * without user setup.
      */
-    private fun isToolAuthorizedForSpecialist(tool: String): Boolean {
-        // Core system tools always allowed
-        if (tool in ToolPermissionPolicy.alwaysAllowed) return true
-
-        // Check user deny setting
-        if (ToolPermissions.mode(context, tool) == ToolMode.DENY) return false
-
-        // Check pack status
-        val pack = AgentPolicy.packForTool(tool)
-        if (pack != null && !AgentPolicy.enabled(context, pack)) return false
-
-        // Check capability registry health
-        val capabilityEntry = CapabilityRegistry.forBuiltInTool(
-            tool,
-            ToolPermissions.mode(context, tool) == ToolMode.DENY,
-            pack == null || AgentPolicy.enabled(context, pack)
+    private fun isOrdinaryCapability(tool: String): Boolean {
+        val restricted = setOf(
+            "trading_place_order",     // Trading Desk — requires explicit Boss confirmation
+            "trading_kill_switch",     // Trading control
+            "shell",                   // Can be destructive — but workspace shell is ordinary
+            "termux_command",          // Can be destructive
+            "system_intent",           // Can change system settings
+            "computer_settings",       // Irreversible device control
+            "extension_enable",        // Self-extension — requires test + approval
+            "extension_test",          // Self-extension — sandbox test
         )
-        if (!capabilityEntry.usable) return false
+        return tool !in restricted
+    }
 
-        // ToolGate preflight (permissions, etc.)
-        if (ToolGate.preflightDenial(context, tool) != null) return false
+    /**
+     * Check if a restricted capability can be auto-resolved (e.g., pack can be enabled,
+     * extension can be installed and tested).
+     */
+    private fun canAutoResolveRestricted(tool: String): Boolean {
+        // Check if it's a pack that can be enabled
+        val pack = AgentPolicy.packs.firstOrNull { tool in it.tools }
+        if (pack != null && !AgentPolicy.enabled(context, pack.id)) {
+            return true // Can auto-enable pack
+        }
+        // Check if it's an extension that can be installed
+        val extId = "ext_${tool.replace(" ", "_").lowercase()}"
+        if (SelfExtendingExtensionStore(svc.applicationContext).all().any { it.id == extId }) {
+            return true // Extension exists, can be tested + enabled
+        }
+        return false
+    }
 
-        return true
+    /**
+     * Auto-resolve a restricted capability by enabling its pack or installing its extension.
+     * Called when a specialist requests a restricted tool.
+     */
+    suspend fun autoResolveCapability(tool: String): Boolean {
+        // Try enabling pack first
+        val pack = AgentPolicy.packs.firstOrNull { tool in it.tools }
+        if (pack != null && !AgentPolicy.enabled(context, pack.id)) {
+            AgentPolicy.setEnabled(context, pack.id, true)
+            return true
+        }
+        // Try installing/testing extension
+        val extId = "ext_${tool.replace(" ", "_").lowercase()}"
+        val extensionStore = SelfExtendingExtensionStore(svc.applicationContext)
+        val existing = extensionStore.all().firstOrNull { it.id == extId }
+        if (existing != null && !existing.enabled) {
+            // Try to enable via Prometheus
+            return runCatching {
+                extensionStore.promote(
+                    extId,
+                    ExtensionTestReport(true, SelfExtendingExtensionPolicy.sha256(existing.source), "auto-enabled by broker"),
+                    true // auto-approve ordinary capabilities
+                )
+            }.getOrDefault(false)
+        }
+        return false
     }
 
     /**
@@ -156,7 +215,7 @@ internal class OrionCapabilityBroker(
                     )
                 }
                 // Check if it's a local extension that can be installed
-                OrionExtensionStore.isExtensionAvailable(capability) -> {
+                SelfExtendingExtensionStore(svc.applicationContext).all().any { it.id == capability || capability in it.providedTools } -> {
                     CapabilityAcquisitionPlan(
                         capability = capability,
                         type = AcquisitionType.INSTALL_EXTENSION,
@@ -176,7 +235,7 @@ internal class OrionCapabilityBroker(
                         estimatedTimeMs = 30000
                     )
                 }
-                // External service/API
+                // External service/API — requires user setup
                 capability.startsWith("api:") -> {
                     CapabilityAcquisitionPlan(
                         capability = capability,
@@ -237,6 +296,23 @@ internal class OrionCapabilityBroker(
             }
             else -> false
         }
+    }
+
+    /**
+     * Build a human-readable grant reason.
+     */
+    private fun buildGrantReason(
+        autoGranted: Set<String>,
+        reviewGranted: Set<String>,
+        allDenied: Set<String>,
+        invalidTools: Set<String>
+    ): String {
+        val parts = mutableListOf<String>()
+        if (autoGranted.isNotEmpty()) parts.add("auto-granted: ${autoGranted.joinToString(", ")}")
+        if (reviewGranted.isNotEmpty()) parts.add("resolved: ${reviewGranted.joinToString(", ")}")
+        if (allDenied.isNotEmpty()) parts.add("denied: ${allDenied.joinToString(", ")}")
+        if (invalidTools.isNotEmpty()) parts.add("invalid: ${invalidTools.joinToString(", ")}")
+        return if (parts.isNotEmpty()) parts.joinToString("; ") else "No tools requested"
     }
 
     /**

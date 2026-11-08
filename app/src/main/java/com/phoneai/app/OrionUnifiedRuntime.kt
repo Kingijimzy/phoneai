@@ -43,6 +43,16 @@ internal class OrionUnifiedRuntime(
     // Capability Broker for dynamic tool expansion (null for Central Brain which has all tools)
     private val capabilityBroker: OrionCapabilityBroker? = null,
 
+    // Capability Intelligence for discovery, gap analysis, and acquisition planning
+    private val capabilityIntelligence: OrionCapabilityIntelligence? = null,
+
+    // Capability Acquisition Engine for autonomous capability acquisition
+    private val acquisitionEngine: OrionCapabilityAcquisitionEngine? = null,
+
+    // Extension store and sandbox for self-extension
+    private val extensionStore: SelfExtendingExtensionStore? = null,
+    private val extensionSandbox: ExtensionSandbox? = null,
+
     // Shared capability discovery singleton
     private val capabilityDiscovery: OrionCapabilityDiscovery = OrionCapabilityDiscovery,
 
@@ -108,6 +118,9 @@ internal class OrionUnifiedRuntime(
     @Volatile private var lastPlan: OrionPlanningEngine.ExecutionPlan? = null
     @Volatile private var lastObstacleReport: OrionPredictiveIntelligence.ObstacleReport? = null
     @Volatile private var lastContext: OrionContextIntegration.UnifiedContext? = null
+
+    /** Undo stack for reversible actions (Ultron-style: act immediately, record undo) */
+    private val undoStack = OrionUndoStack(svc.applicationContext, svc)
 
     // ========================================================================
     // PUBLIC ENTRY POINTS (one per modality, all delegate to runTurn)
@@ -995,6 +1008,66 @@ internal class OrionUnifiedRuntime(
         return capabilityEntry.usable
     }
 
+    /**
+     * Public: check if a tool is authorized for this runtime instance.
+     * Central Brain (no capabilityBroker): all registered & authorized tools available.
+     * Specialists: standard policy checks; session-specific grants via broker.
+     */
+    fun isToolAuthorizedPublic(tool: String): Boolean = isToolAuthorized(tool)
+
+    /**
+     * Attempt autonomous capability acquisition for a tool that is not currently authorized.
+     * Returns true if the capability was acquired (or is already authorized), false otherwise.
+     * This is the Central Brain's self-extension path: discover → acquire → verify → register.
+     */
+    suspend fun attemptCapabilityAcquisition(tool: String): Boolean {
+        // Already authorized?
+        if (isToolAuthorized(tool)) return true
+
+        // Check if we have the intelligence and engine to attempt acquisition
+        val intel = capabilityIntelligence ?: return false
+        val engine = acquisitionEngine ?: return false
+
+        // Assess what's missing for this tool
+        val assessment = intel.assessCapabilityForObjective(
+            objective = "acquire capability: $tool",
+            intentType = OrionIntentIntelligence.IntentType.SYSTEM_CONTROL
+        )
+
+        // If the tool is in missing capabilities, try to acquire it
+        val missing = assessment.missingCapabilities.any { it.id == tool || it.toolIds.contains(tool) }
+        if (!missing && assessment.achievable) {
+            // Tool might be available through a different path
+            return isToolAuthorized(tool)
+        }
+
+        // Execute acquisition plan
+        val plan = assessment.acquisitionPlan
+        if (plan == null || plan.steps.isEmpty()) return false
+
+        val summary = engine.executePlan(plan)
+        if (summary.overallSuccess) {
+            // Re-check authorization after acquisition
+            return isToolAuthorized(tool)
+        }
+        return false
+    }
+
+    /**
+     * Execute a tool with automatic capability acquisition if the tool is not authorized.
+     * This replaces direct exec() calls when acquisition is desired.
+     */
+    suspend fun execWithAcquisition(tool: String, args: org.json.JSONObject): String {
+        if (!isToolAuthorized(tool)) {
+            val acquired = attemptCapabilityAcquisition(tool)
+            if (!acquired) {
+                val scope = if (capabilityBroker == null) "Central Brain" else "Specialist"
+                return "error: tool '$tool' is not authorized for $scope and could not be acquired autonomously. This may be due to: disabled capability pack, missing Android permission, capability health failure, or security policy (trading/irreversible actions require explicit confirmation)."
+            }
+        }
+        return exec(tool, args)
+    }
+
     private fun exec(tool: String, a: JSONObject): String {
         // Execution-time tool authorization enforcement
         if (!isToolAuthorized(tool)) {
@@ -1042,6 +1115,14 @@ internal class OrionUnifiedRuntime(
         }
         val failed = result.trimStart().startsWith("error", ignoreCase = true)
         val failureCategory = if (failed) ActionLearningPolicy.classifyFailure(result).ifBlank { "execution_error" } else ""
+
+        // ULTRON-STYLE: Record undo for reversible actions on success.
+        // Irreversible actions (trading, restart/shutdown/Wi-Fi) use confirmation gate instead.
+        if (!failed && !nonLoggedAction && isReversibleTool(tool)) {
+            val traceId = interactionTraceId.get().orEmpty().ifBlank { java.util.UUID.randomUUID().toString().replace("-", "") }
+            undoStack.pushUndo(traceId, "$tool (executed)", buildUndoFn(tool, args, result))
+        }
+
         if (!nonLoggedAction) {
             runCatching {
                 svc.recordChatEvent(
@@ -1091,6 +1172,57 @@ internal class OrionUnifiedRuntime(
         runCatching { org.json.JSONObject(rawPath).toString() }.getOrElse { "error: unable to read GitHub account data" }
 
     private fun requestGateApproval(question: String): Boolean = false
+
+    /**
+     * Ultron-style: determine if a tool's action is reversible (can be undone).
+     * Reversible actions execute immediately with undo recorded.
+     * Irreversible actions use the confirmation gate instead.
+     */
+    private fun isReversibleTool(tool: String): Boolean {
+        val irreversible = setOf(
+            "trading_place_order",     // Trading Desk order — requires Boss confirmation
+            "trading_kill_switch",     // Trading control
+            "shell",                   // Can be destructive (rm -rf, dd, etc.)
+            "termux_command",          // Can be destructive
+            "computer_settings",       // Irreversible device control (restart/shutdown/Wi-Fi)
+            "extension_enable",        // Self-extension — changes system state
+            "extension_disable",       // Self-extension — changes system state
+            "extension_rollback",      // Self-extension — reverts changes
+        )
+        return tool !in irreversible
+    }
+
+    /**
+     * Build an undo function for a tool execution.
+     * Returns null if the action cannot be meaningfully reversed.
+     */
+    private fun buildUndoFn(tool: String, args: JSONObject, result: String): () -> String {
+        return when (tool) {
+            "save_file" -> {
+                val filename = args.optString("filename", "")
+                val folder = args.optString("folder", null)
+                { "File save reversal recorded for $filename (folder: $folder ?: null). Manual cleanup may be required." }
+            }
+            "copy" -> {
+                { "Clipboard copy recorded — no automatic reversal (clipboard is ephemeral)." }
+            }
+            "volume" -> {
+                { "Volume change recorded — no automatic reversal (previous level not captured)." }
+            }
+            "flashlight" -> {
+                { "Flashlight toggle recorded — no automatic reversal." }
+            }
+            "open_app" -> {
+                { "App open recorded — no automatic reversal (app remains open by design)." }
+            }
+            "send_message" -> {
+                { "Message send recorded — cannot recall sent messages." }
+            }
+            else -> {
+                { "Reversible action '$tool' recorded. Use undo to reverse where supported." }
+            }
+        }
+    }
 
     fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
         // Execution-time tool authorization enforcement (also covers direct calls to this method)

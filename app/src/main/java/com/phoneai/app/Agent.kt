@@ -210,6 +210,32 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val pythonExecutor = OrionPythonCapabilityExecutor(svc, tools)
 
     // Unified runtime instance - Central Brain with FULL capability access (no broker)
+    private val extensionStore = SelfExtendingExtensionStore(svc.applicationContext)
+    private val extensionSandbox = RestrictedPythonSandbox { source, inputJson ->
+        OrionPythonRuntime.execute(svc.applicationContext, source)
+    }
+    private val capabilityIntelligence = OrionCapabilityIntelligence(
+        context = svc.applicationContext,
+        capabilityRegistry = CapabilityRegistry,
+        toolRegistry = ToolRegistry,
+        capabilityBroker = capabilityBroker, // will be initialized below; using lazy
+        extensionStore = extensionStore,
+        experienceStore = ExperienceStore,
+        recall = OrionRecall,
+        knowledgeGraph = OrionKnowledgeGraph,
+        entityIndex = OrionEntityIndex,
+        embeddingProvider = OrionEmbeddingProvider
+    )
+    private val acquisitionEngine = OrionCapabilityAcquisitionEngine(
+        context = svc.applicationContext,
+        svc = svc,
+        capabilityIntelligence = capabilityIntelligence,
+        capabilityBroker = null, // set below after broker is created
+        extensionStore = extensionStore,
+        extensionSandbox = extensionSandbox,
+        pythonRuntime = OrionPythonRuntime
+    )
+
     private val unifiedRuntime = OrionUnifiedRuntime(
         svc = svc,
         ui = ui,
@@ -217,7 +243,11 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         tools = tools,
         localExecutor = local,
         pythonExecutor = pythonExecutor,
-        commandNim = commandNim
+        commandNim = commandNim,
+        capabilityIntelligence = capabilityIntelligence,
+        acquisitionEngine = acquisitionEngine,
+        extensionStore = extensionStore,
+        extensionSandbox = extensionSandbox
         // No capabilityBroker = Central Brain has access to all registered/authorized tools
     )
 
@@ -226,6 +256,12 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         context = svc.applicationContext,
         svc = svc,
         unifiedRuntime = unifiedRuntime
+    )
+
+    // Undo stack for reversible actions (Ultron-style: act immediately, record undo)
+    private val undoStack = OrionUndoStack.getInstance(
+        context = svc.applicationContext,
+        svc = svc
     )
 
     // Phase 0C: Mission Controller
@@ -238,7 +274,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         localExecutor = local,
         pythonExecutor = pythonExecutor,
         commandNim = commandNim,
-        capabilityBroker = capabilityBroker
+        capabilityBroker = capabilityBroker,
+        capabilityIntelligence = capabilityIntelligence,
+        acquisitionEngine = acquisitionEngine,
+        undoStack = undoStack
     )
 
     // History and state (delegated to unified runtime but kept for compatibility)

@@ -10,6 +10,12 @@ import kotlinx.coroutines.*
  * Specialists execute using the Central Brain's unified runtime with dynamic
  * capability expansion via OrionCapabilityBroker. The factory enforces
  * concurrency bounds and prevents runaway agent spawning.
+ *
+ * Ultron Doctrine:
+ *   - "Specialists should receive the tools needed for their assignments."
+ *   - "Specialists should never be trapped by unnecessarily narrow tool configurations."
+ *   - "Dynamic specialist creation. Parallel execution. Shared mission context."
+ *   - "Capability expansion. Delegation and result reconciliation."
  */
 internal class OrionAgentFactory(
     private val context: Context,
@@ -20,7 +26,8 @@ internal class OrionAgentFactory(
     private val pythonExecutor: OrionPythonCapabilityExecutor,
     private val commandNim: Nim,
     private val controller: OrionMissionController,
-    private val capabilityBroker: OrionCapabilityBroker
+    private val capabilityBroker: OrionCapabilityBroker,
+    private val undoStack: OrionUndoStack
 ) {
 
     private val activeSessions = mutableMapOf<String, SpecialistSession>()
@@ -32,6 +39,10 @@ internal class OrionAgentFactory(
      * Create a new specialist session with scoped tools and context.
      * Specialists start with their default tools but can dynamically request
      * additional capabilities through the CapabilityBroker.
+     *
+     * ULTRON-STYLE: Specialists start with default tools but are NOT permanently
+     * restricted. They can request additional capabilities at any time via
+     * request_capabilities through the broker.
      */
     fun createSession(
         parentMissionId: String,
@@ -139,10 +150,9 @@ internal class OrionAgentFactory(
     private fun buildInitialToolSet(specialism: OrionSpecialism, allowedTools: Set<String>?): Set<String> {
         var tools = specialism.defaultTools
         allowedTools?.let { tools = tools.intersect(it) }
-        // Filter by what's actually registered and permitted (basic security gates only)
+        // Filter only to what's actually registered (not by preflight denial — that's runtime)
         tools = tools.filter { name ->
-            ToolRegistry.all.any { it.name == name } &&
-            ToolGate.preflightDenial(svc, name) == null
+            ToolRegistry.all.any { it.name == name }
         }
         return tools
     }
@@ -152,12 +162,9 @@ internal class OrionAgentFactory(
         tools: Set<String>,
         objective: String
     ): OrionContextIntegration.UnifiedContext {
-        // Return a filtered context - only the tools this specialist can use
-        return snapshot?.copy(
-            capabilities = snapshot.capabilities.copy(
-                availableCapabilities = snapshot.capabilities.availableCapabilities.filter { it in tools }
-            )
-        ) ?: OrionContextIntegration(context.applicationContext).buildContext(
+        // ULTRON-STYLE: Do NOT filter capabilities for specialists.
+        // Specialists see the full capability ecosystem and can request expansion via broker.
+        return snapshot ?: OrionContextIntegration(context.applicationContext).buildContext(
             command = objective,
             modality = "SPECIALIST",
             activeObjective = objective,
@@ -169,6 +176,11 @@ internal class OrionAgentFactory(
      * Phase 0C: Specialist execution using the Central Brain's unified runtime
      * with dynamic capability expansion via OrionCapabilityBroker.
      * Specialists start with initial tools but can request additional capabilities.
+     *
+     * ULTRON-STYLE: Specialists use the Central Brain's unified runtime which has
+     * access to ALL registered capabilities. Tool restrictions are enforced at
+     * dispatch time (Android perms, trading confirmation, irreversible actions),
+     * not by pre-filtering the specialist's tool set.
      */
     private fun runSpecialist(session: SpecialistSession) {
         val startedAt = System.currentTimeMillis()
@@ -210,7 +222,7 @@ internal class OrionAgentFactory(
                     result = "Specialist cannot proceed: ${decision.blocker ?: "no executable plan"}"
                     verdict = SpecialistVerdict.FAILED
                 } else {
-                    // Execute the plan
+                    // Execute the plan using Central Brain runtime (all tools available)
                     val outcome = specialistRuntime.executePlan(
                         decision.executionPlan!!, decision,
                         specialistRuntime.predictObstaclesForPlan(decision.executionPlan!!, intent),
