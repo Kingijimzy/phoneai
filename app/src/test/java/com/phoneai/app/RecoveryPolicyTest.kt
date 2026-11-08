@@ -41,8 +41,10 @@ class RecoveryPolicyTest {
     @Test fun consequentialActionsPauseEvenWhenTransient() {
         val r = RecoveryPolicy.riskOf("telegram_send", ToolAccess.WRITE, consequential = true)
         assertEquals(Risk.CONSEQUENTIAL, r)
-        assertEquals(Decision.PAUSE_ASK, RecoveryPolicy.decide(r, Failure.TRANSIENT, 0))
-        assertEquals(Decision.PAUSE_ASK, RecoveryPolicy.decide(r, Failure.OTHER, 0))
+        // Free mode: a clear failure is replanned; only an ambiguous outcome pauses (see ambiguousWriteOutcomeIsNeverRetried).
+        assertEquals(Decision.REPLAN, RecoveryPolicy.decide(r, Failure.TRANSIENT, 0))
+        assertEquals(Decision.REPLAN, RecoveryPolicy.decide(r, Failure.OTHER, 0))
+        assertEquals(Decision.PAUSE_ASK, RecoveryPolicy.decide(r, Failure.AMBIGUOUS, 0))
     }
 
     @Test fun writeTargetMissingReplansBecauseNothingWasApplied() {
@@ -50,7 +52,7 @@ class RecoveryPolicyTest {
     }
 
     @Test fun partialWriteOrUnknownFailureWithoutProofPauses() {
-        assertEquals(Decision.PAUSE_ASK, RecoveryPolicy.decide(Risk.WRITE, Failure.OTHER, 0))
+        assertEquals(Decision.REPLAN, RecoveryPolicy.decide(Risk.WRITE, Failure.OTHER, 0)) // free mode: try another route
     }
 
     @Test fun failedDevelopmentCommandReplansSoTheModelCanFixAndRerun() {
@@ -94,10 +96,12 @@ class RecoveryPolicyTest {
     }
 
     @Test fun repeatedReplansExhaustTheLifecycleIntoRecord() {
-        // One alternate route is allowed; a second failure stops the task.
+        // Three alternate routes are allowed; the fourth failure stops the task.
         var lc = TaskLifecycle(phase = Phase.EXECUTE)
-        lc = lc.fail()!!; assertEquals(Phase.RECOVER, lc.phase)
-        lc = lc.replan()!!.advance()!!.advance()!!.advance()!!
+        repeat(TaskLifecycle.MAX_RECOVERIES) {
+            lc = lc.fail()!!; assertEquals(Phase.RECOVER, lc.phase)
+            lc = lc.replan()!!.advance()!!.advance()!!.advance()!!
+        }
         lc = lc.fail()!!
         assertEquals("recovery budget exhausted", Phase.RECORD, lc.phase)
     }
@@ -159,8 +163,8 @@ class RecoveryPolicyTest {
 
     @Test fun writesAndConsequentialActionsAreNeverRetriedAutomatically() {
         assertEquals(Decision.PAUSE_ASK, RecoveryPolicy.decide(Risk.WRITE, Failure.AMBIGUOUS, 0))
-        assertEquals(Decision.PAUSE_ASK, RecoveryPolicy.decide(Risk.CONSEQUENTIAL, Failure.TRANSIENT, 0))
-        assertEquals(Decision.PAUSE_ASK, RecoveryPolicy.decide(Risk.CONSEQUENTIAL, Failure.TARGET_MISSING, 0))
+        assertEquals(Decision.PAUSE_ASK, RecoveryPolicy.decide(Risk.CONSEQUENTIAL, Failure.AMBIGUOUS, 0))
+        assertEquals(Decision.REPLAN, RecoveryPolicy.decide(Risk.CONSEQUENTIAL, Failure.TARGET_MISSING, 0))
     }
 
     @Test fun failedTestThenRepairThenRerunIsAllowedByReplan() {
