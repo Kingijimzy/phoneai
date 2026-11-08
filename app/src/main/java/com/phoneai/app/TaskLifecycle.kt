@@ -60,6 +60,6 @@ internal data class TaskLifecycle(
     fun cancel(): TaskLifecycle? = if (isTerminal) null else copy(phase = Phase.CANCELLED, blockedFrom = null)
 
     companion object {
-        const val MAX_RECOVERIES = 1
+        const val MAX_RECOVERIES = 3
     }
 }

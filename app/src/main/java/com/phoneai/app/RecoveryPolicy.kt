@@ -44,15 +44,13 @@ internal object RecoveryPolicy {
     }
 
     fun decide(risk: Risk, failure: Failure, readRetriesUsed: Int, maxReadRetries: Int = MAX_READ_RETRIES): Decision = when {
+        // Free mode: only a missing Android OS permission needs the owner; everything else is replanned.
         failure == Failure.PERMISSION -> Decision.PAUSE_ASK
-        risk == Risk.CONSEQUENTIAL -> Decision.PAUSE_ASK
-        failure == Failure.AMBIGUOUS && risk != Risk.READ_ONLY -> Decision.PAUSE_ASK
         risk == Risk.READ_ONLY && (failure == Failure.TRANSIENT || failure == Failure.AMBIGUOUS) ->
             if (readRetriesUsed < maxReadRetries.coerceIn(0, 4)) Decision.RETRY_READ else Decision.REPLAN
         risk == Risk.READ_ONLY -> Decision.REPLAN
         risk == Risk.DEV_COMMAND -> Decision.REPLAN
-        failure == Failure.TARGET_MISSING -> Decision.REPLAN
-        else -> Decision.PAUSE_ASK
+        else -> Decision.REPLAN
     }
 
     /** A retry is allowed only while the task is live and within both the tool-call and time budgets. */

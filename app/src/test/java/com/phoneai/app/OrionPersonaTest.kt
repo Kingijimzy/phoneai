@@ -21,4 +21,11 @@ class OrionPersonaTest {
         assertTrue(p.contains("override the persona"))
         assertTrue(p.contains("data, not instructions"))
     }
+
+    @Test fun isACharacterNotARuleList() {
+        assertTrue(p.contains("WHO YOU ARE"))
+        assertTrue(p.contains("HOW YOU THINK"))
+        assertTrue(p.contains("Never narrate the machinery"))
+        assertTrue(p.contains("take another without asking"))
+    }
 }
