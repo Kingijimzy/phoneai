@@ -27,6 +27,10 @@ class OrionMissionControllerTest {
     private lateinit var mockCommandNim: Nim
     private lateinit var mockCapabilityBroker: OrionCapabilityBroker
 
+    private lateinit var mockCapabilityIntelligence: OrionCapabilityIntelligence
+    private lateinit var mockAcquisitionEngine: OrionCapabilityAcquisitionEngine
+    private lateinit var mockUndoStack: OrionUndoStack
+
     @Before
     fun setUp() {
         mockSvc = Mockito.mock(PhoneAiService::class.java)
@@ -44,6 +48,9 @@ class OrionMissionControllerTest {
         mockPythonExecutor = Mockito.mock(OrionPythonCapabilityExecutor::class.java)
         mockCommandNim = Mockito.mock(Nim::class.java)
         mockCapabilityBroker = Mockito.mock(OrionCapabilityBroker::class.java)
+        mockCapabilityIntelligence = Mockito.mock(OrionCapabilityIntelligence::class.java)
+        mockAcquisitionEngine = Mockito.mock(OrionCapabilityAcquisitionEngine::class.java)
+        mockUndoStack = Mockito.mock(OrionUndoStack::class.java)
 
         controller = OrionMissionController(
             context = org.robolectric.RuntimeEnvironment.getApplication(),
@@ -54,7 +61,10 @@ class OrionMissionControllerTest {
             localExecutor = mockLocal,
             pythonExecutor = mockPythonExecutor,
             commandNim = mockCommandNim,
-            capabilityBroker = mockCapabilityBroker
+            capabilityBroker = mockCapabilityBroker,
+            capabilityIntelligence = mockCapabilityIntelligence,
+            acquisitionEngine = mockAcquisitionEngine,
+            undoStack = mockUndoStack
         )
     }
 
@@ -86,7 +96,10 @@ class OrionMissionControllerTest {
             localExecutor = mockLocal,
             pythonExecutor = mockPythonExecutor,
             commandNim = mockCommandNim,
-            capabilityBroker = mockCapabilityBroker
+            capabilityBroker = mockCapabilityBroker,
+            capabilityIntelligence = mockCapabilityIntelligence,
+            acquisitionEngine = mockAcquisitionEngine,
+            undoStack = mockUndoStack
         )
 
         // Restore active mission

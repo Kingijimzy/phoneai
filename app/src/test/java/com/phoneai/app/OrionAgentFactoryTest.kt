@@ -24,6 +24,7 @@ class OrionAgentFactoryTest {
     private lateinit var mockCommandNim: Nim
     private lateinit var mockController: OrionMissionController
     private lateinit var mockCapabilityBroker: OrionCapabilityBroker
+    private lateinit var mockUndoStack: OrionUndoStack
 
     @Test
     fun testCreateSpecialistSession() = runBlocking {
@@ -54,7 +55,8 @@ class OrionAgentFactoryTest {
             pythonExecutor = mockPythonExecutor,
             commandNim = mockCommandNim,
             controller = mockController,
-            capabilityBroker = mockCapabilityBroker
+            capabilityBroker = mockCapabilityBroker,
+            undoStack = mockUndoStack
         )
 
         val session = factory.createSession(
@@ -102,7 +104,8 @@ class OrionAgentFactoryTest {
             pythonExecutor = mockPythonExecutor,
             commandNim = mockCommandNim,
             controller = mockController,
-            capabilityBroker = mockCapabilityBroker
+            capabilityBroker = mockCapabilityBroker,
+            undoStack = mockUndoStack
         )
 
         val session = factory.createSession(
@@ -152,7 +155,8 @@ class OrionAgentFactoryTest {
             pythonExecutor = mockPythonExecutor,
             commandNim = mockCommandNim,
             controller = mockController,
-            capabilityBroker = mockCapabilityBroker
+            capabilityBroker = mockCapabilityBroker,
+            undoStack = mockUndoStack
         )
 
         val session = factory.createSession(
@@ -201,7 +205,8 @@ class OrionAgentFactoryTest {
             pythonExecutor = mockPythonExecutor,
             commandNim = mockCommandNim,
             controller = mockController,
-            capabilityBroker = mockCapabilityBroker
+            capabilityBroker = mockCapabilityBroker,
+            undoStack = mockUndoStack
         )
 
         // Create 3 specialists (should succeed)
@@ -257,7 +262,8 @@ class OrionAgentFactoryTest {
             pythonExecutor = mockPythonExecutor,
             commandNim = mockCommandNim,
             controller = mockController,
-            capabilityBroker = mockCapabilityBroker
+            capabilityBroker = mockCapabilityBroker,
+            undoStack = mockUndoStack
         )
 
         // Research specialist should get browser tools by default

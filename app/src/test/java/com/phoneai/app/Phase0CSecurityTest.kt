@@ -22,6 +22,9 @@ class Phase0CSecurityTest {
     private lateinit var mockPythonExecutor: OrionPythonCapabilityExecutor
     private lateinit var mockCommandNim: Nim
     private lateinit var mockCapabilityBroker: OrionCapabilityBroker
+    private lateinit var mockCapabilityIntelligence: OrionCapabilityIntelligence
+    private lateinit var mockAcquisitionEngine: OrionCapabilityAcquisitionEngine
+    private lateinit var mockUndoStack: OrionUndoStack
 
     private fun createController(ui: AgentUi = object : AgentUi {
         override fun say(text: String) {}
@@ -39,6 +42,9 @@ class Phase0CSecurityTest {
         mockPythonExecutor = Mockito.mock(OrionPythonCapabilityExecutor::class.java)
         mockCommandNim = Mockito.mock(Nim::class.java)
         mockCapabilityBroker = Mockito.mock(OrionCapabilityBroker::class.java)
+        mockCapabilityIntelligence = Mockito.mock(OrionCapabilityIntelligence::class.java)
+        mockAcquisitionEngine = Mockito.mock(OrionCapabilityAcquisitionEngine::class.java)
+        mockUndoStack = Mockito.mock(OrionUndoStack::class.java)
 
         return OrionMissionController(
             context = context,
@@ -49,7 +55,10 @@ class Phase0CSecurityTest {
             localExecutor = mockLocal,
             pythonExecutor = mockPythonExecutor,
             commandNim = mockCommandNim,
-            capabilityBroker = mockCapabilityBroker
+            capabilityBroker = mockCapabilityBroker,
+            capabilityIntelligence = mockCapabilityIntelligence,
+            acquisitionEngine = mockAcquisitionEngine,
+            undoStack = mockUndoStack
         )
     }
 
