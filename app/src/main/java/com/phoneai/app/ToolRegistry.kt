@@ -17,6 +17,7 @@ internal object ToolRegistry {
     }
 
     val all: List<ToolDefinition> = listOf(
+        tool("request_capabilities", ToolAccess.WRITE, "request_capabilities {tools: [string], reason: string}: request additional capabilities from the central Capability Broker. The broker discovers, authorizes, and provisions registered capabilities without unnecessary user interaction. Use when you need tools beyond your initial set. Example: request_capabilities {tools: [\"python_exec\", \"shell\"], reason: \"need to run code and inspect filesystem to complete analysis\"}"),
         tool("extension_list", ToolAccess.READ, "extension_list {}: list saved self-extending tool drafts and enabled status"),
         tool("extension_create", ToolAccess.WRITE, "extension_create {id, name, runtime:'python', source, description}: save a reusable tool draft. The source is a restricted Python script (no imports, attributes, def/while, files or network; for loops only over range()): read the JSON object INPUT, set RESULT (and optionally print). Example: total = 0 / for i in range(len(INPUT['values'])): total += INPUT['values'][i] / RESULT = total"),
         tool("extension_update", ToolAccess.WRITE, "extension_update {id, name, runtime, source, description}: replace an existing disabled extension draft under the same ID; active versions must first be archived and disabled, then the new source must pass extension_test before activation"),

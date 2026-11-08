@@ -7,8 +7,9 @@ import kotlinx.coroutines.*
  * Phase 0C: Mission Ownership
  *
  * Creates and manages bounded specialist agents.
- * Each specialist gets a scoped tool set, isolated context, and resource limits.
- * The factory enforces concurrency bounds and prevents runaway agent spawning.
+ * Specialists execute using the Central Brain's unified runtime with dynamic
+ * capability expansion via OrionCapabilityBroker. The factory enforces
+ * concurrency bounds and prevents runaway agent spawning.
  */
 internal class OrionAgentFactory(
     private val context: Context,
@@ -18,7 +19,8 @@ internal class OrionAgentFactory(
     private val localExecutor: Local,
     private val pythonExecutor: OrionPythonCapabilityExecutor,
     private val commandNim: Nim,
-    private val controller: OrionMissionController
+    private val controller: OrionMissionController,
+    private val capabilityBroker: OrionCapabilityBroker
 ) {
 
     private val activeSessions = mutableMapOf<String, SpecialistSession>()
@@ -28,6 +30,8 @@ internal class OrionAgentFactory(
 
     /**
      * Create a new specialist session with scoped tools and context.
+     * Specialists start with their default tools but can dynamically request
+     * additional capabilities through the CapabilityBroker.
      */
     fun createSession(
         parentMissionId: String,
@@ -38,16 +42,17 @@ internal class OrionAgentFactory(
     ): SpecialistSession {
         val sessionId = "spec_${specialism.id}_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(8)}"
 
-        // Build tool set: start with specialism defaults, filter by allowed, verify permissions
-        val effectiveTools = buildEffectiveToolSet(specialism, allowedTools)
-        val scopedContext = buildScopedContext(contextSnapshot, effectiveTools, objective)
+        // Build initial tool set: specialism defaults, optionally filtered by allowedTools
+        // This is the STARTING set - specialists can request more via CapabilityBroker
+        val initialTools = buildInitialToolSet(specialism, allowedTools)
+        val scopedContext = buildScopedContext(contextSnapshot, initialTools, objective)
 
         val session = SpecialistSession(
             sessionId = sessionId,
             parentMissionId = parentMissionId,
             specialism = specialism,
             objective = objective,
-            allowedTools = effectiveTools,
+            allowedTools = initialTools, // Starting tools - can expand via broker
             contextSnapshot = scopedContext,
             createdAt = System.currentTimeMillis(),
             status = SpecialistStatus.STARTING
@@ -131,10 +136,10 @@ internal class OrionAgentFactory(
     // PRIVATE: SPECIALIST EXECUTION
     // ------------------------------------------------------------------------
 
-    private fun buildEffectiveToolSet(specialism: OrionSpecialism, allowedTools: Set<String>?): Set<String> {
+    private fun buildInitialToolSet(specialism: OrionSpecialism, allowedTools: Set<String>?): Set<String> {
         var tools = specialism.defaultTools
         allowedTools?.let { tools = tools.intersect(it) }
-        // Filter by what's actually registered and permitted
+        // Filter by what's actually registered and permitted (basic security gates only)
         tools = tools.filter { name ->
             ToolRegistry.all.any { it.name == name } &&
             ToolGate.preflightDenial(svc, name) == null
@@ -160,6 +165,11 @@ internal class OrionAgentFactory(
         )
     }
 
+    /**
+     * Phase 0C: Specialist execution using the Central Brain's unified runtime
+     * with dynamic capability expansion via OrionCapabilityBroker.
+     * Specialists start with initial tools but can request additional capabilities.
+     */
     private fun runSpecialist(session: SpecialistSession) {
         val startedAt = System.currentTimeMillis()
         val evidence = mutableListOf<String>()
@@ -167,47 +177,74 @@ internal class OrionAgentFactory(
         var verdict = SpecialistVerdict.FAILED
         var result = "Specialist did not produce a result"
 
+        // Specialist timeout: 10 minutes max
+        val TIMEOUT_MS = 10 * 60 * 1000L
+
         try {
-            synchronized(sessionLock) { session.status = SpecialistStatus.RUNNING }
+            withTimeout(TIMEOUT_MS) {
+                synchronized(sessionLock) { session.status = SpecialistStatus.RUNNING }
 
-            // Build specialist system prompt
-            val systemPrompt = buildSpecialistPrompt(session)
+                // Use the Central Brain's unified runtime with capability broker for dynamic expansion
+                val specialistRuntime = controller.unifiedRuntime
 
-            // Execute the specialist's objective
-            val messages = JSONArray().put(msg("system", systemPrompt))
-            messages.put(msg("user", "Objective: ${session.objective}"))
+                // Execute the specialist's objective through the decision pipeline
+                val intent = specialistRuntime.analyzeCurrentIntent(session.objective)
 
-            // Specialist gets a dedicated NIM instance
-            val specialistNim = Nim(svc).also { n -> n.onStatus = { s -> } }
+                // Check for missing capabilities and attempt auto-acquisition
+                val discovery = capabilityBroker.discoverMissingCapabilities(intent)
+                if (discovery.canAutoResolve && discovery.acquisitionPlans.isNotEmpty()) {
+                    evidence += "[CAPABILITY] Auto-resolving missing capabilities: ${discovery.missingCapabilities.joinToString(", ")}"
+                    for (plan in discovery.acquisitionPlans) {
+                        val acquired = capabilityBroker.executeAcquisitionPlan(plan)
+                        if (acquired) {
+                            evidence += "[CAPABILITY] Acquired: ${plan.capability}"
+                        } else {
+                            evidence += "[CAPABILITY] Failed to acquire: ${plan.capability} - ${plan.description}"
+                        }
+                    }
+                }
 
-            var response = specialistNim.chat(messages, false, 800, 0.3).trim()
+                val decision = specialistRuntime.decideForIntent(intent)
 
-            // Check if the specialist wants to use tools
-            if (response.uppercase().startsWith("ACTION")) {
-                // Parse and execute tool calls
-                val toolResult = executeSpecialistTools(session, specialistNim, response)
-                response = toolResult
-                evidence += toolResult
-                toolCalls = 1 // simplified - real implementation would count
+                if (!decision.canProceed || decision.executionPlan == null || decision.executionPlan!!.steps.isEmpty()) {
+                    result = "Specialist cannot proceed: ${decision.blocker ?: "no executable plan"}"
+                    verdict = SpecialistVerdict.FAILED
+                } else {
+                    // Execute the plan
+                    val outcome = specialistRuntime.executePlan(
+                        decision.executionPlan!!, decision,
+                        specialistRuntime.predictObstaclesForPlan(decision.executionPlan!!, intent),
+                        OrionUnifiedRuntime.Modality.COMMAND,
+                        specialistRuntime.lastContext!!
+                    )
+
+                    // Verify
+                    val verification = specialistRuntime.verifyOutcome(outcome, intent, specialistRuntime.lastContext)
+                    verdict = if (verification.passed) SpecialistVerdict.VERIFIED else SpecialistVerdict.UNVERIFIED
+                    result = outcome.notes.joinToString("; ")
+                    evidence += outcome.notes
+                    toolCalls = outcome.completed.size + outcome.failed.size
+                }
             }
-
-            // Final result
-            result = response
-            verdict = if (response.trimStart().startsWith("error", ignoreCase = true)) SpecialistVerdict.FAILED else SpecialistVerdict.UNVERIFIED
-
         } catch (e: Exception) {
-            result = "error: specialist execution failed: ${e.javaClass.simpleName}"
+            result = if (e is kotlinx.coroutines.TimeoutCancellationException) {
+                "error: specialist timed out after ${TIMEOUT_MS / 60000} minutes"
+            } else {
+                "error: specialist execution failed: ${e.javaClass.simpleName}: ${e.message}"
+            }
             verdict = SpecialistVerdict.FAILED
         } finally {
-            val duration = System.currentTimeMillis() - startedAt
+            val completedAt = System.currentTimeMillis()
             synchronized(sessionLock) {
                 session.status = if (verdict == SpecialistVerdict.FAILED) SpecialistStatus.FAILED else SpecialistStatus.COMPLETED
                 session.result = result
                 session.evidence = evidence
                 session.verdict = verdict
                 session.toolCalls = toolCalls
-                session.completedAt = System.currentTimeMillis()
+                session.completedAt = completedAt
             }
+            // Clean up broker session state
+            capabilityBroker.revokeSessionCapabilities(session.sessionId)
         }
     }
 
@@ -215,9 +252,13 @@ internal class OrionAgentFactory(
         val sb = StringBuilder()
         sb.append("You are a ${session.specialism.description.toLowerCase()} specialist. ")
         sb.append("Your parent mission (${session.parentMissionId}) assigned you: ${session.objective}\n\n")
-        sb.append("Available tools: ${session.allowedTools.joinToString(", ")}\n")
+        sb.append("Initial tools: ${session.allowedTools.joinToString(", ")}\n")
+        sb.append("DYNAMIC CAPABILITY EXPANSION: You can request additional tools at any time by ")
+        sb.append("calling the 'request_capabilities' tool with the tool names you need and a reason. ")
+        sb.append("The Capability Broker will discover, authorize, and provision available capabilities ")
+        sb.append("without requiring user interaction for ordinary capabilities.\n")
         sb.append("Constraints:\n")
-        sb.append("- Use ONLY the listed tools. Do not invent tools.\n")
+        sb.append("- Start with your initial tools; request more when needed via 'request_capabilities'.\n")
         sb.append("- You are a subordinate agent. Report findings to your parent, do not act independently.\n")
         sb.append("- Maximum ${MAX_SESSION_DURATION_MS / 60000} minutes. Be concise.\n")
         sb.append("- Return evidence for every claim. Verification is required.\n")

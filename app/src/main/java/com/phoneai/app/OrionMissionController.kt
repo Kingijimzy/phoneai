@@ -12,6 +12,7 @@ import kotlinx.coroutines.*
  * - Persistent mission lifecycle (Room via OrionMissionStore)
  * - State machine enforcement (MissionTransitionValidator)
  * - Specialist delegation with bounded concurrency (OrionAgentFactory)
+ * - Dynamic capability expansion via OrionCapabilityBroker
  * - Recovery as mission-level state (replan, resume, retry)
  * - Evidence aggregation for observability (OrionMissionEvidence)
  */
@@ -23,7 +24,8 @@ internal class OrionMissionController(
     private val tools: Tools,
     private val localExecutor: Local,
     private val pythonExecutor: OrionPythonCapabilityExecutor,
-    private val commandNim: Nim
+    private val commandNim: Nim,
+    private val capabilityBroker: OrionCapabilityBroker
 ) {
 
     private val store = OrionMissionStore(context)
@@ -35,8 +37,12 @@ internal class OrionMissionController(
         localExecutor = localExecutor,
         pythonExecutor = pythonExecutor,
         commandNim = commandNim,
-        controller = this
+        controller = this,
+        capabilityBroker = capabilityBroker
     )
+
+    // Expose capability broker for dynamic tool expansion
+    val capabilityBroker: OrionCapabilityBroker = capabilityBroker
 
     // Current mission state
     @Volatile private var currentMission: OrionMission? = null

@@ -21,10 +21,11 @@ class OrionMissionLifecycleIntegrationTest {
     private lateinit var mockLocal: Local
     private lateinit var mockPythonExecutor: OrionPythonCapabilityExecutor
     private lateinit var mockCommandNim: Nim
+    private lateinit var mockCapabilityBroker: OrionCapabilityBroker
 
     private fun createController(): OrionMissionController {
         val context = org.robolectric.RuntimeEnvironment.getApplication()
-        mockSvc = org.mockito.Mockito.mock(PhoneAiService::class.java)
+        mockSvc = Mockito.mock(PhoneAiService::class.java)
         mockUi = object : AgentUi {
             override fun say(text: String) {}
             override fun status(text: String) {}
@@ -34,20 +35,22 @@ class OrionMissionLifecycleIntegrationTest {
             override fun askUser(question: String, options: List<String>, access: String): String = ""
             override fun openBrowser(url: String) {}
         }
-        mockTools = org.mockito.Mockito.mock(Tools::class.java)
-        mockLocal = org.mockito.Mockito.mock(Local::class.java)
-        mockPythonExecutor = org.mockito.Mockito.mock(OrionPythonCapabilityExecutor::class.java)
-        mockCommandNim = org.mockito.Mockito.mock(Nim::class.java)
+        mockTools = Mockito.mock(Tools::class.java)
+        mockLocal = Mockito.mock(Local::class.java)
+        mockPythonExecutor = Mockito.mock(OrionPythonCapabilityExecutor::class.java)
+        mockCommandNim = Mockito.mock(Nim::class.java)
+        mockCapabilityBroker = Mockito.mock(OrionCapabilityBroker::class.java)
 
         return OrionMissionController(
             context = context,
-            unifiedRuntime = org.mockito.Mockito.mock(OrionUnifiedRuntime::class.java),
+            unifiedRuntime = Mockito.mock(OrionUnifiedRuntime::class.java),
             svc = mockSvc,
             ui = mockUi,
             tools = mockTools,
             localExecutor = mockLocal,
             pythonExecutor = mockPythonExecutor,
-            commandNim = mockCommandNim
+            commandNim = mockCommandNim,
+            capabilityBroker = mockCapabilityBroker
         )
     }
 
@@ -200,7 +203,17 @@ class OrionMissionLifecycleIntegrationTest {
         assertNotNull(missionId)
 
         // Simulate process death - create new controller
-        val newController = createController()
+        val newController = OrionMissionController(
+            context = org.robolectric.RuntimeEnvironment.getApplication(),
+            unifiedRuntime = Mockito.mock(OrionUnifiedRuntime::class.java),
+            svc = mockSvc,
+            ui = mockUi,
+            tools = mockTools,
+            localExecutor = mockLocal,
+            pythonExecutor = mockPythonExecutor,
+            commandNim = mockCommandNim,
+            capabilityBroker = mockCapabilityBroker
+        )
 
         // Restore active mission
         val restored = newController.restoreActiveMission().await()

@@ -35,7 +35,7 @@ internal object OrionRuntimeCapabilityExecutor {
             "browser_navigate", "browser_back", "browser_handoff", "browser_wait",
             "browser_tabs", "browser_upload", "browser_close"
         )
-        OrionCapabilityAdapters.Backend.CORE -> tool in setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state")
+        OrionCapabilityAdapters.Backend.CORE -> tool in setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state", "request_capabilities")
         OrionCapabilityAdapters.Backend.DEV -> tool in setOf("dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan", "dev_summary", "macro_save", "macro_run", "macro_list", "macro_delete")
     }
 
@@ -205,6 +205,32 @@ internal object OrionRuntimeCapabilityExecutor {
             "soul_state" -> {
                 val state = OrionSoulLifecycle.state(service)
                 "Soul Engine: ${OrionSoulLifecycle.label(service)} (${OrionSoulLifecycle.millisInState(service)} ms in state; last: ${OrionSoulLifecycle.lastAction(service)})"
+            }
+            "request_capabilities" -> {
+                val toolsJson = args.optJSONArray("tools")
+                val reason = args.optString("reason", "Specialist requested additional capabilities")
+                val requestedTools = if (toolsJson != null) {
+                    (0 until toolsJson.length()).map { toolsJson.getString(it) }.toSet()
+                } else emptySet()
+                
+                if (requestedTools.isEmpty()) {
+                    "error: request_capabilities requires a non-empty 'tools' array"
+                } else {
+                    // Get the capability broker from the unified runtime via PhoneAiService
+                    val agent = service.getAgent() ?: return "error: agent not available for capability request"
+                    val broker = agent.getMissionController()?.let { it.capabilityBroker } 
+                        ?: return "error: capability broker not initialized"
+                    
+                    // Get the current specialist session ID from context
+                    val sessionId = args.optString("session_id").ifBlank { "unknown_session" }
+                    
+                    // Request capabilities through the broker
+                    val grant = broker.requestCapabilities(sessionId, requestedTools, reason)
+                    
+                    org.json.JSONObject().put("granted", grant.granted.joinToString(","))
+                        .put("denied", grant.denied.joinToString(","))
+                        .put("reason", grant.reason).toString()
+                }
             }
             "document_extract" -> {
                 val uri = args.optString("uri", "")

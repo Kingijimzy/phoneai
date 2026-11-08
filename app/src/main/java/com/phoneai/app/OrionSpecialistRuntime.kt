@@ -106,7 +106,8 @@ internal class OrionSpecialistRuntime(
             tools = tools,
             localExecutor = localExecutor,
             pythonExecutor = pythonExecutor,
-            commandNim = commandNim
+            commandNim = commandNim,
+            allowedTools = session.allowedTools
         )
     }
 

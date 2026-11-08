@@ -96,6 +96,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
     private lateinit var wm: WindowManager
     private lateinit var agent: Agent
+    fun getAgent(): Agent = agent
     private lateinit var voice: Voice
     @Volatile private var orionRuntime: OrionRuntime? = null
     @Volatile private var decisionScheduler: OrionDecisionScheduler? = null

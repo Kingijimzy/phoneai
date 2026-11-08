@@ -209,7 +209,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     )
     private val pythonExecutor = OrionPythonCapabilityExecutor(svc, tools)
 
-    // Unified runtime instance
+    // Unified runtime instance - Central Brain with FULL capability access (no broker)
     private val unifiedRuntime = OrionUnifiedRuntime(
         svc = svc,
         ui = ui,
@@ -218,6 +218,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         localExecutor = local,
         pythonExecutor = pythonExecutor,
         commandNim = commandNim
+        // No capabilityBroker = Central Brain has access to all registered/authorized tools
+    )
+
+    // Capability Broker for dynamic specialist tool expansion
+    private val capabilityBroker = OrionCapabilityBroker.getInstance(
+        context = svc.applicationContext,
+        svc = svc,
+        unifiedRuntime = unifiedRuntime
     )
 
     // Phase 0C: Mission Controller
@@ -229,7 +237,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         tools = tools,
         localExecutor = local,
         pythonExecutor = pythonExecutor,
-        commandNim = commandNim
+        commandNim = commandNim,
+        capabilityBroker = capabilityBroker
     )
 
     // History and state (delegated to unified runtime but kept for compatibility)

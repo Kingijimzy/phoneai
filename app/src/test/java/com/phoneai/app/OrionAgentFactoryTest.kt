@@ -6,6 +6,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.junit.runner.RunWith
 import kotlinx.coroutines.runBlocking
+import org.mockito.Mockito
 
 /**
  * Phase 0C Tests: Agent Factory and Specialist Runtime
@@ -22,11 +23,12 @@ class OrionAgentFactoryTest {
     private lateinit var mockPythonExecutor: OrionPythonCapabilityExecutor
     private lateinit var mockCommandNim: Nim
     private lateinit var mockController: OrionMissionController
+    private lateinit var mockCapabilityBroker: OrionCapabilityBroker
 
     @Test
     fun testCreateSpecialistSession() = runBlocking {
         val context = org.robolectric.RuntimeEnvironment.getApplication()
-        mockSvc = org.mockito.Mockito.mock(PhoneAiService::class.java)
+        mockSvc = Mockito.mock(PhoneAiService::class.java)
         mockUi = object : AgentUi {
             override fun say(text: String) {}
             override fun status(text: String) {}
@@ -36,11 +38,12 @@ class OrionAgentFactoryTest {
             override fun askUser(question: String, options: List<String>, access: String): String = ""
             override fun openBrowser(url: String) {}
         }
-        mockTools = org.mockito.Mockito.mock(Tools::class.java)
-        mockLocal = org.mockito.Mockito.mock(Local::class.java)
-        mockPythonExecutor = org.mockito.Mockito.mock(OrionPythonCapabilityExecutor::class.java)
-        mockCommandNim = org.mockito.Mockito.mock(Nim::class.java)
-        mockController = org.mockito.Mockito.mock(OrionMissionController::class.java)
+        mockTools = Mockito.mock(Tools::class.java)
+        mockLocal = Mockito.mock(Local::class.java)
+        mockPythonExecutor = Mockito.mock(OrionPythonCapabilityExecutor::class.java)
+        mockCommandNim = Mockito.mock(Nim::class.java)
+        mockController = Mockito.mock(OrionMissionController::class.java)
+        mockCapabilityBroker = Mockito.mock(OrionCapabilityBroker::class.java)
 
         factory = OrionAgentFactory(
             context = context,
@@ -50,7 +53,8 @@ class OrionAgentFactoryTest {
             localExecutor = mockLocal,
             pythonExecutor = mockPythonExecutor,
             commandNim = mockCommandNim,
-            controller = mockController
+            controller = mockController,
+            capabilityBroker = mockCapabilityBroker
         )
 
         val session = factory.createSession(
@@ -72,7 +76,7 @@ class OrionAgentFactoryTest {
     @Test
     fun testCollectSpecialistResult() = runBlocking {
         val context = org.robolectric.RuntimeEnvironment.getApplication()
-        mockSvc = org.mockito.Mockito.mock(PhoneAiService::class.java)
+        mockSvc = Mockito.mock(PhoneAiService::class.java)
         mockUi = object : AgentUi {
             override fun say(text: String) {}
             override fun status(text: String) {}
@@ -82,11 +86,12 @@ class OrionAgentFactoryTest {
             override fun askUser(question: String, options: List<String>, access: String): String = ""
             override fun openBrowser(url: String) {}
         }
-        mockTools = org.mockito.Mockito.mock(Tools::class.java)
-        mockLocal = org.mockito.Mockito.mock(Local::class.java)
-        mockPythonExecutor = org.mockito.Mockito.mock(OrionPythonCapabilityExecutor::class.java)
-        mockCommandNim = org.mockito.Mockito.mock(Nim::class.java)
-        mockController = org.mockito.Mockito.mock(OrionMissionController::class.java)
+        mockTools = Mockito.mock(Tools::class.java)
+        mockLocal = Mockito.mock(Local::class.java)
+        mockPythonExecutor = Mockito.mock(OrionPythonCapabilityExecutor::class.java)
+        mockCommandNim = Mockito.mock(Nim::class.java)
+        mockController = Mockito.mock(OrionMissionController::class.java)
+        mockCapabilityBroker = Mockito.mock(OrionCapabilityBroker::class.java)
 
         factory = OrionAgentFactory(
             context = context,
@@ -96,7 +101,8 @@ class OrionAgentFactoryTest {
             localExecutor = mockLocal,
             pythonExecutor = mockPythonExecutor,
             commandNim = mockCommandNim,
-            controller = mockController
+            controller = mockController,
+            capabilityBroker = mockCapabilityBroker
         )
 
         val session = factory.createSession(
@@ -120,7 +126,7 @@ class OrionAgentFactoryTest {
     @Test
     fun testTerminateSpecialist() = runBlocking {
         val context = org.robolectric.RuntimeEnvironment.getApplication()
-        mockSvc = org.mockito.Mockito.mock(PhoneAiService::class.java)
+        mockSvc = Mockito.mock(PhoneAiService::class.java)
         mockUi = object : AgentUi {
             override fun say(text: String) {}
             override fun status(text: String) {}
@@ -130,11 +136,12 @@ class OrionAgentFactoryTest {
             override fun askUser(question: String, options: List<String>, access: String): String = ""
             override fun openBrowser(url: String) {}
         }
-        mockTools = org.mockito.Mockito.mock(Tools::class.java)
-        mockLocal = org.mockito.Mockito.mock(Local::class.java)
-        mockPythonExecutor = org.mockito.Mockito.mock(OrionPythonCapabilityExecutor::class.java)
-        mockCommandNim = org.mockito.Mockito.mock(Nim::class.java)
-        mockController = org.mockito.Mockito.mock(OrionMissionController::class.java)
+        mockTools = Mockito.mock(Tools::class.java)
+        mockLocal = Mockito.mock(Local::class.java)
+        mockPythonExecutor = Mockito.mock(OrionPythonCapabilityExecutor::class.java)
+        mockCommandNim = Mockito.mock(Nim::class.java)
+        mockController = Mockito.mock(OrionMissionController::class.java)
+        mockCapabilityBroker = Mockito.mock(OrionCapabilityBroker::class.java)
 
         factory = OrionAgentFactory(
             context = context,
@@ -144,7 +151,8 @@ class OrionAgentFactoryTest {
             localExecutor = mockLocal,
             pythonExecutor = mockPythonExecutor,
             commandNim = mockCommandNim,
-            controller = mockController
+            controller = mockController,
+            capabilityBroker = mockCapabilityBroker
         )
 
         val session = factory.createSession(
@@ -164,7 +172,7 @@ class OrionAgentFactoryTest {
     @Test
     fun testConcurrencyLimit() = runBlocking {
         val context = org.robolectric.RuntimeEnvironment.getApplication()
-        mockSvc = org.mockito.Mockito.mock(PhoneAiService::class.java)
+        mockSvc = Mockito.mock(PhoneAiService::class.java)
         mockUi = object : AgentUi {
             override fun say(text: String) {}
             override fun status(text: String) {}
@@ -174,14 +182,15 @@ class OrionAgentFactoryTest {
             override fun askUser(question: String, options: List<String>, access: String): String = ""
             override fun openBrowser(url: String) {}
         }
-        mockTools = org.mockito.Mockito.mock(Tools::class.java)
-        mockLocal = org.mockito.Mockito.mock(Local::class.java)
-        mockPythonExecutor = org.mockito.Mockito.mock(OrionPythonCapabilityExecutor::class.java)
-        mockCommandNim = org.mockito.Mockito.mock(Nim::class.java)
-        mockController = org.mockito.Mockito.mock(OrionMissionController::class.java)
+        mockTools = Mockito.mock(Tools::class.java)
+        mockLocal = Mockito.mock(Local::class.java)
+        mockPythonExecutor = Mockito.mock(OrionPythonCapabilityExecutor::class.java)
+        mockCommandNim = Mockito.mock(Nim::class.java)
+        mockController = Mockito.mock(OrionMissionController::class.java)
+        mockCapabilityBroker = Mockito.mock(OrionCapabilityBroker::class.java)
 
         // Mock controller to return canSpawnMore = false for 4th specialist
-        org.mockito.Mockito.`when`(mockController.MAX_CONCURRENT_SPECIALISTS).thenReturn(3)
+        Mockito.`when`(mockController.MAX_CONCURRENT_SPECIALISTS).thenReturn(3)
         
         factory = OrionAgentFactory(
             context = context,
@@ -191,7 +200,8 @@ class OrionAgentFactoryTest {
             localExecutor = mockLocal,
             pythonExecutor = mockPythonExecutor,
             commandNim = mockCommandNim,
-            controller = mockController
+            controller = mockController,
+            capabilityBroker = mockCapabilityBroker
         )
 
         // Create 3 specialists (should succeed)
@@ -216,5 +226,52 @@ class OrionAgentFactoryTest {
                 contextSnapshot = null
             )
         }
+    }
+
+    @Test
+    fun testSpecialistInitialToolsAreDefaults() = runBlocking {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        mockSvc = Mockito.mock(PhoneAiService::class.java)
+        mockUi = object : AgentUi {
+            override fun say(text: String) {}
+            override fun status(text: String) {}
+            override fun note(text: String) {}
+            override fun phase(p: String) {}
+            override fun ask(question: String): Boolean = true
+            override fun askUser(question: String, options: List<String>, access: String): String = ""
+            override fun openBrowser(url: String) {}
+        }
+        mockTools = Mockito.mock(Tools::class.java)
+        mockLocal = Mockito.mock(Local::class.java)
+        mockPythonExecutor = Mockito.mock(OrionPythonCapabilityExecutor::class.java)
+        mockCommandNim = Mockito.mock(Nim::class.java)
+        mockController = Mockito.mock(OrionMissionController::class.java)
+        mockCapabilityBroker = Mockito.mock(OrionCapabilityBroker::class.java)
+
+        factory = OrionAgentFactory(
+            context = context,
+            svc = mockSvc,
+            ui = mockUi,
+            tools = mockTools,
+            localExecutor = mockLocal,
+            pythonExecutor = mockPythonExecutor,
+            commandNim = mockCommandNim,
+            controller = mockController,
+            capabilityBroker = mockCapabilityBroker
+        )
+
+        // Research specialist should get browser tools by default
+        val session = factory.createSession(
+            parentMissionId = "mission_123",
+            specialism = OrionSpecialism.RESEARCH,
+            objective = "Research something",
+            allowedTools = null, // No filter - should get all defaults
+            contextSnapshot = null
+        )
+
+        assertTrue("Research specialist should have browser_navigate", session.allowedTools.contains("browser_navigate"))
+        assertTrue("Research specialist should have browser_snapshot", session.allowedTools.contains("browser_snapshot"))
+        assertTrue("Research specialist should have live_web_search", session.allowedTools.contains("live_web_search"))
+        assertTrue("Research specialist should have memory", session.allowedTools.contains("memory"))
     }
 }

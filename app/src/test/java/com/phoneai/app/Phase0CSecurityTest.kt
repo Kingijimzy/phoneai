@@ -6,6 +6,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.junit.runner.RunWith
 import kotlinx.coroutines.runBlocking
+import org.mockito.Mockito
 
 /**
  * Phase 0C Tests: Security boundaries and permission preservation
@@ -14,42 +15,56 @@ import kotlinx.coroutines.runBlocking
 @Config(sdk = [34])
 class Phase0CSecurityTest {
 
-    private lateinit var controller: OrionMissionController
     private lateinit var mockSvc: PhoneAiService
     private lateinit var mockUi: AgentUi
     private lateinit var mockTools: Tools
     private lateinit var mockLocal: Local
     private lateinit var mockPythonExecutor: OrionPythonCapabilityExecutor
     private lateinit var mockCommandNim: Nim
+    private lateinit var mockCapabilityBroker: OrionCapabilityBroker
+
+    private fun createController(ui: AgentUi = object : AgentUi {
+        override fun say(text: String) {}
+        override fun status(text: String) {}
+        override fun note(text: String) {}
+        override fun phase(p: String) {}
+        override fun ask(question: String): Boolean = true
+        override fun askUser(question: String, options: List<String>, access: String): String = ""
+        override fun openBrowser(url: String) {}
+    }): OrionMissionController {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        mockSvc = Mockito.mock(PhoneAiService::class.java)
+        mockTools = Mockito.mock(Tools::class.java)
+        mockLocal = Mockito.mock(Local::class.java)
+        mockPythonExecutor = Mockito.mock(OrionPythonCapabilityExecutor::class.java)
+        mockCommandNim = Mockito.mock(Nim::class.java)
+        mockCapabilityBroker = Mockito.mock(OrionCapabilityBroker::class.java)
+
+        return OrionMissionController(
+            context = context,
+            unifiedRuntime = Mockito.mock(OrionUnifiedRuntime::class.java),
+            svc = mockSvc,
+            ui = ui,
+            tools = mockTools,
+            localExecutor = mockLocal,
+            pythonExecutor = mockPythonExecutor,
+            commandNim = mockCommandNim,
+            capabilityBroker = mockCapabilityBroker
+        )
+    }
 
     @Test
     fun testTradingOrderRequiresExplicitConfirmation() = runBlocking {
-        val context = org.robolectric.RuntimeEnvironment.getApplication()
-        mockSvc = org.mockito.Mockito.mock(PhoneAiService::class.java)
-        mockUi = object : AgentUi {
+        var askCount = 0
+        val controller = createController(object : AgentUi {
             override fun say(text: String) {}
             override fun status(text: String) {}
             override fun note(text: String) {}
             override fun phase(p: String) {}
-            override fun ask(question: String): Boolean = false // Deny confirmation
+            override fun ask(question: String): Boolean { askCount++; return false } // Deny confirmation
             override fun askUser(question: String, options: List<String>, access: String): String = ""
             override fun openBrowser(url: String) {}
-        }
-        mockTools = org.mockito.Mockito.mock(Tools::class.java)
-        mockLocal = org.mockito.Mockito.mock(Local::class.java)
-        mockPythonExecutor = org.mockito.Mockito.mock(OrionPythonCapabilityExecutor::class.java)
-        mockCommandNim = org.mockito.Mockito.mock(Nim::class.java)
-
-        controller = OrionMissionController(
-            context = context,
-            unifiedRuntime = org.mockito.Mockito.mock(OrionUnifiedRuntime::class.java),
-            svc = mockSvc,
-            ui = mockUi,
-            tools = mockTools,
-            localExecutor = mockLocal,
-            pythonExecutor = mockPythonExecutor,
-            commandNim = mockCommandNim
-        )
+        })
 
         // Start a trading mission - should require confirmation
         val missionId = controller.startMission("Place a $100 buy order for BTC on Bybit")
@@ -62,10 +77,8 @@ class Phase0CSecurityTest {
 
     @Test
     fun testOrdinaryTasksNoUnnecessaryPrompts() = runBlocking {
-        val context = org.robolectric.RuntimeEnvironment.getApplication()
-        mockSvc = org.mockito.Mockito.mock(PhoneAiService::class.java)
         var askCount = 0
-        mockUi = object : AgentUi {
+        val controller = createController(object : AgentUi {
             override fun say(text: String) {}
             override fun status(text: String) {}
             override fun note(text: String) {}
@@ -73,22 +86,7 @@ class Phase0CSecurityTest {
             override fun ask(question: String): Boolean { askCount++; return true }
             override fun askUser(question: String, options: List<String>, access: String): String = ""
             override fun openBrowser(url: String) {}
-        }
-        mockTools = org.mockito.Mockito.mock(Tools::class.java)
-        mockLocal = org.mockito.Mockito.mock(Local::class.java)
-        mockPythonExecutor = org.mockito.Mockito.mock(OrionPythonCapabilityExecutor::class.java)
-        mockCommandNim = org.mockito.Mockito.mock(Nim::class.java)
-
-        controller = OrionMissionController(
-            context = context,
-            unifiedRuntime = org.mockito.Mockito.mock(OrionUnifiedRuntime::class.java),
-            svc = mockSvc,
-            ui = mockUi,
-            tools = mockTools,
-            localExecutor = mockLocal,
-            pythonExecutor = mockPythonExecutor,
-            commandNim = mockCommandNim
-        )
+        })
 
         // Ordinary task should not require confirmation
         val missionId = controller.startMission("Open WhatsApp and send a message to Mom")
@@ -104,32 +102,7 @@ class Phase0CSecurityTest {
 
     @Test
     fun testAndroidPermissionsPreserved() = runBlocking {
-        val context = org.robolectric.RuntimeEnvironment.getApplication()
-        mockSvc = org.mockito.Mockito.mock(PhoneAiService::class.java)
-        mockUi = object : AgentUi {
-            override fun say(text: String) {}
-            override fun status(text: String) {}
-            override fun note(text: String) {}
-            override fun phase(p: String) {}
-            override fun ask(question: String): Boolean = true
-            override fun askUser(question: String, options: List<String>, access: String): String = ""
-            override fun openBrowser(url: String) {}
-        }
-        mockTools = org.mockito.Mockito.mock(Tools::class.java)
-        mockLocal = org.mockito.Mockito.mock(Local::class.java)
-        mockPythonExecutor = org.mockito.Mockito.mock(OrionPythonCapabilityExecutor::class.java)
-        mockCommandNim = org.mockito.Mockito.mock(Nim::class.java)
-
-        controller = OrionMissionController(
-            context = context,
-            unifiedRuntime = org.mockito.Mockito.mock(OrionUnifiedRuntime::class.java),
-            svc = mockSvc,
-            ui = mockUi,
-            tools = mockTools,
-            localExecutor = mockLocal,
-            pythonExecutor = mockPythonExecutor,
-            commandNim = mockCommandNim
-        )
+        val controller = createController()
 
         // Specialist with tools requiring Android permissions
         val session = controller.delegateToSpecialist(
@@ -149,32 +122,7 @@ class Phase0CSecurityTest {
         // This is a structural test - the mission controller and agent factory
         // should not have any code that bypasses ApiKeyVault or AppVault
         
-        val context = org.robolectric.RuntimeEnvironment.getApplication()
-        mockSvc = org.mockito.Mockito.mock(PhoneAiService::class.java)
-        mockUi = object : AgentUi {
-            override fun say(text: String) {}
-            override fun status(text: String) {}
-            override fun note(text: String) {}
-            override fun phase(p: String) {}
-            override fun ask(question: String): Boolean = true
-            override fun askUser(question: String, options: List<String>, access: String): String = ""
-            override fun openBrowser(url: String) {}
-        }
-        mockTools = org.mockito.Mockito.mock(Tools::class.java)
-        mockLocal = org.mockito.Mockito.mock(Local::class.java)
-        mockPythonExecutor = org.mockito.Mockito.mock(OrionPythonCapabilityExecutor::class.java)
-        mockCommandNim = org.mockito.Mockito.mock(Nim::class.java)
-
-        controller = OrionMissionController(
-            context = context,
-            unifiedRuntime = org.mockito.Mockito.mock(OrionUnifiedRuntime::class.java),
-            svc = mockSvc,
-            ui = mockUi,
-            tools = mockTools,
-            localExecutor = mockLocal,
-            pythonExecutor = mockPythonExecutor,
-            commandNim = mockCommandNim
-        )
+        val controller = createController()
 
         // Verify no direct credential access in mission controller
         // Credentials should only be accessed through ApiKeyVault/AppVault
@@ -183,32 +131,7 @@ class Phase0CSecurityTest {
 
     @Test
     fun testShellDestructiveCommandsBlocked() = runBlocking {
-        val context = org.robolectric.RuntimeEnvironment.getApplication()
-        mockSvc = org.mockito.Mockito.mock(PhoneAiService::class.java)
-        mockUi = object : AgentUi {
-            override fun say(text: String) {}
-            override fun status(text: String) {}
-            override fun note(text: String) {}
-            override fun phase(p: String) {}
-            override fun ask(question: String): Boolean = true
-            override fun askUser(question: String, options: List<String>, access: String): String = ""
-            override fun openBrowser(url: String) {}
-        }
-        mockTools = org.mockito.Mockito.mock(Tools::class.java)
-        mockLocal = org.mockito.Mockito.mock(Local::class.java)
-        mockPythonExecutor = org.mockito.Mockito.mock(OrionPythonCapabilityExecutor::class.java)
-        mockCommandNim = org.mockito.Mockito.mock(Nim::class.java)
-
-        controller = OrionMissionController(
-            context = context,
-            unifiedRuntime = org.mockito.Mockito.mock(OrionUnifiedRuntime::class.java),
-            svc = mockSvc,
-            ui = mockUi,
-            tools = mockTools,
-            localExecutor = mockLocal,
-            pythonExecutor = mockPythonExecutor,
-            commandNim = mockCommandNim
-        )
+        val controller = createController()
 
         // Try to delegate a specialist with shell access
         val session = controller.delegateToSpecialist(

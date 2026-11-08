@@ -9,6 +9,7 @@ import org.junit.runner.RunWith
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import org.mockito.Mockito
 
 /**
  * Phase 0C Tests: Mission Controller lifecycle, persistence, delegation, recovery
@@ -24,10 +25,11 @@ class OrionMissionControllerTest {
     private lateinit var mockLocal: Local
     private lateinit var mockPythonExecutor: OrionPythonCapabilityExecutor
     private lateinit var mockCommandNim: Nim
+    private lateinit var mockCapabilityBroker: OrionCapabilityBroker
 
     @Before
     fun setUp() {
-        mockSvc = org.mockito.Mockito.mock(PhoneAiService::class.java)
+        mockSvc = Mockito.mock(PhoneAiService::class.java)
         mockUi = object : AgentUi {
             override fun say(text: String) {}
             override fun status(text: String) {}
@@ -37,20 +39,22 @@ class OrionMissionControllerTest {
             override fun askUser(question: String, options: List<String>, access: String): String = ""
             override fun openBrowser(url: String) {}
         }
-        mockTools = org.mockito.Mockito.mock(Tools::class.java)
-        mockLocal = org.mockito.Mockito.mock(Local::class.java)
-        mockPythonExecutor = org.mockito.Mockito.mock(OrionPythonCapabilityExecutor::class.java)
-        mockCommandNim = org.mockito.Mockito.mock(Nim::class.java)
+        mockTools = Mockito.mock(Tools::class.java)
+        mockLocal = Mockito.mock(Local::class.java)
+        mockPythonExecutor = Mockito.mock(OrionPythonCapabilityExecutor::class.java)
+        mockCommandNim = Mockito.mock(Nim::class.java)
+        mockCapabilityBroker = Mockito.mock(OrionCapabilityBroker::class.java)
 
         controller = OrionMissionController(
             context = org.robolectric.RuntimeEnvironment.getApplication(),
-            unifiedRuntime = org.mockito.Mockito.mock(OrionUnifiedRuntime::class.java),
+            unifiedRuntime = Mockito.mock(OrionUnifiedRuntime::class.java),
             svc = mockSvc,
             ui = mockUi,
             tools = mockTools,
             localExecutor = mockLocal,
             pythonExecutor = mockPythonExecutor,
-            commandNim = mockCommandNim
+            commandNim = mockCommandNim,
+            capabilityBroker = mockCapabilityBroker
         )
     }
 
@@ -75,13 +79,14 @@ class OrionMissionControllerTest {
         // Simulate process death by creating new controller with same context
         val newController = OrionMissionController(
             context = org.robolectric.RuntimeEnvironment.getApplication(),
-            unifiedRuntime = org.mockito.Mockito.mock(OrionUnifiedRuntime::class.java),
+            unifiedRuntime = Mockito.mock(OrionUnifiedRuntime::class.java),
             svc = mockSvc,
             ui = mockUi,
             tools = mockTools,
             localExecutor = mockLocal,
             pythonExecutor = mockPythonExecutor,
-            commandNim = mockCommandNim
+            commandNim = mockCommandNim,
+            capabilityBroker = mockCapabilityBroker
         )
 
         // Restore active mission

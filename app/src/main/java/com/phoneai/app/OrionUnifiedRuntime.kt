@@ -26,6 +26,10 @@ import java.nio.charset.StandardCharsets
  * - Mandatory verification before mission completion
  * - Autonomous problem-solving with strategy switching
  * - Integrated Central Decision Engine for intent, reasoning, planning, prediction
+ * - OPEN CAPABILITIES: Central Brain has access to ALL registered/authorized capabilities
+ * - DYNAMIC AUTHORIZATION: Specialists request additional tools via CapabilityBroker
+ * - AUTONOMOUS RECOVERY: Denied/unavailable capabilities trigger diagnosis & alternatives
+ * - CENTRAL GOVERNANCE: Security boundaries enforced at dispatch (Android perms, trading, irreversible)
  */
 internal class OrionUnifiedRuntime(
     private val svc: PhoneAiService,
@@ -35,6 +39,9 @@ internal class OrionUnifiedRuntime(
     private val localExecutor: Local,
     private val pythonExecutor: OrionPythonCapabilityExecutor,
     private val commandNim: Nim,
+
+    // Capability Broker for dynamic tool expansion (null for Central Brain which has all tools)
+    private val capabilityBroker: OrionCapabilityBroker? = null,
 
     // Shared capability discovery singleton
     private val capabilityDiscovery: OrionCapabilityDiscovery = OrionCapabilityDiscovery,
@@ -941,7 +948,60 @@ internal class OrionUnifiedRuntime(
     // EXECUTION DELEGATION (forward to unified runtime's exec)
     // ========================================================================
 
+    /**
+     * Check if a tool is authorized for this runtime instance.
+     *
+     * OPEN CAPABILITY ARCHITECTURE:
+     * - Central Brain (no capabilityBroker): ALL registered & authorized tools available
+     * - Specialists (with capabilityBroker): Initial tools + dynamically granted via broker
+     * - Security boundaries ALWAYS enforced: Android perms, trading confirmation, irreversible actions, shell destructive
+     */
+    private fun isToolAuthorized(tool: String): Boolean {
+        // Core system tools always allowed (cannot be denied)
+        if (tool in ToolPermissionPolicy.alwaysAllowed) return true
+
+        // If no capabilityBroker, this is the Central Brain - all registered & authorized tools available
+        if (capabilityBroker == null) {
+            // Still enforce security boundaries: pack status, permissions, health
+            return isToolAuthorizedByPolicy(tool)
+        }
+
+        // This is a specialist runtime - check broker for granted capabilities
+        // Note: In practice, specialists share the Central Brain's runtime and request
+        // capabilities through the broker. The broker tracks granted tools per session.
+        // For now, we enforce standard policy checks; session-specific grants are
+        // handled by the specialist execution flow requesting via broker.
+        return isToolAuthorizedByPolicy(tool)
+    }
+
+    /** Core authorization logic: pack status, permissions, capability health, security gates */
+    private fun isToolAuthorizedByPolicy(tool: String): Boolean {
+        // Check user deny setting
+        if (ToolPermissions.mode(svc, tool) == ToolMode.DENY) return false
+
+        // Check pack status
+        val pack = AgentPolicy.packForTool(tool)
+        if (pack != null && !AgentPolicy.enabled(svc, pack)) return false
+
+        // ToolGate preflight (Android permissions, etc.)
+        if (ToolGate.preflightDenial(svc, tool) != null) return false
+
+        // CapabilityRegistry health check
+        val capabilityEntry = CapabilityRegistry.forBuiltInTool(
+            tool,
+            ToolPermissions.mode(svc, tool) == ToolMode.DENY,
+            pack == null || AgentPolicy.enabled(svc, pack)
+        )
+        return capabilityEntry.usable
+    }
+
     private fun exec(tool: String, a: JSONObject): String {
+        // Execution-time tool authorization enforcement
+        if (!isToolAuthorized(tool)) {
+            val scope = if (capabilityBroker == null) "Central Brain" else "Specialist"
+            return "error: tool '$tool' is not authorized for $scope. This may be due to: disabled capability pack, missing Android permission, capability health failure, or security policy (trading/irreversible actions require explicit confirmation)."
+        }
+
         val startedAt = System.currentTimeMillis()
         val traceId = interactionTraceId.get().orEmpty().ifBlank { java.util.UUID.randomUUID().toString().replace("-", "") }
         val correlationId = java.util.UUID.randomUUID().toString()
@@ -1033,6 +1093,12 @@ internal class OrionUnifiedRuntime(
     private fun requestGateApproval(question: String): Boolean = false
 
     fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
+        // Execution-time tool authorization enforcement (also covers direct calls to this method)
+        if (!isToolAuthorized(tool)) {
+            val scope = if (capabilityBroker == null) "Central Brain" else "Specialist"
+            return "error: tool '$tool' is not authorized for $scope. This may be due to: disabled capability pack, missing Android permission, capability health failure, or security policy (trading/irreversible actions require explicit confirmation)."
+        }
+
         // Enhanced with decision engine context
         val objectiveGraph = OrionObjectiveGraph.load(svc)
         if (objectiveGraph != null && OrionObjectiveGraph.requiresObjectiveDispatch(tool)) {
