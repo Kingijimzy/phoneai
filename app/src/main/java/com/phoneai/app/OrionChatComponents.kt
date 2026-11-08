@@ -70,6 +70,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -334,22 +337,61 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
 @Composable
 private fun ShellActivityCard(raw: String) {
     val failed = raw.startsWith("[SHELL:FAILED]")
-    val command = raw.lineSequence().drop(1).firstOrNull().orEmpty().removePrefix("$ ")
-    val output = raw.substringAfter("\n", "").substringAfter("\n", "").trim()
+    val body = raw.substringAfter("\n", "")
+    val command = body.substringBefore("\n").removePrefix("$ ")
+    val rest = body.substringAfter("\n", "")
+    val hasMarkers = rest.contains("\u2063OUT\n")
+    val code = if (hasMarkers && rest.startsWith("\u2063CODE\n")) rest.substringAfter("\u2063CODE\n").substringBefore("\u2063OUT\n").trimEnd() else ""
+    val output = (if (hasMarkers) rest.substringAfter("\u2063OUT\n") else rest).trim()
+    val title = when {
+        command.startsWith("python") -> "ORION PYTHON"
+        command.startsWith("write ") -> "ORION CODE"
+        command.startsWith("cat ") -> "ORION FILE"
+        else -> "ORION TERMINAL"
+    }
+    val clipboard = LocalClipboardManager.current
+    var expanded by remember(raw) { mutableStateOf(false) }
+    val mono = androidx.compose.ui.text.font.FontFamily.Monospace
+    val green = Color(0xFF7EE787)
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF0B0B0B)).border(1.dp, Color(0xFF353535), RoundedCornerShape(12.dp))
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).animateContentSize(animationSpec = tween(220))
+            .background(Color(0xFF0B0B0B)).border(1.dp, if (failed) Color(0xFF6B3A30) else Color(0xFF353535), RoundedCornerShape(12.dp))
             .padding(11.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            Icon(Icons.Rounded.Tune, contentDescription = null, tint = Color(0xFFD0D0D0), modifier = Modifier.size(16.dp))
-            Text("ORION SHELL", color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
+            Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(if (failed) Color(0xFFE7A18F) else green))
+            Text(title, color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
             Spacer(Modifier.weight(1f))
-            Text(if (failed) "FAILED" else "OUTPUT", color = if (failed) Color(0xFFE7A18F) else Color(0xFFBFC5CC), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Text(if (failed) "FAILED" else "DONE", color = if (failed) Color(0xFFE7A18F) else green, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
-        Text("\$ $command", color = Color(0xFFE8E8E8), fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
-        if (output.isNotBlank()) Text(output.take(1600), color = Color(0xFFBFC5CC), fontSize = 11.sp, lineHeight = 16.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+        Text(buildAnnotatedString {
+            withStyle(SpanStyle(color = green)) { append("$ ") }
+            append(command)
+        }, color = Color(0xFFE8E8E8), fontSize = 12.sp, fontFamily = mono)
+        if (code.isNotBlank()) {
+            val lines = code.lines()
+            val shown = if (expanded) lines else lines.take(10)
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color(0xFF141414)).padding(8.dp)
+            ) {
+                shown.forEachIndexed { n, line ->
+                    Row {
+                        Text("${n + 1}".padStart(3), color = Color(0xFF5C6370), fontSize = 10.sp, fontFamily = mono)
+                        Spacer(Modifier.width(8.dp))
+                        Text(line.take(160), color = Color(0xFFD7DAE0), fontSize = 11.sp, lineHeight = 15.sp, fontFamily = mono)
+                    }
+                }
+                if (lines.size > 10) Text(if (expanded) "SHOW LESS" else "+${lines.size - 10} more lines", color = Color(0xFFD4D4D4), fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold, modifier = Modifier.clickable { expanded = !expanded }.padding(top = 6.dp))
+            }
+        }
+        if (output.isNotBlank()) {
+            Text("OUTPUT", color = Color(0xFF8A8F98), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
+            Text(output.take(2400), color = if (failed) Color(0xFFE7A18F) else Color(0xFFBFC5CC), fontSize = 11.sp, lineHeight = 16.sp, fontFamily = mono)
+        }
+        Text("COPY", color = ChatMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.clickable { clipboard.setText(AnnotatedString((if (code.isNotBlank()) code + "\n\n" else "") + output)) }.padding(vertical = 2.dp))
     }
 }
 

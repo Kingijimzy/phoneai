@@ -810,7 +810,7 @@ internal fun OrionComposeChatScreen(
                         }), maxLines = 5
                     )
                 }
-                ComposerButton(Icons.Rounded.AddPhotoAlternate, "Attach image", onPickImage, secondary = true)
+                ComposerButton(Icons.Rounded.AddPhotoAlternate, "Attach file or image", onPickImage, secondary = true)
                 Spacer(Modifier.width(5.dp))
                 ComposerButton(
                     if (busy) Icons.Rounded.Stop else Icons.Rounded.Send,
