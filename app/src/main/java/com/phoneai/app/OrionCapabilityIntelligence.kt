@@ -20,7 +20,7 @@ class OrionCapabilityIntelligence(
     private val context: Context,
     private val capabilityRegistry: CapabilityRegistry,
     private val toolRegistry: ToolRegistry,
-    private val capabilityBroker: OrionCapabilityBroker,
+    private val capabilityBroker: OrionCapabilityBroker?,
     private val extensionStore: SelfExtendingExtensionStore,
     private val experienceStore: ExperienceStore,
     private val recall: OrionRecall,
