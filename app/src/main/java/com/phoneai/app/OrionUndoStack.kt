@@ -24,7 +24,7 @@ internal class OrionUndoStack(
     private val svc: PhoneAiService
 ) {
 
-    private val stack = ConcurrentHashMap<String, UndoEntry>() // keyed by trace ID -> list
+    private val stack = ConcurrentHashMap<String, MutableList<UndoEntry>>() // keyed by trace ID -> list of entries
     private val maxDepth = 20
 
     private data class UndoEntry(
@@ -120,7 +120,8 @@ internal class OrionUndoStack(
     }
 }
 
-data class UndoEntry(
+// Internal UndoEntry used by the stack (keep top-level for external test access)
+internal data class UndoEntry(
     val label: String,
     val undoFn: () -> String,
     val at: Long = System.currentTimeMillis()

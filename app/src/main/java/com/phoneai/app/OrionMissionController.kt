@@ -49,6 +49,8 @@ internal class OrionMissionController(
     val capabilityBroker: OrionCapabilityBroker = capabilityBroker
     val capabilityIntelligence: OrionCapabilityIntelligence = capabilityIntelligence
     val acquisitionEngine: OrionCapabilityAcquisitionEngine = acquisitionEngine
+    // Expose undo stack for "undo"/"undo_status" tool dispatch
+    val undoStack: OrionUndoStack = undoStack
 
     // Current mission state
     @Volatile private var currentMission: OrionMission? = null

@@ -35,7 +35,7 @@ internal object OrionRuntimeCapabilityExecutor {
             "browser_navigate", "browser_back", "browser_handoff", "browser_wait",
             "browser_tabs", "browser_upload", "browser_close"
         )
-        OrionCapabilityAdapters.Backend.CORE -> tool in setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state", "request_capabilities")
+        OrionCapabilityAdapters.Backend.CORE -> tool in setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state", "request_capabilities", "undo_last", "undo_status")
         OrionCapabilityAdapters.Backend.DEV -> tool in setOf("dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan", "dev_summary", "macro_save", "macro_run", "macro_list", "macro_delete")
     }
 
@@ -231,6 +231,30 @@ internal object OrionRuntimeCapabilityExecutor {
                         .put("denied", grant.denied.joinToString(","))
                         .put("reason", grant.reason).toString()
                 }
+            }
+            "undo_status" -> {
+                val agent = service.getAgent() ?: return "error: agent not available for undo status"
+                val missionController = agent.getMissionController()
+                if (missionController == null) {
+                    return "undo_status: no active mission"
+                }
+                val undoStack = missionController.undoStack
+                if (!undoStack.canUndo()) {
+                    return "nothing to undo — no reversible changes recorded yet"
+                }
+                val history = undoStack.undoHistory()
+                val peek = undoStack.peekUndo()
+                return "undo available: ${history.size} change(s) recorded; most recent: ${peek ?: "none"}"
+            }
+            "undo_last" -> {
+                val agent = service.getAgent() ?: return "error: agent not available for undo"
+                val missionController = agent.getMissionController()
+                if (missionController == null) {
+                    return "undo_last: no active mission to undo from"
+                }
+                val undoStack = missionController.undoStack
+                val result = undoStack.undoLast()
+                return result
             }
             "document_extract" -> {
                 val uri = args.optString("uri", "")
