@@ -844,7 +844,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Only restart, shutdown and Wi-Fi toggles require confirmation through the app interface; every other authorized action executes immediately after its capability, scope and validation checks. " +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
-            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
+            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionLivingLoop.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
     }
 
     /** Turns raw search results into a direct answer with sources; falls back to the raw list if the model call fails. */
@@ -2055,8 +2055,8 @@ Rules:
         if (!resumeRequest && !browserActionTask && !structuredTask && runSavedRoutineCommand(command)) return
         // Ground every run in live capability/graph context before acting.
         if (!resumeRequest) {
-            val pre = OrionPreActionContext.assess(svc, command)
-            ui.note("[CONTEXT]\n" + pre.summary)
+            // Context is assessed for the planner only; internal bookkeeping is not shown in the chat.
+            OrionPreActionContext.assess(svc, command)
         }
         // One-intent commands (play music, Google it in Chrome) skip the model entirely.
         if (!resumeRequest && !browserActionTask && !structuredTask) {
@@ -2848,7 +2848,8 @@ Rules:
                 val diagnosis = ToolResultPolicy.diagnose(result)
                 ui.note("[TASK:BLOCKED]\nFailure type: ${diagnosis.kind.name.lowercase()}\nSafe next step: ${diagnosis.safeNextStep}")
                 val precise = if (failureKind == RecoveryPolicy.Failure.PERMISSION || failureKind == RecoveryPolicy.Failure.AMBIGUOUS) RecoveryPolicy.pauseMessage(tool, failureKind) + " " else ""
-                ui.say(precise + "I couldn't complete the step '$tool'. ${diagnosis.reason.ifBlank { toolFailure }} Safe next step: ${diagnosis.safeNextStep} I paused the task and saved its progress; I have not marked the task complete.")
+                val why = diagnosis.reason.ifBlank { toolFailure }.lineSequence().firstOrNull().orEmpty().take(180)
+                ui.say(precise + "That route failed: '$tool' — $why. Progress is saved and this is not marked done; say \"continue\" and I'll take a different approach.")
                 return
             }
             history.put(msg("user", "RESULT: " + result.take(3500)))
@@ -3226,6 +3227,7 @@ Rules:
         // without persisting arguments, screen contents, credentials or raw tool output.
         val failed = result.trimStart().startsWith("error", ignoreCase = true)
         val failureCategory = if (failed) ActionLearningPolicy.classifyFailure(result).ifBlank { "execution_error" } else ""
+        OrionSelfModel.record(svc, tool, !failed, if (failed) result else "")
         if (!nonLoggedAction) {
         svc.recordChatEvent(
             "tool_result",

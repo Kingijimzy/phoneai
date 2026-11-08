@@ -27,6 +27,8 @@ internal class OrionProactiveWorker(
 
         // Genuine lifecycle state: scheduled proactive work means the Soul is monitoring.
         OrionSoulLifecycle.watcherTick(applicationContext)
+        // Self-reflection: notice repeatedly failing tools, learn, and queue a follow-up.
+        OrionLivingLoop.tick(applicationContext)
 
         return runCatching {
             SoulEngineWatcher.run(applicationContext)

@@ -28,16 +28,18 @@ class TaskLifecycleTest {
         assertNull(t.replan())
     }
 
-    @Test fun oneAlternateRouteRecoveryIsAllowedThenTheTaskStops() {
+    @Test fun threeAlternateRoutesAreAllowedThenTheTaskStops() {
         var t = walkToVerify()
+        repeat(TaskLifecycle.MAX_RECOVERIES) { n ->
+            t = t.fail()!!
+            assertEquals(Phase.RECOVER, t.phase)
+            assertEquals(n + 1, t.recoveries)
+            t = t.replan()!!.advance()!!.advance()!!.advance()!! // PLAN→CHECK→AUTH→EXECUTE
+            assertEquals(Phase.EXECUTE, t.phase)
+            t = t.advance()!!
+        }
         t = t.fail()!!
-        assertEquals(Phase.RECOVER, t.phase)
-        assertEquals(1, t.recoveries)
-        t = t.replan()!!.advance()!!.advance()!!.advance()!! // PLAN→CHECK→AUTH→EXECUTE
-        assertEquals(Phase.EXECUTE, t.phase)
-        t = t.advance()!!
-        t = t.fail()!!
-        assertEquals("second failure ends the task; no third route is attempted", Phase.RECORD, t.phase)
+        assertEquals("the failure after the recovery budget ends the task", Phase.RECORD, t.phase)
         assertFalse(t.verified)
     }
 
