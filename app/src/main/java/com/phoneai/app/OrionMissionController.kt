@@ -3,6 +3,7 @@ package com.phoneai.app
 import android.content.Context
 import android.os.SystemClock
 import kotlinx.coroutines.*
+import kotlinx.serialization.json.Json
 
 /**
  * Phase 0C: Mission Ownership
@@ -304,7 +305,7 @@ internal class OrionMissionController(
         }
 
         // All steps processed - verify at objective level
-        val outcome = MissionOutcome(
+        val outcome = OrionUnifiedRuntime.MissionOutcome(
             plan = currentPlan,
             decision = decision,
             completed = completed,
@@ -521,7 +522,7 @@ internal class OrionMissionController(
     // PRIVATE HELPERS
     // ------------------------------------------------------------------------
 
-    private fun transitionTo(
+    private suspend fun transitionTo(
         newStatus: OrionMissionStatus,
         checkpointJson: String? = null,
         failureReason: String? = null,
@@ -543,7 +544,7 @@ internal class OrionMissionController(
         }
     }
 
-    private fun checkpointAndSuspend(reason: String) {
+    private suspend fun checkpointAndSuspend(reason: String) {
         currentMission?.let { mission ->
             val checkpoint = buildString {
                 appendLine("CHECKPOINT $reason")
@@ -594,7 +595,7 @@ internal class OrionMissionController(
     enum class ResumeStrategy { CONTINUE, REPLAN, RETRY_FULL }
 }
 
-data class MissionExecutionResult(
+internal data class MissionExecutionResult(
     val missionId: String,
     val status: OrionMissionStatus,
     val completed: Set<String>,
@@ -606,7 +607,7 @@ data class MissionExecutionResult(
     val verification: OrionUnifiedRuntime.VerificationOutcome? = null
 )
 
-data class MissionOutcome(
+internal data class MissionOutcome(
     val plan: OrionPlanningEngine.ExecutionPlan,
     val decision: OrionDecisionEngine.Decision,
     val completed: Set<String>,

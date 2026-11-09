@@ -49,7 +49,7 @@ internal class OrionCapabilityAcquisitionEngine(
      * Execute a full acquisition plan: try each step in order, with retry and fallback.
      * Returns true if at least one step succeeded (partial success is still progress).
      */
-    suspend fun executePlan(plan: OrionCapabilityIntelligence.AcquisitionPlan): AcquisitionExecutionSummary {
+    suspend fun executePlan(plan: AcquisitionPlan): AcquisitionExecutionSummary {
         val startTime = System.currentTimeMillis()
         val stepResults = mutableListOf<AcquisitionStepResult>()
         var overallSuccess = false
@@ -85,7 +85,7 @@ internal class OrionCapabilityAcquisitionEngine(
      * Execute a single acquisition step with retry logic.
      */
     private suspend fun executeStepWithRetry(
-        step: OrionCapabilityIntelligence.AcquisitionStep,
+        step: AcquisitionStep,
         objective: String
     ): AcquisitionStepResult {
         var lastError: String? = null
@@ -119,35 +119,35 @@ internal class OrionCapabilityAcquisitionEngine(
      * Execute a single acquisition step (one attempt).
      */
     private suspend fun executeSingleStep(
-        step: OrionCapabilityIntelligence.AcquisitionStep,
+        step: AcquisitionStep,
         objective: String,
         attempt: Int
     ): AcquisitionStepResult {
         val startTime = System.currentTimeMillis()
 
         return when (step.action) {
-            OrionCapabilityIntelligence.AcquisitionType.ENABLE_EXTENSION -> {
+            AcquisitionType.ENABLE_EXTENSION -> {
                 enableExtension(step)
             }
-            OrionCapabilityIntelligence.AcquisitionType.RESOLVE_BLOCKER -> {
+            AcquisitionType.RESOLVE_BLOCKER -> {
                 resolveBlocker(step)
             }
-            OrionCapabilityIntelligence.AcquisitionType.IMPROVE_RELIABILITY -> {
+            AcquisitionType.IMPROVE_RELIABILITY -> {
                 improveReliability(step)
             }
-            OrionCapabilityIntelligence.AcquisitionType.ALTERNATIVE_STRATEGY -> {
+            AcquisitionType.ALTERNATIVE_STRATEGY -> {
                 findAlternative(step)
             }
-            OrionCapabilityIntelligence.AcquisitionType.CREATE_EXTENSION -> {
+            AcquisitionType.CREATE_EXTENSION -> {
                 createExtension(step)
             }
-            OrionCapabilityIntelligence.AcquisitionType.COMPOSITE_WORKFLOW -> {
+            AcquisitionType.COMPOSITE_WORKFLOW -> {
                 createCompositeWorkflow(step, objective)
             }
-            OrionCapabilityIntelligence.AcquisitionType.INSTALL_PACKAGE -> {
+            AcquisitionType.INSTALL_PACKAGE -> {
                 installSystemPackage(step)
             }
-            OrionCapabilityIntelligence.AcquisitionType.CONFIGURE_INTEGRATION -> {
+            AcquisitionType.CONFIGURE_INTEGRATION -> {
                 configureIntegration(step)
             }
         }.let { result ->
@@ -159,7 +159,7 @@ internal class OrionCapabilityAcquisitionEngine(
     // Acquisition step implementations
     // ========================================================================
 
-    private suspend fun enableExtension(step: OrionCapabilityIntelligence.AcquisitionStep): AcquisitionStepResult {
+    private suspend fun enableExtension(step: AcquisitionStep): AcquisitionStepResult {
         val targetId = step.targetId ?: return failure(step, "No target extension ID for ENABLE_EXTENSION")
         val extension = extensionStore.enabled(targetId)
         if (extension != null) {
@@ -180,7 +180,7 @@ internal class OrionCapabilityAcquisitionEngine(
         return failure(step, "Could not enable extension $targetId")
     }
 
-    private suspend fun resolveBlocker(step: OrionCapabilityIntelligence.AcquisitionStep): AcquisitionStepResult {
+    private suspend fun resolveBlocker(step: AcquisitionStep): AcquisitionStepResult {
         // Blocker resolution depends on the block reason
         val cap = step.capabilityId
         // Check if it's a pack that can be enabled
@@ -194,13 +194,13 @@ internal class OrionCapabilityAcquisitionEngine(
         return failure(step, "Blocker for $cap requires user action (Android permission or pack enablement)")
     }
 
-    private suspend fun improveReliability(step: OrionCapabilityIntelligence.AcquisitionStep): AcquisitionStepResult {
+    private suspend fun improveReliability(step: AcquisitionStep): AcquisitionStepResult {
         // Reliability improvement: try alternative approaches, retry logic
         // This is a soft improvement — record and continue
         return success(step, "Reliability improvement noted for ${step.capabilityId}; will use with retry logic")
     }
 
-    private suspend fun findAlternative(step: OrionCapabilityIntelligence.AcquisitionStep): AcquisitionStepResult {
+    private suspend fun findAlternative(step: AcquisitionStep): AcquisitionStepResult {
         // Find alternative tools that can accomplish the same objective
         val capId = step.capabilityId
         // Look for alternative registered tools with similar names
@@ -213,7 +213,7 @@ internal class OrionCapabilityAcquisitionEngine(
         return failure(step, "No alternatives found for $capId")
     }
 
-    private suspend fun createExtension(step: OrionCapabilityIntelligence.AcquisitionStep): AcquisitionStepResult {
+    private suspend fun createExtension(step: AcquisitionStep): AcquisitionStepResult {
         val capId = step.capabilityId
         val extId = "ext_${capId.replace(" ", "_").lowercase()}"
         val source = generateExtensionSource(capId)
@@ -252,13 +252,13 @@ internal class OrionCapabilityAcquisitionEngine(
         return success(step, "Extension $extId created and tested for $capId; awaiting user approval for enablement")
     }
 
-    private suspend fun createCompositeWorkflow(step: OrionCapabilityIntelligence.AcquisitionStep, objective: String): AcquisitionStepResult {
+    private suspend fun createCompositeWorkflow(step: AcquisitionStep, objective: String): AcquisitionStepResult {
         // Composite workflow: chain existing capabilities to achieve the objective
         // This is a planning-level solution — record and return success
         return success(step, "Composite workflow planned for $objective using existing capabilities")
     }
 
-    private suspend fun installSystemPackage(step: OrionCapabilityIntelligence.AcquisitionStep): AcquisitionStepResult {
+    private suspend fun installSystemPackage(step: AcquisitionStep): AcquisitionStepResult {
         val pkg = extractPackageName(step.capabilityId)
         // Install via shell/pip
         val result = runCatching {
@@ -271,7 +271,7 @@ internal class OrionCapabilityAcquisitionEngine(
         return success(step, "Installed package $pkg")
     }
 
-    private suspend fun configureIntegration(step: OrionCapabilityIntelligence.AcquisitionStep): AcquisitionStepResult {
+    private suspend fun configureIntegration(step: AcquisitionStep): AcquisitionStepResult {
         // External service configuration requires user credentials — cannot auto-resolve
         return failure(step, "External service integration for ${step.capabilityId} requires user credential setup")
     }
@@ -280,11 +280,11 @@ internal class OrionCapabilityAcquisitionEngine(
     // Helpers
     // ========================================================================
 
-    private fun success(step: OrionCapabilityIntelligence.AcquisitionStep, detail: String): AcquisitionStepResult {
+    private fun success(step: AcquisitionStep, detail: String): AcquisitionStepResult {
         return AcquisitionStepResult(step, 1, AcquisitionStatus.SUCCESS, detail, 0)
     }
 
-    private fun failure(step: OrionCapabilityIntelligence.AcquisitionStep, detail: String): AcquisitionStepResult {
+    private fun failure(step: AcquisitionStep, detail: String): AcquisitionStepResult {
         return AcquisitionStepResult(step, 1, AcquisitionStatus.FAILED, detail, 0)
     }
 
@@ -323,7 +323,7 @@ def orion_exec(INPUT):
     // ========================================================================
 
     data class AcquisitionStepResult(
-        val step: OrionCapabilityIntelligence.AcquisitionStep,
+        val step: AcquisitionStep,
         val attempt: Int,
         val status: AcquisitionStatus,
         val detail: String,
@@ -345,7 +345,7 @@ def orion_exec(INPUT):
 
     data class AcquisitionExecutionRecord(
         val capabilityId: String,
-        val acquisitionType: OrionCapabilityIntelligence.AcquisitionType,
+        val acquisitionType: AcquisitionType,
         val timestamp: Long,
         var successCount: Long = 0,
         var failureCount: Long = 0,

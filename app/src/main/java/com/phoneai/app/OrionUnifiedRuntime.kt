@@ -1200,8 +1200,8 @@ internal class OrionUnifiedRuntime(
         return when (tool) {
             "save_file" -> {
                 val filename = args.optString("filename", "")
-                val folder = args.optString("folder", null)
-                { "File save reversal recorded for $filename (folder: $folder ?: null). Manual cleanup may be required." }
+                val folder = args.optString("folder", null);
+                { "File save reversal recorded for $filename (folder: ${folder ?: "null"}). Manual cleanup may be required." }
             }
             "copy" -> {
                 { "Clipboard copy recorded — no automatic reversal (clipboard is ephemeral)." }

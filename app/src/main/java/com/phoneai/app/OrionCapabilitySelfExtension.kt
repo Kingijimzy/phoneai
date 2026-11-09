@@ -217,7 +217,7 @@ def orion_exec(INPUT):
         record.phases += "FAILED: $detail"
         return ExtensionExtensionResult(
             capabilityId = record.capabilityId,
-            extensionId = record.extensionId.orNull ?: "",
+            extensionId = record.extensionId ?: "",
             status = ExtensionStatus.FAILED,
             phases = record.phases,
             detail = detail,

@@ -58,7 +58,8 @@ internal object OrionRuntimeCapabilityExecutor {
         researchCancelled: java.util.concurrent.atomic.AtomicBoolean = java.util.concurrent.atomic.AtomicBoolean(false),
         askUser: (String, List<String>, String) -> String = { _, _, _ -> "" },
         pythonExecutor: OrionPythonCapabilityExecutor? = null
-    ): String? = when (backend) {
+    ): String? {
+        return when (backend) {
         OrionCapabilityAdapters.Backend.DEVICE -> OrionDeviceCapabilityExecutor.execute(
             tool, args, service, tools, stopped, confirm, validateAction, verifyAction, verifySend, look, play, readScreen
         )
@@ -264,6 +265,7 @@ internal object OrionRuntimeCapabilityExecutor {
             else -> null
         }
         else -> null
+        }
     }
 
     private fun executeBrowser(

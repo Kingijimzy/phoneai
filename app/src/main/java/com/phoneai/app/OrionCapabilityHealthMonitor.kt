@@ -203,7 +203,7 @@ internal class OrionCapabilityHealthMonitor(
 
         if (recoveryPlan != null) {
             val result = acquisitionEngine.executePlan(
-                OrionCapabilityIntelligence.AcquisitionPlan(
+                AcquisitionPlan(
                     objective = "Health recovery for ${cap.name}",
                     steps = listOf(recoveryPlan),
                     totalEstimatedEffort = 1,
@@ -224,32 +224,32 @@ internal class OrionCapabilityHealthMonitor(
         }
     }
 
-    private suspend fun resolveBlocker(cap: DiscoveredCapability): OrionCapabilityIntelligence.AcquisitionStep {
-        return OrionCapabilityIntelligence.AcquisitionStep(
+    private suspend fun resolveBlocker(cap: DiscoveredCapability): AcquisitionStep {
+        return AcquisitionStep(
             capabilityId = cap.id,
-            action = OrionCapabilityIntelligence.AcquisitionType.RESOLVE_BLOCKER,
+            action = AcquisitionType.RESOLVE_BLOCKER,
             description = "Resolve blocker for ${cap.name}: ${cap.description}",
-            estimatedEffort = OrionCapabilityIntelligence.EffortLevel.MEDIUM,
+            estimatedEffort = EffortLevel.MEDIUM,
             prerequisites = emptyList()
         )
     }
 
-    private suspend fun findAlternative(cap: DiscoveredCapability): OrionCapabilityIntelligence.AcquisitionStep {
-        return OrionCapabilityIntelligence.AcquisitionStep(
+    private suspend fun findAlternative(cap: DiscoveredCapability): AcquisitionStep {
+        return AcquisitionStep(
             capabilityId = cap.id,
-            action = OrionCapabilityIntelligence.AcquisitionType.ALTERNATIVE_STRATEGY,
+            action = AcquisitionType.ALTERNATIVE_STRATEGY,
             description = "Find alternative for ${cap.name}",
-            estimatedEffort = OrionCapabilityIntelligence.EffortLevel.LOW,
+            estimatedEffort = EffortLevel.LOW,
             prerequisites = emptyList()
         )
     }
 
-    private suspend fun improveReliability(cap: DiscoveredCapability): OrionCapabilityIntelligence.AcquisitionStep {
-        return OrionCapabilityIntelligence.AcquisitionStep(
+    private suspend fun improveReliability(cap: DiscoveredCapability): AcquisitionStep {
+        return AcquisitionStep(
             capabilityId = cap.id,
-            action = OrionCapabilityIntelligence.AcquisitionType.IMPROVE_RELIABILITY,
+            action = AcquisitionType.IMPROVE_RELIABILITY,
             description = "Improve reliability for ${cap.name}",
-            estimatedEffort = OrionCapabilityIntelligence.EffortLevel.MEDIUM,
+            estimatedEffort = EffortLevel.MEDIUM,
             prerequisites = emptyList()
         )
     }
@@ -275,12 +275,12 @@ internal class OrionCapabilityHealthMonitor(
     data class CapabilityHealthStatus(
         val capabilityId: String,
         val status: CapabilityStatus,
-        val successRate: Double,
-        val totalCalls: Long,
-        val lastError: String?,
-        val lastErrorTime: Long,
-        val blockReason: String?,
-        val lastAssessed: Long,
-        val lastRecoveryAttempt: Long
+        val successRate: Double = 0.0,
+        val totalCalls: Long = 0L,
+        val lastError: String? = null,
+        val lastErrorTime: Long = 0L,
+        val blockReason: String? = null,
+        val lastAssessed: Long = System.currentTimeMillis(),
+        val lastRecoveryAttempt: Long = 0L
     )
 }

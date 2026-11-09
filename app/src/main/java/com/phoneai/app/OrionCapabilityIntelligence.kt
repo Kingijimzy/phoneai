@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicLong
  * This is the brain's sensory organ for the capability ecosystem — continuously mapping what's
  * available, what's missing, what's degraded, and formulating acquisition strategies.
  */
-class OrionCapabilityIntelligence(
+internal class OrionCapabilityIntelligence(
     private val context: Context,
     private val capabilityRegistry: CapabilityRegistry,
     private val toolRegistry: ToolRegistry,
@@ -223,7 +223,7 @@ class OrionCapabilityIntelligence(
         // System permissions we hold
         val grantedPerms = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
             .requestedPermissions?.filter { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
-            .map { perm ->
+            ?.map { perm ->
                 DiscoveredCapability(
                     id = "perm:$perm",
                     name = perm,
@@ -238,7 +238,7 @@ class OrionCapabilityIntelligence(
                     }
                 )
             } ?: emptyList()
-        caps.addAll(grantedPerms)
+        caps.addAll(grantedPerms ?: emptyList())
 
         // Accessibility service status
         val accessibilityEnabled = isAccessibilityServiceEnabled()
@@ -482,9 +482,9 @@ class OrionCapabilityIntelligence(
 
         // Intent-type relevance
         val intentMatch = when (intentType) {
-            OrionIntentIntelligence.IntentType.CODE -> cap.type in setOf(CapabilityType.TOOL, CapabilityType.EXTENSION, CapabilityType.SYSTEM_ENVIRONMENT)
+            OrionIntentIntelligence.IntentType.MULTI_STEP -> cap.type in setOf(CapabilityType.TOOL, CapabilityType.EXTENSION, CapabilityType.SYSTEM_ENVIRONMENT)
             OrionIntentIntelligence.IntentType.RESEARCH -> cap.type in setOf(CapabilityType.TOOL, CapabilityType.EXTERNAL_API, CapabilityType.SYSTEM_APP)
-            OrionIntentIntelligence.IntentType.COMMUNICATION -> cap.type in setOf(CapabilityType.TOOL, CapabilityType.SYSTEM_APP, CapabilityType.EXTERNAL_API)
+            OrionIntentIntelligence.IntentType.ACTION -> cap.type in setOf(CapabilityType.TOOL, CapabilityType.SYSTEM_APP, CapabilityType.EXTERNAL_API)
             OrionIntentIntelligence.IntentType.SYSTEM_CONTROL -> cap.type in setOf(CapabilityType.SYSTEM_SERVICE, CapabilityType.SYSTEM_PERMISSION, CapabilityType.TOOL)
             else -> true
         }
@@ -535,7 +535,7 @@ class OrionCapabilityIntelligence(
 
     private fun isAccessibilityServiceEnabled(): Boolean {
         val accessibilityManager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager
-        return accessibilityManager.enabledAccessibilityServiceList?.any {
+        return accessibilityManager.getEnabledAccessibilityServiceList(android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK)?.any {
             it.id.contains("phoneai") || it.id.contains("orion")
         } ?: false
     }

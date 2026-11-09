@@ -154,7 +154,7 @@ internal class OrionAgentFactory(
         // Filter only to what's actually registered (not by preflight denial — that's runtime)
         tools = tools.filter { name ->
             ToolRegistry.all.any { it.name == name }
-        }
+        }.toSet()
         return tools
     }
 

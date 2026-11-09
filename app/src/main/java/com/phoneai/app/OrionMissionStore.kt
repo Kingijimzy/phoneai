@@ -50,7 +50,7 @@ data class MissionEntity(
     val recoveryPlanJson: String?,
     val parentMissionId: String?
 ) {
-    fun toMission(): OrionMission = OrionMission(
+    internal fun toMission(): OrionMission = OrionMission(
         id = id,
         requestId = requestId,
         intent = Json.decodeFromString(OrionIntentIntelligence.Intent.serializer(), intentJson),
@@ -163,7 +163,7 @@ internal class OrionMissionStore(private val context: Context) {
     }
 
     suspend fun count(): Int = withContext(Dispatchers.IO) {
-        OrionMissionDatabase.getInstance(context).openHelper.writableDatabase.rawQuery("SELECT COUNT(*) FROM missions", null).use { c ->
+        OrionMissionDatabase.getInstance(context).openHelper.writableDatabase.query("SELECT COUNT(*) FROM missions", emptyArray()).use { c ->
             c.moveToFirst()
             c.getInt(0)
         }

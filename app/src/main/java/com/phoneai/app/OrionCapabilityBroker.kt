@@ -108,7 +108,7 @@ internal class OrionCapabilityBroker(
             sessionId = sessionId,
             granted = allGranted,
             denied = allDenied,
-            reason = buildGrantReason(authorized, reviewGranted, allDenied, invalidTools)
+            reason = buildGrantReason(authorized.toSet(), reviewGranted.toSet(), allDenied, invalidTools)
         )
     }
 
@@ -259,7 +259,7 @@ internal class OrionCapabilityBroker(
         }
 
         return CapabilityDiscoveryResult(
-            missingCapabilities = missing,
+            missingCapabilities = missing.toSet(),
             acquisitionPlans = acquisitionPlans,
             canAutoResolve = acquisitionPlans.all { it.automated }
         )

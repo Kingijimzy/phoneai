@@ -27,7 +27,7 @@ internal class OrionSpecialistRuntime(
     private val builtInWorkers = OrionBuiltInSpecialists(context.applicationContext).workers()
 
     /** Execute a dynamic specialist session with real tool dispatch. */
-    suspend fun executeSpecialist(session: OrionAgentFactory.SpecialistSession): OrionAgentFactory.SpecialistSession {
+    suspend fun executeSpecialist(session: SpecialistSession): OrionAgentFactory.SpecialistSession {
         val startedAt = System.currentTimeMillis()
         val evidence = mutableListOf<String>()
         var toolCalls = 0
@@ -188,6 +188,45 @@ internal class OrionSpecialistRuntime(
             }
         }
         return OrionExecutionCoordinator(tasks, OrionWorkerLeaseStore(app), app).dispatch(taskId, worker)
+    }
+    companion object {
+        fun dispatch(context: Context, taskId: String): OrionCoordinatedResult {
+            val app = context.applicationContext
+            val tasks = OrionDistributedTaskStore(app)
+            val task = tasks.get(taskId)?.envelope ?: return OrionCoordinatedResult.Failed(taskId, "task_not_found")
+            val requested = task.requestedCapabilities.map { it.lowercase() }.toSet()
+            val workerId = when {
+                "coding" in requested || task.kind == OrionTaskEnvelope.Kind.CODE -> "orion-coding"
+                "diagnostics" in requested || task.kind == OrionTaskEnvelope.Kind.DIAGNOSTICS -> "orion-diagnostics"
+                "trading_analysis" in requested || task.kind == OrionTaskEnvelope.Kind.TRADING_ANALYSIS -> "orion-trading"
+                "verification" in requested || task.kind == OrionTaskEnvelope.Kind.VERIFICATION -> "orion-verification"
+                "research" in requested || task.kind == OrionTaskEnvelope.Kind.RESEARCH -> "orion-research"
+                else -> return OrionCoordinatedResult.NeedsOwner(taskId, "specialist_route_ambiguous; add one requested capability")
+            }
+            val worker = OrionBuiltInSpecialists(app).workers().firstOrNull { it.workerId == workerId }
+                ?: return OrionCoordinatedResult.Failed(taskId, "specialist_not_registered")
+            return OrionExecutionCoordinator(tasks, OrionWorkerLeaseStore(app), app).dispatch(taskId, worker)
+        }
+        fun dispatchRemote(context: Context, taskId: String, endpoint: String, bearerToken: () -> String?): OrionCoordinatedResult {
+            val app = context.applicationContext
+            val tasks = OrionDistributedTaskStore(app)
+            val remote = OrionLangGraphRemoteWorker(OrionLangGraphTransport(endpoint, bearerToken), bearerToken, OrionRemoteTaskReceiptStore(app))
+            val worker = object : OrionTaskWorker {
+                override val workerId = "orion-langgraph-remote"
+                override val supportedKinds = OrionTaskEnvelope.Kind.values().toSet()
+                override val supportedCapabilities = setOf("research", "coding", "diagnostics", "trading_analysis", "verification")
+                override fun execute(task: OrionTaskEnvelope): OrionWorkerResult = when (val result = remote.execute(task) { tasks.isCancellationRequested(task.taskId) }) {
+                    is OrionLangGraphRemoteWorker.RemoteResult -> when (result.status) {
+                        "completed" -> OrionWorkerResult.Success(result.evidenceRef ?: throw IllegalStateException("remote_evidence_missing"))
+                        "failed" -> OrionWorkerResult.Failure(result.detail ?: "remote_task_failed", false)
+                        "cancelled", "cancel_requested" -> OrionWorkerResult.NeedsOwner(result.detail ?: "remote_task_cancelled")
+                        else -> OrionWorkerResult.Failure("remote_pending_resume_from_receipt", true)
+                    }
+                    else -> OrionWorkerResult.Failure("remote_result_type_unknown", false)
+                }
+            }
+            return OrionExecutionCoordinator(tasks, OrionWorkerLeaseStore(app), app).dispatch(taskId, worker)
+        }
     }
 }
 

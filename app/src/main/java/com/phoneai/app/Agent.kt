@@ -2,6 +2,7 @@ package com.phoneai.app
 
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlinx.coroutines.*
 
 /** Deterministic routing for intents where a chat-only answer would silently skip a requested action. */
 internal object OrionCommandIntentPolicy {
@@ -382,7 +383,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         commandNim.cancel()
         talkNim.cancel()
         unifiedRuntime.stop()
-        missionController.cancelMission()
+        CoroutineScope(Dispatchers.IO).launch { missionController.cancelMission() }
     }
 
     /** Drop conversational context after the user explicitly clears the active chat. */
@@ -413,7 +414,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     internal fun currentTaskCommand(): String = currentTask
 
     /** Access to mission controller for Phase 0C observability and control */
-    fun getMissionController(): OrionMissionController = missionController
+    internal fun getMissionController(): OrionMissionController = missionController
 
     /** Chat system prompt - now built by unified runtime */
     private fun chatSystem(query: String? = null): String {
