@@ -6,37 +6,37 @@ import org.json.JSONObject
 import java.io.File
 
 /** Something the user asked for that Orion could not do yet, kept so it can be fixed and offered again later. */
-data class CapabilityGap(val goal: String, val provider: String, val status: String, val count: Int, val lastAt: Long)
+data class BoardBoardCapabilityGap(val goal: String, val provider: String, val status: String, val count: Int, val lastAt: Long)
 
 internal object CapabilityBoardPolicy {
     const val MAX = 30
     /** Statuses: requested (asked, not possible), proposed (a plan was shown), connected (resolved). */
-    fun record(list: List<CapabilityGap>, goal: String, provider: String, now: Long): List<CapabilityGap> {
+    fun record(list: List<BoardCapabilityGap>, goal: String, provider: String, now: Long): List<BoardCapabilityGap> {
         val g = goal.trim().replace(Regex("\\s+"), " ").take(140)
         if (g.length < 3) return list
         val out = list.toMutableList()
         val i = out.indexOfFirst { it.provider == provider && MemoryRanking.similarity(it.goal, g) >= 0.5 }
         if (i >= 0) out[i] = out[i].copy(goal = g, count = out[i].count + 1, lastAt = now, status = if (out[i].status == "connected") "requested" else out[i].status)
-        else out += CapabilityGap(g, provider.take(40), "requested", 1, now)
+        else out += BoardCapabilityGap(g, provider.take(40), "requested", 1, now)
         return out.sortedByDescending { it.lastAt }.take(MAX)
     }
 
-    fun markResolved(list: List<CapabilityGap>, provider: String): List<CapabilityGap> =
+    fun markResolved(list: List<BoardCapabilityGap>, provider: String): List<BoardCapabilityGap> =
         list.map { if (it.provider == provider && it.status != "connected") it.copy(status = "connected") else it }
 
-    fun open(list: List<CapabilityGap>) = list.filter { it.status != "connected" }
+    fun open(list: List<BoardCapabilityGap>) = list.filter { it.status != "connected" }
 }
 
 object CapabilityBoard {
     private val lock = Any()
     private fun file(c: Context) = File(c.filesDir, "orion_capability_board.json")
-    private fun load(c: Context): List<CapabilityGap> = try {
+    private fun load(c: Context): List<BoardCapabilityGap> = try {
         val f = file(c)
         if (!f.exists()) emptyList() else JSONArray(f.readText()).let { a ->
-            (0 until a.length()).map { val o = a.getJSONObject(it); CapabilityGap(o.optString("g"), o.optString("p"), o.optString("s", "requested"), o.optInt("n", 1), o.optLong("t")) }
+            (0 until a.length()).map { val o = a.getJSONObject(it); BoardCapabilityGap(o.optString("g"), o.optString("p"), o.optString("s", "requested"), o.optInt("n", 1), o.optLong("t")) }
         }
     } catch (_: Exception) { emptyList() }
-    private fun save(c: Context, l: List<CapabilityGap>) {
+    private fun save(c: Context, l: List<BoardCapabilityGap>) {
         try {
             val a = JSONArray(); l.forEach { a.put(JSONObject().put("g", it.goal).put("p", it.provider).put("s", it.status).put("n", it.count).put("t", it.lastAt)) }
             val tmp = File(c.filesDir, "orion_capability_board.json.tmp"); tmp.writeText(a.toString())
@@ -49,8 +49,8 @@ object CapabilityBoard {
         save(c, after); after !== before
     }
     fun resolved(c: Context, provider: String) = synchronized(lock) { save(c, CapabilityBoardPolicy.markResolved(load(c), provider)) }
-    fun open(c: Context): List<CapabilityGap> = synchronized(lock) { CapabilityBoardPolicy.open(load(c)) }
-    fun all(c: Context): List<CapabilityGap> = synchronized(lock) { load(c) }
+    fun open(c: Context): List<BoardCapabilityGap> = synchronized(lock) { CapabilityBoardPolicy.open(load(c)) }
+    fun all(c: Context): List<BoardCapabilityGap> = synchronized(lock) { load(c) }
 }
 
 /** What the soul loop should do after looking at the world once. Pure, so it is unit-testable. */
