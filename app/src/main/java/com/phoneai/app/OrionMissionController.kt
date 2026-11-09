@@ -370,7 +370,7 @@ internal class OrionMissionController(
      * For SUSPENDED: continues from checkpoint.
      */
     suspend fun resumeMission(missionId: String, strategy: ResumeStrategy = ResumeStrategy.CONTINUE): MissionExecutionResult {
-        val mission = store.getById(missionId).await() ?: throw IllegalArgumentException("Mission $missionId not found")
+        val mission = store.getById(missionId) ?: throw IllegalArgumentException("Mission $missionId not found")
         if (!mission.canResume) throw IllegalStateException("Mission $missionId cannot be resumed from ${mission.status}")
 
         currentMission = mission
@@ -471,7 +471,7 @@ internal class OrionMissionController(
      * Collect a specialist's result and integrate into parent mission.
      */
     suspend fun collectSpecialist(sessionId: String): OrionSpecialistReceipt {
-        val receipt = agentFactory.collectSession(sessionId).await()
+        val receipt = agentFactory.collectSession(sessionId)
         currentMission?.let { mission ->
             val updated = mission.withReceipt(receipt)
             currentMission = updated
@@ -484,7 +484,7 @@ internal class OrionMissionController(
      * Terminate a specialist early.
      */
     suspend fun terminateSpecialist(sessionId: String, reason: String): OrionSpecialistReceipt {
-        val receipt = agentFactory.terminateSession(sessionId, reason).await()
+        val receipt = agentFactory.terminateSession(sessionId, reason)
         currentMission?.let { mission ->
             val updated = mission.withReceipt(receipt)
             currentMission = updated
@@ -498,13 +498,13 @@ internal class OrionMissionController(
 
     /** Get mission evidence for observatory */
     suspend fun getMissionEvidence(missionId: String): OrionMissionEvidence? {
-        val mission = store.getById(missionId).await() ?: return null
+        val mission = store.getById(missionId) ?: return null
         return buildEvidence(mission)
     }
 
     /** Load active mission on startup (survives process death) */
     suspend fun restoreActiveMission(): OrionMission? {
-        val mission = store.getActiveMission().await()
+        val mission = store.getActiveMission()
         currentMission = mission
         return mission
     }

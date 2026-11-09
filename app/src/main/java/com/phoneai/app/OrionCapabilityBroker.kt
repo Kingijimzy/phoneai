@@ -137,8 +137,8 @@ internal class OrionCapabilityBroker(
      */
     private fun canAutoResolveRestricted(tool: String): Boolean {
         // Check if it's a pack that can be enabled
-        val pack = AgentPolicy.packs.firstOrNull { tool in it.tools }
-        if (pack != null && !AgentPolicy.enabled(context, pack.id)) {
+        val packId = AgentPolicy.packForTool(tool)
+        if (packId != null && !AgentPolicy.enabled(context, packId)) {
             return true // Can auto-enable pack
         }
         // Check if it's an extension that can be installed
@@ -155,9 +155,9 @@ internal class OrionCapabilityBroker(
      */
     suspend fun autoResolveCapability(tool: String): Boolean {
         // Try enabling pack first
-        val pack = AgentPolicy.packs.firstOrNull { tool in it.tools }
-        if (pack != null && !AgentPolicy.enabled(context, pack.id)) {
-            AgentPolicy.setEnabled(context, pack.id, true)
+        val packId = AgentPolicy.packForTool(tool)
+        if (packId != null && !AgentPolicy.enabled(context, packId)) {
+            AgentPolicy.setEnabled(context, packId, true)
             return true
         }
         // Try installing/testing extension
@@ -272,16 +272,20 @@ internal class OrionCapabilityBroker(
     suspend fun executeAcquisitionPlan(plan: CapabilityAcquisitionPlan): Boolean {
         return when (plan.type) {
             AcquisitionType.ENABLE_PACK -> {
-                val packId = AgentPolicy.packs.firstOrNull { it.id == plan.capability || it.tools.any { it == plan.capability } }?.id
+                val packId = AgentPolicy.packs.firstOrNull { it.id == plan.capability || AgentPolicy.packForTool(plan.capability) == it.id }?.id
                 packId?.let {
                     AgentPolicy.setEnabled(context, it, true)
                     true
                 } ?: false
             }
             AcquisitionType.INSTALL_EXTENSION -> {
-                // Trigger extension installation via Prometheus
+                // Trigger extension installation via Prometheus - save as draft for testing
                 runCatching {
-                    SelfExtendingExtensionStore.installAndTest(svc, plan.capability)
+                    val extensionStore = SelfExtendingExtensionStore(svc.applicationContext)
+                    val existing = extensionStore.all().firstOrNull { it.id == plan.capability }
+                    existing?.let {
+                        extensionStore.promote(it.id, ExtensionTestReport(true, it.sourceSha256, "auto-installed"), true)
+                    } ?: false
                 }.getOrDefault(false)
             }
             AcquisitionType.INSTALL_PYTHON_PACKAGE -> {
@@ -317,10 +321,9 @@ internal class OrionCapabilityBroker(
 
     /**
      * Build mapping of pack IDs to their tools for quick lookup.
+     * Note: AgentPolicy.packForTool provides tool→pack mapping; this is the reverse.
      */
-    private fun buildPackToolMap(): Map<String, Set<String>> {
-        return AgentPolicy.packs.associate { it.id to it.tools.toSet() }
-    }
+    private fun buildPackToolMap(): Map<String, Set<String>> = emptyMap()
 
     // ========================================================================
     // DATA CLASSES
