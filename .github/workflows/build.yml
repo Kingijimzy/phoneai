@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [main, feature/phoneai-integrated-character-agent]
+    branches: [main, feature/phoneai-integrated-character-agent, feature/orion-milestone-0c-mission-ownership]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
