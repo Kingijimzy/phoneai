@@ -2497,6 +2497,7 @@ Rules:
         ui.stream("I’m working through this now. I’ll check each result before moving on.")
         val stall = SessionStall()
         var promiseNudged = false
+        var goalChecks = 0
         var planAnnounced = false
         while (!stopped && requestBudget.tryConsume()) {
             if (managedTask.phase == TaskLifecycle.Phase.AUTHORIZE) {
@@ -2710,6 +2711,20 @@ Rules:
                     } else ActionPromise.NUDGE
                     history.put(msg("user", dispatchNudge))
                     continue
+                }
+                // Goal check: do not stop just because the model said "done". A cheap second opinion
+                // compares the goal with the latest results and sends it back to work if something remains.
+                if (goalChecks < 2 && toolCalls > 0 && !stopped) {
+                    goalChecks++
+                    val recent = (maxOf(0, history.length() - 6) until history.length())
+                        .joinToString("\n") { runCatching { history.getJSONObject(it).optString("content") }.getOrDefault("") }.takeLast(3000)
+                    val verdict = try {
+                        aiOneShot("You audit an autonomous agent. Given the GOAL and the latest transcript, reply exactly DONE if the goal is fully achieved with real results. Otherwise reply CONTINUE: <the single most important thing still missing>. Be strict about invented or unverified results.", "GOAL: $command\n\nTRANSCRIPT:\n$recent")
+                    } catch (_: Exception) { "DONE" }
+                    if (verdict.trim().startsWith("CONTINUE", true)) {
+                        history.put(msg("user", "GOAL CHECK: the goal is not finished. " + verdict.trim().take(400) + " Keep working with real tool calls; do not stop until it is achieved or truly impossible, then say exactly what blocked it."))
+                        continue
+                    }
                 }
                 val runEvidence = taskProofs.snapshot()
                 val durableEvidence = OrionEvidenceLedger.events(svc, evidenceTaskId())
