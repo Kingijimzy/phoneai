@@ -38,7 +38,6 @@ internal class OrionUndoStack(
      * Called from tool dispatch after a reversible action succeeds.
      */
     fun pushUndo(traceId: String, label: String, undoFn: () -> String) {
-        if (!undoFn::class.isMarkerAnnotation) { /* always callable */ }
         try {
             val list = stack.getOrPut(traceId) { mutableListOf<UndoEntry>() }
             list.add(UndoEntry(label, undoFn))
@@ -82,8 +81,8 @@ internal class OrionUndoStack(
         // Find the most recent entry across all traces
         val all = stack.values.flatMap { it }
         if (all.isEmpty()) {
-            return ("There is nothing to undo. I only track things I changed myself — "
-                "files I moved or wrote, settings I adjusted, messages I drafted.")
+            return "There is nothing to undo. I only track things I changed myself — " +
+                "files I moved or wrote, settings I adjusted, messages I drafted."
         }
         val entry = all.last()
         // Remove it from its trace list
@@ -92,7 +91,7 @@ internal class OrionUndoStack(
         }
 
         return try {
-            val detail = entry.undoFn() or ""
+            val detail = entry.undoFn()
             OrionEvidenceLedger.recordDispatch(
                 svc, entry.label, "undo_executed", "undo_executed",
                 org.json.JSONObject().put("label", entry.label),
