@@ -76,6 +76,6 @@ class OrionUndoStackTest {
 
     // Stub PhoneAiService for testing
     private class PhoneAiServiceStub : PhoneAiService() {
-        override fun applicationContext: Context = ApplicationProvider.getApplicationContext()
+        override fun getApplicationContext(): Context = ApplicationProvider.getApplicationContext()
     }
 }
