@@ -87,18 +87,26 @@ jobs:
       - name: Test the restricted Python sandbox
         run: python3 tests/python/test_orion_exec.py
 
-      - name: Run Kotlin compile with --rerun-tasks
+      - name: Run Kotlin compile and capture daemon log
         shell: bash
         run: |
           set +e
-          gradle :app:compileDebugKotlin :app:kaptGenerateStubsDebugKotlin --no-daemon --stacktrace --info --rerun-tasks > /tmp/kotlin_rerun.log 2>&1
+          # Kill any existing daemons to get a fresh one
+          ./gradlew --stop >/dev/null 2>&1 || true
+          gradle :app:compileDebugKotlin :app:kaptGenerateStubsDebugKotlin --no-daemon --stacktrace > /tmp/kotlin_daemon.log 2>&1
           GRADLE_EXIT=$?
-          echo "GRADLE_EXIT=$GRADLE_EXIT" >> /tmp/kotlin_rerun.log
+          echo "GRADLE_EXIT=$GRADLE_EXIT" >> /tmp/kotlin_daemon.log
+          # Capture daemon log
+          DAEMON_LOG=$(ls -t /home/runner/.gradle/daemon/8.7/daemon-*.out.log 2>/dev/null | head -1)
+          if [ -n "$DAEMON_LOG" ]; then
+            echo "=== DAEMON LOG: $DAEMON_LOG ===" >> /tmp/kotlin_daemon.log
+            cat "$DAEMON_LOG" >> /tmp/kotlin_daemon.log 2>/dev/null || echo "Could not read daemon log" >> /tmp/kotlin_daemon.log
+          fi
           exit $GRADLE_EXIT
 
-      - name: Upload Kotlin rerun log as artifact
+      - name: Upload Kotlin daemon log as artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: diagnose-kotlin-rerun
-          path: /tmp/kotlin_rerun.log
+          name: diagnose-kotlin-daemon
+          path: /tmp/kotlin_daemon.log
