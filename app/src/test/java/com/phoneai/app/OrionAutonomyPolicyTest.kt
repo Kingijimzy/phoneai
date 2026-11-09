@@ -25,7 +25,7 @@ class OrionAutonomyPolicyTest {
             maxAiRequests = -3,
             maxRetries = 100
         ))
-        assertEquals(40, c.maxToolSteps)
+        assertEquals(200, c.maxToolSteps)
         assertEquals(1, c.maxAiRequests)
         assertEquals(4, c.maxRetries)
     }
