@@ -25,10 +25,10 @@ internal class OrionMissionController(
     private val localExecutor: Local,
     private val pythonExecutor: OrionPythonCapabilityExecutor,
     private val commandNim: Nim,
-    private val capabilityBroker: OrionCapabilityBroker,
-    private val capabilityIntelligence: OrionCapabilityIntelligence,
-    private val acquisitionEngine: OrionCapabilityAcquisitionEngine,
-    private val undoStack: OrionUndoStack
+    val capabilityBroker: OrionCapabilityBroker,
+    val capabilityIntelligence: OrionCapabilityIntelligence,
+    val acquisitionEngine: OrionCapabilityAcquisitionEngine,
+    val undoStack: OrionUndoStack
 ) {
 
     private val store = OrionMissionStore(context)
@@ -44,13 +44,6 @@ internal class OrionMissionController(
         capabilityBroker = capabilityBroker,
         undoStack = undoStack
     )
-
-    // Expose capability broker and intelligence for dynamic tool expansion
-    val capabilityBroker: OrionCapabilityBroker = capabilityBroker
-    val capabilityIntelligence: OrionCapabilityIntelligence = capabilityIntelligence
-    val acquisitionEngine: OrionCapabilityAcquisitionEngine = acquisitionEngine
-    // Expose undo stack for "undo"/"undo_status" tool dispatch
-    val undoStack: OrionUndoStack = undoStack
 
     // Current mission state
     @Volatile private var currentMission: OrionMission? = null
