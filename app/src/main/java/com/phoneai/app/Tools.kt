@@ -951,6 +951,12 @@ class Tools(
     }
 
     /** Reads the current clipboard text (Android 10+ only returns it while Orion is the foreground app or the keyboard). */
+    fun factTool(tool: String, a: org.json.JSONObject): String = when (tool) {
+        "fact_add" -> OrionFactStore.add(svc, a.optString("subject"), a.optString("predicate"), a.optString("object"))
+        "fact_forget" -> OrionFactStore.forget(svc, a.optString("subject"), a.optString("predicate"), a.optString("object"))
+        else -> OrionFactStore.query(svc, a.optString("subject"), a.optString("predicate"), a.optString("object"), a.optString("match"))
+    }
+
     fun clipboardRead(): String {
         val cb = svc.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val text = cb.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(svc)?.toString().orEmpty()

@@ -178,8 +178,44 @@ internal object OrionMediaTools {
     fun generateImage(c: Context, prompt: String, model: String, size: String): String {
         if (prompt.isBlank()) return "error: image_generate needs a prompt"
         val p = Prefs.provider(c, false)
-        if (p.anthropicStyle) return "error: ${p.label} has no image endpoint. Add a custom API provider that offers /images/generations and select it."
         val key = Prefs.key(c, p.id)
+        // Providers without an image endpoint (Gemini/Anthropic-style) use the keyless Pollinations service.
+        if (p.anthropicStyle || key.isBlank() || p.id == "gemini" || p.id == "google") return generateKeyless(c, prompt, size)
+        val viaProvider = generateViaProvider(c, p, key, prompt, model, size)
+        return if (viaProvider.startsWith("error:")) {
+            val alt = generateKeyless(c, prompt, size)
+            if (alt.startsWith("error:")) viaProvider else alt
+        } else viaProvider
+    }
+
+    private fun generateKeyless(c: Context, prompt: String, size: String): String = try {
+        val (w, h) = size.split("x").let { (it.getOrNull(0)?.toIntOrNull() ?: 1024) to (it.getOrNull(1)?.toIntOrNull() ?: 1024) }
+        val url = "https://image.pollinations.ai/prompt/" + java.net.URLEncoder.encode(prompt.take(1500), "UTF-8").replace("+", "%20") +
+            "?width=$w&height=$h&nologo=true"
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply { connectTimeout = 20000; readTimeout = 120000 }
+        if (conn.responseCode !in 200..299) "error: image service returned HTTP ${conn.responseCode}"
+        else saveGenerated(c, conn.inputStream.use { it.readBytes() }, "keyless image service")
+    } catch (e: Exception) { "error: image generation failed: ${e.message}".take(220) }
+
+    /** Writes to the private workspace (for show_file/open_file) and to the phone gallery under Pictures/Orion. */
+    private fun saveGenerated(c: Context, png: ByteArray, via: String): String {
+        if (png.size < 200) return "error: the image service returned no image data"
+        val dir = File(c.filesDir, "orion-python/workspace/images").apply { mkdirs() }
+        val f = File(dir, "gen_${System.currentTimeMillis()}.png"); f.writeBytes(png)
+        val gallery = runCatching {
+            val v = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, f.name)
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Orion")
+            }
+            val uri = c.contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v)!!
+            c.contentResolver.openOutputStream(uri)!!.use { it.write(png) }
+            "Saved to your gallery: Pictures/Orion/${f.name}."
+        }.getOrDefault("Gallery copy failed; the file is only in Orion's workspace.")
+        return "image saved: images/${f.name} (${png.size} bytes) via $via. $gallery Call show_file with path images/${f.name} to display it in chat."
+    }
+
+    private fun generateViaProvider(c: Context, p: Provider, key: String, prompt: String, model: String, size: String): String {
         return try {
             val body = JSONObject().put("model", model.ifBlank { if (p.id == "openai") "gpt-image-1" else "dall-e-3" })
                 .put("prompt", prompt.take(4000)).put("n", 1).put("size", size.ifBlank { "1024x1024" })
@@ -195,9 +231,7 @@ internal object OrionMediaTools {
             val item = JSONObject(text).getJSONArray("data").getJSONObject(0)
             val png = if (item.has("b64_json")) Base64.decode(item.getString("b64_json"), Base64.DEFAULT)
             else URL(item.getString("url")).openStream().use { it.readBytes() }
-            val dir = File(c.filesDir, "orion-python/workspace/images").apply { mkdirs() }
-            val f = File(dir, "gen_${System.currentTimeMillis()}.png"); f.writeBytes(png)
-            "image saved: images/${f.name} (${png.size} bytes) via ${p.label}. Open it with open_file or send it onward."
+            saveGenerated(c, png, p.label)
         } catch (e: Exception) { "error: image generation failed: ${e.message}".take(220) }
     }
 }
