@@ -45,7 +45,7 @@ internal class OrionCapabilityBroker(
      * Only restricted capabilities (trading, shell destructive, irreversible) require
      * owner confirmation or are denied.
      */
-    suspend fun requestCapabilities(
+    fun requestCapabilities(
         sessionId: String,
         requestedTools: Set<String>,
         reason: String
