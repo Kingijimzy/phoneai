@@ -218,7 +218,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         context = svc.applicationContext,
         capabilityRegistry = CapabilityRegistry,
         toolRegistry = ToolRegistry,
-        capabilityBroker = capabilityBroker, // will be initialized below; using lazy
+        capabilityBroker = null, // set below after broker is created (circular dep: broker <- unifiedRuntime <- capabilityIntelligence)
         extensionStore = extensionStore,
         experienceStore = ExperienceStore,
         recall = OrionRecall,
