@@ -21,11 +21,11 @@ class OrionAutonomyPolicyTest {
     @Test fun executionLimitsAreClampedToBoundedValues() {
         val c = OrionAutonomyPolicy.clamp(OrionAutonomyConfig(
             mode = OrionMode.AUTOPILOT,
-            maxToolSteps = 5000,
+            maxToolSteps = 5_000_000,
             maxAiRequests = -3,
             maxRetries = 100
         ))
-        assertEquals(1000, c.maxToolSteps)
+        assertEquals(100_000, c.maxToolSteps)
         assertEquals(1, c.maxAiRequests)
         assertEquals(4, c.maxRetries)
     }

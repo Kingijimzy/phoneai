@@ -1527,6 +1527,8 @@ Rules:
     internal fun currentTaskCommand(): String = currentTask
 
     fun run(inputCommand: String) {
+        // Remember what Kingi tells Orion about himself automatically, without a tool call or a prompt.
+        runCatching { OrionFactExtractor.extract(inputCommand, Prefs.userName(svc)).forEach { (s, p, o) -> OrionFactStore.add(svc, s, p, o) } }
         runInternal(inputCommand, reuseCommandBudget = false)
     }
 
@@ -1677,7 +1679,7 @@ Rules:
         ui.phase("acting")
         val currentSize = svc.replayScreenSize()
         // Saved routines are bounded by the same owner-configured per-command tool-step ceiling.
-        val routineStepLimit = OrionAutonomySettings.read(svc).maxToolSteps.coerceIn(1, 40)
+        val routineStepLimit = OrionAutonomySettings.read(svc).maxToolSteps.coerceIn(1, 1000)
         val routineStopIndex = minOf(steps.length(), nextIndex + routineStepLimit)
         for (index in nextIndex until routineStopIndex) {
             if (stopped) {
@@ -3392,8 +3394,8 @@ Rules:
     private fun play(goal: String, steps: Int): String {
         if (goal.isBlank()) return "error: a goal is required"
         var note = ""
-        val requestedSteps = steps.coerceIn(1, 40)
-        val n = minOf(requestedSteps, OrionAutonomySettings.read(svc).maxToolSteps.coerceIn(1, 40))
+        val requestedSteps = steps.coerceIn(1, 1000)
+        val n = minOf(requestedSteps, OrionAutonomySettings.read(svc).maxToolSteps.coerceIn(1, 1000))
         for (i in 1..n) {
             if (stopped) return "stopped at step $i"
             if (!reserveVisionStep()) {

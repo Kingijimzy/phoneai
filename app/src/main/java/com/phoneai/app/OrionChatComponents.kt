@@ -379,7 +379,7 @@ private fun ShellActivityCard(raw: String) {
                     Row {
                         Text("${n + 1}".padStart(3), color = Color(0xFF5C6370), fontSize = 10.sp, fontFamily = mono)
                         Spacer(Modifier.width(8.dp))
-                        Text(line.take(160), color = Color(0xFFD7DAE0), fontSize = 11.sp, lineHeight = 15.sp, fontFamily = mono)
+                        Text(highlightCode(line.take(160)), color = Color(0xFFD7DAE0), fontSize = 11.sp, lineHeight = 15.sp, fontFamily = mono)
                     }
                 }
                 if (lines.size > 10) Text(if (expanded) "SHOW LESS" else "+${lines.size - 10} more lines", color = Color(0xFFD4D4D4), fontSize = 9.sp,
@@ -606,4 +606,23 @@ private fun DockAction(title: String, icon: androidx.compose.ui.graphics.vector.
         Icon(icon, null, tint = if (selected) ChatMint else ChatMuted, modifier = Modifier.size(19.dp))
         Text(title, color = if (selected) ChatMint else ChatMuted, fontSize = 9.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium)
     }
+}
+
+private val codeToken = Regex("(#.*$)|(\"\"\".*?\"\"\"|\"[^\"]*\"|'[^']*')|\\b(def|class|import|from|return|if|elif|else|for|while|try|except|finally|with|as|in|not|and|or|None|True|False|lambda|yield|raise|pass|break|continue|print)\\b|\\b(\\d+(?:\\.\\d+)?)\\b")
+
+/** Light syntax colouring so code cards read like an editor, not a black wall of text. */
+private fun highlightCode(line: String): AnnotatedString = buildAnnotatedString {
+    var last = 0
+    for (m in codeToken.findAll(line)) {
+        append(line.substring(last, m.range.first))
+        val color = when {
+            m.groups[1] != null -> Color(0xFF6A737D)
+            m.groups[2] != null -> Color(0xFFA5D6A7)
+            m.groups[3] != null -> Color(0xFFC792EA)
+            else -> Color(0xFFF2A65A)
+        }
+        withStyle(SpanStyle(color = color)) { append(m.value) }
+        last = m.range.last + 1
+    }
+    append(line.substring(last))
 }
