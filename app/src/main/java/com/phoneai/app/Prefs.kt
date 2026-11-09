@@ -135,7 +135,7 @@ object Prefs {
                 val id = o.optString("id"); val base = o.optString("base")
                 if (id.isBlank() || base.isBlank()) return@mapNotNull null
                 Provider(id, o.optString("label", id), base.trimEnd('/'), o.optString("model"),
-                    o.optString("vision").ifBlank { null }, "API key", "Your custom endpoint. " + base,
+                    o.optString("vision").ifBlank { o.optString("model").ifBlank { null } }, "API key", "Your custom endpoint. " + base,
                     base.trimEnd('/') + "/models", o.optBoolean("anthropic", false), o.optBoolean("noKey", false))
             }
         } catch (_: Exception) { emptyList() }
@@ -312,6 +312,9 @@ object Prefs {
         val stored = sp(c).getString(if (vision) "provider_vision" else "provider_text", null)
         val sp0 = Providers.find(stored)
         if (sp0 != null && (!vision || sp0.hasVision)) return sp0
+        // No explicit vision choice: stay on the provider Kingi already chose for chat instead of silently
+        // switching to another service (and another key) just to look at an image.
+        if (vision && stored == null) provider(c, false).takeIf { it.hasVision && hasKey(c, it.id) }?.let { return it }
         return Providers.all.firstOrNull { hasKey(c, it.id) && (!vision || it.hasVision) } ?: Providers.all[0]
     }
 

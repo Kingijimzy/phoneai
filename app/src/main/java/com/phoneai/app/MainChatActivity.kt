@@ -1532,7 +1532,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     },
                     onModeChange = { enabled -> commandMode = enabled; composeCommandMode.value = enabled },
                     onSend = { message -> input.setText(message); sendMessage() },
-                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) }; startActivityForResult(Intent.createChooser(picker, "Choose up to 4 images"), 44) }, onRemoveImage = { index -> if (index in selectedImageUris.indices) selectedImageUris.removeAt(index); composeSelectedImages.value = selectedImageUris.toList(); refreshImagePreview(selectedImageUris.firstOrNull()) }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> showChatBrowserPopup(url) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() },
+                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "*/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) }; startActivityForResult(Intent.createChooser(picker, "Attach images or files"), 44) }, onRemoveImage = { index -> if (index in selectedImageUris.indices) selectedImageUris.removeAt(index); composeSelectedImages.value = selectedImageUris.toList(); refreshImagePreview(selectedImageUris.firstOrNull()) }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> showChatBrowserPopup(url) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() },
                     onRetry = { prompt -> PhoneAiService.instance?.retryLastResponse(prompt) },
                     onEditSend = { original, edited -> PhoneAiService.instance?.editAndResend(original, edited) }
                 )
@@ -1806,9 +1806,38 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             }.start()
         }
         if (requestCode == 44 && resultCode == RESULT_OK) {
-            selectedDocumentName = null
-            selectedDocumentText = null
-            refreshDocumentPreview(null)
+            val picked = ArrayList<Uri>()
+            data?.clipData?.let { clip -> for (index in 0 until minOf(clip.itemCount, 4)) picked.add(clip.getItemAt(index).uri) }
+            data?.data?.let { if (picked.isEmpty()) picked.add(it) }
+            val files = picked.filter { contentResolver.getType(it)?.startsWith("image/") != true }
+            if (files.isNotEmpty()) {
+                // Any non-image file (PDF, doc, code, archive...) is copied into Orion's workspace so tools can use it.
+                Thread {
+                    val notes = ArrayList<String>()
+                    var name0: String? = null
+                    files.take(4).forEach { uri ->
+                        try {
+                            val name = (contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                                ?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: "upload_${System.currentTimeMillis()}")
+                                .replace(Regex("[^A-Za-z0-9._-]"), "_").take(100)
+                            val dir = java.io.File(filesDir, "orion-python/workspace/uploads").apply { mkdirs() }
+                            val dest = java.io.File(dir, name)
+                            contentResolver.openInputStream(uri)?.use { input -> dest.outputStream().use { out -> input.copyTo(out, 8192) } }
+                            val text = OrionMediaTools.readDocument(this, "uploads/$name")
+                            name0 = name0 ?: name
+                            notes.add("[Uploaded file: uploads/$name, ${dest.length()} bytes. It is in your workspace; use document_extract, python_exec or show_file on it.]\n" +
+                                (if (text.startsWith("error")) "" else text.take(12000)))
+                        } catch (e: Exception) { notes.add("[Could not copy a file: ${e.message}]") }
+                    }
+                    runOnUiThread {
+                        selectedDocumentName = name0 ?: "file"
+                        selectedDocumentText = notes.joinToString("\n\n")
+                        refreshDocumentPreview(selectedDocumentName)
+                        Toast.makeText(this, "Attached ${files.size} file(s). Orion can read them.", Toast.LENGTH_SHORT).show()
+                    }
+                }.start()
+            }
+            if (picked.size == files.size) return
             val chosen = ArrayList<Uri>()
             data?.clipData?.let { clip ->
                 for (index in 0 until minOf(clip.itemCount, 4)) chosen.add(clip.getItemAt(index).uri)
