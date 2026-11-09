@@ -191,6 +191,5 @@ internal class OrionSpecialistRuntime(
     }
 }
 
-// Re-export enums for compatibility
-internal enum class SpecialistVerdict { VERIFIED, UNVERIFIED, FAILED, CANCELLED }
-internal enum class SpecialistStatus { STARTING, RUNNING, COMPLETED, FAILED, CANCELLED }
+// SpecialistVerdict is declared in OrionMissionStatus.kt; SpecialistStatus in OrionAgentFactory.kt.
+// Both are visible here via same-package resolution — no duplicate declarations.
