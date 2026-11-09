@@ -957,6 +957,9 @@ class Tools(
         else -> OrionFactStore.query(svc, a.optString("subject"), a.optString("predicate"), a.optString("object"), a.optString("match"))
     }
 
+    fun selfEdit(a: org.json.JSONObject): String = OrionSelfEdit.run(svc, a)
+    fun webApi(a: org.json.JSONObject): String = OrionWebApi.call(a)
+
     fun clipboardRead(): String {
         val cb = svc.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val text = cb.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(svc)?.toString().orEmpty()
