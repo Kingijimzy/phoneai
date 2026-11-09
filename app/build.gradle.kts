@@ -8,7 +8,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.chaquo.python")
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.24"
-    id("org.jetbrains.kotlin.kapt")
+    id("com.google.devtools.ksp")
 }
 
 chaquopy {
@@ -171,7 +171,7 @@ dependencies {
     // Room for mission persistence (Phase 0C)
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
-    kapt("androidx.room:room-compiler:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
 }
 
 // Configure Gradle Test tasks directly. Android's unitTests.all receiver is not

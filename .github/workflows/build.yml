@@ -91,28 +91,6 @@ jobs:
         with:
           gradle-version: 8.7
 
-      - name: Test Kotlin sources with KAPT disabled to expose hidden compiler errors
-        shell: bash
-        run: |
-          set +e
-          mkdir -p build-diagnostics
-          cat > build-diagnostics/disable-kapt.init.gradle <<'EOF'
-          allprojects {
-            afterEvaluate {
-              tasks.matching { task -> task.name.toLowerCase().contains("kapt") }.configureEach {
-                enabled = false
-              }
-            }
-          }
-          EOF
-          gradle :app:compileDebugKotlin \
-            -x :app:kaptGenerateStubsDebugKotlin \
-            -x :app:kaptDebugKotlin \
-            --no-daemon --stacktrace --info --rerun-tasks \
-            2>&1 | tee build-diagnostics/kotlin-without-kapt.log
-          echo "${PIPESTATUS[0]}" > build-diagnostics/kotlin-without-kapt.exit
-          exit 0
-
       - name: Test the restricted Python sandbox
         run: python3 tests/python/test_orion_exec.py
 
@@ -130,7 +108,11 @@ jobs:
           name: PhoneAI-build-diagnostics
           if-no-files-found: warn
           path: |
-            build-diagnostics/gradle-build.log\n            build-diagnostics/kotlin-without-kapt.log\n            build-diagnostics/kotlin-without-kapt.exit
+            build-diagnostics/gradle-build.log
+            app/build/reports/
+            app/build/tmp/kapt3/
+            app/build/generated/source/kapt/
+            app/build/generated/ksp/
             app/build/reports/
             app/build/tmp/kapt3/
             app/build/generated/source/kapt/
