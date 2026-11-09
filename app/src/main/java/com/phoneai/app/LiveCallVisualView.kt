@@ -23,14 +23,15 @@ import kotlin.math.sin
  */
 class LiveCallVisualView(context: Context) : View(context) {
     enum class Style {
-        DOT_MATRIX, EYES;
+        DOT_MATRIX, EYES, ORB;
         companion object {
             fun fromPref(value: String?): Style =
-                if (LiveCallStylePolicy.normalize(value) == "eyes") EYES else DOT_MATRIX
+                when (LiveCallStylePolicy.normalize(value)) { "eyes" -> EYES; "dot_matrix" -> DOT_MATRIX; else -> ORB }
         }
     }
 
-    @Volatile var style: Style = Style.DOT_MATRIX
+    private val orb = OrionOrbPainter()
+    @Volatile var style: Style = Style.ORB
         set(value) { field = value; invalidate() }
     @Volatile var mode: OrbView.Mode = OrbView.Mode.IDLE
         set(value) { field = value; invalidate() }
@@ -144,6 +145,11 @@ class LiveCallVisualView(context: Context) : View(context) {
         when (style) {
             Style.DOT_MATRIX -> drawDots(canvas, w, h, t, now)
             Style.EYES -> drawEyes(canvas, w, h, t, now)
+            Style.ORB -> {
+                val lvl = if (mode == OrbView.Mode.SPEAKING) maxOf(speechAmplitude, wordPulse * .5f) else micLevel
+                orb.draw(canvas, w / 2f, h / 2f, minOf(w, h) * .34f, t, lvl, mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING)
+                if (!reducedMotion) postInvalidateOnAnimation()
+            }
         }
         if (errorState) { paint.color = android.graphics.Color.BLACK; paint.alpha = 125; canvas.drawRect(0f, 0f, w, h, paint) }
         if (wordPulse > 0f) wordPulse = max(0f, wordPulse - if (reducedMotion) 1f else 0.11f)
