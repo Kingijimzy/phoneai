@@ -6,7 +6,7 @@ import org.json.JSONObject
 import java.io.File
 
 /** Something the user asked for that Orion could not do yet, kept so it can be fixed and offered again later. */
-data class BoardBoardCapabilityGap(val goal: String, val provider: String, val status: String, val count: Int, val lastAt: Long)
+data class BoardCapabilityGap(val goal: String, val provider: String, val status: String, val count: Int, val lastAt: Long)
 
 internal object CapabilityBoardPolicy {
     const val MAX = 30

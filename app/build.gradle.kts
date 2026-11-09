@@ -145,6 +145,8 @@ android {
 dependencies {
     implementation(files(sherpaTtsAar).builtBy(downloadSherpaTtsAar))
     implementation("org.apache.commons:commons-compress:1.27.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("com.google.code.gson:gson:2.11.0")
     // WebSocket transport for the opt-in Gemini Live audio session.
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
