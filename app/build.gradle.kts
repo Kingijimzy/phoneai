@@ -11,9 +11,7 @@ plugins {
 
 chaquopy {
     defaultConfig {
-        // Python is bundled in the APK for ARM64 devices; no Termux bridge required.
         version = "3.11"
-        // Pure-Python libraries scripts commonly need; available to the bundled-Python fallback runner.
         pip {
             install("requests")
             install("beautifulsoup4")
@@ -22,7 +20,6 @@ chaquopy {
 }
 
 // Official sherpa-onnx Android AAR (pinned version + verified SHA-256).
-// Downloaded during builds rather than checked into this repository as a binary.
 val sherpaTtsAar = layout.buildDirectory.file("downloads/sherpa-onnx-1.13.8.aar")
 val sherpaTtsAarSha256 = "633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96"
 
@@ -48,35 +45,54 @@ val downloadSherpaTtsAar by tasks.registering {
             destination.parentFile.mkdirs()
             val temporary = File(destination.parentFile, destination.name + ".part")
             temporary.delete()
-            val connection = URL(
-                "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar"
-            ).openConnection() as HttpURLConnection
-            try {
-                connection.connectTimeout = 30_000
-                connection.readTimeout = 90_000
-                connection.instanceFollowRedirects = true
-                connection.connect()
-                if (connection.responseCode !in 200..299) {
-                    throw org.gradle.api.GradleException("Could not download official sherpa-onnx AAR: HTTP " + connection.responseCode)
-                }
-                connection.inputStream.buffered().use { input ->
-                    temporary.outputStream().buffered().use { output -> input.copyTo(output) }
-                }
-                val actual = sha256Of(temporary)
-                if (actual != sherpaTtsAarSha256) {
+            val url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar"
+            var lastError: Exception? = null
+            for (attempt in 1..4) {
+                try {
+                    val connection = URL(url).openConnection() as HttpURLConnection
+                    try {
+                        connection.connectTimeout = 45_000
+                        connection.readTimeout = 120_000
+                        connection.instanceFollowRedirects = true
+                        connection.setRequestProperty("User-Agent", "phoneai-ci")
+                        connection.connect()
+                        val code = connection.responseCode
+                        if (code !in 200..299) {
+                            throw org.gradle.api.GradleException("Could not download official sherpa-onnx AAR: HTTP $code (attempt $attempt)")
+                        }
+                        connection.inputStream.buffered().use { input ->
+                            temporary.outputStream().buffered().use { output -> input.copyTo(output) }
+                        }
+                        val actual = sha256Of(temporary)
+                        if (actual != sherpaTtsAarSha256) {
+                            temporary.delete()
+                            throw org.gradle.api.GradleException("sherpa-onnx AAR SHA-256 mismatch; refusing to use an unverified native binary")
+                        }
+                        if (destination.exists() && !destination.delete()) {
+                            throw org.gradle.api.GradleException("Could not replace cached sherpa-onnx AAR")
+                        }
+                        if (!temporary.renameTo(destination)) {
+                            temporary.copyTo(destination, overwrite = true)
+                            temporary.delete()
+                        }
+                        lastError = null
+                        break
+                    } finally {
+                        connection.disconnect()
+                    }
+                } catch (e: Exception) {
+                    lastError = e
                     temporary.delete()
-                    throw org.gradle.api.GradleException("sherpa-onnx AAR SHA-256 mismatch; refusing to use an unverified native binary")
+                    if (attempt < 4) {
+                        Thread.sleep(attempt * 2000L)
+                    }
                 }
-                if (destination.exists() && !destination.delete()) {
-                    throw org.gradle.api.GradleException("Could not replace cached sherpa-onnx AAR")
-                }
-                if (!temporary.renameTo(destination)) {
-                    temporary.copyTo(destination, overwrite = true)
-                    temporary.delete()
-                }
-            } finally {
-                connection.disconnect()
-                temporary.delete()
+            }
+            if (lastError != null) {
+                throw org.gradle.api.GradleException(
+                    "Could not download official sherpa-onnx AAR after retries: ${lastError.message}",
+                    lastError
+                )
             }
         }
     }
@@ -93,14 +109,11 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // Orion targets the Redmi A3 Pro (ARM64). Exclude x86 and 32-bit ARM
-        // native runtimes from sherpa-onnx so the APK is not a 250 MB fat package.
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
     }
 
-    // A fixed debug key, so every new build can be installed over the old one.
     signingConfigs {
         getByName("debug") {
             storeFile = file("debug.keystore")
@@ -134,20 +147,15 @@ android {
     }
 }
 
-
 dependencies {
     implementation(files(sherpaTtsAar).builtBy(downloadSherpaTtsAar))
     implementation("org.apache.commons:commons-compress:1.27.1")
-    // WebSocket transport for the opt-in Gemini Live audio session.
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.activity:activity-compose:1.9.1")
     implementation("androidx.webkit:webkit:1.11.0")
-    // Durable, deferrable recovery signal for queued local work after process death.
     implementation("androidx.work:work-runtime-ktx:2.9.1")
-    // Bundled on-device OCR; screen text stays on device until Orion explicitly chooses a tool.
     implementation("com.google.mlkit:text-recognition:16.0.1")
-    // CPU TFLite runtime for the optional bundled UI detector; no network inference.
     implementation("org.tensorflow:tensorflow-lite:2.16.1")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
@@ -156,15 +164,11 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
-    // Android local unit tests use a real org.json implementation; android.jar stubs throw from JSONObject.put().
     testImplementation("org.json:json:20240303")
-    // Robolectric supplies real Android SQLite and SharedPreferences for repository lifecycle tests.
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("androidx.work:work-testing:2.9.1")
 }
 
-// Configure Gradle Test tasks directly. Android's unitTests.all receiver is not
-// the Gradle Test task in this Kotlin DSL context, so testLogging is unavailable there.
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
     testLogging {
         events = setOf(
