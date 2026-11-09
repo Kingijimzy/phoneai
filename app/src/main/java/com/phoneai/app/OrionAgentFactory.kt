@@ -328,7 +328,7 @@ internal data class SpecialistSession(
         evidence = evidence,
         verdict = verdict,
         startedAt = createdAt,
-        completedAt = completedAt.ifZero { createdAt },
+        completedAt = if (completedAt == 0L) createdAt else completedAt,
         toolCalls = toolCalls
     )
 }

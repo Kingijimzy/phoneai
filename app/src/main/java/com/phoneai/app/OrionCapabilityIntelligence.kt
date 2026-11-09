@@ -643,7 +643,7 @@ enum class CapabilityStatus {
     UNKNOWN, HEALTHY, DEGRADED, CRITICAL, BLOCKED, MISSING
 }
 
-data class ObjectiveCapabilityAssessment(
+internal data class ObjectiveCapabilityAssessment(
     val objective: String,
     val intentType: OrionIntentIntelligence.IntentType,
     val achievable: Boolean,

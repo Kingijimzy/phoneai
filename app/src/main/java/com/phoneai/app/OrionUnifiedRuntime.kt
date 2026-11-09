@@ -74,8 +74,8 @@ internal class OrionUnifiedRuntime(
     private val sharedHistory = JSONArray()
 
     /** Task/goal context persisted across turns */
-    @Volatile private var activeObjective: String = ""
-    @Volatile private var activeTaskId: String = ""
+    @Volatile internal var activeObjective: String = ""
+    @Volatile internal var activeTaskId: String = ""
     @Volatile private var activeObjectiveId: String = ""
     @Volatile private var currentTask: String = ""
     @Volatile private var runStartedAt: Long = 0L
@@ -97,7 +97,7 @@ internal class OrionUnifiedRuntime(
     @Volatile var stopped = false
     private val researchCancelled = AtomicBoolean(false)
     private val interactionTraceId = ThreadLocal<String>()
-    private val activeSkillId = AtomicReference<String?>(null)
+    internal val activeSkillId = AtomicReference<String?>(null)
     private var activeSkillStartedAt: Long = 0L
     private var activeSkillCalls: Int = 0
 

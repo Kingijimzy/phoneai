@@ -104,7 +104,7 @@ internal class OrionCapabilityAcquisitionEngine(
             if (result.status == AcquisitionStatus.SUCCESS) return result
             lastError = result.detail
             // Brief backoff between retries
-            delay(1000 * attempt)
+            delay(1000L * attempt)
         }
         return AcquisitionStepResult(
             step = step,
@@ -263,7 +263,7 @@ internal class OrionCapabilityAcquisitionEngine(
         // Install via shell/pip
         val result = runCatching {
             // Use the Python runtime to check/install
-            pythonRuntime.execute(context, "import subprocess; subprocess.check_call([sys.executable, '-m', 'pip', 'install', '$pkg'])", confirm = { true }) { }
+            pythonRuntime.execute(context, "import subprocess, sys; subprocess.check_call([sys.executable, '-m', 'pip', 'install', '$pkg'])", confirm = { true }, onOutput = { })
         }.getOrElse { "error: ${it.message}" }
         if (result.startsWith("error")) {
             return failure(step, "Could not install package $pkg: $result")

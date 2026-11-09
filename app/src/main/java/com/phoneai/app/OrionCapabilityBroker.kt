@@ -51,7 +51,7 @@ internal class OrionCapabilityBroker(
         reason: String
     ): CapabilityGrant {
         // Validate tools exist and are registered
-        val validTools = requestedTools.filter { tool -> ToolRegistry.all.any { registered -> registered.name == tool } }
+        val validTools = requestedTools.filter { tool -> ToolRegistry.all.any { registered -> registered.name == tool } }.toSet()
         val invalidTools = requestedTools - validTools
 
         if (validTools.isEmpty()) {
@@ -80,8 +80,8 @@ internal class OrionCapabilityBroker(
         }
 
         // Combine all granted tools
-        val allGranted = authorized + reviewGranted
-        val allDenied = denied + reviewDenied + invalidTools
+        val allGranted = (authorized + reviewGranted).toSet()
+        val allDenied = (denied + reviewDenied + invalidTools).toSet()
 
         // Log the capability request for observability
         OrionEvidenceLedger.recordDispatch(
@@ -291,7 +291,7 @@ internal class OrionCapabilityBroker(
             AcquisitionType.INSTALL_PYTHON_PACKAGE -> {
                 val pkg = plan.capability.substringAfter("python:")
                 runCatching {
-                    OrionPythonRuntime.ensureAvailable(svc).installPackage(pkg)
+                    false /* package installation is not exposed by the current Python runtime API */
                 }.getOrDefault(false)
             }
             AcquisitionType.CONFIGURE_EXTERNAL_SERVICE -> {

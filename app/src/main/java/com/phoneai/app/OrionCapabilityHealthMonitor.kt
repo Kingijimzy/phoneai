@@ -115,11 +115,11 @@ internal class OrionCapabilityHealthMonitor(
         val ecosystem = capabilityIntelligence.discoverFullCapabilityEcosystem()
         val cap = ecosystem.allCapabilities.firstOrNull { it.id == capabilityId }
         if (cap == null) {
-            return CapabilityHealthStatus(capabilityId, CapabilityStatus.MISSING, "Not discovered")
+            return CapabilityHealthStatus(capabilityId, CapabilityStatus.MISSING, successRate = 0.0)
         }
         val health = ecosystem.healthAssessments[capabilityId]
         if (health == null) {
-            return CapabilityHealthStatus(capabilityId, CapabilityStatus.UNKNOWN, "No health data")
+            return CapabilityHealthStatus(capabilityId, CapabilityStatus.UNKNOWN, successRate = 0.0)
         }
         val status = toHealthStatus(cap, health)
         healthStatus[capabilityId] = status

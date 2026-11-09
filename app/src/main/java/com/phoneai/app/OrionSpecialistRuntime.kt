@@ -27,7 +27,7 @@ internal class OrionSpecialistRuntime(
     private val builtInWorkers = OrionBuiltInSpecialists(context.applicationContext).workers()
 
     /** Execute a dynamic specialist session with real tool dispatch. */
-    suspend fun executeSpecialist(session: SpecialistSession): OrionAgentFactory.SpecialistSession {
+    suspend fun executeSpecialist(session: SpecialistSession): SpecialistSession {
         val startedAt = System.currentTimeMillis()
         val evidence = mutableListOf<String>()
         var toolCalls = 0
@@ -93,7 +93,7 @@ internal class OrionSpecialistRuntime(
      * with all registered capabilities, and security boundaries are enforced at dispatch time
      * (Android perms, trading confirmation, irreversible actions, shell destructive blocks).
      * Dynamic expansion happens via OrionCapabilityBroker.requestCapabilities. */
-    private fun buildScopedRuntime(session: OrionAgentFactory.SpecialistSession): OrionUnifiedRuntime {
+    private fun buildScopedRuntime(session: SpecialistSession): OrionUnifiedRuntime {
         // Create a runtime with the same capabilities as the Central Brain
         // No allowedTools filter — specialists expand via broker, not pre-restriction
         return OrionUnifiedRuntime(
