@@ -51,7 +51,7 @@ import kotlin.math.abs
 /** A screenshot shrunk for the vision model. scale = real width / sent width. */
 class Shot(val b64: String, val scale: Float, val w: Int, val h: Int)
 
-class PhoneAiService : AccessibilityService(), AgentUi {
+open class PhoneAiService : AccessibilityService(), AgentUi {
 
     companion object {
         @Volatile

@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap
 internal class OrionCapabilityBroker(
     private val context: Context,
     private val svc: PhoneAiService,
-    private val unifiedRuntime: OrionUnifiedRuntime
+    private val unifiedRuntime: OrionUnifiedRuntime?
 ) {
 
     // Capability request queue - specialists can request additional tools
@@ -362,7 +362,7 @@ internal class OrionCapabilityBroker(
         /** Global broker instance for singleton access */
         @Volatile private var INSTANCE: OrionCapabilityBroker? = null
 
-        fun getInstance(context: Context, svc: PhoneAiService, unifiedRuntime: OrionUnifiedRuntime): OrionCapabilityBroker {
+        fun getInstance(context: Context, svc: PhoneAiService, unifiedRuntime: OrionUnifiedRuntime?): OrionCapabilityBroker {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: OrionCapabilityBroker(context, svc, unifiedRuntime).also { INSTANCE = it }
             }
