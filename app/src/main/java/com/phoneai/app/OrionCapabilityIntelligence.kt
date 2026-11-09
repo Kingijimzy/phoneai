@@ -154,57 +154,42 @@ class OrionCapabilityIntelligence(
     // ============================================================
 
     private suspend fun discoverRegisteredCapabilities(): List<DiscoveredCapability> {
-        return capabilityRegistry.getAllCapabilities().map { cap ->
-            DiscoveredCapability(
-                id = cap.id,
-                name = cap.name,
-                type = CapabilityType.REGISTERED,
-                description = cap.description,
-                toolIds = cap.tools,
-                packId = cap.packId,
-                enabled = cap.enabled,
-                source = "CapabilityRegistry",
-                metadata = cap.metadata
-            )
-        }
+        // CapabilityRegistry evaluates individual facts; it does not enumerate capabilities.
+        return emptyList()
     }
 
     private suspend fun discoverAvailableTools(): List<DiscoveredCapability> {
-        return toolRegistry.getAllTools().map { tool ->
+        return toolRegistry.all.map { tool ->
             DiscoveredCapability(
-                id = "tool:${tool.id}",
+                id = "tool:${tool.name}",
                 name = tool.name,
                 type = CapabilityType.TOOL,
                 description = tool.description,
-                toolIds = listOf(tool.id),
-                packId = tool.capabilityPackId,
-                enabled = tool.enabled && (tool.capabilityPackId?.let { capabilityRegistry.isPackEnabled(it) } ?: true),
+                toolIds = listOf(tool.name),
+                packId = "core",
+                enabled = true,
                 source = "ToolRegistry",
                 metadata = JsonObject().apply {
-                    addProperty("category", tool.category)
-                    addProperty("requiresConfirmation", tool.requiresConfirmation)
-                    addProperty("androidPermissions", tool.requiredAndroidPermissions.joinToString(","))
+                    addProperty("access", tool.access.name)
                 }
             )
         }
     }
 
     private suspend fun discoverExtensionCapabilities(): List<DiscoveredCapability> {
-        return extensionStore.getAllExtensions().map { ext ->
+        return extensionStore.all().map { ext ->
             DiscoveredCapability(
                 id = "ext:${ext.id}",
-                name = ext.name,
+                name = ext.displayName,
                 type = CapabilityType.EXTENSION,
                 description = ext.description,
-                toolIds = ext.providedTools,
+                toolIds = emptyList(),
                 packId = "self-extended",
                 enabled = ext.enabled && ext.verified,
                 source = "SelfExtendingExtensionStore",
                 metadata = JsonObject().apply {
-                    addProperty("version", ext.version)
                     addProperty("verified", ext.verified)
-                    addProperty("source", ext.source.name)
-                    addProperty("installPath", ext.installPath)
+                    addProperty("source", ext.source)
                 }
             )
         }
@@ -331,24 +316,10 @@ class OrionCapabilityIntelligence(
     }
 
     private suspend fun discoverAPIIntegrations(): List<DiscoveredCapability> {
-        // Check ApiKeyVault for stored credentials
+        // ApiKeyVault stores credentials but does not expose key enumeration.
+        // Return empty list to avoid leaking credential metadata.
         return try {
-            val vault = ApiKeyVault
-            vault.listKeys().map { key ->
-                DiscoveredCapability(
-                    id = "api:$key",
-                    name = "API: $key",
-                    type = CapabilityType.EXTERNAL_API,
-                    description = "Authenticated external API access",
-                    toolIds = listOf("vault_get", "http_request"),
-                    packId = "credentials",
-                    enabled = true,
-                    source = "ApiKeyVault",
-                    metadata = JsonObject().apply {
-                        addProperty("keyId", key)
-                    }
-                )
-            }
+            emptyList()
         } catch (e: Exception) {
             emptyList()
         }
@@ -375,53 +346,9 @@ class OrionCapabilityIntelligence(
     private fun analyzeCapabilityGaps(healthMap: Map<String, CapabilityHealth>): List<CapabilityGap> {
         val gaps = mutableListOf<CapabilityGap>()
 
-        // Query recent failed missions from experience store
-        val recentFailures = experienceStore.getRecentFailures(limit = 50)
-
-        // Group failures by missing capability patterns
-        val failurePatterns = recentFailures
-            .flatMap { it.missingCapabilities ?: emptyList() }
-            .groupBy { it }
-            .mapValues { (cap, occurrences) -> occurrences.size }
-
-        failurePatterns.forEach { (capabilityId, count) ->
-            if (count >= 2) { // Pattern threshold
-                val health = healthMap[capabilityId]
-                gaps.add(CapabilityGap(
-                    capabilityId = capabilityId,
-                    gapType = when {
-                        health == null -> GapType.MISSING
-                        health.status == CapabilityStatus.BLOCKED -> GapType.BLOCKED
-                        health.status == CapabilityStatus.DEGRADED -> GapType.DEGRADED
-                        else -> GapType.INSUFFICIENT
-                    },
-                    frequency = count,
-                    impact = calculateGapImpact(capabilityId, count),
-                    suggestedAcquisition = suggestAcquisitionForGap(capabilityId, health)
-                ))
-            }
-        }
-
-        // Also check for objective patterns that consistently fail
-        val objectiveFailures = recentFailures
-            .groupBy { it.objectiveType }
-            .mapValues { (_, failures) -> failures.size }
-            .filter { (_, count) -> count >= 3 }
-
-        objectiveFailures.forEach { (objectiveType, count) ->
-            gaps.add(CapabilityGap(
-                capabilityId = "objective:$objectiveType",
-                gapType = GapType.OBJECTIVE_PATTERN,
-                frequency = count,
-                impact = GapImpact.HIGH,
-                suggestedAcquisition = AcquisitionSuggestion(
-                    type = AcquisitionType.COMPOSITE_WORKFLOW,
-                    description = "Create specialist workflow for $objectiveType",
-                    estimatedEffort = EffortLevel.MEDIUM
-                )
-            ))
-        }
-
+        // ExperienceStore does not expose a getRecentFailures query; gaps remain empty until
+        // a failure-tracking query is added to the store API.
+        // No failure data is available through the current store API, so no gaps are derived.
         return gaps.sortedByDescending { it.frequency * it.impact.weight }
     }
 
@@ -438,13 +365,11 @@ class OrionCapabilityIntelligence(
         return when {
             health == null -> {
                 // Completely missing — check if extension exists
-                val existingExt = extensionStore.getAllExtensions().find { ext ->
-                    capabilityId in ext.providedTools || ext.id == capabilityId
-                }
+                val existingExt = extensionStore.all().find { ext -> ext.id == capabilityId }
                 if (existingExt != null) {
                     AcquisitionSuggestion(
                         type = AcquisitionType.ENABLE_EXTENSION,
-                        description = "Enable existing extension: ${existingExt.name}",
+                        description = "Enable existing extension: ${existingExt.displayName}",
                         estimatedEffort = EffortLevel.LOW,
                         targetId = existingExt.id
                     )
@@ -506,29 +431,7 @@ class OrionCapabilityIntelligence(
                 ))
             }
 
-        // Check for popular capabilities we don't have (from knowledge graph)
-        val popularCaps = knowledgeGraph.getPopularCapabilities(limit = 20)
-        popularCaps.forEach { cap ->
-            if (!healthMap.containsKey(cap.id) && !gaps.any { it.capabilityId == cap.id }) {
-                opportunities.add(AcquisitionOpportunity(
-                    gap = CapabilityGap(
-                        capabilityId = cap.id,
-                        gapType = GapType.MISSING,
-                        frequency = cap.popularity,
-                        impact = GapImpact.MEDIUM,
-                        suggestedAcquisition = AcquisitionSuggestion(
-                            type = AcquisitionType.CREATE_EXTENSION,
-                            description = "Popular capability: ${cap.name}",
-                            estimatedEffort = EffortLevel.HIGH
-                        )
-                    ),
-                    priority = Priority.NORMAL,
-                    feasibility = FeasibilityLevel.MODERATE,
-                    estimatedValue = cap.popularity * 0.1
-                ))
-            }
-        }
-
+        // Knowledge graph does not expose getPopularCapabilities; opportunities from gaps only.
         return opportunities.sortedByDescending { it.priority.weight * it.feasibility.weight * it.estimatedValue }
     }
 
@@ -557,9 +460,9 @@ class OrionCapabilityIntelligence(
         // Return a minimal cached version — in practice would cache the full map
         return CapabilityEcosystemMap(
             timestamp = discoveryTimestamp.get(),
-            registeredCapabilities = capabilityRegistry.getAllCapabilities().map { it.toDiscovered() },
-            availableTools = toolRegistry.getAllTools().map { it.toDiscovered() },
-            extensionCapabilities = extensionStore.getAllExtensions().map { it.toDiscovered() },
+            registeredCapabilities = emptyList(),
+            availableTools = toolRegistry.all.map { it.toDiscovered() },
+            extensionCapabilities = extensionStore.all().map { it.toDiscovered() },
             systemCapabilities = emptyList(),
             externalCapabilities = emptyList(),
             healthAssessments = healthCache.toMap(),
@@ -648,8 +551,7 @@ class OrionCapabilityIntelligence(
 
     private fun isPythonAvailable(): Boolean {
         return try {
-            // Check if Python runtime is installed via OrionPythonRuntime
-            OrionPythonRuntime.isPythonAvailable(context)
+            toolRegistry.all.any { it.name == "python_exec" }
         } catch (e: Exception) {
             false
         }
@@ -830,21 +732,27 @@ data class AcquisitionRecord(
     val successRate: Double get() = if (successCount + failureCount > 0) successCount.toDouble() / (successCount + failureCount) else 0.0
 }
 
-// Extension functions for conversion
-private fun Capability.toDiscovered(): DiscoveredCapability = DiscoveredCapability(
-    id = id, name = name, type = CapabilityType.REGISTERED, description = description,
-    toolIds = tools, packId = packId, enabled = enabled, source = "CapabilityRegistry",
-    metadata = JsonObject().apply { addProperty("metadata", metadata.toString()) }
+// Extension functions for conversion to DiscoveredCapability
+private fun ToolDefinition.toDiscovered(): DiscoveredCapability = DiscoveredCapability(
+    id = "tool:${name}",
+    name = name,
+    type = CapabilityType.TOOL,
+    description = description,
+    toolIds = listOf(name),
+    packId = "core",
+    enabled = true,
+    source = "ToolRegistry",
+    metadata = JsonObject().apply { addProperty("access", access.name) }
 )
 
-private fun Tool.toDiscovered(): DiscoveredCapability = DiscoveredCapability(
-    id = "tool:$id", name = name, type = CapabilityType.TOOL, description = description,
-    toolIds = listOf(id), packId = capabilityPackId ?: "core", enabled = enabled,
-    source = "ToolRegistry", metadata = JsonObject()
-)
-
-private fun SelfExtendingExtension.toDiscovered(): DiscoveredCapability = DiscoveredCapability(
-    id = "ext:$id", name = name, type = CapabilityType.EXTENSION, description = description,
-    toolIds = providedTools, packId = "self-extended", enabled = enabled && verified,
-    source = "SelfExtendingExtensionStore", metadata = JsonObject()
+private fun GeneratedExtension.toDiscovered(): DiscoveredCapability = DiscoveredCapability(
+    id = "ext:${id}",
+    name = displayName,
+    type = CapabilityType.EXTENSION,
+    description = description,
+    toolIds = emptyList(),
+    packId = "self-extended",
+    enabled = enabled && verified,
+    source = "SelfExtendingExtensionStore",
+    metadata = JsonObject().apply { addProperty("verified", verified) }
 )
