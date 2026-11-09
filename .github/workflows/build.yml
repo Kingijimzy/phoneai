@@ -7,8 +7,6 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
-# Cancel stale builds on the same ref so every commit does not queue another full
-# ~50 MB native-runtime download/build behind obsolete commits.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -58,9 +56,6 @@ jobs:
             exit 1
           fi
           echo "${TALLOC_SHA256}  ${TALLOC_ARCHIVE}" | sha256sum --check -
-          # The two loader binaries are already part of the exact pinned upstream
-          # checkout above. Reuse those tracked files instead of fetching the same
-          # bytes again from raw.githubusercontent.com (which caused intermittent 504s).
           mkdir -p upstream/src/android/app/src/main/jniLibs/arm64-v8a
           test -s upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so
           echo "44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04  upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so" | sha256sum --check -
@@ -78,6 +73,45 @@ jobs:
           echo "44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04  app/src/main/jniLibs/arm64-v8a/libproot-loader.so" | sha256sum --check -
           echo "25f6bd90bc5a3d3088026289a0d3eaf3e502bd2b00e5cb74fadd9791132efa34  app/src/main/jniLibs/arm64-v8a/libproot-loader32.so" | sha256sum --check -
           file app/src/main/jniLibs/arm64-v8a/*
+
+      - name: Cache sherpa-onnx AAR
+        id: cache-sherpa
+        uses: actions/cache@v4
+        with:
+          path: app/build/downloads/sherpa-onnx-1.13.8.aar
+          key: sherpa-onnx-1.13.8-633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96
+
+      - name: Pre-download sherpa-onnx AAR (avoid Gradle HTTP 504)
+        if: steps.cache-sherpa.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST="app/build/downloads/sherpa-onnx-1.13.8.aar"
+          SHA="633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96"
+          mkdir -p "$(dirname "$DEST")"
+          URLS=(
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar"
+            "https://ghproxy.net/https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar"
+          )
+          ok=false
+          for url in "${URLS[@]}"; do
+            echo "Trying $url"
+            if curl --fail --location --retry 8 --retry-all-errors --retry-delay 5 \
+                --connect-timeout 30 --max-time 300 \
+                -A "phoneai-ci" "$url" -o "${DEST}.part"; then
+              if echo "${SHA}  ${DEST}.part" | sha256sum --check --status; then
+                mv "${DEST}.part" "$DEST"
+                ok=true
+                break
+              fi
+            fi
+            rm -f "${DEST}.part"
+          done
+          if [ "$ok" != true ]; then
+            echo "Failed to download checksum-valid sherpa-onnx AAR" >&2
+            exit 1
+          fi
+          echo "${SHA}  ${DEST}" | sha256sum --check -
 
       - name: Test constrained bundled Python policy
         run: python3 -m unittest discover -s app/src/test/python -v
@@ -122,8 +156,6 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Publish the APK as a release (easy download on your phone)
-        # Only main may publish a release. Branch pushes still build an artifact for
-        # review, but must never become the download users install from Releases.
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
