@@ -12,6 +12,7 @@ import java.util.Locale
  * into a single spoken interruption at most once per configured interval.
  *
  * Rules:
+ * - Active user mission (MissionLock): never interrupt with proactive speech.
  * - Quiet period: never speak proactively between startHour and endHour.
  * - Throttle: at most one proactive spoken interruption per proactiveMinIntervalMs.
  * - At most proactiveMaxPerHour per hour.
@@ -22,45 +23,46 @@ import java.util.Locale
  */
 internal object OrionProactiveEngine {
 
-    /** A single proactive interruption Orion may speak, with reason and urgency. */
     data class ProactiveItem(
-        val kind: String, // "calendar", "task", "followup", "battery", "notification"
+        val kind: String,
         val title: String,
         val body: String,
-        val urgency: Int, // 0=low, 1=medium, 2=high
+        val urgency: Int,
         val dueAtMillis: Long? = null
     )
 
-    /** Evaluate everything and return at most one item to speak, or null. */
     fun evaluate(
         context: Context,
         now: Long = System.currentTimeMillis()
     ): ProactiveItem? {
         val app = context.applicationContext
 
-        // 0. Global gates: proactive pack + core must be on.
         if (!AgentPolicy.enabled(app, "orion_core") || !AgentPolicy.enabled(app, "proactive")) {
             return null
         }
 
-        // 1. Quiet period: do not speak during owner-configured quiet hours.
+        // Ultron agency: never steal the user's active mission with background life.
+        if (OrionMissionLock.activeGoal(app).isNotBlank()) {
+            return null
+        }
+        val pulse = OrionAutonomousPulse.evaluate(app, now)
+        if (!pulse.allowed && pulse.reason == "active_mission_blocks_pulse") {
+            return null
+        }
+
         if (inQuietPeriod(app, now)) return null
 
-        // 2. Throttle: at most one spoken interruption per configured minimum interval.
         val lastSpoken = Prefs.lastProactiveSpokenAt(app)
         val minInterval = Prefs.proactiveMinIntervalMs(app)
         if (lastSpoken > 0L && now - lastSpoken < minInterval) return null
 
-        // 3. Rate cap: at most proactiveMaxPerHour per hour.
         val maxPerHour = Prefs.proactiveMaxPerHour(app)
-        if (maxPerHour <= 0) return null // proactive speaking fully disabled
+        if (maxPerHour <= 0) return null
         val spokenThisHour = countSpokenSince(app, now - 60 * 60 * 1000L, now)
         if (spokenThisHour >= maxPerHour) return null
 
-        // 4. Gather candidate items from all sources.
         val candidates = mutableListOf<ProactiveItem>()
 
-        // 4a. Calendar events starting soon.
         val lookahead = Prefs.calendarLookaheadHours(app)
         val soonEvents = OrionCalendarMonitor.upcoming(app, lookahead, now)
             .filter { it.minutesFromNow > 0 && it.minutesFromNow <= 120 }
@@ -76,7 +78,6 @@ internal object OrionProactiveEngine {
             )
         }
 
-        // 4b. Unfinished tasks due soon or overdue.
         val tasks = TaskStore.all(app)
         val unfinished = tasks.filter { it.status !in setOf("completed", "done", "failed", "cancelled") }
         for (t in unfinished.take(5)) {
@@ -93,7 +94,6 @@ internal object OrionProactiveEngine {
             }
         }
 
-        // 4c. Owner-mentioned follow-ups due soon or overdue.
         val followUps = OrionFollowUpStore.pending(app)
         for (f in followUps.take(5)) {
             if (f.dueAt != null && f.dueAt!! <= now + 60 * 60 * 1000L && f.dueAt!! > 0L) {
@@ -109,7 +109,6 @@ internal object OrionProactiveEngine {
             }
         }
 
-        // 4d. Battery: low battery before a long/due task suggests charging first.
         val batteryLowThreshold = Prefs.proactiveBatteryLowThreshold(app)
         if (batteryLowThreshold > 0) {
             val deviceCtx = OrionDeviceContextProvider.summary(app)
@@ -128,7 +127,6 @@ internal object OrionProactiveEngine {
             }
         }
 
-        // 4e. Recent safe notifications that look important (from OrionNotificationListener).
         val notifCtx = OrionNotificationListener.contextSummary()
         val importantLines = notifCtx.lineSequence()
             .filter { it.contains("urgent", ignoreCase = true) || it.contains("alert", ignoreCase = true) || it.contains("reminder", ignoreCase = true) }
@@ -142,20 +140,18 @@ internal object OrionProactiveEngine {
             )
         }
 
-        // 5. Pick the single most urgent item (ties: earliest due).
         val best = candidates
             .sortedWith(compareByDescending<ProactiveItem> { it.urgency }
                 .thenBy { it.dueAtMillis ?: Long.MAX_VALUE })
             .firstOrNull() ?: return null
 
-        // 6. Record the interruption so throttling applies.
         Prefs.setLastProactiveSpokenAt(app, now)
         recordSpoken(app, now)
+        OrionAutonomousPulse.markFired(app, now)
 
         return best
     }
 
-    /** Format a millisecond delta as a short human string. */
     private fun formatAgo(deltaMs: Long): String {
         val minutes = deltaMs / 60_000L
         return when {
@@ -175,10 +171,9 @@ internal object OrionProactiveEngine {
         val end = Prefs.quietPeriodEndHour(context)
         val hour = java.util.Calendar.getInstance().apply { timeInMillis = now }.get(java.util.Calendar.HOUR_OF_DAY)
         return if (start < end) hour in start until end
-        else hour >= start || hour < end // wraps midnight
+        else hour >= start || hour < end
     }
 
-    /** Count spoken interruptions since a given time (for the per-hour cap). */
     private fun countSpokenSince(context: Context, since: Long, now: Long): Int {
         val raw = context.getSharedPreferences("orion_proactive_spoken_v1", Context.MODE_PRIVATE)
             .getString("spoken_at", "[]") ?: "[]"
@@ -198,20 +193,18 @@ internal object OrionProactiveEngine {
             .getString("spoken_at", "[]") ?: "[]"
         val arr = try { JSONArray(raw) } catch (_: Exception) { JSONArray() }
         val kept = JSONArray()
-        val cutoff = now - 24 * 60 * 60 * 1000L // drop records older than 24h
+        val cutoff = now - 24 * 60 * 60 * 1000L
         (0 until arr.length()).forEach { i ->
             val t = arr.optLong(i, 0L)
             if (t > cutoff) kept.put(t)
         }
         kept.put(now)
-        // Cap at 100 entries
         while (kept.length() > 100) kept.remove(0)
         context.getSharedPreferences("orion_proactive_spoken_v1", Context.MODE_PRIVATE).edit()
             .putString("spoken_at", kept.toString()).apply()
     }
 
     private fun parseBatteryPercent(deviceCtx: String): Int {
-        // deviceCtx looks like: "OWNER-GRANTED DEVICE STATE ... battery=42%; ..."
         val m = Regex("battery=(\\d+)%").find(deviceCtx)
         return m?.groupValues?.get(1)?.toIntOrNull() ?: -1
     }
