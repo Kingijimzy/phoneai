@@ -887,7 +887,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Only restart, shutdown and Wi-Fi toggles require confirmation through the app interface; every other authorized action executes immediately after its capability, scope and validation checks. " +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
-            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionLivingLoop.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + OrionInnerLife.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
+            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionLivingLoop.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + OrionInnerLife.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + OrionFactStore.promptBlock(svc, Prefs.userName(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
     }
 
     /** Turns raw search results into a direct answer with sources; falls back to the raw list if the model call fails. */
@@ -958,6 +958,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             ui.stream(visiblePrefix.toString())
         }
         if (raw.isEmpty() || raw.uppercase().startsWith("ACTION")) return null
+        // A chat reply that promises work ("generating now") or prints a tool call must run the tool loop, not stand as the answer.
+        if (raw.contains("<tool_call>") || Regex("(?i)\\b(generat|creat|draw|sav|writ|build|run)(ing|e)\\b[^.\\n]{0,40}\\b(now|right away|this second)\\b").containsMatchIn(raw.take(400)) ||
+            OrionToolCallRecovery.recover(raw) { ToolRegistry.find(it) != null } != null) return null
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", raw))
         while (chatHist.length() > 28) chatHist.remove(0)
