@@ -50,7 +50,7 @@ internal fun OrionHome(commandMode: Boolean, onSend: (String) -> Unit, modifier:
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 chips.forEach { c ->
                     Text(c, color = Color(0xFFD8DCFF), fontSize = 13.sp,
-                        modifier = Modifier.clip(RoundedCornerShape(22.dp)).background(Color(0x334F5BFF))
+                        modifier = Modifier.pressScale(0.94f).clip(RoundedCornerShape(22.dp)).background(Color(0x334F5BFF))
                             .border(1.dp, Color(0x445C6BFF), RoundedCornerShape(22.dp))
                             .clickable { onSend(c) }.padding(horizontal = 16.dp, vertical = 11.dp))
                 }

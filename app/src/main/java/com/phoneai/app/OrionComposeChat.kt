@@ -623,7 +623,7 @@ internal fun OrionComposeChatScreen(
                     val previousUserMessage = if (item.kind == "ai") {
                         visibleLines.take(index).lastOrNull { it.kind == "me" }?.text
                     } else null
-                    ChatBubble(
+                    androidx.compose.foundation.layout.Box(Modifier.orionEnter()) { ChatBubble(
                         item = item,
                         onOpenBrowser = { url -> inlineBrowserUrl = url ?: "https://duckduckgo.com/" },
                         onRetry = previousUserMessage?.takeIf { it.isNotBlank() }?.let { prompt ->
@@ -635,12 +635,12 @@ internal fun OrionComposeChatScreen(
                             composerFocusRequester.requestFocus()
                             keyboardController?.show()
                         } else null
-                    )
+                    ) }
                 }
                 // Keep the conversation primary: show one live task card for the latest
                 // task only. Full event history remains available from the Tasks surface.
                 OrionActivityTimeline.latestChatCard(activityEvents)?.let { event ->
-                    item(key = "activity-${event.eventId}") { OrionComposeActivityCard(event) }
+                    item(key = "activity-${event.eventId}") { androidx.compose.foundation.layout.Box(Modifier.orionEnter()) { OrionComposeActivityCard(event) } }
                 }
                 val assistantAlreadyStreaming = lines.lastOrNull()?.let {
                     it.kind == "ai" && it.text.isNotBlank()
