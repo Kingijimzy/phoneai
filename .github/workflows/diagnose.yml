@@ -87,18 +87,18 @@ jobs:
       - name: Test the restricted Python sandbox
         run: python3 tests/python/test_orion_exec.py
 
-      - name: Run unit tests and build debug APK with --info
+      - name: Run Kotlin compile with --debug
         shell: bash
         run: |
           set +e
-          gradle testDebugUnitTest assembleDebug --no-daemon --stacktrace --info > /tmp/build.log 2>&1
+          gradle :app:compileDebugKotlin :app:kaptGenerateStubsDebugKotlin --no-daemon --stacktrace --debug > /tmp/kotlin_debug.log 2>&1
           GRADLE_EXIT=$?
-          echo "GRADLE_EXIT=$GRADLE_EXIT" >> /tmp/build.log
+          echo "GRADLE_EXIT=$GRADLE_EXIT" >> /tmp/kotlin_debug.log
           exit $GRADLE_EXIT
 
-      - name: Upload full build log as artifact
+      - name: Upload Kotlin debug log as artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: diagnose-build-log
-          path: /tmp/build.log
+          name: diagnose-kotlin-debug
+          path: /tmp/kotlin_debug.log
