@@ -20,7 +20,7 @@ internal enum class OrionMissionStatus {
     CANCELLED     // Owner cancelled; no further work will be done
 }
 
-internal sealed class MissionTransition(val from: OrionMissionStatus, val to: OrionMissionStatus) {
+internal sealed class MissionTransition(open val from: OrionMissionStatus, open val to: OrionMissionStatus) {
     data class Valid(override val from: OrionMissionStatus, override val to: OrionMissionStatus) : MissionTransition(from, to)
     data class Invalid(override val from: OrionMissionStatus, override val to: OrionMissionStatus, val reason: String) : MissionTransition(from, to)
 }
