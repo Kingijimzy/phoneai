@@ -405,7 +405,7 @@ object Prefs {
     }
 
     /** Only the two user-approved live-call visuals are valid; old orb/wave values migrate to dots. */
-    fun liveCallStyle(c: Context): String = LiveCallStylePolicy.normalize(sp(c).getString("live_call_style", "dot_matrix"))
+    fun liveCallStyle(c: Context): String = LiveCallStylePolicy.normalize(sp(c).getString("live_call_style", "orb"))
     fun setLiveCallStyle(c: Context, v: String) = sp(c).edit()
         .putString("live_call_style", LiveCallStylePolicy.normalize(v)).apply()
 

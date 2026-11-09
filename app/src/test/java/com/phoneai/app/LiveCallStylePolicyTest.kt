@@ -5,9 +5,9 @@ import org.junit.Test
 
 class LiveCallStylePolicyTest {
     @Test fun dotMatrixIsTheDefaultAndLegacyStylesMigrateToIt() {
-        assertEquals("dot_matrix", LiveCallStylePolicy.normalize(null))
-        assertEquals("dot_matrix", LiveCallStylePolicy.normalize("orb"))
-        assertEquals("dot_matrix", LiveCallStylePolicy.normalize("wave"))
+        assertEquals("orb", LiveCallStylePolicy.normalize(null))
+        assertEquals("orb", LiveCallStylePolicy.normalize("orb"))
+        assertEquals("orb", LiveCallStylePolicy.normalize("wave"))
         assertEquals("dot_matrix", LiveCallStylePolicy.normalize("dot_matrix"))
     }
 

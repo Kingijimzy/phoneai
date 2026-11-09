@@ -610,69 +610,7 @@ internal fun OrionComposeChatScreen(
         Box(Modifier.fillMaxWidth().height(1.dp).background(ChatHairline.copy(alpha = .55f)))
 
         if (lines.isEmpty()) {
-            Column(
-                Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
-                    .padding(horizontal = 18.dp, vertical = 14.dp),
-                horizontalAlignment = Alignment.Start,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("ORION", color = ChatCopy, fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
-                        Text("PERSONAL AI  /  READY WHEN YOU ARE", color = ChatMuted,
-                            fontSize = 9.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.1.sp)
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.padding(end = 4.dp)
-                    ) {
-                        listOf(7, 12, 17, 11, 6).forEachIndexed { index, barHeight ->
-                            Box(
-                                Modifier.width(3.dp).height(barHeight.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(if (index == 2) ChatCopy else ChatHairline)
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.height(18.dp))
-                Text(if (commandMode) "What can I take\noff your hands?" else "What’s on your\nmind today?",
-                    color = ChatCopy, fontSize = 31.sp, lineHeight = 35.sp,
-                    fontWeight = FontWeight.SemiBold, letterSpacing = (-.9).sp)
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    if (commandMode) "Tell Orion what you want done. It will keep you informed and ask before sensitive actions."
-                    else "Start with a question, an idea, or something you want to understand. Just talk naturally.",
-                    color = ChatMuted, fontSize = 13.sp, lineHeight = 20.sp
-                )
-                Spacer(Modifier.height(24.dp))
-                Text("TRY ASKING", color = Color(0xFF9B9B9B), fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-                Spacer(Modifier.height(10.dp))
-                listOf(
-                    Triple("Help me think", "Work through an idea together", "Help me think through an idea"),
-                    Triple("Explain it simply", "Make a difficult topic clear", "Explain something simply"),
-                    Triple("Plan my next step", "Turn a goal into a practical plan", "Help me plan my next step")
-                ).forEach { item ->
-                    Row(
-                        Modifier.fillMaxWidth().padding(bottom = 7.dp).clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF121212)).border(1.dp, ChatHairline, RoundedCornerShape(12.dp))
-                            .clickable { onSend(item.third) }.padding(horizontal = 12.dp, vertical = 11.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(item.first, color = ChatCopy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            Text(item.second, color = ChatMuted, fontSize = 11.sp)
-                        }
-                        Icon(Icons.Rounded.ChevronRight, null, tint = ChatMint.copy(alpha = .8f), modifier = Modifier.size(18.dp))
-                    }
-                }
-            }
+            OrionHome(commandMode = commandMode, onSend = onSend, modifier = Modifier.weight(1f).fillMaxWidth())
         } else {
             val visibleLines = lines.filterNot(::isCompactExecutionNote)
             LazyColumn(
