@@ -21,7 +21,7 @@ internal object OrionSelfEdit {
         return PROTECTED.any { p.contains(it) }
     }
 
-    fun repoOk(repo: String) = Regex("[A-Za-z0-9_.-]{1,60}/[A-Za-z0-9_.-]{1,100}").matches(repo)
+    fun repoOk(repo: String) = Regex("[A-Za-z0-9_.-]{1,60}/[A-Za-z0-9_.-]{1,100}").matches(repo) && repo.split("/").none { it.all { ch -> ch == '.' } }
 
     private fun call(c: Context, method: String, path: String, body: JSONObject? = null): Pair<Int, String> {
         val token = OrionConnectionStore.tokenForConnector(c, "github")
