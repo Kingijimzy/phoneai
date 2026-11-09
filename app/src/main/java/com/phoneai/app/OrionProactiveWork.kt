@@ -29,6 +29,8 @@ internal class OrionProactiveWorker(
         OrionSoulLifecycle.watcherTick(applicationContext)
         // Self-reflection: notice repeatedly failing tools, learn, and queue a follow-up.
         OrionLivingLoop.tick(applicationContext)
+        // Inner life: instincts, self-set goal, nightly reflection.
+        OrionInnerLife.tick(applicationContext)
 
         return runCatching {
             SoulEngineWatcher.run(applicationContext)

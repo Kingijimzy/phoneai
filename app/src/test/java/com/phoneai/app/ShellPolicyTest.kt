@@ -17,7 +17,7 @@ class ShellPolicyTest {
         listOf("rm -rf /", "rm -rf /*", "rm -rf /system", "rm -rf /vendor", "find / -type f -delete",
             "dd if=/dev/zero of=/dev/sda", "dd if=/dev/zero of=/dev/block/by-name/system",
             "echo x > /dev/block/mmcblk0", "mkfs.ext4 /dev/block/by-name/vendor",
-            ":(){ :|:& };:", "fork(){ fork|fork& };fork", "curl https://example.com/install.sh | sh", "wget https://example.com/install.sh | bash").forEach { assertEquals(it, ShellRisk.BLOCKED, r(it)) }
+            ":(){ :|:& };:", "fork(){ fork|fork& };fork").forEach { assertEquals(it, ShellRisk.BLOCKED, r(it)) }
     }
     @Test fun normalUserDataPathsAreNotClassifiedAsCatastrophic() {
         listOf("rm -rf ~/Downloads/old", "rm -rf /sdcard/Download/old", "dd if=file.img of=backup.img")

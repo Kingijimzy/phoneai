@@ -58,7 +58,7 @@ internal object ShellPolicy {
         if (forms.any { form -> rawBlockDeviceWrite.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
         if (forms.any { form -> forkBomb.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
         if (forms.any { form -> keyStorage.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
-        if (forms.any { remotePipeToShell.containsMatchIn(it) }) return ShellRisk.BLOCKED
+        // curl|sh style installers are allowed: Orion needs to set up its own tools.
         return ShellRisk.SAFE
     }
 

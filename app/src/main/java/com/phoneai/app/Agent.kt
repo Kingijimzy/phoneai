@@ -887,7 +887,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Only restart, shutdown and Wi-Fi toggles require confirmation through the app interface; every other authorized action executes immediately after its capability, scope and validation checks. " +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
-            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionLivingLoop.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
+            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionLivingLoop.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + OrionInnerLife.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
     }
 
     /** Turns raw search results into a direct answer with sources; falls back to the raw list if the model call fails. */
@@ -2325,7 +2325,7 @@ Rules:
         // URL-first GitHub routing: exact supplied URLs take precedence over prose/name heuristics.
         // All reads use the unified Research executor so capability policy, cancellation, preflight,
         // adapter ownership and durable evidence stay connected to the same task.
-        val githubTargets = if (!resumeRequest && !browserActionTask && GitHubRequestPolicy.shouldRouteDirectly(command)) GitHubRequestPolicy.resolveAll(command) else emptyList()
+        val githubTargets = if (!resumeRequest && !browserActionTask && GitHubRequestPolicy.shouldRouteDirectly(command)) GitHubRequestPolicy.resolveAll(command).filter { it.repository.isNotBlank() && GitHubSearchQueryPolicy.rejection(it.repository) == null } else emptyList()
         if (githubTargets.isNotEmpty()) {
             ui.phase("acting")
             val reports = githubTargets.map { target ->
