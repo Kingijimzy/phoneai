@@ -79,8 +79,8 @@ internal class OrionUnifiedRuntime(
     @Volatile private var activeObjectiveId: String = ""
     @Volatile private var currentTask: String = ""
     @Volatile private var runStartedAt: Long = 0L
-    @Volatile private var runTools: Int = 0
-    @Volatile private var runFailed: Int = 0
+    @Volatile internal var runTools: Int = 0
+    @Volatile internal var runFailed: Int = 0
 
     /** Recovery and verification state */
     private val failedCallGuard = AgentHooks.FailedCallGuard()
