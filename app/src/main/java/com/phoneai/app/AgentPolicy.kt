@@ -140,7 +140,7 @@ object AgentPolicy {
         "key", "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify", "browser_click",
         "browser_click_verify", "browser_type", "browser_scroll", "browser_navigate", "browser_back", "browser_tabs",
         "browser_upload", "browser_handoff", "browser_wait", "browser_close", "settings", "dial", "alarm", "timer",
-        "volume", "flashlight", "copy", "clipboard_read", "fact_add", "fact_query", "fact_forget", "show_file", "call_status", "call_place", "call_answer", "call_end", "battery", "time", "device_info", "integration_status", "mcp_status",
+        "volume", "flashlight", "copy", "clipboard_read", "self_edit", "web_api", "fact_add", "fact_query", "fact_forget", "show_file", "call_status", "call_place", "call_answer", "call_end", "battery", "time", "device_info", "integration_status", "mcp_status",
         "mcp_list_tools", "mcp_call", "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt", "record_screen" -> "phone_control"
         "agent_jobs", "agent_cancel", "agent_reassign", "remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "knowledge_search", "ask_agent", "queue_agent", "specialist_job_status", "undo_last", "undo_status",
         "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "ask_user" -> "orion_core"

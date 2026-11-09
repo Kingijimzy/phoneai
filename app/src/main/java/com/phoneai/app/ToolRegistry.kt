@@ -111,6 +111,8 @@ internal object ToolRegistry {
         tool("call_answer", ToolAccess.WRITE, "call_answer {}: answer the ringing call"),
         tool("call_end", ToolAccess.WRITE, "call_end {}: hang up the current call"),
         tool("show_file", ToolAccess.READ, "show_file {path}: show a file to Kingi — text and code come back into the chat; images, PDFs and other files open in their viewer. Use after creating any file"),
+        tool("self_edit", ToolAccess.WRITE, "self_edit {action: read|search|write|pr|status|merge, path?, content?, branch?, message?, title?, number?, repo?}: edit Orion's own app source on GitHub. read/search the code, write a file to a branch, open a PR (CI builds the APK and runs tests), read the build with status, fix failures with another write, then merge. The trading desk is never writable. Default repo Kingijimzy/phoneai."),
+        tool("web_api", ToolAccess.WRITE, "web_api {url, method?, headers?, body?}: call any HTTP(S) API or site endpoint directly (GET/POST/PUT/DELETE) and read the response; learn a site's request once, then reuse it"),
         tool("fact_add", ToolAccess.WRITE, "fact_add {subject, predicate, object}: remember a fact as a triplet, e.g. Kingi — favourite_sport — football"),
         tool("fact_query", ToolAccess.READ, "fact_query {subject?, predicate?, object?, match?}: recall stored triplet facts; blank fields are wildcards"),
         tool("fact_forget", ToolAccess.WRITE, "fact_forget {subject, predicate, object}: delete one stored fact"),
