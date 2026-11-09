@@ -184,7 +184,7 @@ internal class OrionCapabilityAcquisitionEngine(
         // Blocker resolution depends on the block reason
         val cap = step.capabilityId
         // Check if it's a pack that can be enabled
-        val pack = AgentPolicy.packs.firstOrNull { cap in it.tools }
+        val pack = AgentPolicy.packs.firstOrNull { AgentPolicy.packForTool(cap) == it.id }
         if (pack != null && !AgentPolicy.enabled(context, pack.id)) {
             AgentPolicy.setEnabled(context, pack.id, true)
             return success(step, "Enabled capability pack ${pack.title} to resolve blocker for $cap")

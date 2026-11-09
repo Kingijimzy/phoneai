@@ -204,8 +204,8 @@ internal class OrionCapabilityBroker(
         for (capability in missing) {
             val plan = when {
                 // Check if it's a known pack that can be enabled
-                AgentPolicy.packs.any { it.id == capability || it.tools.any { it == capability } } -> {
-                    val pack = AgentPolicy.packs.first { it.id == capability || it.tools.any { it == capability } }
+                AgentPolicy.packs.any { it.id == capability || AgentPolicy.packForTool(capability) == it.id } -> {
+                    val pack = AgentPolicy.packs.first { it.id == capability || AgentPolicy.packForTool(capability) == it.id }
                     CapabilityAcquisitionPlan(
                         capability = capability,
                         type = AcquisitionType.ENABLE_PACK,
@@ -215,7 +215,7 @@ internal class OrionCapabilityBroker(
                     )
                 }
                 // Check if it's a local extension that can be installed
-                SelfExtendingExtensionStore(svc.applicationContext).all().any { it.id == capability || capability in it.providedTools } -> {
+                SelfExtendingExtensionStore(svc.applicationContext).all().any { it.id == capability } -> {
                     CapabilityAcquisitionPlan(
                         capability = capability,
                         type = AcquisitionType.INSTALL_EXTENSION,
