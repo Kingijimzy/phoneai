@@ -74,7 +74,7 @@ internal class OrionAgentFactory(
         }
 
         // Start specialist execution in background
-        missionScope.launch {
+        controller.missionScope.launch {
             runSpecialist(session)
         }
 

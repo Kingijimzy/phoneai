@@ -56,7 +56,7 @@ internal class OrionMissionController(
     private val MAX_MISSION_DURATION_MS = 30 * 60 * 1000L // 30 minutes
 
     // Background scope for specialist coroutines
-    private val missionScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    internal val missionScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     /**
      * Start a new mission from a raw command string.
