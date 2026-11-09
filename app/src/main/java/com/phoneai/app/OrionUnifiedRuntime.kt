@@ -575,7 +575,7 @@ internal class OrionUnifiedRuntime(
         }
     }
 
-    private fun isStepSuccess(result: String): Boolean {
+    internal fun isStepSuccess(result: String): Boolean {
         val trimmed = result.trimStart()
         if (trimmed.startsWith("error", ignoreCase = true)) return false
         if (trimmed.startsWith("PASS:", ignoreCase = true)) return true
@@ -612,7 +612,7 @@ internal class OrionUnifiedRuntime(
     )
 
     /** Build dispatch args from a plan step, using the step's own template plus resolved entities. */
-    private fun buildStepArgs(
+    internal fun buildStepArgs(
         step: OrionPlanningEngine.PlanStep,
         intent: OrionIntentIntelligence.Intent
     ): JSONObject {
@@ -682,7 +682,7 @@ internal class OrionUnifiedRuntime(
         // Index for future recall - handled by OrionRecall.top during retrieval
     }
 
-    private fun recentConversationTurns(): List<Pair<String, String>> {
+    internal fun recentConversationTurns(): List<Pair<String, String>> {
         val turns = mutableListOf<Pair<String, String>>()
         for (i in 0 until sharedHistory.length()) {
             val obj = sharedHistory.optJSONObject(i) ?: continue
