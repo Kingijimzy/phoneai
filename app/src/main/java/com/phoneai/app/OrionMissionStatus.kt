@@ -68,7 +68,11 @@ internal object MissionTransitionValidator {
  * Specialist specialism types for the AgentFactory.
  */
 @Serializable
-internal enum class OrionSpecialism {
+internal enum class OrionSpecialism(
+    val id: String,
+    val description: String,
+    val defaultTools: Set<String>
+) {
     RESEARCH("research", "Web research and information gathering", setOf("browser_navigate", "browser_snapshot", "live_web_search", "memory")),
     CODING("coding", "Code writing, testing, and debugging", setOf("python_exec", "shell", "workspace_read", "workspace_write", "save_file")),
     DIAGNOSTICS("diagnostics", "Failure analysis and system diagnostics", setOf("read_screen", "look", "shell", "battery", "device_info", "memory")),
@@ -79,16 +83,6 @@ internal enum class OrionSpecialism {
     BROWSER("browser", "Web automation and scraping", setOf("browser_navigate", "browser_click", "browser_type", "browser_snapshot", "live_web_search")),
     PHONE("phone", "Android app interaction and control", setOf("open_app", "click", "type_text", "swipe", "send_message", "read_screen")),
     SECURITY("security", "Permission auditing and security review", setOf("shell", "read_screen", "memory", "device_info"));
-
-    val id: String
-    val description: String
-    val defaultTools: Set<String>
-
-    constructor(id: String, description: String, defaultTools: Set<String>) {
-        this.id = id
-        this.description = description
-        this.defaultTools = defaultTools
-    }
 
     companion object {
         fun fromId(id: String): OrionSpecialism? = values().firstOrNull { it.id == id }
