@@ -20,8 +20,10 @@ chaquopy {
 }
 
 // Official sherpa-onnx Android AAR (pinned version + verified SHA-256).
-val sherpaTtsAar = layout.buildDirectory.file("downloads/sherpa-onnx-1.13.8.aar")
+// Prefer app/libs (CI pre-download / durable path). Fall back to build/downloads.
 val sherpaTtsAarSha256 = "633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96"
+val sherpaLibsAar = layout.projectDirectory.file("libs/sherpa-onnx-1.13.8.aar").asFile
+val sherpaBuildAar = layout.buildDirectory.file("downloads/sherpa-onnx-1.13.8.aar").get().asFile
 
 fun sha256Of(file: File): String {
     val digest = MessageDigest.getInstance("SHA-256")
@@ -36,64 +38,77 @@ fun sha256Of(file: File): String {
     return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
 }
 
+fun resolveSherpaAar(): File {
+    if (sherpaLibsAar.isFile && sha256Of(sherpaLibsAar) == sherpaTtsAarSha256) return sherpaLibsAar
+    if (sherpaBuildAar.isFile && sha256Of(sherpaBuildAar) == sherpaTtsAarSha256) return sherpaBuildAar
+    return sherpaBuildAar
+}
+
 val downloadSherpaTtsAar by tasks.registering {
-    val destination = sherpaTtsAar.get().asFile
-    outputs.file(destination)
-    outputs.upToDateWhen { destination.isFile && sha256Of(destination) == sherpaTtsAarSha256 }
+    outputs.upToDateWhen {
+        (sherpaLibsAar.isFile && sha256Of(sherpaLibsAar) == sherpaTtsAarSha256) ||
+            (sherpaBuildAar.isFile && sha256Of(sherpaBuildAar) == sherpaTtsAarSha256)
+    }
     doLast {
-        if (!destination.isFile || sha256Of(destination) != sherpaTtsAarSha256) {
-            destination.parentFile.mkdirs()
-            val temporary = File(destination.parentFile, destination.name + ".part")
-            temporary.delete()
-            val url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar"
-            var lastError: Exception? = null
-            for (attempt in 1..4) {
+        if (sherpaLibsAar.isFile && sha256Of(sherpaLibsAar) == sherpaTtsAarSha256) {
+            logger.lifecycle("Using pre-placed sherpa-onnx AAR at ${sherpaLibsAar}")
+            return@doLast
+        }
+        if (sherpaBuildAar.isFile && sha256Of(sherpaBuildAar) == sherpaTtsAarSha256) {
+            logger.lifecycle("Using cached sherpa-onnx AAR at ${sherpaBuildAar}")
+            return@doLast
+        }
+        val destination = sherpaBuildAar
+        destination.parentFile.mkdirs()
+        val temporary = File(destination.parentFile, destination.name + ".part")
+        temporary.delete()
+        val url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar"
+        var lastError: Exception? = null
+        for (attempt in 1..4) {
+            try {
+                val connection = URL(url).openConnection() as HttpURLConnection
                 try {
-                    val connection = URL(url).openConnection() as HttpURLConnection
-                    try {
-                        connection.connectTimeout = 45_000
-                        connection.readTimeout = 120_000
-                        connection.instanceFollowRedirects = true
-                        connection.setRequestProperty("User-Agent", "phoneai-ci")
-                        connection.connect()
-                        val code = connection.responseCode
-                        if (code !in 200..299) {
-                            throw org.gradle.api.GradleException("Could not download official sherpa-onnx AAR: HTTP $code (attempt $attempt)")
-                        }
-                        connection.inputStream.buffered().use { input ->
-                            temporary.outputStream().buffered().use { output -> input.copyTo(output) }
-                        }
-                        val actual = sha256Of(temporary)
-                        if (actual != sherpaTtsAarSha256) {
-                            temporary.delete()
-                            throw org.gradle.api.GradleException("sherpa-onnx AAR SHA-256 mismatch; refusing to use an unverified native binary")
-                        }
-                        if (destination.exists() && !destination.delete()) {
-                            throw org.gradle.api.GradleException("Could not replace cached sherpa-onnx AAR")
-                        }
-                        if (!temporary.renameTo(destination)) {
-                            temporary.copyTo(destination, overwrite = true)
-                            temporary.delete()
-                        }
-                        lastError = null
-                        break
-                    } finally {
-                        connection.disconnect()
+                    connection.connectTimeout = 45_000
+                    connection.readTimeout = 120_000
+                    connection.instanceFollowRedirects = true
+                    connection.setRequestProperty("User-Agent", "phoneai-ci")
+                    connection.connect()
+                    val code = connection.responseCode
+                    if (code !in 200..299) {
+                        throw org.gradle.api.GradleException("Could not download official sherpa-onnx AAR: HTTP $code (attempt $attempt)")
                     }
-                } catch (e: Exception) {
-                    lastError = e
-                    temporary.delete()
-                    if (attempt < 4) {
-                        Thread.sleep(attempt * 2000L)
+                    connection.inputStream.buffered().use { input ->
+                        temporary.outputStream().buffered().use { output -> input.copyTo(output) }
                     }
+                    val actual = sha256Of(temporary)
+                    if (actual != sherpaTtsAarSha256) {
+                        temporary.delete()
+                        throw org.gradle.api.GradleException("sherpa-onnx AAR SHA-256 mismatch; refusing to use an unverified native binary")
+                    }
+                    if (destination.exists() && !destination.delete()) {
+                        throw org.gradle.api.GradleException("Could not replace cached sherpa-onnx AAR")
+                    }
+                    if (!temporary.renameTo(destination)) {
+                        temporary.copyTo(destination, overwrite = true)
+                        temporary.delete()
+                    }
+                    lastError = null
+                    break
+                } finally {
+                    connection.disconnect()
                 }
+            } catch (e: Exception) {
+                lastError = e
+                temporary.delete()
+                if (attempt < 4) Thread.sleep(attempt * 2000L)
             }
-            if (lastError != null) {
-                throw org.gradle.api.GradleException(
-                    "Could not download official sherpa-onnx AAR after retries: ${lastError.message}",
-                    lastError
-                )
-            }
+        }
+        if (lastError != null) {
+            throw org.gradle.api.GradleException(
+                "Could not download official sherpa-onnx AAR after retries: ${lastError.message}. " +
+                    "Place a verified file at app/libs/sherpa-onnx-1.13.8.aar (CI pre-download path).",
+                lastError
+            )
         }
     }
 }
@@ -148,7 +163,8 @@ android {
 }
 
 dependencies {
-    implementation(files(sherpaTtsAar).builtBy(downloadSherpaTtsAar))
+    // Resolve after download task; prefer app/libs pre-placement from CI.
+    implementation(files(provider { resolveSherpaAar() }).builtBy(downloadSherpaTtsAar))
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))

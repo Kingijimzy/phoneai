@@ -78,17 +78,17 @@ jobs:
         id: cache-sherpa
         uses: actions/cache@v4
         with:
-          path: app/build/downloads/sherpa-onnx-1.13.8.aar
+          path: app/libs/sherpa-onnx-1.13.8.aar
           key: sherpa-onnx-1.13.8-633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96
 
-      - name: Pre-download sherpa-onnx AAR (avoid Gradle HTTP 504)
+      - name: Pre-download sherpa-onnx AAR into app/libs
         if: steps.cache-sherpa.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
-          DEST="app/build/downloads/sherpa-onnx-1.13.8.aar"
+          DEST="app/libs/sherpa-onnx-1.13.8.aar"
           SHA="633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96"
-          mkdir -p "$(dirname "$DEST")"
+          mkdir -p app/libs
           URLS=(
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar"
             "https://ghproxy.net/https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar"
@@ -112,6 +112,7 @@ jobs:
             exit 1
           fi
           echo "${SHA}  ${DEST}" | sha256sum --check -
+          ls -la "$DEST"
 
       - name: Test constrained bundled Python policy
         run: python3 -m unittest discover -s app/src/test/python -v
