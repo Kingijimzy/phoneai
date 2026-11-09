@@ -567,12 +567,7 @@ internal fun ThinkingIndicator() {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Box(
-            Modifier.size(24.dp).clip(RoundedCornerShape(8.dp))
-                .background(Brush.linearGradient(listOf(Color(0xFF444444), Color(0xFF181818))))
-                .border(1.dp, Color(0xFF3A3A3A), RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center
-        ) { Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(13.dp)) }
+        OrionOrb(Modifier.size(44.dp), busy = true)
         Text("Orion is thinking", color = ChatMuted, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
             repeat(3) { index ->
@@ -587,12 +582,16 @@ internal fun ThinkingIndicator() {
 @Composable
 internal fun ComposerButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit, secondary: Boolean) {
     Box(
-        Modifier.size(43.dp).clip(CircleShape)
+        Modifier.pressScale().size(43.dp).clip(CircleShape)
             .background(if (secondary) Color(0xFF242424) else ChatMint)
             .border(1.dp, if (secondary) ChatHairline else Color(0xFFE5E5E5), CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
-    ) { Icon(icon, contentDescription = description, tint = if (secondary) ChatMint else ChatInk, modifier = Modifier.size(19.dp)) }
+    ) {
+        androidx.compose.animation.Crossfade(icon, animationSpec = androidx.compose.animation.core.tween(160), label = "composer-icon") { shown ->
+            Icon(shown, contentDescription = description, tint = if (secondary) ChatMint else ChatInk, modifier = Modifier.size(19.dp))
+        }
+    }
 }
 
 @Composable
