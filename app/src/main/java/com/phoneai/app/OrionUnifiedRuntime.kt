@@ -1120,7 +1120,7 @@ internal class OrionUnifiedRuntime(
         // Irreversible actions (trading, restart/shutdown/Wi-Fi) use confirmation gate instead.
         if (!failed && !nonLoggedAction && isReversibleTool(tool)) {
             val traceId = interactionTraceId.get().orEmpty().ifBlank { java.util.UUID.randomUUID().toString().replace("-", "") }
-            undoStack.pushUndo(traceId, "$tool (executed)", buildUndoFn(tool, args, result))
+            undoStack.pushUndo(traceId, "$tool (executed)", buildUndoFn(tool, a, result))
         }
 
         if (!nonLoggedAction) {

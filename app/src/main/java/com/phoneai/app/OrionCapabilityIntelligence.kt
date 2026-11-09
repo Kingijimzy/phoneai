@@ -518,7 +518,8 @@ internal class OrionCapabilityIntelligence(
                 action = suggestion.type,
                 description = suggestion.description,
                 estimatedEffort = suggestion.estimatedEffort,
-                prerequisites = emptyList()
+                prerequisites = emptyList(),
+                targetId = suggestion.targetId
             )
         }
         return AcquisitionPlan(
@@ -714,7 +715,8 @@ data class AcquisitionStep(
     val action: AcquisitionType,
     val description: String,
     val estimatedEffort: EffortLevel,
-    val prerequisites: List<String>
+    val prerequisites: List<String>,
+    val targetId: String? = null
 )
 
 data class AcquisitionRecord(

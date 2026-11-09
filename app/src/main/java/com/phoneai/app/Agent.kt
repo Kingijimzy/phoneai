@@ -3,6 +3,7 @@ package com.phoneai.app
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlinx.coroutines.*
+import kotlinx.coroutines.*
 
 /** Deterministic routing for intents where a chat-only answer would silently skip a requested action. */
 internal object OrionCommandIntentPolicy {
@@ -366,13 +367,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     }
 
     fun runResume(input: String) = withInteractionTrace {
-        // Resume uses mission controller to restore and continue
-        val activeMission = missionController.getCurrentMission()
-            ?: runCatching { missionController.restoreActiveMission() }.getOrNull()
-        if (activeMission != null && activeMission.canResume) {
-            missionController.resumeMission(activeMission.id, OrionMissionController.ResumeStrategy.CONTINUE)
-        } else {
-            unifiedRuntime.runResume(input)
+        CoroutineScope(Dispatchers.IO).launch {
+            val activeMission = missionController.getCurrentMission()
+                ?: runCatching { missionController.restoreActiveMission() }.getOrNull()
+            if (activeMission != null && activeMission.canResume()) {
+                missionController.resumeMission(activeMission.id, OrionMissionController.ResumeStrategy.CONTINUE)
+            } else {
+                unifiedRuntime.runResume(input)
+            }
         }
     }
 
@@ -404,7 +406,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         activeObjectiveId = ""
         OrionObjectiveGraph.clear(svc)
         unifiedRuntime.reset()
-        missionController.cancelMission() // Clear any active mission
+        CoroutineScope(Dispatchers.IO).launch { missionController.cancelMission() } // Clear any active mission
     }
 
     /** Reset the full agent state (alias for resetConversationContext). */
