@@ -182,23 +182,37 @@ internal object OrionObjectiveGraph {
         return save(context, updateStatusSoft(graph, resolved, Status.COMPLETE, receipt.id))
     }
 
-    /**
-     * Hard update kept for callers that expect exceptions — prefer [updateStatusSoft].
-     */
-    fun updateStatus(graph: Graph, id: String, status: Status, evidence: String = graph.nodes.firstOrNull { it.id == id }?.evidence.orEmpty()): Graph =
-        updateStatusSoft(graph, id, status, evidence)
+    fun updateStatus(graph: Graph, id: String, status: Status, evidence: String = graph.nodes.firstOrNull { it.id == id }?.evidence.orEmpty()): Graph {
+        val exact = graph.nodes.firstOrNull { it.id == id }
+            ?: return graph // unknown id: never throw (Ultron: bad planner ids do not kill the run)
+        if (status == Status.COMPLETE) {
+            val blocked = exact.dependsOn.any { dep ->
+                graph.nodes.firstOrNull { it.id == dep }?.status != Status.COMPLETE
+            }
+            if (blocked) throw IllegalArgumentException("An objective cannot be complete before its dependencies.")
+        }
+        val updated = graph.nodes.map {
+            if (it.id == id) it.copy(status = status, evidence = evidence.ifBlank { it.evidence }.take(1000)) else it
+        }
+        return graph.copy(nodes = topologicalOrder(updated), updatedAt = System.currentTimeMillis())
+    }
 
     /**
-     * Ultron-style: unknown objective ids never throw. Resolve or no-op.
+     * Unknown objective ids never throw and never retarget a different node.
+     * Illegal completion (deps unfinished) is refused without an exception.
      */
     fun updateStatusSoft(graph: Graph, id: String, status: Status, evidence: String = ""): Graph {
-        val resolved = resolveDispatchId(graph, id) ?: return graph
-        val priorEvidence = graph.nodes.firstOrNull { it.id == resolved }?.evidence.orEmpty()
-        val useEvidence = evidence.ifBlank { priorEvidence }.take(1000)
-        val updated = graph.nodes.map {
-            if (it.id == resolved) it.copy(status = status, evidence = useEvidence) else it
+        val exact = graph.nodes.firstOrNull { it.id == id } ?: return graph
+        if (status == Status.COMPLETE) {
+            val blocked = exact.dependsOn.any { dep ->
+                graph.nodes.firstOrNull { it.id == dep }?.status != Status.COMPLETE
+            }
+            if (blocked) return graph
         }
-        // Do not enforce complete-before-deps with exceptions; leave inconsistent states as FAILED/BLOCKED.
+        val useEvidence = evidence.ifBlank { exact.evidence }.take(1000)
+        val updated = graph.nodes.map {
+            if (it.id == id) it.copy(status = status, evidence = useEvidence) else it
+        }
         return graph.copy(nodes = topologicalOrder(updated), updatedAt = System.currentTimeMillis())
     }
 

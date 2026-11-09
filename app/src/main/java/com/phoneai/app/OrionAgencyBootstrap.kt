@@ -43,6 +43,10 @@ internal object OrionAgencyBootstrap {
             appendLine("- On tool failure: change tool/method (e.g. ${recoveryHint.nextToolHint}). Do not only apologize.")
             appendLine("- Never invent objective ids. Unknown ids bind to the RUNNING/READY node.")
             appendLine("- Success requires a tool receipt that matches the user goal.")
+            appendLine("- ACT, do not narrate. If a tool can do it, call the tool before explaining.")
+            appendLine("- After every tool result, continue the same mission. Feed the result into the next decision.")
+            appendLine("- On failure, switch method (web search, browser, different app). Do not stop after the first miss.")
+            appendLine("- Do not replace the user mission with soul-watch, startup recovery, or trading context.")
             if (intent.contextBlock.isNotBlank()) appendLine(intent.contextBlock)
         }.trim()
 

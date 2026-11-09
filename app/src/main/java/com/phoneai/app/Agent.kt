@@ -367,13 +367,20 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // task_add only records planner bookkeeping; it does not execute an objective capability.
         // Keep dependency and capability gates on every real capability dispatch below.
         if (objectiveGraph != null && OrionObjectiveGraph.requiresObjectiveDispatch(tool)) {
+            // Ultron dispatch: invented ids bind to a real node. Never abort the mission.
             val objectiveId = OrionObjectiveGraph.resolveDispatchId(objectiveGraph, activeObjectiveId, tool)
-                ?: return "error: the planner's objective_id does not match this multi-objective task. Valid IDs: " +
-                    objectiveGraph.nodes.joinToString(", ") { it.id } + ". No tool was dispatched."
-            // Keep the canonical persisted ID for the evidence receipt written after execution.
-            activeObjectiveId = objectiveId
-            // Free mode: prerequisites are advisory, never a dispatch blocker.
-            runCatching { OrionObjectiveGraph.startExecution(svc, objectiveId) }
+                ?: objectiveGraph.nodes.firstOrNull { it.status == OrionObjectiveGraph.Status.RUNNING }?.id
+                ?: objectiveGraph.ready().firstOrNull()?.id
+                ?: objectiveGraph.nodes.firstOrNull()?.id
+            if (objectiveId == null) {
+                ui.note("[RECOVERY]\nNo objective node; continuing with a direct tool call.")
+            } else {
+                if (!activeObjectiveId.isNullOrBlank() && !activeObjectiveId.equals(objectiveId, true)) {
+                    ui.note("[RECOVERY]\nBound invented objective '$activeObjectiveId' to '$objectiveId'.")
+                }
+                activeObjectiveId = objectiveId
+                runCatching { OrionObjectiveGraph.startExecution(svc, objectiveId) }
+            }
         }
         // The request-time orchestrator is part of the real dispatch boundary, not just prompt text.
         // A model cannot call an unregistered tool or one the live registry marked unavailable.
@@ -670,7 +677,11 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
             // Give the next planning turn a bounded, evidence-based recovery strategy.
             // This is advisory only: dispatch, capability and safety gates still run.
-            val recovery = OrionRecoveryPlanner.forFailure(tool, verifiedResult)
+            val forced = runCatching {
+            OrionAgencyBootstrap.afterTool(svc, currentTask.ifBlank { "task" }, tool, verifiedResult, runFailed)
+        }.getOrNull()
+        if (!forced.isNullOrBlank()) ui.note(forced)
+        val recovery = OrionRecoveryPlanner.forFailure(tool, verifiedResult)
             if (!isNonLoggedAction(tool, args)) {
             runCatching {
                 OrionEvidenceLedger.recordRecovery(
@@ -1884,6 +1895,21 @@ Rules:
     private fun runInternalBody(inputCommand: String, reuseCommandBudget: Boolean) {
         if (!reuseCommandBudget) commandNim.beginCommand()
         var command = inputCommand.trim()
+        // Ultron agency: sticky mission owns continue/fix-that. Background soul/trading is not the goal.
+        val agency = runCatching {
+            OrionAgencyBootstrap.begin(svc, command, recentConversationTurns())
+        }.getOrNull()
+        if (agency != null) {
+            if (agency.systemExtra.isNotBlank()) activeIntentContext = agency.systemExtra
+            if (agency.isContinue && agency.effectiveGoal.isNotBlank() &&
+                !OrionMissionLock.isBackgroundNoise(agency.effectiveGoal)) {
+                command = agency.effectiveGoal
+                currentTask = agency.effectiveGoal
+            } else if (!agency.isContinue && agency.effectiveGoal.isNotBlank() &&
+                !OrionMissionLock.isBackgroundNoise(command)) {
+                OrionMissionLock.setActive(svc, command)
+            }
+        }
         val explicitResumeRequest = Regex("(?i)^(?:continue|resume|keep going)(?:\\s|$)").containsMatchIn(command)
         // A new task may start while older work is paused. On an explicit Continue, restore
         // the oldest archived unfinished checkpoint before resolving conversational context.
