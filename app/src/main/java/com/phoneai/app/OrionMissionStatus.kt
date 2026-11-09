@@ -1,6 +1,6 @@
 package com.phoneai.app
 
-import android.os.Parcelable
+import kotlinx.serialization.Serializable
 
 /**
  * Phase 0C: Mission Ownership
@@ -67,6 +67,7 @@ internal object MissionTransitionValidator {
 /**
  * Specialist specialism types for the AgentFactory.
  */
+@Serializable
 internal enum class OrionSpecialism {
     RESEARCH("research", "Web research and information gathering", setOf("browser_navigate", "browser_snapshot", "live_web_search", "memory")),
     CODING("coding", "Code writing, testing, and debugging", setOf("python_exec", "shell", "workspace_read", "workspace_write", "save_file")),
@@ -97,6 +98,7 @@ internal enum class OrionSpecialism {
 /**
  * Specialist session result with verification status.
  */
+@Serializable
 internal data class OrionSpecialistReceipt(
     val sessionId: String,
     val parentMissionId: String,
@@ -108,8 +110,9 @@ internal data class OrionSpecialistReceipt(
     val startedAt: Long,
     val completedAt: Long,
     val toolCalls: Int
-) : Parcelable
+)
 
+@Serializable
 internal enum class SpecialistVerdict {
     VERIFIED,    // Evidence confirms the specialist's work achieved its objective
     UNVERIFIED,  // Specialist claimed success but parent cannot verify
@@ -133,6 +136,7 @@ internal data class OrionMissionEvidence(
     val completedAt: Long?
 )
 
+@Serializable
 internal data class StepEvidence(
     val stepId: String,
     val tool: String,
