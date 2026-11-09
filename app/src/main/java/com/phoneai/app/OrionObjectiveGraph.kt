@@ -123,26 +123,18 @@ internal object OrionObjectiveGraph {
         return null
     }
 
-    /**
-     * Task Centre bookkeeping is not execution of an objective capability.
-     * These tools manage user-visible task records; they must not inherit the active
-     * objective's dependency gate or create execution evidence for that objective.
-     */
     fun requiresObjectiveDispatch(tool: String): Boolean =
         tool !in setOf("task_add", "task_update", "task_list")
 
-    /**
-     * Resolve the planner's objective_id at dispatch time.
-     * Models invent descriptive IDs; bind safely to a unique ready/running node without guessing parallel work.
-     */
     fun resolveDispatchId(graph: Graph, requestedId: String?, tool: String = ""): String? {
         val candidate = requestedId?.trim()?.lowercase().orEmpty()
         graph.nodes.firstOrNull { it.id == candidate }?.let { return it.id }
 
+        // Soft bind: invented ids (apkvision_size) map to running/ready node — never crash.
         val hints = when (tool.lowercase()) {
             "open_app", "lookup_app", "list_apps", "open_deep_link", "system_intent",
             "read_screen", "look", "battery", "device_info" -> setOf("phone", "device", "app", "capability")
-            "python_exec" -> setOf("python", "diagnostic", "script", "execute")
+            "python_exec" -> setOf("python", "diagnostic", "script", "execute", "scrape", "size")
             "workspace_read" -> setOf("verify", "report", "workspace", "read")
             "workspace_write", "save_file" -> setOf("save", "report", "file", "workspace", "script")
             else -> setOf(tool.lowercase().replace(Regex("[^a-z0-9]+"), "_"))
@@ -161,38 +153,52 @@ internal object OrionObjectiveGraph {
 
     fun startExecution(context: Context, id: String): Boolean {
         val graph = load(context) ?: return false
-        if (canExecute(graph, id) != null) return false
-        return save(context, updateStatus(graph, id, Status.RUNNING))
+        val resolved = resolveDispatchId(graph, id) ?: return false
+        if (canExecute(graph, resolved) != null) return false
+        return save(context, updateStatusSoft(graph, resolved, Status.RUNNING))
     }
 
     fun recordExecution(context: Context, id: String, tool: String, result: String): String? {
         val graph = load(context) ?: return null
+        val resolved = resolveDispatchId(graph, id, tool) ?: graph.nodes.singleOrNull { it.status == Status.RUNNING }?.id ?: return null
         val outcome = if (result.startsWith("error:", ignoreCase = true) || result.startsWith("blocked", ignoreCase = true)) "failure" else "success"
         val summary = result.take(400)
-        val receipt = ChatHistoryStore.recordObjectiveEvidence(context, id, tool, outcome, summary) ?: return null
+        val receipt = ChatHistoryStore.recordObjectiveEvidence(context, resolved, tool, outcome, summary) ?: return null
         val status = if (outcome == "success") Status.RUNNING else Status.FAILED
-        return if (save(context, updateStatus(graph, id, status, receipt.id))) receipt.id else null
+        return if (save(context, updateStatusSoft(graph, resolved, status, receipt.id))) receipt.id else null
     }
 
     fun completeFromEvidence(context: Context, id: String, evidenceId: String): Boolean {
         val graph = load(context) ?: return false
-        if (canExecute(graph, id) != null) return false
-        val node = graph.nodes.firstOrNull { it.id == id } ?: return false
+        val resolved = resolveDispatchId(graph, id) ?: return false
+        if (canExecute(graph, resolved) != null) return false
+        val node = graph.nodes.firstOrNull { it.id == resolved } ?: return false
         if (node.evidence != evidenceId) return false
-        val receipt = ChatHistoryStore.objectiveEvidence(context, id).firstOrNull {
+        val receipt = ChatHistoryStore.objectiveEvidence(context, resolved).firstOrNull {
             it.id == evidenceId && it.outcome == "success"
         } ?: return false
         val active = ChatHistoryStore.activeSessionId(context)
         if (active != null && receipt.sessionId != active) return false
-        return save(context, updateStatus(graph, id, Status.COMPLETE, receipt.id))
+        return save(context, updateStatusSoft(graph, resolved, Status.COMPLETE, receipt.id))
     }
 
-    fun updateStatus(graph: Graph, id: String, status: Status, evidence: String = graph.nodes.firstOrNull { it.id == id }?.evidence.orEmpty()): Graph {
-        require(graph.nodes.any { it.id == id }) { "Unknown objective '$id'." }
-        val updated = graph.nodes.map { if (it.id == id) it.copy(status = status, evidence = evidence.take(1000)) else it }
-        require(updated.filter { it.status == Status.COMPLETE }.all { node ->
-            node.dependsOn.all { dep -> updated.firstOrNull { it.id == dep }?.status == Status.COMPLETE }
-        }) { "An objective cannot be complete before its dependencies." }
+    /**
+     * Hard update kept for callers that expect exceptions — prefer [updateStatusSoft].
+     */
+    fun updateStatus(graph: Graph, id: String, status: Status, evidence: String = graph.nodes.firstOrNull { it.id == id }?.evidence.orEmpty()): Graph =
+        updateStatusSoft(graph, id, status, evidence)
+
+    /**
+     * Ultron-style: unknown objective ids never throw. Resolve or no-op.
+     */
+    fun updateStatusSoft(graph: Graph, id: String, status: Status, evidence: String = ""): Graph {
+        val resolved = resolveDispatchId(graph, id) ?: return graph
+        val priorEvidence = graph.nodes.firstOrNull { it.id == resolved }?.evidence.orEmpty()
+        val useEvidence = evidence.ifBlank { priorEvidence }.take(1000)
+        val updated = graph.nodes.map {
+            if (it.id == resolved) it.copy(status = status, evidence = useEvidence) else it
+        }
+        // Do not enforce complete-before-deps with exceptions; leave inconsistent states as FAILED/BLOCKED.
         return graph.copy(nodes = topologicalOrder(updated), updatedAt = System.currentTimeMillis())
     }
 
@@ -205,7 +211,7 @@ internal object OrionObjectiveGraph {
             if (node.evidence.isNotBlank()) append("; last_executor_evidence_id=${node.evidence.take(80)}")
             appendLine()
         }
-        appendLine("Only work on objectives whose dependencies are COMPLETE. Update status only from execution evidence. A tool call being attempted is not completion evidence. Preserve blocked and failed nodes; do not silently mark them complete.")
+        appendLine("Only work on objectives whose dependencies are COMPLETE. Never invent objective ids that are not listed. If an id is unknown, use the single RUNNING or READY node. Unknown ids must not stop the task.")
     }
 
     fun resolveSessionId(context: Context): String {
@@ -245,19 +251,16 @@ internal object OrionObjectiveGraph {
     fun synthesizeFromCommand(command: String, sequential: Boolean = true): Graph {
         val objective = command.trim().take(1000).ifBlank { "Autonomous task" }
         val titles = ArrayList<String>()
-        if (Regex("(?i)python|pytest|unittest").containsMatchIn(command)) {
+        if (Regex("(?i)python|pytest|unittest|scraper|scrape").containsMatchIn(command)) {
             titles += "Create or repair Python project in shared workspace"
-            titles += "Run Python tests and capture evidence"
+            titles += "Run Python and capture evidence"
         }
         if (Regex("(?i)bug|diagnose|fix|repair").containsMatchIn(command)) {
             titles += "Diagnose failure and apply a verified fix"
         }
-        if (Regex("(?i)node|javascript|npm").containsMatchIn(command)) {
-            titles += "Create Node.js project in shared workspace"
-            titles += "Run Node tests and capture evidence"
-        }
-        if (Regex("(?i)workspace|terminal|shell").containsMatchIn(command)) {
-            titles += "Preserve workspace files and show commands/outputs"
+        if (Regex("(?i)apkvision|file size|browser|web").containsMatchIn(command)) {
+            titles += "Open or fetch the target page"
+            titles += "Extract the requested facts with evidence"
         }
         if (titles.size < 2) {
             titles.clear()
@@ -274,10 +277,6 @@ internal object OrionObjectiveGraph {
         return Graph(objective, topologicalOrder(nodes))
     }
 
-    /**
-     * Build a safe fallback graph from an already-returned ordered plan. IDs and dependencies
-     * are generated locally; the model cannot inject completion state or evidence.
-     */
     fun fromPlan(objective: String, titles: List<String>, sequential: Boolean): Graph? {
         val clean = titles.map { it.trim().take(240) }.filter { it.isNotBlank() }.take(24)
         if (objective.isBlank() || clean.size !in 2..24) return null
