@@ -114,7 +114,7 @@ internal class OrionMissionController(
         decision: OrionDecisionEngine.Decision
     ): String {
         // If there's an active mission that can't be interrupted, queue or reject
-        if (currentMission?.isActive() == true && currentMission?.status != OrionMissionStatus.SUSPENDED) {
+        if (currentMission?.isActive == true && currentMission?.status != OrionMissionStatus.SUSPENDED) {
             throw IllegalStateException("Mission ${currentMission!!.id} is ${currentMission!!.status}; cannot start new mission. Pause or complete first.")
         }
 
@@ -159,7 +159,7 @@ internal class OrionMissionController(
      */
     suspend fun executeCurrentMission(modality: OrionUnifiedRuntime.Modality): MissionExecutionResult {
         val mission = currentMission ?: throw IllegalStateException("No active mission to execute")
-        if (!mission.canResume() && mission.status != OrionMissionStatus.PLANNED) {
+        if (!mission.status.canResume && mission.status != OrionMissionStatus.PLANNED) {
             throw IllegalStateException("Mission ${mission.id} is ${mission.status}; cannot execute")
         }
 
@@ -352,7 +352,7 @@ internal class OrionMissionController(
      */
     suspend fun pauseMission(): Boolean {
         val mission = currentMission ?: return false
-        if (!mission.isActive()) return false
+        if (!mission.isActive) return false
 
         isPaused = true
         // Wait for execution loop to reach checkpoint
@@ -371,7 +371,7 @@ internal class OrionMissionController(
      */
     suspend fun resumeMission(missionId: String, strategy: ResumeStrategy = ResumeStrategy.CONTINUE): MissionExecutionResult {
         val mission = store.getById(missionId) ?: throw IllegalArgumentException("Mission $missionId not found")
-        if (!mission.canResume()) throw IllegalStateException("Mission $missionId cannot be resumed from ${mission.status}")
+        if (!mission.canResume) throw IllegalStateException("Mission $missionId cannot be resumed from ${mission.status}")
 
         currentMission = mission
         isPaused = false
@@ -430,7 +430,7 @@ internal class OrionMissionController(
      */
     suspend fun cancelMission(): Boolean {
         val mission = currentMission ?: return false
-        if (mission.isTerminal()) return false
+        if (mission.isTerminal) return false
 
         isPaused = false
         unifiedRuntime.stop()
@@ -510,7 +510,7 @@ internal class OrionMissionController(
     }
 
     /** Check if a new mission can be started */
-    fun canStartNewMission(): Boolean = currentMission?.isActive() != true
+    fun canStartNewMission(): Boolean = currentMission?.isActive != true
 
     /** Pause state for power controller */
     fun setPaused(paused: Boolean) {
@@ -557,20 +557,27 @@ internal class OrionMissionController(
     }
 
     private fun buildEvidence(mission: OrionMission): OrionMissionEvidence {
-        val executedSteps = mission.evidence
+        val executedSteps = mission.evidence.map { outcome ->
+            StepEvidence(
+                stepId = outcome.tool,
+                tool = outcome.tool,
+                args = "{}", // args not stored in outcome
+                result = outcome.result,
+                verified = outcome.verified,
+                timestamp = outcome.timestamp
+            )
+        }
 
-        val failures = mission.evidence
-            .filter { !it.verified && it.tool != "verify_action" && it.tool != "verify_send" }
-            .map { outcome ->
-                FailureEvidence(
-                    stepId = outcome.stepId,
-                    tool = outcome.tool,
-                    error = outcome.result,
-                    recoveryAttempted = mission.recoveryPlan != null,
-                    recoveryStrategy = mission.recoveryPlan,
-                    timestamp = outcome.timestamp
-                )
-            }
+        val failures = mission.evidence.filter { !it.verified && it.tool != "verify_action" && it.tool != "verify_send" }.map { outcome ->
+            FailureEvidence(
+                stepId = outcome.tool,
+                tool = outcome.tool,
+                error = outcome.result,
+                recoveryAttempted = false, // TODO: track from replans
+                recoveryStrategy = null,
+                timestamp = outcome.timestamp
+            )
+        }
 
         return OrionMissionEvidence(
             missionId = mission.id,
@@ -580,7 +587,7 @@ internal class OrionMissionController(
             executedSteps = executedSteps,
             specialistReceipts = mission.specialistReceipts,
             failures = failures,
-            recoveryActions = mission.recoveryPlan?.takeIf { it.isNotBlank() }?.let { listOf("Recovery plan persisted") } ?: emptyList(),
+            recoveryActions = mission.notes.filter { it.contains("replan") },
             finalVerification = "", // VerificationOutcome not serializable directly
             completedAt = mission.completedAt
         )

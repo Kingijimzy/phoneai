@@ -1,5 +1,7 @@
 package com.phoneai.app
 
+import kotlinx.serialization.Serializable
+
 /**
  * Orion Policy Engine
  *
@@ -20,6 +22,7 @@ internal class OrionPolicyEngine(
     private val svc: PhoneAiService
 ) {
 
+    @Serializable
     enum class Verdict { ALLOW, DENY, ASK }
 
     data class Evaluation(

@@ -1,5 +1,7 @@
 package com.phoneai.app
 
+import kotlinx.serialization.Serializable
+
 import org.json.JSONObject
 
 /**
@@ -14,8 +16,10 @@ internal class OrionPlanningEngine(
     private val svc: PhoneAiService
 ) {
 
+    @Serializable
     enum class PlanStepStatus { PENDING, READY, RUNNING, COMPLETE, FAILED, BLOCKED, SKIPPED }
 
+    @Serializable
     data class PlanStep(
         val stepId: String,
         val name: String,
@@ -30,11 +34,13 @@ internal class OrionPlanningEngine(
         val failureAlternatives: List<String> = emptyList()
     )
 
+    @Serializable
     data class RollbackPlan(
         val triggerConditions: List<String>,
         val steps: List<PlanStep>
     )
 
+    @Serializable
     data class ExecutionPlan(
         val planId: String,
         val objective: String,

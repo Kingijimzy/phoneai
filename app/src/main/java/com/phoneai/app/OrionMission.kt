@@ -1,5 +1,6 @@
 package com.phoneai.app
 
+import android.os.Parcelable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.encodeToString
 import kotlinx.serialization.json.decodeFromString
@@ -19,7 +20,7 @@ internal data class OrionMission(
     val status: OrionMissionStatus,
     val checkpointJson: String? = null,      // Serializable runtime state for resume
     val specialistReceipts: List<OrionSpecialistReceipt> = emptyList(),
-    val evidence: List<StepEvidence> = emptyList(),
+    val evidence: List<OrionTaskOutcome> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val completedAt: Long? = null,
@@ -50,7 +51,7 @@ internal data class OrionMission(
         )
     }
 
-    fun withEvidence(outcome: StepEvidence): OrionMission {
+    fun withEvidence(outcome: OrionTaskOutcome): OrionMission {
         return copy(
             evidence = evidence + outcome,
             updatedAt = System.currentTimeMillis()

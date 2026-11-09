@@ -1,5 +1,7 @@
 package com.phoneai.app
 
+import kotlinx.serialization.Serializable
+
 /**
  * Orion Decision Engine
  *
@@ -15,6 +17,7 @@ internal class OrionDecisionEngine(
     private val svc: PhoneAiService
 ) {
 
+    @Serializable
     data class RejectedAlternative(
         val strategyId: String,
         val name: String,
@@ -22,12 +25,14 @@ internal class OrionDecisionEngine(
         val confidence: Double
     )
 
+    @Serializable
     data class PolicyCheck(
         val tool: String,
         val verdict: OrionPolicyEngine.Verdict,
         val reason: String
     )
 
+    @Serializable
     data class Decision(
         val decisionId: String,
         val timestamp: Long,

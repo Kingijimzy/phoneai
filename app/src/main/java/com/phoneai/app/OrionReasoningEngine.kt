@@ -1,5 +1,7 @@
 package com.phoneai.app
 
+import kotlinx.serialization.Serializable
+
 /**
  * Orion Reasoning Engine
  *
@@ -14,20 +16,25 @@ internal class OrionReasoningEngine(
     private val svc: PhoneAiService
 ) {
 
+    @Serializable
     enum class RiskLevel { LOW, MEDIUM, HIGH }
+    @Serializable
     enum class RiskImpact { LOW, MEDIUM, HIGH, CATASTROPHIC }
 
+    @Serializable
     data class RiskFactor(
         val description: String,
         val impact: RiskImpact
     )
 
+    @Serializable
     data class RiskAssessment(
         val overallRisk: RiskImpact,
         val riskFactors: List<RiskFactor>
     )
 
     /** A named approach. Scores are computed, and `scoreReasons` says why. */
+    @Serializable
     data class Strategy(
         val id: String,
         val name: String,
@@ -44,6 +51,7 @@ internal class OrionReasoningEngine(
         val feasible: Boolean get() = unmetPrerequisites.isEmpty()
     }
 
+    @Serializable
     data class ReasoningResult(
         val strategies: List<Strategy>,
         val selectedStrategy: Strategy?,

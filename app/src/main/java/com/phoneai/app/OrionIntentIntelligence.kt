@@ -1,5 +1,7 @@
 package com.phoneai.app
 
+import kotlinx.serialization.Serializable
+
 /**
  * Orion Intent Intelligence
  *
@@ -19,34 +21,41 @@ internal class OrionIntentIntelligence(
     private val svc: PhoneAiService
 ) {
 
-    enum class IntentType { QUESTION, ACTION, MULTI_STEP, MEMORY_QUERY, SYSTEM_CONTROL, CREATIVE, RESEARCH, DELEGATION, UNKNOWN }
+    @Serializable
+enum class IntentType { QUESTION, ACTION, MULTI_STEP, MEMORY_QUERY, SYSTEM_CONTROL, CREATIVE, RESEARCH, DELEGATION, UNKNOWN }
 
-    enum class Urgency { LOW, NORMAL, HIGH, CRITICAL }
+    @Serializable
+enum class Urgency { LOW, NORMAL, HIGH, CRITICAL }
 
+    @Serializable
     data class Constraint(
         val type: String,
         val severity: String,
         val description: String
     )
 
+    @Serializable
     data class SuccessCriterion(
         val description: String,
         val verificationMethod: String,
         val verifiable: Boolean = true
     )
 
+    @Serializable
     data class ContextualReference(
         val type: String,
         val target: String,
         val confidence: Double
     )
 
+    @Serializable
     data class EntityRef(
         val kind: String,
         val name: String,
         val resolvedFromMemory: Boolean
     )
 
+    @Serializable
     data class Intent(
         val type: IntentType,
         val primaryObjective: String,
