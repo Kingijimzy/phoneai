@@ -18,7 +18,7 @@ import kotlinx.coroutines.*
  */
 internal class OrionMissionController(
     private val context: Context,
-    private val unifiedRuntime: OrionUnifiedRuntime,
+    internal val unifiedRuntime: OrionUnifiedRuntime,
     private val svc: PhoneAiService,
     private val ui: AgentUi,
     private val tools: Tools,

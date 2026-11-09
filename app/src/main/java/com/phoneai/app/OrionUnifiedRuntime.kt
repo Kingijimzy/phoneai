@@ -117,7 +117,7 @@ internal class OrionUnifiedRuntime(
     @Volatile private var lastDecision: OrionDecisionEngine.Decision? = null
     @Volatile private var lastPlan: OrionPlanningEngine.ExecutionPlan? = null
     @Volatile private var lastObstacleReport: OrionPredictiveIntelligence.ObstacleReport? = null
-    @Volatile private var lastContext: OrionContextIntegration.UnifiedContext? = null
+    @Volatile internal var lastContext: OrionContextIntegration.UnifiedContext? = null
 
     /** Undo stack for reversible actions (Ultron-style: act immediately, record undo) */
     private val undoStack = OrionUndoStack(svc.applicationContext, svc)
@@ -336,7 +336,7 @@ internal class OrionUnifiedRuntime(
     }
 
     /** Executes plan steps in dependency order with real replanning on failure. */
-    private fun executePlan(
+    internal fun executePlan(
         plan: OrionPlanningEngine.ExecutionPlan,
         decision: OrionDecisionEngine.Decision,
         obstacleReport: OrionPredictiveIntelligence.ObstacleReport,
@@ -437,7 +437,7 @@ internal class OrionUnifiedRuntime(
      * evidence from a verifier tool or from the recorded proof set, and refuses to call a
      * mission complete on dispatch success alone.
      */
-    private fun verifyOutcome(
+    internal fun verifyOutcome(
         outcome: MissionOutcome,
         intent: OrionIntentIntelligence.Intent,
         context: OrionContextIntegration.UnifiedContext?
