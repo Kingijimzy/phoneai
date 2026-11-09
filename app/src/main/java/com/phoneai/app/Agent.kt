@@ -959,7 +959,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         if (raw.isEmpty() || raw.uppercase().startsWith("ACTION")) return null
         // A chat reply that promises work ("generating now") or prints a tool call must run the tool loop, not stand as the answer.
-        if (raw.contains("<tool_call>") || Regex("(?i)\\b(generat|creat|draw|sav|writ|build|run)(ing|e)\\b[^.\\n]{0,40}\\b(now|right away|this second)\\b").containsMatchIn(raw.take(400)) ||
+        if (raw.contains("<tool_call>") || raw.contains("DSML") || Regex("(?i)\\b(generat|creat|draw|sav|writ|build|run)(ing|e)\\b[^.\\n]{0,40}\\b(now|right away|this second)\\b").containsMatchIn(raw.take(400)) ||
             OrionToolCallRecovery.recover(raw) { ToolRegistry.find(it) != null } != null) return null
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", raw))
@@ -2544,7 +2544,7 @@ Rules:
             }
             ui.phase("thinking")
             val raw = try {
-                commandNim.chat(history, false, 1400)
+                commandNim.chat(history, false, 6000)
             } catch (e: Exception) {
                 if (stopped) break
                 OrionTasksCapabilityExecutor.pauseRun(svc)
