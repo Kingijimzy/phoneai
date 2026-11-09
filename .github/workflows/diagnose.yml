@@ -87,18 +87,18 @@ jobs:
       - name: Test the restricted Python sandbox
         run: python3 tests/python/test_orion_exec.py
 
-      - name: Run Kotlin compile with in-process strategy
+      - name: Run Kotlin compile with --console=plain
         shell: bash
         run: |
           set +e
-          gradle :app:compileDebugKotlin :app:kaptGenerateStubsDebugKotlin --no-daemon --stacktrace --info -Dkotlin.compiler.execution.strategy=in-process > /tmp/kotlin_inprocess.log 2>&1
+          gradle :app:compileDebugKotlin :app:kaptGenerateStubsDebugKotlin --no-daemon --stacktrace --debug --console=plain > /tmp/kotlin_plain.log 2>&1
           GRADLE_EXIT=$?
-          echo "GRADLE_EXIT=$GRADLE_EXIT" >> /tmp/kotlin_inprocess.log
+          echo "GRADLE_EXIT=$GRADLE_EXIT" >> /tmp/kotlin_plain.log
           exit $GRADLE_EXIT
 
-      - name: Upload Kotlin in-process log as artifact
+      - name: Upload Kotlin plain log as artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: diagnose-kotlin-inprocess
-          path: /tmp/kotlin_inprocess.log
+          name: diagnose-kotlin-plain
+          path: /tmp/kotlin_plain.log
