@@ -105,8 +105,10 @@ jobs:
             }
           }
           EOF
-          gradle :app:compileDebugKotlin --no-daemon --stacktrace --info --rerun-tasks \
-            --init-script build-diagnostics/disable-kapt.init.gradle \
+          gradle :app:compileDebugKotlin \
+            -x :app:kaptGenerateStubsDebugKotlin \
+            -x :app:kaptDebugKotlin \
+            --no-daemon --stacktrace --info --rerun-tasks \
             2>&1 | tee build-diagnostics/kotlin-without-kapt.log
           echo "${PIPESTATUS[0]}" > build-diagnostics/kotlin-without-kapt.exit
           exit 0
