@@ -21,4 +21,11 @@ class OrionToolCallRecoveryTest {
         assertNull(OrionToolCallRecovery.recover("foo(bar=\"x\")", known))
         assertNull(OrionToolCallRecovery.recover("just talking", known))
     }
+
+    @Test fun recoversDsmlInvoke() {
+        val raw = "<\uFF5C\uFF5CDSML\uFF5C\uFF5C calls>\n<\uFF5C\uFF5CDSML\uFF5C\uFF5C invoke name=\"python_exec\">\n<\uFF5C\uFF5CDSML\uFF5C\uFF5C parameter name=\"code\" string=\"true\">print(1)</\uFF5C\uFF5CDSML\uFF5C\uFF5C parameter>\n</\uFF5C\uFF5CDSML\uFF5C\uFF5C invoke>"
+        val r = OrionToolCallRecovery.recover(raw, known)!!
+        assertEquals("python_exec", r.getString("tool"))
+        assertEquals("print(1)", r.getJSONObject("args").getString("code"))
+    }
 }
