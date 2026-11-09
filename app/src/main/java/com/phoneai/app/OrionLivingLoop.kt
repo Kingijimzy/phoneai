@@ -102,12 +102,6 @@ object OrionLessons {
 object OrionLivingLoop {
     /** Newest lessons plus currently failing tools, ready for the system prompt. Empty when there is nothing to say. */
     fun promptBlock(c: Context, maxLessons: Int = 5): String {
-        val inner = OrionInnerLife.promptBlock(c)
-        val base = baseBlock(c, maxLessons)
-        return listOf(inner, base).filter { it.isNotBlank() }.joinToString("\n\n")
-    }
-
-    private fun baseBlock(c: Context, maxLessons: Int): String {
         val lessons = OrionLessons.all(c).takeLast(maxLessons)
         val broken = OrionSelfModel.degraded(c).take(4)
         if (lessons.isEmpty() && broken.isEmpty()) return ""
@@ -126,10 +120,7 @@ object OrionLivingLoop {
      * and queues a follow-up so Orion raises it with the owner instead of failing silently again.
      * Returns what it noticed (empty when all is well). Never throws.
      */
-    fun tick(c: Context, now: Long = System.currentTimeMillis()): String =
-        listOf(tickRepairs(c, now), OrionInnerLife.tick(c, now)).filter { it.isNotBlank() }.joinToString("; ")
-
-    private fun tickRepairs(c: Context, now: Long): String = runCatching {
+    fun tick(c: Context, now: Long = System.currentTimeMillis()): String = runCatching {
         val broken = OrionSelfModel.degraded(c).filter { !it.flagged }
         if (broken.isEmpty()) return@runCatching ""
         broken.forEach { h ->
