@@ -15,7 +15,7 @@ import java.io.File
  */
 internal object OrionPythonRuntime {
     private const val SCRIPT_NAME = "orion_main.py"
-    private const val MAX_OUTPUT_CHARS = 5_200
+    private const val MAX_OUTPUT_CHARS = 24_000
     private const val EXECUTION_TIMEOUT_MS = 100_000L
     private const val FULL_EXECUTION_TIMEOUT_MS = 300_000L
 
@@ -83,7 +83,7 @@ internal object OrionPythonRuntime {
         val result = try {
             val full = OrionOwnerDialSettings.read(app).pythonProfile == OrionPythonProfile.FULL
             val bootstrap = OrionPythonPhoneBridge.bootstrapCommand(full)
-            val limits = if (full) "ulimit -c 0; ulimit -t 280; ulimit -f 65536; ulimit -n 256; ulimit -u 128" else "ulimit -c 0; ulimit -t 90; ulimit -f 4096; ulimit -n 64; ulimit -u 32"
+            val limits = if (full) "ulimit -c 0; ulimit -t 3500; ulimit -f 1048576; ulimit -n 1024; ulimit -u 512" else "ulimit -c 0; ulimit -t 90; ulimit -f 4096; ulimit -n 64; ulimit -u 32"
             installer.execute(
                 manifest,
                 "$limits; cd /workspace && exec python3 -I -c '$bootstrap'",
