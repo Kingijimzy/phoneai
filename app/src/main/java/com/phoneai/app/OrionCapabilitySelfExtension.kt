@@ -129,7 +129,7 @@ internal class OrionCapabilitySelfExtension(
             record.rollbackReason = reason
             record.rollbackAt = System.currentTimeMillis()
             OrionEvidenceLedger.recordDispatch(
-                svc, "self_extension", "rollback",
+                svc, "self_extension", "rollback", "rollback",
                 org.json.JSONObject()
                     .put("extension", extensionId)
                     .put("reason", reason),

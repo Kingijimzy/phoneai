@@ -65,7 +65,7 @@ internal class OrionCapabilityHealthMonitor(
                 } catch (e: Exception) {
                     // Monitoring errors should not crash the app
                     OrionEvidenceLedger.recordDispatch(
-                        svc, "health_monitor", "health_check_error",
+                        svc, "health_monitor", "health_check_error", "health_check_error",
                         org.json.JSONObject().put("error", e.message.orEmpty()),
                         System.currentTimeMillis(),
                         "monitoring continues"
@@ -166,7 +166,7 @@ internal class OrionCapabilityHealthMonitor(
         }
         if (change != null) {
             OrionEvidenceLedger.recordDispatch(
-                svc, "health_monitor", "status_change",
+                svc, "health_monitor", "status_change", "status_change",
                 org.json.JSONObject()
                     .put("capability", cap.id)
                     .put("previous", previous.name)
@@ -212,7 +212,7 @@ internal class OrionCapabilityHealthMonitor(
             )
             if (result.overallSuccess) {
                 OrionEvidenceLedger.recordDispatch(
-                    svc, "health_monitor", "recovery_success",
+                    svc, "health_monitor", "recovery_success", "recovery_success",
                     org.json.JSONObject()
                         .put("capability", cap.id)
                         .put("action", recoveryPlan.action.name)

@@ -45,7 +45,7 @@ internal class OrionUndoStack(
             // Drop oldest if over depth
             while (list.size > maxDepth) list.removeAt(0)
             OrionEvidenceLedger.recordDispatch(
-                svc, "undo_stack", "push_undo",
+                svc, traceId, "push_undo", "push_undo",
                 org.json.JSONObject().put("label", label).put("trace", traceId),
                 System.currentTimeMillis(),
                 "Recorded reversible operation: $label"
@@ -53,7 +53,7 @@ internal class OrionUndoStack(
         } catch (e: Exception) {
             // Undo registration must never take down the action that succeeded
             OrionEvidenceLedger.recordDispatch(
-                svc, "undo_stack", "push_undo_error",
+                svc, traceId, "push_undo_error", "push_undo_error",
                 org.json.JSONObject().put("error", e.message.orEmpty()),
                 System.currentTimeMillis(),
                 "Undo registration failed (non-fatal)"
@@ -94,7 +94,7 @@ internal class OrionUndoStack(
         return try {
             val detail = entry.undoFn() or ""
             OrionEvidenceLedger.recordDispatch(
-                svc, "undo_stack", "undo_executed",
+                svc, entry.label, "undo_executed", "undo_executed",
                 org.json.JSONObject().put("label", entry.label),
                 System.currentTimeMillis(),
                 "Undone: ${entry.label}"
