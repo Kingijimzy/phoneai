@@ -8,8 +8,8 @@ internal enum class OrionMode { TALK, ASSIST, AUTOPILOT, BUILDER }
 
 internal data class OrionAutonomyConfig(
     val mode: OrionMode = OrionMode.ASSIST,
-    val maxToolSteps: Int = 300,
-    val maxAiRequests: Int = 300,
+    val maxToolSteps: Int = 100_000,
+    val maxAiRequests: Int = 100_000,
     val maxRetries: Int = 2,
     val notifyOnCompletion: Boolean = true,
     val notifyOnFailure: Boolean = true,
@@ -31,9 +31,9 @@ internal object OrionAutonomyRunPolicy {
 
 internal object OrionAutonomyPolicy {
     const val MIN_STEPS = 1
-    const val MAX_STEPS = 1000
+    const val MAX_STEPS = 100_000
     const val MIN_REQUESTS = 1
-    const val MAX_REQUESTS = 1000
+    const val MAX_REQUESTS = 100_000
     const val MIN_RETRIES = 0
     const val MAX_RETRIES = 4
 
@@ -69,8 +69,8 @@ internal object OrionAutonomySettings {
         val mode = runCatching { OrionMode.valueOf(p.getString("orion_mode", "ASSIST") ?: "ASSIST") }.getOrDefault(OrionMode.ASSIST)
         return OrionAutonomyPolicy.clamp(OrionAutonomyConfig(
             mode = mode,
-            maxToolSteps = p.getInt("orion_max_tool_steps_v4", 300),
-            maxAiRequests = p.getInt("orion_max_ai_requests_v4", 300),
+            maxToolSteps = p.getInt("orion_max_tool_steps_v5", 100_000),
+            maxAiRequests = p.getInt("orion_max_ai_requests_v5", 100_000),
             maxRetries = p.getInt("orion_max_retries", 2),
             notifyOnCompletion = p.getBoolean("orion_notify_completion", true),
             notifyOnFailure = p.getBoolean("orion_notify_failure", true),
@@ -81,8 +81,8 @@ internal object OrionAutonomySettings {
         val v = OrionAutonomyPolicy.clamp(config)
         c.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
             .putString("orion_mode", v.mode.name)
-            .putInt("orion_max_tool_steps_v4", v.maxToolSteps)
-            .putInt("orion_max_ai_requests_v4", v.maxAiRequests)
+            .putInt("orion_max_tool_steps_v5", v.maxToolSteps)
+            .putInt("orion_max_ai_requests_v5", v.maxAiRequests)
             .putInt("orion_max_retries", v.maxRetries)
             .putBoolean("orion_notify_completion", v.notifyOnCompletion)
             .putBoolean("orion_notify_failure", v.notifyOnFailure)
