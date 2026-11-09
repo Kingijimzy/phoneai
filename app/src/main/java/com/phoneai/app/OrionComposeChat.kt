@@ -637,6 +637,7 @@ internal fun OrionComposeChatScreen(
                         } else null
                     ) }
                 }
+                item(key = "orion-tool-pills") { OrionToolPills(lines) }
                 // Keep the conversation primary: show one live task card for the latest
                 // task only. Full event history remains available from the Tasks surface.
                 OrionActivityTimeline.latestChatCard(activityEvents)?.let { event ->
