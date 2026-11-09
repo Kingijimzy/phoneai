@@ -49,7 +49,7 @@ class OrionAutonomySettingsTest {
         )
         val saved = OrionAutonomySettings.read(context)
         assertEquals(OrionMode.BUILDER, saved.mode)
-        assertEquals(40, saved.maxToolSteps)
+        assertEquals(200, saved.maxToolSteps)
         assertEquals(1, saved.maxAiRequests)
         assertEquals(0, saved.maxRetries)
     }

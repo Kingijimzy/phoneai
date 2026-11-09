@@ -35,4 +35,8 @@ class OrionPersonaTest {
         assertTrue(p.contains("Be creative"))
         assertTrue(p.contains("initiative"))
     }
+
+    @Test fun pursuesGoalsToCompletion() {
+        assertTrue(OrionPersona.CORE.contains("HOW YOU PURSUE A GOAL"))
+    }
 }
