@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.content.Context
+import android.os.SystemClock
 import kotlinx.coroutines.*
 
 /**
@@ -182,7 +183,7 @@ internal class OrionAgentFactory(
      * dispatch time (Android perms, trading confirmation, irreversible actions),
      * not by pre-filtering the specialist's tool set.
      */
-    private fun runSpecialist(session: SpecialistSession) {
+    private suspend fun runSpecialist(session: SpecialistSession) {
         val startedAt = System.currentTimeMillis()
         val evidence = mutableListOf<String>()
         var toolCalls = 0
