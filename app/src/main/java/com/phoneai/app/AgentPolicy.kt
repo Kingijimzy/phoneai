@@ -61,11 +61,11 @@ object AgentPolicy {
     }
     fun stopTrustedSession(c: Context) { p(c).edit().putLong("trusted_until", 0L).apply(); log(c, "trusted-session", "stop", true, "stopped by user") }
     fun isTrustedFor(c: Context, id: String) = System.currentTimeMillis() < trustedUntil(c) && p(c).getBoolean("trusted_$id", false)
-    fun maxSteps(c: Context) = p(c).getInt("budget_steps_v3", 80).coerceIn(1, 200)
-    fun maxCalls(c: Context) = p(c).getInt("budget_calls_v3", 150).coerceIn(1, 400)
-    fun maxMinutes(c: Context) = p(c).getInt("budget_minutes_v3", 45).coerceIn(1, 180)
+    fun maxSteps(c: Context) = p(c).getInt("budget_steps_v4", 300).coerceIn(1, 1000)
+    fun maxCalls(c: Context) = p(c).getInt("budget_calls_v4", 1000).coerceIn(1, 3000)
+    fun maxMinutes(c: Context) = p(c).getInt("budget_minutes_v4", 480).coerceIn(1, 1440)
     fun setBudgets(c: Context, steps: Int, calls: Int, minutes: Int) {
-        p(c).edit().putInt("budget_steps_v3", steps.coerceIn(1, 200)).putInt("budget_calls_v3", calls.coerceIn(1, 400)).putInt("budget_minutes_v3", minutes.coerceIn(1, 180)).apply()
+        p(c).edit().putInt("budget_steps_v4", steps.coerceIn(1, 1000)).putInt("budget_calls_v4", calls.coerceIn(1, 3000)).putInt("budget_minutes_v4", minutes.coerceIn(1, 1440)).apply()
     }
     /** The one wording for "this pack is off", shared by the pre-flight check, the pack gate and the prompt status. */
     fun packOffMessage(pack: String): String =
