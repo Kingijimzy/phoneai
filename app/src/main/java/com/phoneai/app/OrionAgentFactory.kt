@@ -165,7 +165,7 @@ internal class OrionAgentFactory(
     ): OrionContextIntegration.UnifiedContext {
         // ULTRON-STYLE: Do NOT filter capabilities for specialists.
         // Specialists see the full capability ecosystem and can request expansion via broker.
-        return snapshot ?: OrionContextIntegration(context.applicationContext).buildContext(
+        return snapshot ?: OrionContextIntegration(svc).buildContext(
             command = objective,
             modality = "SPECIALIST",
             activeObjective = objective,

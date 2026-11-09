@@ -333,7 +333,7 @@ class OrionCapabilityIntelligence(
     private suspend fun discoverAPIIntegrations(): List<DiscoveredCapability> {
         // Check ApiKeyVault for stored credentials
         return try {
-            val vault = ApiKeyVault(context)
+            val vault = ApiKeyVault
             vault.listKeys().map { key ->
                 DiscoveredCapability(
                     id = "api:$key",
