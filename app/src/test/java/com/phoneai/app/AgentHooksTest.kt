@@ -5,6 +5,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AgentHooksTest {
+ @Test fun unavailableGoalAuditorNeverApprovesCompletion(){
+  val verdict=AgentHooks.goalAuditUnavailableVerdict()
+  assertTrue(verdict.startsWith("CONTINUE"))
+  assertFalse(verdict.contains("DONE",ignoreCase=true))
+ }
+
  @Test fun blocksUnrequestedSend(){assertNotNull(AgentHooks.scopeBlockReason("Open WhatsApp and draft a message","click_text",JSONObject().put("text","Send")))}
  @Test fun weatherToolCannotHijackUnrelatedEngineeringRequests() {
   val audit = "ORION full execution reliability audit: test all capabilities and integration tests wherever possible."
