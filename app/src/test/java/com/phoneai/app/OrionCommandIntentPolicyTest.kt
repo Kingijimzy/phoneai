@@ -61,6 +61,23 @@ class OrionCommandIntentPolicyTest {
         ))
     }
 
+    @Test fun explicitImageCreationAlwaysUsesTheRealActionPlanner() {
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting("Generate an image of a golden retriever in a sunny park."))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting("Create a logo for Orion."))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting("Draw a wallpaper with a mountain landscape."))
+    }
+
+    @Test fun imageDiscussionDoesNotTriggerImageGeneration() {
+        assertFalse(OrionCommandIntentPolicy.requiresDirectActionRouting("Explain how AI image generation works."))
+        assertFalse(OrionCommandIntentPolicy.requiresDirectActionRouting("What is the best image format for a website?"))
+    }
+
+    @Test fun explicitCodeAndDocumentCreationUsesTheActionPlanner() {
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting("Create a Python script file that sorts my CSV."))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting("Build a small application for tracking tasks."))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting("Generate a PDF report from these results."))
+    }
+
     @Test fun explicitPythonCreationAndExecutionIsAnActionRequest() {
         assertTrue(OrionCommandIntentPolicy.requiresPythonExecution(
             "write a Python code calculator, and execute it"
