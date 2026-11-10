@@ -33,6 +33,12 @@ object AgentPolicy {
     fun setMode(c: Context, v: Mode) {
         p(c).edit().putString("mode", if (v == Mode.PLAN) Mode.PLAN.name else Mode.ALLOW.name).apply()
     }
+    /** Resolve an installed pack's persisted owner choice; unknown or unimplemented packs fail closed. */
+    internal fun packEnabled(id: String, savedValue: Boolean?): Boolean {
+        val pack = packs.firstOrNull { it.id == id } ?: return false
+        return pack.implemented && (savedValue ?: defaultOn(id))
+    }
+
     /**
      * Core companion packs are enabled on first launch so phone and messaging features are discoverable.
      * This only makes their tools available: Android OS permissions, explicit capability scope and validation
@@ -44,8 +50,12 @@ object AgentPolicy {
     )
     internal fun defaultOn(id: String) = id in defaultOnPacks
 
-    /** An explicit user choice always wins; only a never-set pack falls back to its default. */
-    @Suppress("UNUSED_PARAMETER") fun enabled(c: Context, id: String) = true // Free mode: every capability pack is on.
+    /** An explicit user choice always wins; only a never-set pack falls back to its declared default. */
+    fun enabled(c: Context, id: String): Boolean {
+        val prefs = p(c)
+        val saved = if (prefs.contains("pack_$id")) prefs.getBoolean("pack_$id", false) else null
+        return packEnabled(id, saved)
+    }.
     fun setEnabled(c: Context, id: String, on: Boolean) {
         val pack = packs.firstOrNull { it.id == id }
         p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
