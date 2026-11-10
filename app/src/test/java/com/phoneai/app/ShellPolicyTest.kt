@@ -28,17 +28,17 @@ class ShellPolicyTest {
 
     @Test fun quotedAndEscapedDestructiveCommandsRemainConfirmationGated() {
         listOf(
-            "rm -rf '/system'",
-            "rm -rf \"/vendor\"",
-            "r\\m -rf /system",
-            "find '/' -type f -delete",
-            "dd if=image.img of='/dev/block/by-name/system'",
-            "cp image.img /dev/mmcblk0",
-            "truncate -s 0 /dev/block/by-name/vendor",
+            "rm -rf '/system'", "rm -rf \"/vendor\"", "r\\m -rf /system",
+            "find '/' -type f -delete", "dd if=image.img of='/dev/block/by-name/system'",
+            "cp image.img /dev/mmcblk0", "truncate -s 0 /dev/block/by-name/vendor",
             "echo x > '/dev/block/mmcblk0'",
-            """python3 -c "open('/dev/block/mmcblk0','wb').write(b'x')" """,
-            ":(){ :|:& };:"
-        ).forEach { assertEquals(it, ShellRisk.SAFE, r(it)) }
+            """python3 -c "open('/dev/block/mmcblk0','wb').write(b'x')" """
+        ).forEach {
+            assertEquals(it, ShellRisk.SAFE, r(it))
+            assertNotNull(IrreversibleActionConfirmationPolicy.approvalReason(
+                "shell", org.json.JSONObject().put("command", it), "workspace_shell"))
+        }
+        assertEquals(ShellRisk.BLOCKED, r(":(){ :|:& };:"))
     }
 
     @Test fun readingBlockDeviceIsNotMistakenForAWrite() {
