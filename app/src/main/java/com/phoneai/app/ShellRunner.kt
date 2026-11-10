@@ -133,26 +133,18 @@ object ShellRunner {
         finally { pending.remove(id) }
     }
 
-    /** Opens the managed Alpine runtime as one persistent interactive PTY session. */
-    fun startLinuxTerminalSession(
-        c: Context,
-        onOutput: (String) -> Unit,
-        onClosed: () -> Unit
-    ): LinuxTerminalSession {
-        val runtime = LinuxRuntimeInstaller(c.applicationContext) { name, current, total ->
-            if (total > 0L) onOutput("Preparing Alpine: $name ${(current * 100L / total).coerceIn(0L, 100L)}%\r\n")
-            else onOutput("Preparing Alpine: $name…\r\n")
-        }
+    /** Installs/validates Alpine and prepares a persistent interactive terminal launch. */
+    fun prepareLinuxTerminalConfig(c: Context): LinuxTerminalLaunchConfig {
+        val runtime = LinuxRuntimeInstaller(c.applicationContext)
         val manifest = LinuxRuntimePolicy.productionManifest
         if (!runtime.isReady(manifest)) {
-            onOutput("Preparing Alpine Linux runtime…\r\n")
             val installed = runtime.install(manifest)
             check(installed.isSuccess) {
                 "Alpine runtime installation failed: ${installed.exceptionOrNull()?.message ?: "unknown error"}"
             }
             check(runtime.isReady(manifest)) { "Alpine runtime did not pass readiness checks after installation." }
         }
-        return runtime.startInteractiveSession(workspace(c).absolutePath, onOutput = onOutput, onClosed = onClosed)
+        return runtime.interactiveLaunchConfig(workspace(c).absolutePath)
     }
 
     fun run(c: Context, command: String, where: String): String =
