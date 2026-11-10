@@ -19,7 +19,7 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 
-/** User-facing approval modes, capability toggles, diagnostics and audit log. */
+/** Partner runtime diagnostics, task controls and privacy-safe action log. */
 class AgentControlActivity : Activity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private lateinit var root: LinearLayout
