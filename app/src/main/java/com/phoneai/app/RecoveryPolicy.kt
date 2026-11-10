@@ -12,7 +12,7 @@ package com.phoneai.app
  */
 internal object RecoveryPolicy {
     enum class Risk { READ_ONLY, DEV_COMMAND, WRITE, CONSEQUENTIAL }
-    enum class Failure { TRANSIENT, AMBIGUOUS, PERMISSION, TARGET_MISSING, DIAGNOSTIC, OTHER }
+    enum class Failure { TRANSIENT, AMBIGUOUS, PERMISSION, UNSUPPORTED_ROUTE, TARGET_MISSING, DIAGNOSTIC, OTHER }
     enum class Decision { RETRY_READ, REPLAN, PAUSE_ASK }
 
     const val MAX_READ_RETRIES = 1
@@ -34,6 +34,7 @@ internal object RecoveryPolicy {
     fun classify(result: String): Failure {
         val t = result.lowercase()
         return when {
+            listOf("path is not allowed", "endpoint is not allowed", "allowlist", "unsupported endpoint", "route is not supported").any(t::contains) -> Failure.UNSUPPORTED_ROUTE
             permissionWords.any { t.contains(it) } -> Failure.PERMISSION
             ambiguousWords.any { t.contains(it) } -> Failure.AMBIGUOUS
             transientWords.any { t.contains(it) } -> Failure.TRANSIENT
@@ -44,6 +45,8 @@ internal object RecoveryPolicy {
     }
 
     fun decide(risk: Risk, failure: Failure, readRetriesUsed: Int, maxReadRetries: Int = MAX_READ_RETRIES): Decision = when {
+        // Connector allowlist errors are not user permissions and cannot be fixed by prompting.
+        failure == Failure.UNSUPPORTED_ROUTE -> Decision.REPLAN
         // Free mode: only a missing Android OS permission needs the owner; everything else is replanned.
         failure == Failure.PERMISSION -> Decision.PAUSE_ASK
         // An unknown outcome of a write may already have applied; repeating it could double-send or double-write.
