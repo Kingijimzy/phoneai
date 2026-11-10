@@ -212,8 +212,13 @@ internal object IrreversibleActionConfirmationPolicy {
         if (tool in deleteTools || remoteDelete || removesSavedItem) return "destructive deletion ($tool)"
         if (tool == "shell" || tool == "termux_command") {
             val command = args.optString("command").ifBlank { args.optString("cmd") }.ifBlank { args.optString("script") }
-            if (command.isNotBlank() && shellDelete.containsMatchIn(command)) return "shell file deletion"
-            if (command.isNotBlank() && shellWipe.containsMatchIn(command)) return "shell filesystem or device wipe"
+            val normalized = command.replace("'", "").replace("\"", "").replace("`", "").replace("\\", "")
+            if (command.isNotBlank() && (shellDelete.containsMatchIn(command) || shellDelete.containsMatchIn(normalized))) {
+                return "shell file deletion"
+            }
+            if (command.isNotBlank() && (shellWipe.containsMatchIn(command) || shellWipe.containsMatchIn(normalized))) {
+                return "shell filesystem or device wipe"
+            }
         }
         if (tool == "web_api" && args.optString("method", "GET").equals("DELETE", true)) {
             return "remote HTTP resource deletion"
