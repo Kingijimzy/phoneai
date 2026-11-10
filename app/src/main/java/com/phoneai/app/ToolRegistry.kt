@@ -225,7 +225,7 @@ internal object ToolRegistry {
         tool("dev_understand", ToolAccess.READ, "dev_understand {path?}: inspect a workspace directory structure, detect project type and list key source/config files without modifying anything; read-only repository reconnaissance"),
         tool("dev_read", ToolAccess.READ, "dev_read {path}: read the exact contents of one workspace source or text file; read-only inspection, no modifications"),
         tool("dev_write", ToolAccess.WRITE, "dev_write {path, content}: create or overwrite one workspace source file; an automatic backup is made before any overwrite; does not compile, test or install anything"),
-        tool("dev_python", ToolAccess.WRITE, "dev_python {code}: run bounded Python code in the restricted sandbox; output is execution evidence, not proof of compilation or test success"),
+        tool("dev_python", ToolAccess.WRITE, "dev_python {code}: run full CPython in Orion’s persistent Alpine workspace using the same expanded FULL profile, pip package manager, shared project files, output streaming and recovery as python_exec; output is execution evidence, not proof of compilation or test success"),
         tool("dev_shell", ToolAccess.WRITE, "dev_shell {command}: run a bounded shell command for build/test operations under ShellPolicy hard blocks; output and exit status are evidence only"),
         tool("dev_plan", ToolAccess.READ, "dev_plan {path, proposed_change}: inspect one file and prepare a change plan without modifying it; read-only planning step"),
         tool("dev_summary", ToolAccess.READ, "dev_summary {}: report the Dev Agent's current workspace status (files, backups, recycle) without claiming any build/test/install result"),
