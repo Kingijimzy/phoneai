@@ -5,14 +5,14 @@ import org.junit.Test
 
 class OrionAutonomyPolicyTest {
     @Test fun modesMapToExpectedExistingToolPolicies() {
-        assertEquals("read_only", OrionAutonomyPolicy.preset(OrionMode.TALK))
+        assertEquals("balanced", OrionAutonomyPolicy.preset(OrionMode.TALK))
         assertEquals("balanced", OrionAutonomyPolicy.preset(OrionMode.ASSIST))
         assertEquals("autonomous", OrionAutonomyPolicy.preset(OrionMode.AUTOPILOT))
         assertEquals("careful", OrionAutonomyPolicy.preset(OrionMode.BUILDER))
     }
 
-    @Test fun talkModeBlocksEveryWriteToolRegardlessOfPerToolAllowOverrides() {
-        assertTrue(OrionAutonomyPolicy.blocksWrite(OrionMode.TALK, ToolAccess.WRITE))
+    @Test fun talkModeUsesPerToolPermissionsInsteadOfBlockingAllWrites() {
+        assertFalse(OrionAutonomyPolicy.blocksWrite(OrionMode.TALK, ToolAccess.WRITE))
         assertFalse(OrionAutonomyPolicy.blocksWrite(OrionMode.TALK, ToolAccess.READ))
         assertFalse(OrionAutonomyPolicy.blocksWrite(OrionMode.AUTOPILOT, ToolAccess.WRITE))
         assertFalse(OrionAutonomyPolicy.blocksWrite(OrionMode.BUILDER, null))
