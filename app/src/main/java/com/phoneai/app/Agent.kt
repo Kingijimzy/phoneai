@@ -2128,7 +2128,6 @@ Rules:
             // Feedback ("no, do it this way") belongs to the previous task; it must not replace it as the task being learned from.
             if (!ExperiencePolicy.isCorrection(command) && !ExperiencePolicy.isPraise(command)) {
                 currentTask = command
-                runCatching { SoulEngineState.setGoal(svc, command) }
             }
             runStartedAt = System.currentTimeMillis(); runTools = 0; runFailed = 0
         }
@@ -2618,6 +2617,8 @@ Rules:
                     return false
                 }
                 checkpointStarted = true
+                // Chronos/Soul Engine owns actual action objectives, not reply-only chat turns.
+                runCatching { SoulEngineState.setGoal(svc, currentTask.ifBlank { command }) }
             }
             if (!lifecycleStarted) {
                 if (managedTask.phase == TaskLifecycle.Phase.UNDERSTAND) {
