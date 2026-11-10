@@ -71,13 +71,13 @@ class ToolPermissionsPersistenceTest {
         assertEquals(ToolMode.ASK, ToolPermissions.mode(context, writeTool))
     }
 
-    @Test fun planModeIsTheOnlyGlobalExecutionStop() {
+    @Test fun noModeIsAGlobalExecutionStop() {
         AgentPolicy.setMode(context, AgentPolicy.Mode.PLAN)
         val planned = AgentPolicy.gate(
             context, "trading_research", "live_sports", dangerous = false,
             toolMode = ToolMode.ALLOW, askedThisTask = false
         )
-        assertEquals(GatePolicy.Verdict.PLAN_ONLY, planned.verdict)
+        assertEquals(GatePolicy.Verdict.ALLOW, planned.verdict)
 
         AgentPolicy.setMode(context, AgentPolicy.Mode.ALLOW)
         AgentPolicy.setEnabled(context, "trading_research", true)

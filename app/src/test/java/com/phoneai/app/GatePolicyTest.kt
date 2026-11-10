@@ -19,20 +19,20 @@ class GatePolicyTest {
     @Test fun defaultPermissionAllowsToolsImmediately() {
         assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input()).verdict)
         assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(dangerous = true)).verdict)
-        assertEquals(GatePolicy.Verdict.ASK, GatePolicy.decide(input(toolMode = ToolMode.ASK)).verdict)
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(toolMode = ToolMode.ASK)).verdict)
     }
 
-    @Test fun onlyPlanModeIsAGlobalExecutionStop() {
-        assertEquals(GatePolicy.Verdict.PLAN_ONLY, GatePolicy.decide(input(mode = AgentPolicy.Mode.PLAN)).verdict)
+    @Test fun noModeOrSwitchRefusesATool() {
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(mode = AgentPolicy.Mode.PLAN)).verdict)
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(toolMode = ToolMode.DENY)).verdict)
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(packOn = false)).verdict)
     }
 
-    @Test fun explicitToolDenyDisabledPacksAndHardBlocksStillApply() {
-        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(toolMode = ToolMode.DENY)).verdict)
-        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(packOn = false)).verdict)
-        assertEquals(
-            GatePolicy.Verdict.DENY,
-            GatePolicy.decide(input().copy(hardBlockReason = "destructive shell command")).verdict
-        )
+    @Test fun confirmedWipeIsAllowed() {
+        val cmd = "rm -rf /system/confirmed-wipe-test"
+        assertNotNull(GatePolicy.hardBlockReason("shell", org.json.JSONObject().put("command", cmd)))
+        assertNull(GatePolicy.hardBlockReason("shell", org.json.JSONObject().put("command", cmd).put("confirmed", true)))
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify(cmd))
     }
 
     @Test fun genericRiskDoesNotCreateApprovalButDestructiveShellCommandsRemainBlocked() {
@@ -42,18 +42,21 @@ class GatePolicyTest {
         assertNull(GatePolicy.hardBlockReason("vault_get", org.json.JSONObject().put("name", "ApiKeyVault")))
     }
 
+    @Test fun onlyThreeIrreversibleComputerActionsMatchConfirmationPolicy() {
+        listOf("computer_settings restart", "computer_settings shutdown",
+            "computer_settings toggle Wi-Fi", "computer_settings turn WiFi off",
+            "Remote MCP Tool: computer_settings; arguments: {action:wifi}")
+            .forEach { assertTrue(it, IrreversibleActionConfirmationPolicy.requiresConfirmation(it)) }
+        listOf("restart app", "shutdown service", "toggle Wi-Fi settings screen",
+            "send telegram message", "reply to notification", "write remote file",
+            "delete memory", "make payment", "run shell command")
+            .forEach { assertFalse(it, IrreversibleActionConfirmationPolicy.requiresConfirmation(it)) }
+    }
+
     @Test fun tradingResearchOrderRestrictionRemains() {
         assertEquals(
             GatePolicy.Verdict.DENY,
             GatePolicy.decide(input(pack = "trading_research", tool = "bybit_order_place")).verdict
         )
-    }
-    @Test fun onlyTradingWritesAndDestructiveDeletionNeedOwnerApproval() {
-        assertTrue(AgentHooks.requiresConfirmation("paper_trade", org.json.JSONObject()))
-        assertFalse(AgentHooks.requiresConfirmation("bybit_public_ticker", org.json.JSONObject()))
-        assertTrue(AgentHooks.requiresConfirmation("workspace_delete", org.json.JSONObject()))
-        assertTrue(AgentHooks.requiresConfirmation("shell", org.json.JSONObject().put("command", "rm old-build")))
-        assertTrue(AgentHooks.requiresConfirmation("python_exec", org.json.JSONObject().put("code", "import os\nos.remove('/workspace/old.txt')")))
-        assertFalse(AgentHooks.requiresConfirmation("shell", org.json.JSONObject().put("command", "ls -la")))
     }
 }

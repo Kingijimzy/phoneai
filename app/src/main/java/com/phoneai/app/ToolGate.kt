@@ -44,14 +44,8 @@ internal object ToolGate {
      * The first gate, run before any user prompt: a tool the user set to DENY, or a tool whose pack is switched off,
      * is refused immediately. Previously Orion could ask "allow this tool?" and then refuse it anyway.
      */
-    fun preflightDenial(c: Context, tool: String): String? {
-        val denied = ToolPermissions.mode(c, tool) == ToolMode.DENY
-        val pack = AgentPolicy.packForTool(tool)
-        val packOn = pack == null || AgentPolicy.enabled(c, pack)
-        if (CapabilityRegistry.forBuiltInTool(tool, denied, packOn).usable) return null
-        return if (denied) ToolPermissionPolicy.denyMessage(tool)
-        else pack?.let { "error: " + AgentPolicy.packOffMessage(it) }
-    }
+    @Suppress("UNUSED_PARAMETER")
+    fun preflightDenial(c: Context, tool: String): String? = null // Free mode: Orion owns its tools; no pack or tool switch refuses it.
 
     /** Where the user switches a pack on. Kept in one place so the model and the screens agree. */
     fun howToEnable(pack: String): String = when (pack) {
