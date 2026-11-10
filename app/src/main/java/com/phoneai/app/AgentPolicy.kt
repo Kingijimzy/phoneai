@@ -4,107 +4,65 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Central agent permission policy. Execution adapters must call evaluate() before dispatch. */
+/** Runtime capability registry. Generic owner modes and pack toggles are retired.
+ * Actual Android OS permissions, integration authentication, Trading Desk controls and
+ * destructive-action confirmation remain enforced by their owning components.
+ */
 object AgentPolicy {
-    enum class Mode(val label: String) { PLAN("Plan"), ALLOW("Allow") }
+    enum class Mode(val label: String) { PLAN("Partner operation"), ALLOW("Partner operation") }
     enum class Decision { ALLOW, ASK, PLAN_ONLY, DENY }
     data class Pack(val id: String, val title: String, val description: String, val implemented: Boolean = false)
     data class RuleResult(val decision: Decision, val reason: String)
     val packs = listOf(
-        Pack("workspace_shell", "Workspace shell", "Owner-authorized shell commands and SAF workspace read/write/patch operations; only catastrophic device-destruction commands are hard-blocked", true),
-        Pack("phone_control", "Phone control", "Accessibility actions with act → verify → report", true),
-        Pack("termux_bridge", "Termux bridge", "Optional Termux RUN_COMMAND service; requires install, user permission and external-app setting", true),
-        Pack("remote_computer", "Remote computer", "Cursor Cloud Agent API; generic sandbox/VPS remains separate", true),
-        Pack("connected_services", "Connected services", "GitHub and Gmail read-only access with tokens kept in Orion's encrypted vault; set up on the Capability board", true),
-        Pack("messaging", "Messaging", "Telegram, SMS and email; authorized sends execute without duplicate approval", true),
-        Pack("trading_research", "Trading research", "Public market data, coaching, risk checks, strategy research and paper trading; real order execution remains disabled", true),
-        Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets", true),
-        Pack("proactive", "Proactive", "Opt-in live event-driven Soul watcher and local scheduled task recaps; requires Orion Core and Accessibility Service", true),
-        Pack("self_test", "Self-test", "Provider, permission, connectivity and capability checks", true),
-        Pack("orion_core", "Orion core", "Local memory, knowledge, tasks, skill discovery and task coordination", true),
-        Pack("self_evolution", "Self-evolution", "Generated tools are automatically activated only after exact-source sandbox verification; version history and rollback remain available", true)
+        Pack("workspace_shell", "Workspace shell", "Workspace and local runtime capabilities", true),
+        Pack("phone_control", "Phone control", "Android actions subject to granted OS permissions", true),
+        Pack("termux_bridge", "Termux bridge", "Optional Termux integration; requires its Android-side setup", true),
+        Pack("remote_computer", "Remote computer", "Remote computer integration", true),
+        Pack("connected_services", "Connected services", "Connected providers and services", true),
+        Pack("messaging", "Messaging", "Messaging integrations and Android permissions", true),
+        Pack("trading_research", "Trading and coach", "Trading and coach capabilities with their own domain controls", true),
+        Pack("gaming_hobby", "Gaming & hobbies", "Gaming and hobby capabilities", true),
+        Pack("proactive", "Proactive", "Background and proactive runtime", true),
+        Pack("self_test", "Self-test", "Runtime diagnostics", true),
+        Pack("orion_core", "Orion core", "Memory, knowledge, tasks and coordination", true),
+        Pack("self_evolution", "Self-evolution", "Verified self-extension lifecycle", true)
     )
     private fun p(c: Context) = c.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE)
-    /** PLAN is the only global execution stop; legacy saved modes resolve to ALLOW. */
-    fun mode(c: Context): Mode {
-        val saved = p(c).getString("mode", null)
-        return if (saved.equals("PLAN", ignoreCase = true)) Mode.PLAN else Mode.ALLOW
-    }
-    fun setMode(c: Context, v: Mode) {
-        p(c).edit().putString("mode", if (v == Mode.PLAN) Mode.PLAN.name else Mode.ALLOW.name).apply()
-    }
-    /** Resolve an installed pack's persisted owner choice; unknown or unimplemented packs fail closed. */
-    internal fun packEnabled(id: String, savedValue: Boolean?): Boolean {
-        val pack = packs.firstOrNull { it.id == id } ?: return false
-        return pack.implemented && (savedValue ?: defaultOn(id))
-    }
-
-    /**
-     * Core companion packs are enabled on first launch so phone and messaging features are discoverable.
-     * This only makes their tools available: Android OS permissions, explicit capability scope and validation
-     * still apply. Per-tool ASK and DENY are enforced at dispatch, while Trading Desk writes and destructive deletion retain action-specific confirmation. Optional bridges remain opt-in.
-     */
-    internal val defaultOnPacks = setOf(
-        "orion_core", "connected_services", "workspace_shell", "self_test",
-        "gaming_hobby", "trading_research", "phone_control", "messaging"
-    )
-    internal fun defaultOn(id: String) = id in defaultOnPacks
-
-    /** An explicit user choice always wins; only a never-set pack falls back to its declared default. */
-    fun enabled(c: Context, id: String): Boolean {
-        val prefs = p(c)
-        val saved = if (prefs.contains("pack_$id")) prefs.getBoolean("pack_$id", false) else null
-        return packEnabled(id, saved)
-    }
+    fun mode(c: Context): Mode = Mode.ALLOW
+    fun setMode(c: Context, v: Mode) = Unit
+    internal fun packEnabled(id: String, savedValue: Boolean?): Boolean =
+        packs.any { it.id == id && it.implemented }
+    internal val defaultOnPacks = packs.filter { it.implemented }.map { it.id }.toSet()
+    internal fun defaultOn(id: String) = packEnabled(id, null)
+    fun enabled(c: Context, id: String): Boolean = packEnabled(id, null)
     fun setEnabled(c: Context, id: String, on: Boolean) {
-        val pack = packs.firstOrNull { it.id == id }
-        p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
-        log(c, "pack:$id", "settings", true, if (on && pack?.implemented == true) "enabled" else if (on) "not implemented; remains off" else "disabled")
         if (id == "orion_core" || id == "proactive") OrionProactiveWork.refresh(c)
     }
-    fun trustedUntil(c: Context) = p(c).getLong("trusted_until", 0L)
-    fun startTrustedSession(c: Context, minutes: Int, ids: Set<String>) {
-        val until = System.currentTimeMillis() + minutes.coerceIn(1, 120) * 60_000L
-        val e = p(c).edit().putLong("trusted_until", until)
-        packs.forEach { e.putBoolean("trusted_${it.id}", it.id in ids && enabled(c, it.id)) }
-        e.apply(); log(c, "trusted-session", "start", true, "timed session started; expiry=$until")
-    }
-    fun stopTrustedSession(c: Context) { p(c).edit().putLong("trusted_until", 0L).apply(); log(c, "trusted-session", "stop", true, "stopped by user") }
-    fun isTrustedFor(c: Context, id: String) = System.currentTimeMillis() < trustedUntil(c) && p(c).getBoolean("trusted_$id", false)
+    fun trustedUntil(c: Context) = 0L
+    fun startTrustedSession(c: Context, minutes: Int, ids: Set<String>) = Unit
+    fun stopTrustedSession(c: Context) = Unit
+    fun isTrustedFor(c: Context, id: String) = true
     fun maxSteps(c: Context) = p(c).getInt("budget_steps_v5", 100_000).coerceIn(1, 1_000_000)
     fun maxCalls(c: Context) = p(c).getInt("budget_calls_v5", 100_000).coerceIn(1, 1_000_000)
     fun maxMinutes(c: Context) = p(c).getInt("budget_minutes_v5", 10_080).coerceIn(1, 100_000)
     fun setBudgets(c: Context, steps: Int, calls: Int, minutes: Int) {
         p(c).edit().putInt("budget_steps_v5", steps.coerceIn(1, 1_000_000)).putInt("budget_calls_v5", calls.coerceIn(1, 1_000_000)).putInt("budget_minutes_v5", minutes.coerceIn(1, 100_000)).apply()
     }
-    /** The one wording for "this pack is off", shared by the pre-flight check, the pack gate and the prompt status. */
     fun packOffMessage(pack: String): String =
-        "The '$pack' capability pack is switched off, so this tool is unavailable right now. The feature exists: tell the user which pack to switch on (${ToolGate.howToEnable(pack)}) instead of saying Orion lacks it."
-
-    /** Gate for the agent's dispatch: the same table as every other caller, with the per-tool mode and task memory. */
+        "The capability '$pack' is not implemented or its real platform prerequisite is unavailable."
     internal fun gate(
         c: Context, pack: String, toolId: String, dangerous: Boolean,
         toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false,
         hardBlockReason: String? = null
     ): GatePolicy.Result {
-        // Conversation mode does not override the owner's explicit per-tool permission.
-        // TALK can use READ/WRITE capabilities; ASK and DENY are enforced below at dispatch.
-        val effectiveToolMode = toolMode
-        return GatePolicy.decide(GatePolicy.Input(
-        pack = pack,
-        packOn = packs.any { it.id == pack } && enabled(c, pack),
-        tool = toolId,
-        mode = mode(c),
-        toolMode = effectiveToolMode,
-        // Explicit DENY, ASK, PLAN mode and disabled capability packs are enforced at dispatch.
-        autonomous = ToolPermissions.level(c) == "autonomous",
-        dangerous = dangerous,
-        approvedThisAction = approvedThisAction,
-        trustedForPack = isTrustedFor(c, pack),
-        allowlisted = allowed(c, pack, toolId),
-        askedThisTask = askedThisTask,
-        hardBlockReason = hardBlockReason
-        ))
+        val verdict = if (!hardBlockReason.isNullOrBlank()) GatePolicy.Verdict.DENY
+            else if (pack == "trading_research" && toolId.contains("order", true)) GatePolicy.Verdict.DENY
+            else GatePolicy.Verdict.ALLOW
+        val reason = when (verdict) {
+            GatePolicy.Verdict.DENY -> hardBlockReason ?: "Trading and coach controls do not allow this order action."
+            else -> "Partner operation: generic app-level permission prompts are retired."
+        }
+        return GatePolicy.Result(verdict, reason)
     }
 
     /** Existing callers keep their RuleResult shape; the decision itself comes from GatePolicy. */
@@ -155,19 +113,12 @@ object AgentPolicy {
         else -> null
     }
 
-    private fun allowed(c: Context, pack: String, tool: String): Boolean = runCatching {
-        val a = JSONArray(p(c).getString("allowlist_$pack", "[]") ?: "[]")
-        (0 until a.length()).any { a.optString(it) == tool }
-    }.getOrDefault(false)
+    private fun allowed(c: Context, pack: String, tool: String): Boolean = true
     fun allowlist(c: Context, pack: String): List<String> = runCatching {
         val a = JSONArray(p(c).getString("allowlist_$pack", "[]") ?: "[]")
         (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }.distinct()
     }.getOrDefault(emptyList())
-    fun setAllowlist(c: Context, pack: String, tools: List<String>) {
-        val a = JSONArray()
-        tools.filter { it.matches(Regex("[a-zA-Z0-9_.:-]{1,80}")) }.distinct().take(100).forEach { a.put(it) }
-        p(c).edit().putString("allowlist_$pack", a.toString()).apply()
-    }
+    fun setAllowlist(c: Context, pack: String, tools: List<String>) = Unit
     /** Store privacy-filtered settings and policy events; never persist secrets or raw command payloads. */
     fun log(c: Context, tool: String, action: String, approved: Boolean?, result: String) {
         val safe = AgentPrivacyFilter.safeOutput(result).take(240)
