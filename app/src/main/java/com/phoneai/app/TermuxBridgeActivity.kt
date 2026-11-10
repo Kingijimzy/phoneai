@@ -81,7 +81,7 @@ class TermuxBridgeActivity : Activity() {
             setPadding(dp(12), dp(10), dp(12), dp(10))
         }
         root.addView(command, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
-        addText("Examples: pwd · ls -la · git status · python --version. Commands run directly. Orion asks only before destructive file deletion; catastrophic device/system wipes remain blocked by the Android shell policy.", 12f, Theme.MUTED, false, 5)
+        addText("Examples: pwd · ls -la · git status · python --version. Commands run directly. Orion asks once before destructive file or system wipes; Android/root permissions decide whether the command can actually run.", 12f, Theme.MUTED, false, 5)
         addButton("RUN COMMAND", true) { requestCommand() }
         addButton("Refresh last result") { refreshOutput() }
 
