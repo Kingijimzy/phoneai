@@ -227,7 +227,7 @@ internal class LinuxRuntimeInstaller(
             "PROOT_TMP_DIR=${prootTmp.absolutePath}",
             "PROOT_LOADER=${prootLoader.absolutePath}"
         )
-        return LinuxTerminalLaunchConfig(argv.first(), rootfs.absolutePath, argv.drop(1).toTypedArray(), environment)
+        return LinuxTerminalLaunchConfig(argv.first(), rootfs.absolutePath, argv.toTypedArray(), environment)
     }
 
     private data class ProcessResult(val exitCode: Int, val output: String, val timedOut: Boolean, val cancelled: Boolean = false)
