@@ -1,8 +1,8 @@
 package com.phoneai.app
 
 /**
- * Ultron-style: tool failure must change method, not end with an essay.
- * Pure policy — Agent applies the suggested next tool.
+ * Recovery hints are based on the failed capability and its observed error, not a phrase list
+ * over the user's goal. The model owns whole-situation reasoning; dispatch still rechecks policy.
  */
 internal object OrionForcedRecovery {
 
@@ -25,37 +25,19 @@ internal object OrionForcedRecovery {
                 userMessageIfGiveUp = "I tried ${attempt + 1} approaches and still could not complete: ${userGoal.take(120)}. ${result.take(160)}"
             )
         }
-        val g = userGoal.lowercase()
-        val t = failedTool.lowercase()
-
-        // Sports / scores
-        if (t.contains("sport") || t.contains("livescore") || t.contains("live_score") ||
-            Regex("\\b(score|match|fixture|atletico|barca|barcelona)\\b").containsMatchIn(g)
-        ) {
-            if (attempt == 0) return Plan(true, "web_search or research_web for the match score with sources", null)
-            return Plan(true, "open_url news source and extract scoreline", null)
+        val tool = failedTool.lowercase()
+        val hint = when {
+            tool.contains("python") ->
+                "inspect the actual Python runtime and workspace state, then choose one minimal executable recovery"
+            tool.contains("shell") || tool == "termux_command" ->
+                "inspect the selected shell backend and runtime readiness, then choose a shorter non-destructive command"
+            tool.startsWith("browser_") || tool == "open_url" ->
+                "inspect the current browser state, then choose a different registered read-only retrieval capability"
+            tool.contains("web") || tool == "fetch_url" || tool == "research_web" ->
+                "inspect the actual network error, then choose a different registered research source"
+            else ->
+                "re-read the current state and choose a different registered capability that can verify the same outcome"
         }
-
-        // Site scrape / APKVision / file size questions
-        if (g.contains("apkvision") || g.contains("scraper") || g.contains("file size") ||
-            t.contains("python") || t.contains("browser")
-        ) {
-            if (attempt == 0) return Plan(true, "browser_open + read page text for the answer", null)
-            return Plan(true, "web_search site-specific query then cite", null)
-        }
-
-        // Open music
-        if (Regex("\\b(open|launch).*(music|spotify)\\b").containsMatchIn(g)) {
-            return Plan(true, "open_app with installed music package (not web YouTube)", null)
-        }
-
-        // Generic
-        val alt = when {
-            t.contains("python") -> "workspace_write then simplified python_exec"
-            t.contains("shell") -> "retry shorter shell command"
-            t.contains("browser") || t == "open_url" -> "web_search as fallback"
-            else -> "web_search or browser for the same user goal"
-        }
-        return Plan(true, alt, null)
+        return Plan(true, hint, null)
     }
 }
