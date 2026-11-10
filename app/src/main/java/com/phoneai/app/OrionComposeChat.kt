@@ -419,14 +419,19 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent, lines: List<Orio
                 modifier = Modifier.padding(start = 13.dp, top = 2.dp))
         }
         val browserEvidence = event.typedEvidence.filterIsInstance<OrionActivityEvidence.Browser>().lastOrNull()
-        if (browserEvidence != null && browserEvidence.url.isNotBlank()) {
-            Text(
+        val transcriptUrl = lines.asReversed().firstOrNull { it.text.contains("URL:") }?.text
+            ?.substringAfter("URL:")?.lineSequence()?.firstOrNull()?.trim()
+        val browserUrl = browserEvidence?.url?.takeIf { it.isNotBlank() } ?: transcriptUrl
+        if (!browserUrl.isNullOrBlank()) {
+            val safeUrl = (OrionEvidenceSanitizer.evidence(OrionActivityEvidence.Browser("Site", browserUrl)) as OrionActivityEvidence.Browser).url
+            if (safeUrl.isNotBlank()) Text(
                 "OPEN SITE  ↗",
                 color = Color(0xFFD5D5D5), fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(start = 13.dp, top = 5.dp).clickable { onBrowser(browserEvidence.url) }
+                modifier = Modifier.padding(start = 13.dp, top = 5.dp).clickable { onBrowser(safeUrl) }
             )
         }
-        if (terminalEvidence != null) {
+        val hasTerminalActivity = terminalEvidence != null || lines.any { it.text.startsWith("[SHELL:") || it.text.startsWith("[TASK:OUTPUT]") }
+        if (hasTerminalActivity) {
             Text(
                 "OPEN TERMINAL  ↗",
                 color = Color(0xFFD5D5D5), fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
