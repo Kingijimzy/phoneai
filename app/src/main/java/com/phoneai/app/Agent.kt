@@ -355,7 +355,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
 
     /** Local command shortcuts must still respect capability-pack availability. */
     /** No word lists: chatReply() lets the model itself answer or hand the job to the tool loop with ACTION. */
-    private fun requiresToolPolicy(command: String): Boolean = false
 
     /** Every entry point (chat, command, resume) must set the scope, or a stale one blocks real tools. */
     private fun setRequestScope(command: String) {
@@ -2559,7 +2558,7 @@ Rules:
         // Instant path: common commands need no AI at all.
         ui.phase("acting")
         val quick = try {
-            if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask && activeSkillId == null && !requiresToolPolicy(command)) local.tryRun(command) else null
+            if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask && activeSkillId == null) local.tryRun(command) else null
         } catch (e: Exception) {
             null
         }
@@ -2570,43 +2569,18 @@ Rules:
             return
         }
         while (ranSteps.length() > 0) ranSteps.remove(0)
-        // Plain chat and questions: ONE small AI call (saves your free limits and is much faster).
-        if (!resumeRequest && !browserActionTask && activeSkillId == null && !requiresToolPolicy(command)) {
-            ui.phase("thinking")
-            val r = try {
-                chatReply(command)
-            } catch (e: Exception) {
-                if (stopped) return
-                ui.say("I could not reach the AI. ${e.message}")
-                return
-            }
-            if (r != null) {
-                history.put(msg("assistant", JSONObject().put("say", r).put("tool", "done").toString()))
-                ui.say(r)
-                return
-            }
-        }
+        // Every request now enters the same model-led planner with the live tool registry.
+        // The model may return a direct conversational answer or select a registered capability.
+        // A durable task checkpoint is created lazily only after the model selects a real action.
         if (command.trim().split(" ").size > 2 && Prefs.voice(svc)) {
             val acks = listOf("On it.", "One moment.", "Let me see.", "Right away.", "Sure thing.", "Working on it.", "Got it.")
             ui.say(acks[(System.currentTimeMillis() % acks.size).toInt()])
         }
-        // Only agent/tool tasks reach this point. Save a checkpoint so process death or the step cap does not erase progress.
-        if (!resumeRequest && !OrionTasksCapabilityExecutor.beginRun(svc, command)) {
-            val previous = OrionTasksCapabilityExecutor.pendingCheckpoint(svc)
-            if (previous != null) {
-                val previousTitle = previous.optString("command").ifBlank { "the previous task" }.take(140)
-                val previousStatus = previous.optString("status", "unfinished")
-                ui.say("I kept your previous task intact: \"$previousTitle\" ($previousStatus). Say continue to resume it, or stop that task before starting a different one. I did not start the new task.")
-            } else {
-                ui.say("I could not save a recovery checkpoint, so I did not start the phone actions. Check available storage and try again.")
-            }
-            return
-        }
-        // TaskLifecycle governs this live tool-task path. Individual calls remain inside EXECUTE;
-        // the overall task can complete only after the existing evidence-based completion gate passes.
-        // A resumed checkpoint does not persist the in-memory lifecycle object. Reconstruct
-        // it as a blocked execution and resume through PLAN so uncertain actions are inspected,
-        // not replayed. The checkpoint/tool dispatcher remains the source of execution evidence.
+        // Task checkpoints and lifecycle state are created only after the model selects a
+        // real registered action. Ordinary chat remains a reply-only turn, not a fake task.
+        var checkpointStarted = resumeRequest
+        var lifecycleStarted = false
+        var taskStartedAt = 0L
         var managedTask = if (resumeRequest) {
             TaskLifecycle(phase = TaskLifecycle.Phase.BLOCKED, blockedFrom = TaskLifecycle.Phase.EXECUTE).resume() ?: TaskLifecycle()
         } else {
@@ -2632,19 +2606,41 @@ Rules:
             }
             ui.note("[TASK:${managedTask.phase.name}]\n$detail")
         }
-        if (managedTask.phase == TaskLifecycle.Phase.UNDERSTAND) {
-            managedTask = managedTask.advance() ?: managedTask // UNDERSTAND -> PLAN
+        fun startManagedTask(): Boolean {
+            if (!checkpointStarted) {
+                if (!OrionTasksCapabilityExecutor.beginRun(svc, command)) {
+                    val previous = OrionTasksCapabilityExecutor.pendingCheckpoint(svc)
+                    if (previous != null) {
+                        ui.say("I kept your previous unfinished task intact. Say continue to resume it, or stop it before starting a different task. No new action was dispatched.")
+                    } else {
+                        ui.say("I could not save a recovery checkpoint, so I did not start the action. Check available storage and try again.")
+                    }
+                    return false
+                }
+                checkpointStarted = true
+            }
+            if (!lifecycleStarted) {
+                if (managedTask.phase == TaskLifecycle.Phase.UNDERSTAND) {
+                    managedTask = managedTask.advance() ?: managedTask // UNDERSTAND -> PLAN
+                }
+                moveTaskPhase(
+                    TaskLifecycle.Phase.PLAN,
+                    if (resumeRequest) "Replanning from the saved checkpoint before any further action" else "Planning the requested outcome"
+                )
+                managedTask = managedTask.advance() ?: managedTask // PLAN -> CHECK_CAPABILITIES
+                moveTaskPhase(TaskLifecycle.Phase.CHECK_CAPABILITIES, "Checking registered tools, enabled packs and permissions")
+                managedTask = managedTask.advance() ?: managedTask // CHECK_CAPABILITIES -> AUTHORIZE
+                moveTaskPhase(TaskLifecycle.Phase.AUTHORIZE, "Checking owner permissions, validation, action confirmations and platform prerequisites")
+                managedTask = managedTask.advance() ?: managedTask // AUTHORIZE -> EXECUTE
+                moveTaskPhase(TaskLifecycle.Phase.EXECUTE, "Executing through the existing guarded tool dispatcher")
+                lifecycleStarted = true
+                taskStartedAt = System.currentTimeMillis()
+                ui.stream("I’m working through this now. I’ll check each result before moving on.")
+            }
+            return true
         }
-        moveTaskPhase(
-            TaskLifecycle.Phase.PLAN,
-            if (resumeRequest) "Replanning from the saved checkpoint before any further action" else "Planning the requested outcome"
-        )
-        managedTask = managedTask.advance() ?: managedTask // PLAN -> CHECK_CAPABILITIES
-        moveTaskPhase(TaskLifecycle.Phase.CHECK_CAPABILITIES, "Checking registered tools, enabled packs and permissions")
-        managedTask = managedTask.advance() ?: managedTask // CHECK_CAPABILITIES -> AUTHORIZE
-        moveTaskPhase(TaskLifecycle.Phase.AUTHORIZE, "Capability, scope, validation and Trading Desk and destructive-deletion confirmation checks remain enforced at each real tool dispatch")
+        if (resumeRequest && !startManagedTask()) return
         val requestBudget = AgentHooks.RequestBudget(minOf(AgentPolicy.maxSteps(svc), OrionAutonomySettings.read(svc).maxToolSteps))
-        val taskStartedAt = System.currentTimeMillis()
         var toolCalls = 0
         fun budgetStopReason(): String? = when {
             toolCalls >= AgentPolicy.maxCalls(svc) -> "tool-call budget reached (${AgentPolicy.maxCalls(svc)})"
@@ -2656,10 +2652,6 @@ Rules:
         // Command-mode model output is structured JSON and must not be exposed token-by-token.
         // Give the user one natural live progress line while the guarded planner works; tool
         // details remain in the single compact activity card and the final assistant bubble.
-        if (!resumeRequest) deliberate(command)?.let { brief ->
-            history.put(msg("user", "[ORION INNER THOUGHT — your own analysis of this request; use it to pick the first action, do not recite it]\n" + brief))
-        }
-        ui.stream("I’m working through this now. I’ll check each result before moving on.")
         val stall = SessionStall()
         var promiseNudged = false
         var goalChecks = 0
@@ -2683,7 +2675,7 @@ Rules:
                 commandNim.chat(history, false, 6000)
             } catch (e: Exception) {
                 if (stopped) break
-                OrionTasksCapabilityExecutor.pauseRun(svc)
+                if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say("I could not reach the AI. ${e.message}. I saved the task progress locally; say \"continue\" when the connection is back.")
                 return
             }
@@ -2693,12 +2685,12 @@ Rules:
             if (stopped) {
                 managedTask = managedTask.cancel() ?: managedTask
                 moveTaskPhase(TaskLifecycle.Phase.CANCELLED, "User stopped while the model was responding; no planned action was dispatched")
-                OrionTasksCapabilityExecutor.pauseRun(svc)
+                if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say("Stopped before the next action could start. I saved the task progress locally.")
                 return
             }
             if (HermesRepetitionGuard.isRunawayRepetition(raw)) {
-                OrionTasksCapabilityExecutor.pauseRun(svc)
+                if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say("The model returned a repeated or corrupted task response. I stopped before parsing or dispatching any actions; the task checkpoint is preserved. Retry or switch models.")
                 return
             }
@@ -2708,7 +2700,7 @@ Rules:
                 // Ask for one complete object again; give up politely after two bad replies.
                 damagedReplies++
                 if (damagedReplies > 2) {
-                    OrionTasksCapabilityExecutor.pauseRun(svc)
+                    if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
                     ui.say("The AI model keeps returning incomplete replies, so I stopped before acting. Try again, or pick a different chat model in Settings.")
                     return
                 }
@@ -2760,7 +2752,7 @@ Rules:
             if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(inputCommand) && !graphHasRequiredStructure) {
                 graphRepairAttempts++
                 if (graphRepairAttempts > 2) {
-                    OrionTasksCapabilityExecutor.pauseRun(svc)
+                    if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
                     ui.note("[TASK:OBJECTIVE] Model graph failed; installing local fallback and continuing.")
                     OrionObjectiveGraph.ensureStructuredGraph(svc, inputCommand, sequential = true)
                         ?: OrionObjectiveGraph.ensureSingleMain(svc, inputCommand)
@@ -2798,9 +2790,10 @@ Rules:
                     val one = batch.optJSONObject(i) ?: continue
                     val bt = one.optString("tool")
                     if (bt.isBlank() || bt == "done") continue
+                    if (!startManagedTask()) return
                     val batchArgs = one.optJSONObject("args") ?: JSONObject()
                     budgetStopReason()?.let { reason ->
-                        OrionTasksCapabilityExecutor.pauseRun(svc)
+                        if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
                         ui.say("I stopped safely because the task $reason. ${stall.summary()}Progress is saved; raise the budget or continue later.")
                         return
                     }
@@ -2810,7 +2803,7 @@ Rules:
                     // Persist the exact dispatch arguments. Adding objective_id after beginStep made
                     // recordStep reject the otherwise valid result as an in-flight argument mismatch.
                     if (!OrionTasksCapabilityExecutor.beginStep(svc, bt, batchArgs)) {
-                        OrionTasksCapabilityExecutor.pauseRun(svc)
+                        if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
                         ui.say("I could not save the next action before running it, so I stopped safely. No new action was started.")
                         return
                     }
@@ -2845,7 +2838,7 @@ Rules:
                     activeObjectiveId = ""
                     sb.append(bt).append(": ").append(br.take(700)).append("\n")
                     stall.add(bt, batchArgs.toString(), br)?.let { reason ->
-                        OrionTasksCapabilityExecutor.pauseRun(svc)
+                        if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
                         ui.say("I stopped because the task $reason. ${stall.summary()}Tell me what you want instead, or I can try a different approach.")
                         return
                     }
@@ -2877,6 +2870,10 @@ Rules:
                     history.put(msg("user", dispatchNudge))
                     continue
                 }
+                if (!checkpointStarted && toolCalls == 0) {
+                    if (say.isBlank()) ui.say("I understand. What would you like me to do next?")
+                    return
+                }
                 // Goal check: do not stop just because the model said "done". A cheap second opinion
                 // compares the goal with the latest results and sends it back to work if something remains.
                 if (goalChecks < 2 && toolCalls > 0 && !stopped) {
@@ -2898,7 +2895,7 @@ Rules:
                 if (!completion.allowed) {
                     managedTask = managedTask.block() ?: managedTask
                     moveTaskPhase(TaskLifecycle.Phase.BLOCKED, "Completion verification did not pass: ${completion.reason}")
-                    OrionTasksCapabilityExecutor.pauseRun(svc)
+                    if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
                     if (runEvidence.isEmpty() && runFailed == 0) return // reply-only turn (question/offer): nothing was attempted, so nothing failed.
                     ui.say("I stopped before marking this task complete: " + completion.reason + " " + outcome.message + " I saved the task progress; please verify the current screen or state before continuing.")
                     return
@@ -2944,10 +2941,11 @@ Rules:
                 try { svc.onAgentTaskFinished(currentTask, true) } catch (_: Exception) { }
                 return
             }
+            if (!startManagedTask()) return
             val args = step.optJSONObject("args") ?: JSONObject()
             ui.phase("acting")
             budgetStopReason()?.let { reason ->
-                OrionTasksCapabilityExecutor.pauseRun(svc)
+                if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say("I stopped safely because the task $reason. ${stall.summary()}Progress is saved; raise the budget or continue later.")
                 return
             }
@@ -2956,7 +2954,7 @@ Rules:
             if (activeObjectiveId.isNotBlank()) args.put("objective_id", activeObjectiveId)
             // The in-flight marker and result receipt must use byte-for-byte equivalent safe args.
             if (!OrionTasksCapabilityExecutor.beginStep(svc, tool, args)) {
-                OrionTasksCapabilityExecutor.pauseRun(svc)
+                if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say("I could not save the next action before running it, so I stopped safely. No new action was started.")
                 return
             }
@@ -3009,7 +3007,7 @@ Rules:
             ui.note(activityNote(tool, args, result))
             record(tool, args, result)
             stall.add(tool, args.toString(), result)?.let { reason ->
-                OrionTasksCapabilityExecutor.pauseRun(svc)
+                if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say("I stopped because the task $reason. ${stall.summary()}Tell me what you want instead, or I can try a different approach.")
                 activeObjectiveId = ""
                 return
@@ -3026,7 +3024,7 @@ Rules:
                     if (receipt != null) result += "\n[ORION_EXECUTOR_EVIDENCE id=" + receipt + " objective=" + activeObjectiveId + "]"
                 }
                 activeObjectiveId = ""
-                OrionTasksCapabilityExecutor.pauseRun(svc)
+                if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say(result + " I have paused the automated task. Complete the step yourself, then ask Orion to continue.")
                 return
             }
@@ -3083,7 +3081,7 @@ Rules:
             history.put(msg("user", "RESULT: " + result.take(3500)))
             compact()
         }
-        OrionTasksCapabilityExecutor.pauseRun(svc)
+        if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
         if (stopped) {
             managedTask = managedTask.cancel() ?: managedTask
             moveTaskPhase(TaskLifecycle.Phase.CANCELLED, "User stopped execution; checkpoint preserved and no new actions will start")
