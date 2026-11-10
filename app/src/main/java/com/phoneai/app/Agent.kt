@@ -153,6 +153,9 @@ internal object IrreversibleActionConfirmationPolicy {
     private val shellDelete = Regex(
         """(?is)(?:^|[;&|]\s*)(?:command\s+)?(?:rm|rmdir|unlink|shred|truncate)\b|\bfind\b[^;&|]*\s-delete\b"""
     )
+    private val pythonDelete = Regex(
+        """(?is)\b(?:os\.(?:remove|unlink|rmdir)|shutil\.(?:rmtree|move)|Path\([^)]*\)\.(?:unlink|rmdir))\s*\("""
+    )
 
     fun approvalReason(tool: String, args: JSONObject, pack: String): String? {
         if (pack == "trading_research" && ToolRegistry.access(tool) == ToolAccess.WRITE) {
@@ -168,6 +171,10 @@ internal object IrreversibleActionConfirmationPolicy {
         if (tool == "shell" || tool == "termux_command") {
             val command = args.optString("command").ifBlank { args.optString("cmd") }.ifBlank { args.optString("script") }
             if (command.isNotBlank() && shellDelete.containsMatchIn(command)) return "shell file deletion"
+        }
+        if (tool == "python_exec") {
+            val code = args.optString("code").ifBlank { args.optString("script") }
+            if (code.isNotBlank() && pythonDelete.containsMatchIn(code)) return "Python file deletion"
         }
         return null
     }
