@@ -90,7 +90,7 @@ class SkillAuthorizationPolicyTest {
     @Test fun consequentialToolsUseTheSharedDispatcherNotSkillApproval() {
         assertTrue(check(tool = "open_url").allowed)
         assertTrue(check(tool = "open_url", approved = false).allowed)
-        assertTrue(check(tool = "task_delete").allowed)
+        assertTrue(check(skill = skill(tools = setOf("task_delete")), tool = "task_delete").allowed)
     }
 
     @Test fun skillLevelApprovalFlagIsIgnoredByPartnerRuntime() {
