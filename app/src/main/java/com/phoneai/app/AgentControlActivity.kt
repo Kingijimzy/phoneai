@@ -174,34 +174,6 @@ class AgentControlActivity : Activity() {
             .setNegativeButton("CANCEL", null).show()
     }
 
-    private fun chooseMode() {
-        val modes = AgentPolicy.Mode.values()
-        AlertDialog.Builder(this).setTitle("Approval mode")
-            .setItems(modes.map { it.label }.toTypedArray()) { _, which ->
-                AgentPolicy.setMode(this, modes[which])
-                AgentPolicy.log(this, "policy", "mode-change", true, "mode set to ${modes[which].name}")
-                refresh()
-            }.show()
-    }
-    private fun startTrusted() {
-        val enabled = AgentPolicy.packs.filter { it.implemented && AgentPolicy.enabled(this, it.id) }
-        if (enabled.isEmpty()) {
-            Toast.makeText(this, "Enable at least one supported pack first.", Toast.LENGTH_LONG).show()
-            return
-        }
-        val names = enabled.map { it.title }.toTypedArray()
-        val selected = BooleanArray(enabled.size) { true }
-        AlertDialog.Builder(this).setTitle("Trust selected packs temporarily")
-            .setMultiChoiceItems(names, selected) { _, i, checked -> selected[i] = checked }
-            .setPositiveButton("CONTINUE") { _, _ ->
-                val minutes = intArrayOf(15, 30, 60, 120)
-                AlertDialog.Builder(this).setTitle("Session duration")
-                    .setItems(arrayOf("15 minutes", "30 minutes", "60 minutes", "120 minutes")) { _, idx ->
-                        AgentPolicy.startTrustedSession(this, minutes[idx], enabled.filterIndexed { i, _ -> selected[i] }.map { it.id }.toSet())
-                        refresh()
-                    }.show()
-            }.setNegativeButton("CANCEL", null).show()
-    }
     private fun chooseBudgets() {
         val current = "${AgentPolicy.maxSteps(this)},${AgentPolicy.maxCalls(this)},${AgentPolicy.maxMinutes(this)}"
         val input = android.widget.EditText(this).apply {
