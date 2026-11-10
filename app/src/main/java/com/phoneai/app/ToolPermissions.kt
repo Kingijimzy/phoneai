@@ -29,6 +29,7 @@ internal object ToolPermissionPolicy {
     fun modeOf(map: Map<String, ToolMode>, tool: String): ToolMode =
         if (tool in alwaysAllowed) ToolMode.ALLOW else when (map[tool]) {
             ToolMode.DENY -> ToolMode.DENY
+            ToolMode.ASK -> ToolMode.ASK
             else -> ToolMode.ALLOW
         }
 
@@ -49,7 +50,12 @@ internal object ToolPermissionPolicy {
     fun serializeOverrides(map: Map<String, ToolMode>): String =
         JSONObject().also { o -> map.forEach { (k, v) -> if (k !in alwaysAllowed) o.put(k, v.name) } }.toString()
 
-    fun next(m: ToolMode): ToolMode = if (m == ToolMode.DENY) ToolMode.ALLOW else ToolMode.DENY
+    /** Cycle through the UI's advertised Allow → Ask → Deny states. */
+    fun next(m: ToolMode): ToolMode = when (m) {
+        ToolMode.ALLOW -> ToolMode.ASK
+        ToolMode.ASK -> ToolMode.DENY
+        ToolMode.DENY -> ToolMode.ALLOW
+    }
 
     fun serialize(map: Map<String, ToolMode>): String =
         JSONObject().also { o -> map.filterValues { it != ToolMode.ALLOW }.forEach { (k, v) -> o.put(k, v.name) } }.toString()
