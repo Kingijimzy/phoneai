@@ -161,7 +161,10 @@ internal object IrreversibleActionConfirmationPolicy {
         val remoteName = if (tool == "mcp_call") args.optString("name").lowercase() else ""
         val remoteDelete = remoteName.contains("delete") || remoteName.contains("remove") ||
             remoteName.contains("forget") || remoteName.contains("wipe")
-        if (tool in deleteTools || remoteDelete) return "destructive deletion ($tool)"
+        val requestedAction = args.optString("action").lowercase()
+        val removesSavedItem = requestedAction in setOf("delete", "remove", "forget", "wipe", "empty") &&
+            tool in setOf("standing_order", "memecoin_watch", "wallet_watch")
+        if (tool in deleteTools || remoteDelete || removesSavedItem) return "destructive deletion ($tool)"
         if (tool == "shell" || tool == "termux_command") {
             val command = args.optString("command").ifBlank { args.optString("cmd") }.ifBlank { args.optString("script") }
             if (command.isNotBlank() && shellDelete.containsMatchIn(command)) return "shell file deletion"
