@@ -430,25 +430,9 @@ class OwnerControlCenterActivity : Activity() {
 
     private fun showPolicyRegister() {
         val entries = listOf(
-            "Tool permissions — configurable Allow / Ask / Deny per registered tool; always-available conversation tools remain reserved.",
-            "Autonomy mode — configurable Talk / Assist / Autopilot / Builder; modes do not erase explicit safety gates.",
-            "Owner dials — exact-hash, sandbox-tested extension auto-promotion; guarded/developer Python code-size profiles with approval retained; configurable durable recovery retries and backoff.",
-            "Tool registry — extensions run through the pre-registered extension tool contract; they cannot self-register arbitrary native tools or add capability mappings.",
-            "Execution budgets — configurable within enforced app caps: 1–40 tool steps, 1–30 AI requests, 0–4 retries.",
-            "Agent approval — configurable Plan / Ask / Allowlist / timed trusted session; trust expires and can be stopped.",
-            "Capability packs — individually enabled only when a working adapter exists; unsupported packs remain unavailable.",
-            "Task checkpoints — Stop / Pause / recovery confirmation prevent uncertain actions from being silently replayed.",
-            "Learning — reusable routes require completed tasks and explicit post-action verification evidence.",
-            "Privacy filtering — sensitive values, email addresses, URLs and phone-like numbers are redacted from recovery metadata.",
-            "Secrets — provider and exchange credentials are masked in UI and excluded from audit events; manage or rotate them in Settings.",
-            "Android permissions — controlled by Android. Orion can report grant state and open system settings, but cannot silently grant itself access.",
-            "Accessibility and notification access — user-enabled Android special access; Android can revoke these independently.",
-            "Background execution — owner can enable/disable the proactive policy, set the WorkManager fallback interval, inspect AccessibilityService connection and open battery settings; Android/HyperOS can still kill or defer it.",
-            "Network/provider limits — provider quotas, billing, model availability and server-side refusals are controlled externally.",
-            "OpenAI/system safety instructions — external to this app and not configurable or bypassable from Orion.",
-            "Hard security invariants — certain checks cannot be disabled through app preferences; the app must fail closed when required proof or authorization is absent.",
-            "Source policy modules — ActionLearningPolicy, AgentDispatchPolicy, AgentPolicy, CheckpointTransitionPolicy, ConversationAutoRoutePolicy, GatePolicy, LinuxRuntimePolicy, OrionKeyboardPolicy, OrionPerformancePolicy, OrionRuntimePolicy, OrionIntegrationCapabilityPolicy, OrionSkillInstallPolicy, ProviderBillingPolicy, ProviderFallbackPolicy, PythonExecutionPolicy, RecoveryPolicy, RoutineReplayCheckpointPolicy, RoutineReplayPolicy, SharedToolSurfacePolicy, ShellPolicy, SkillAuthorizationPolicy, StreamCompletionPolicy, StreamFallbackPolicy, SystemIntentPolicy, TaskScopePolicy, ToolPermissionPolicy, ToolResultPolicy and TranscriptEditPolicy.",
-            "Other app policy modules — AgentPrivacyFilter, OrionSecurityPolicy, ChatBrowserUrlPolicy, GeminiLivePolicy, LiveCallStylePolicy, ResearchRoutingPolicy, ResearchFollowUpPolicy, WakeWordPolicy and McpConnectorScopePolicy. Their implementation constraints are enforced by their owning modules; this panel does not silently rewrite source code or disable invariants."
+            "Partnership — the phone, its apps and this project belong to Kingi and Orion together; no tool, pack, mode or policy asks permission.",
+            "Confirmation — Orion checks with Kingi before deleting or wiping anything, and the trading desk keeps per-trade approval.",
+            "Android permissions — controlled by Android. Orion uses every permission that is granted and can open system settings so Kingi can grant more.",
         )
         AlertDialog.Builder(this).setTitle("Orion app policy register")
             .setMessage(entries.mapIndexed { i, s -> "${i + 1}. $s" }.joinToString("\n\n"))
