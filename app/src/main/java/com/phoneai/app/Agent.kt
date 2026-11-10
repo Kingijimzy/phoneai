@@ -2806,7 +2806,7 @@ Rules:
                         .joinToString("\n") { runCatching { history.getJSONObject(it).optString("content") }.getOrDefault("") }.takeLast(3000)
                     val verdict = try {
                         aiOneShot("You audit an autonomous agent. Given the GOAL and the latest transcript, reply exactly DONE if the goal is fully achieved with real results. Otherwise reply CONTINUE: <the single most important thing still missing>. Be strict about invented or unverified results.", "GOAL: $command\n\nTRANSCRIPT:\n$recent")
-                    } catch (_: Exception) { "DONE" }
+                    } catch (_: Exception) { "CONTINUE: goal audit unavailable; task completion cannot be independently confirmed." }
                     if (verdict.trim().startsWith("CONTINUE", true)) {
                         history.put(msg("user", "GOAL CHECK: the goal is not finished. " + verdict.trim().take(400) + " Keep working with real tool calls; do not stop until it is achieved or truly impossible, then say exactly what blocked it."))
                         continue
