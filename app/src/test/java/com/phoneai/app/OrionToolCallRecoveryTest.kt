@@ -31,6 +31,7 @@ class OrionToolCallRecoveryTest {
 
     @Test fun detectsImageGenerationPseudoCallBeforeItLeaksIntoChat() {
         val knownMedia = { n: String -> n == "python_exec" || n == "image_generate" }
+        assertTrue("A streamed partial tool name must remain hidden", OrionToolCallRecovery.shouldHoldFromChat("image_generate", knownMedia))
         val raw = "On it.\n\n\u0060\u0060\u0060python\nimage_generate(prompt=\"A police cat in New York\")\n\u0060\u0060\u0060"
         assertTrue(OrionToolCallRecovery.shouldHoldFromChat(raw, knownMedia))
         val recovered = OrionToolCallRecovery.recover(raw, knownMedia)!!
