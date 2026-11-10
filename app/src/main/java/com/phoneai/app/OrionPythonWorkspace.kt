@@ -17,6 +17,8 @@ internal class OrionPythonWorkspace(context: Context) {
     companion object {
         const val MAX_FILE_BYTES = 512 * 1024 * 1024
         const val MAX_TOTAL_BYTES = 8L * 1024 * 1024 * 1024
+        // Preserve space for Android, databases and other apps.
+        private const val MIN_FREE_SPACE_BYTES = 1024L * 1024 * 1024
         private const val MAX_ENTRIES = 100_000
         private val IGNORED_LIST_DIRECTORIES = setOf("node_modules", ".gradle", ".git", ".idea", "build", "dist", "target", "__pycache__", ".venv", "venv")
         private val NAME = Regex("^[A-Za-z0-9.][A-Za-z0-9._/-]{0,179}$")
@@ -119,6 +121,9 @@ internal class OrionPythonWorkspace(context: Context) {
         val current = root.walkTopDown().filter { it.isFile }.sumOf { it.length() }
         val previous = if (file.isFile) file.length() else 0L
         if (current - previous + bytes.size > MAX_TOTAL_BYTES) return "error: workspace storage quota (8 GiB) exceeded"
+        if (filesDir.usableSpace - bytes.size < MIN_FREE_SPACE_BYTES) {
+            return "error: workspace write paused to preserve at least 1 GiB free on the device"
+        }
         // Automatic backup before any destructive overwrite: preserve the exact prior contents
         // so the owner can always restore the pre-write state from the recycle/backup area.
         if (file.isFile) {
