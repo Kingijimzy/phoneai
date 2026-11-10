@@ -32,6 +32,12 @@ class OrionOwnerDialSettingsTest {
         assertEquals(300, updated.recoveryBackoffSeconds)
     }
 
+    @Test fun newInstallDefaultsToFullPythonDevelopmentProfile() {
+        context.getSharedPreferences("orion_owner_dials", Context.MODE_PRIVATE).edit().clear().commit()
+        assertEquals(OrionPythonProfile.FULL, OrionOwnerDialSettings.read(context).pythonProfile)
+        assertEquals(256_000, PythonExecutionPolicy.maxCodeChars(context))
+    }
+
     @Test fun pythonProfileChangesOnlyTheCodeSizeBudget() {
         OrionOwnerDialSettings.write(context, OrionOwnerDials(pythonProfile = OrionPythonProfile.GUARDED))
         assertEquals(8_000, PythonExecutionPolicy.maxCodeChars(context))
