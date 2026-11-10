@@ -19,7 +19,7 @@ class GatePolicyTest {
     @Test fun defaultPermissionAllowsToolsImmediately() {
         assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input()).verdict)
         assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(dangerous = true)).verdict)
-        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(toolMode = ToolMode.ASK)).verdict)
+        assertEquals(GatePolicy.Verdict.ASK, GatePolicy.decide(input(toolMode = ToolMode.ASK)).verdict)
     }
 
     @Test fun onlyPlanModeIsAGlobalExecutionStop() {
