@@ -280,12 +280,10 @@ class AgentControlActivity : Activity() {
                         Toast.makeText(this, if (result.allowed) "Skill disabled." else result.reason, Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    if (true) {
-                        builder.setPositiveButton("ENABLE") { _, _ ->
-                            val result = SkillRegistry.setEnabled(this, skill.id, true)
-                            AgentPolicy.log(this, "skill:${skill.id}", "enable", result.allowed, if (result.allowed) "user approved skill enablement" else result.reason)
-                            Toast.makeText(this, if (result.allowed) "Skill enabled." else result.reason, Toast.LENGTH_SHORT).show()
-                        }
+                    builder.setPositiveButton("ENABLE") { _, _ ->
+                        val result = SkillRegistry.setEnabled(this, skill.id, true)
+                        AgentPolicy.log(this, "skill:${skill.id}", "enable", result.allowed, if (result.allowed) "skill enabled in partner runtime" else result.reason)
+                        Toast.makeText(this, if (result.allowed) "Skill enabled." else result.reason, Toast.LENGTH_SHORT).show()
                     }
                     if (!skill.id.startsWith("whatsapp_draft") && !skill.id.startsWith("email_draft")) {
                         builder.setNeutralButton("REMOVE") { _, _ ->
