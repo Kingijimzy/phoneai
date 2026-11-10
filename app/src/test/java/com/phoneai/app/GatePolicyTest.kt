@@ -26,9 +26,13 @@ class GatePolicyTest {
         assertEquals(GatePolicy.Verdict.PLAN_ONLY, GatePolicy.decide(input(mode = AgentPolicy.Mode.PLAN)).verdict)
     }
 
-    @Test fun explicitToolDenyAndDisabledPacksStillApply() {
+    @Test fun explicitToolDenyDisabledPacksAndHardBlocksStillApply() {
         assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(toolMode = ToolMode.DENY)).verdict)
         assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(packOn = false)).verdict)
+        assertEquals(
+            GatePolicy.Verdict.DENY,
+            GatePolicy.decide(input().copy(hardBlockReason = "destructive shell command")).verdict
+        )
     }
 
     @Test fun genericRiskDoesNotCreateApprovalButDestructiveShellCommandsRemainBlocked() {
