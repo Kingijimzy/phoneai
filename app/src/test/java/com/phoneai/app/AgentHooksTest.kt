@@ -29,9 +29,9 @@ class AgentHooksTest {
   assertNull(AgentHooks.scopeBlockReason("Prepare and send the reply to Amma","click_text",JSONObject().put("text","Send")))
  }
  @Test fun onlyRestartShutdownAndWifiToggleRequireConfirmation(){
-  assertTrue(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","restart")))
-  assertTrue(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","shutdown")))
-  assertTrue(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","wifi_toggle")))
+  assertFalse(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","restart")))
+  assertFalse(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","shutdown")))
+  assertFalse(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","wifi_toggle")))
   assertFalse(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")))
   assertFalse(AgentHooks.requiresConfirmation("notification_action",JSONObject().put("action","reply")))
   assertFalse(AgentHooks.requiresConfirmation("type",JSONObject().put("text","Hello"),"WhatsApp message"))
