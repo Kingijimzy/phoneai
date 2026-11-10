@@ -214,11 +214,11 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                 }
             }
             Column(
-                Modifier.fillMaxWidth(if (note) 1f else if (mine) .86f else .98f)
+                (if (mine) Modifier.widthIn(max = 320.dp) else Modifier.fillMaxWidth(if (note) 1f else .98f))
                     .then(
                         if (mine || note) Modifier.clip(RoundedCornerShape(17.dp))
-                            .background(if (note) Color(0xFF181818) else Color(0xFF202020))
-                            .border(1.dp, if (mine) Color(0xFF252525) else ChatHairline, RoundedCornerShape(17.dp))
+                            .background(if (note) Color(0xFF1C1C1E) else Color(0xFF2C2C30))
+                            .border(1.dp, if (mine) Color(0x00000000) else Color(0x40545458), RoundedCornerShape(17.dp))
                         else if (replyType != OrionReplyType.NORMAL) Modifier
                             .clip(RoundedCornerShape(16.dp))
                             .background(when (replyType) {

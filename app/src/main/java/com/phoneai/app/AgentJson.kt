@@ -54,10 +54,32 @@ internal object OrionToolCallRecovery {
         return JSONObject().put("say", say).put("tool", tool).put("args", args)
     }
 
+    private val PRIMARY_ARG = mapOf(
+        "python_exec" to "code", "shell" to "command", "workspace_read" to "path", "fetch_url" to "url",
+        "open_url" to "url", "research_web" to "query", "web_search" to "query", "dev_shell" to "command",
+    )
+
+    /** `python_exec("""code""")` / `shell("ls")`: one positional string argument, optionally inside a code fence. */
+    private fun recoverPositional(raw: String, isKnownTool: (String) -> Boolean): JSONObject? {
+        val call = Regex("\\b([a-z][a-z0-9_]{2,40})\\(\\s*(\"\"\"|\"|')").findAll(raw)
+            .firstOrNull { isKnownTool(it.groupValues[1]) && PRIMARY_ARG.containsKey(it.groupValues[1]) } ?: return null
+        val tool = call.groupValues[1]
+        val q = call.groupValues[2]
+        val start = call.range.last + 1
+        val end = raw.lastIndexOf(q + ")").takeIf { it >= start }
+            ?: raw.lastIndexOf(q).takeIf { it >= start }
+            ?: raw.length.also { }
+        val body = raw.substring(start, end).trim('\n', '\r')
+        if (body.isBlank()) return null
+        val say = raw.substring(0, call.range.first).replace(Regex("```[a-z]*"), "").trim().lines()
+            .filter { it.isNotBlank() }.take(2).joinToString(" ").take(240)
+        return JSONObject().put("say", say).put("tool", tool).put("args", JSONObject().put(PRIMARY_ARG.getValue(tool), body))
+    }
+
     fun recover(raw: String, isKnownTool: (String) -> Boolean): JSONObject? {
         recoverDsml(raw, isKnownTool)?.let { return it }
         val call = Regex("\\b([a-z][a-z0-9_]{2,40})\\(\\s*([A-Za-z_]\\w*)\\s*=").findAll(raw)
-            .firstOrNull { isKnownTool(it.groupValues[1]) } ?: return null
+            .firstOrNull { isKnownTool(it.groupValues[1]) } ?: return recoverPositional(raw, isKnownTool)
         val tool = call.groupValues[1]
         var i = call.range.first + tool.length + 1
         val args = JSONObject()
