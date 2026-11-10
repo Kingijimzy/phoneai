@@ -134,6 +134,8 @@ internal object AgentHooks {
  /** Confirmation is reserved for the three irreversible computer settings only. */
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean =
   IrreversibleActionConfirmationPolicy.computerSettingAction(tool,args) != null
+ fun goalAuditUnavailableVerdict(): String = "CONTINUE: independent goal audit unavailable; task completion cannot be confirmed."
+
  fun completionDecision(request:String,proofs:List<Proof>):GateDecision =
   completionDecision(request, proofs, emptyList())
 
