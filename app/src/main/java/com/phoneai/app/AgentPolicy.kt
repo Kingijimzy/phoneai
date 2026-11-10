@@ -42,7 +42,7 @@ object AgentPolicy {
     /**
      * Core companion packs are enabled on first launch so phone and messaging features are discoverable.
      * This only makes their tools available: Android OS permissions, explicit capability scope and validation
-     * still apply. Only restart, shutdown and Wi-Fi toggles require an action confirmation. Optional bridges remain opt-in.
+     * still apply. Per-tool ASK and DENY are enforced at dispatch, while Trading Desk writes and destructive deletion retain action-specific confirmation. Optional bridges remain opt-in.
      */
     internal val defaultOnPacks = setOf(
         "orion_core", "connected_services", "workspace_shell", "self_test",
