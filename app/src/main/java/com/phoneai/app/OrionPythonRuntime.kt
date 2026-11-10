@@ -66,6 +66,32 @@ internal object OrionPythonRuntime {
             }
         }
 
+        // FULL profile includes pip so Orion can install ordinary Python dependencies and build wheels.
+        // Keep the package manager in the guest rootfs; project files remain in the shared workspace.
+        val full = OrionOwnerDialSettings.read(app).pythonProfile == OrionPythonProfile.FULL
+        if (full) {
+            val pipProbe = installer.execute(
+                manifest, "python3 -m pip --version", 12_000L,
+                workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
+            )
+            if (!pipProbe.startsWith("exit=0")) {
+                val pipInstall = installer.execute(
+                    manifest, "apk add --no-cache py3-pip", 180_000L,
+                    onOutput = onOutput, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
+                )
+                if (!pipInstall.startsWith("exit=0")) {
+                    return runBundled(app, workspaceRoot, code, "Alpine pip installation failed: " + pipInstall.take(160).replace("\\n", " "))
+                }
+                val pipVerify = installer.execute(
+                    manifest, "python3 -m pip --version", 12_000L,
+                    workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
+                )
+                if (!pipVerify.startsWith("exit=0")) {
+                    return runBundled(app, workspaceRoot, code, "Alpine pip verification failed")
+                }
+            }
+        }
+
         // CPython can write directly through the bind mount, bypassing OrionPythonWorkspace.write().
         // Refuse to start with an already exhausted/unsafe workspace and audit it again after exit.
         when (workspace.quotaStatus()) {
@@ -81,7 +107,6 @@ internal object OrionPythonRuntime {
         }
         var quotaExceededDuringRun = false
         val result = try {
-            val full = OrionOwnerDialSettings.read(app).pythonProfile == OrionPythonProfile.FULL
             val bootstrap = OrionPythonPhoneBridge.bootstrapCommand(full)
             val limits = if (full) "ulimit -c 0; ulimit -t 9000; ulimit -f 8388608; ulimit -n 2048; ulimit -u 1024" else "ulimit -c 0; ulimit -t 90; ulimit -f 4096; ulimit -n 64; ulimit -u 32"
             installer.execute(
