@@ -35,8 +35,8 @@ class OrionPythonCapabilitiesTest {
     }
 
     @Test fun fullWorkspaceBudgetSupportsLargeProjectsAndGeneratedAssets() {
-        assertEquals(32 * 1024 * 1024, OrionPythonWorkspace.MAX_FILE_BYTES)
-        assertEquals(1024L * 1024 * 1024, OrionPythonWorkspace.MAX_TOTAL_BYTES)
+        assertEquals(512 * 1024 * 1024, OrionPythonWorkspace.MAX_FILE_BYTES)
+        assertEquals(8L * 1024 * 1024 * 1024, OrionPythonWorkspace.MAX_TOTAL_BYTES)
     }
 
     @Test fun workspaceEnforcesPerFileAndTotalBounds() {
