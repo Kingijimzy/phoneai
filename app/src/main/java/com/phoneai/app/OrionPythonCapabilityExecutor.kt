@@ -125,21 +125,18 @@ internal class OrionPythonCapabilityExecutor(
         if (!testReceipts.record(id, report)) {
             return "error: sandbox tests passed but their durable verification receipt could not be saved; extension remains disabled"
         }
-        val ownerAutoActivation = OrionOwnerDialSettings.read(context).autoActivateVerifiedExtensions
-        val autoActivated = ownerAutoActivation && activateVerifiedVersion(extension, report, approved = true)
+        val autoActivated = activateVerifiedVersion(extension, report)
         AgentPolicy.log(
             context, "extension:$id", "auto-activate", autoActivated,
-            if (autoActivated) "owner pre-approval promoted exact-hash sandbox-tested extension"
-            else if (ownerAutoActivation) "owner auto-activation was enabled but promotion failed validation"
-            else "owner auto-activation is off; awaiting an explicit extension_enable tool request"
+            if (autoActivated) "exact-hash sandbox-tested extension promoted automatically"
+            else "automatic promotion failed exact-source verification or version-history persistence"
         )
         if (autoActivated) runCatching { OrionLessons.learn(context, "Built and activated tool '$id' (${extension.displayName}): ${extension.description.take(100)}. Reuse it via extension_run before building anything similar.") }
         return if (autoActivated) {
             "SANDBOX TEST PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
         } else {
             "SANDBOX TEST PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} " +
-                if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use explicit extension_enable approval."
-                else "Next: extension_enable (requires an explicit extension_enable tool request)."
+                "Automatic promotion failed; inspect the test receipt and version history before retrying."
         }
     }
 
@@ -151,12 +148,12 @@ internal class OrionPythonCapabilityExecutor(
             return "Extension $id is enabled and its verified version is archived."
         val report = testReceipts.get(id, extension.sourceSha256)
             ?: return "error: no successful runtime sandbox test receipt matches the current source; run extension_test again"
-        return if (activateVerifiedVersion(extension, report, approved = true)) "Extension $id is enabled and its verified version is archived."
+        return if (activateVerifiedVersion(extension, report)) "Extension $id is enabled and its verified version is archived."
         else "error: extension promotion failed; verification or version history could not be committed"
     }
 
-    private fun activateVerifiedVersion(extension: GeneratedExtension, report: ExtensionTestReport, approved: Boolean): Boolean {
-        if (!extensionStore.promote(extension.id, report, userApproved = approved)) return false
+    private fun activateVerifiedVersion(extension: GeneratedExtension, report: ExtensionTestReport): Boolean {
+        if (!extensionStore.promote(extension.id, report)) return false
         if (versionHistory.record(extension.copy(enabled = true, verified = true))) return true
         extensionStore.disable(extension.id)
         return false
@@ -184,7 +181,7 @@ internal class OrionPythonCapabilityExecutor(
         if (!versionHistory.record(active.copy(enabled = true, verified = true))) {
             return "error: could not preserve the current version before rollback"
         }
-        return if (extensionStore.activateVersion(previous, receipt, approved = true)) {
+        return if (extensionStore.activateVersion(previous, receipt)) {
             "Extension $id rolled back to verified version ${previous.version}."
         } else "error: rollback activation failed; current version remains unchanged"
     }

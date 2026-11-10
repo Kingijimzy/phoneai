@@ -19,13 +19,11 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 
-/** User-facing approval modes, capability toggles, diagnostics and audit log. */
+/** Partner runtime diagnostics, task controls and privacy-safe action log. */
 class AgentControlActivity : Activity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private lateinit var root: LinearLayout
-    private lateinit var modeStatus: TextView
     private lateinit var testReport: TextView
-    private lateinit var packStatus: TextView
     private lateinit var commandModelStatus: TextView
     private lateinit var termuxBridgeStatus: TextView
     private lateinit var remoteComputerStatus: TextView
@@ -41,55 +39,16 @@ class AgentControlActivity : Activity() {
         scroll.addView(root)
         setContentView(scroll)
         addText("ORION / AGENT CONTROL", 10f, Theme.MUTED, true, 0)
-        addText("Approval & capabilities", 26f, Theme.TEXT, true, 4)
-        addText("Core phone and messaging tools are available by default. Optional services may need setup or Android permission. Per-tool Allow / Ask / Deny settings are enforced at dispatch; Trading Desk writes and destructive deletion also require confirmation. Unsupported integrations stay visibly off.", 13f, Theme.MUTED, false, 8)
+        addText("Partner runtime", 26f, Theme.TEXT, true, 4)
+        addText("Orion operates through the registered capability runtime without generic approval modes, per-tool permission switches or capability-pack locks. Actual Android OS permissions, provider sign-in, Trading/Coach controls and confirmation before wiping or deleting data remain active.", 13f, Theme.MUTED, false, 8)
         addButton("‹ Back to settings") { finish() }
 
-        section("APPROVAL MODE")
-        modeStatus = addText("", 14f, Theme.TEXT, true, 5)
-        addText("Plan = suggest actions without executing. Allow = execute immediately, except restart, shutdown and Wi-Fi toggles which ask once. Capability packs and Android permissions still apply.", 12f, Theme.MUTED, false, 4)
-        addButton("Choose approval mode") { chooseMode() }
-        addButton("Start trusted session (15–120 min)") { startTrusted() }
-        addButton("STOP / LOCK TRUST NOW", true) {
-            AgentPolicy.stopTrustedSession(this)
-            refresh()
-            Toast.makeText(this, "Trusted session stopped.", Toast.LENGTH_SHORT).show()
-        }
+        section("OPERATING MODEL")
+        addText("PARTNER OPERATION · ACTIVE", 14f, Theme.TEXT, true, 5)
+        addText("Research, coding, Python, files, phone actions and background objectives run when their real capability and Android prerequisites are available. Orion reports progress and verifies results. It asks before destructive deletion or wiping; Trading/Coach actions keep their own controls.", 12f, Theme.MUTED, false, 4)
 
-        section("CAPABILITY PACKS")
-        packStatus = addText("Enabled packs are stored locally. Packs without a working adapter cannot be enabled yet.", 12f, Theme.MUTED, false, 5)
-        AgentPolicy.packs.forEach { pack ->
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(12), dp(10), dp(12), dp(10))
-                background = GradientDrawable().apply { setColor(0xFF191919.toInt()); cornerRadius = dp(12).toFloat(); setStroke(dp(1), 0xFF343434.toInt()) }
-            }
-            val sw = Switch(this).apply {
-                text = pack.title + if (pack.implemented) "" else " · not ready"
-                setTextColor(Theme.TEXT)
-                isChecked = AgentPolicy.enabled(this@AgentControlActivity, pack.id)
-                isEnabled = pack.implemented
-                setOnCheckedChangeListener { _, checked ->
-                    AgentPolicy.setEnabled(this@AgentControlActivity, pack.id, checked)
-                    if (pack.id == "termux_bridge") {
-                        getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
-                            .putBoolean("termux_bridge_enabled", checked).apply()
-                    }
-                    if (pack.id == "proactive") {
-                        if (checked) ProactiveBriefing.schedule(this@AgentControlActivity)
-                        else ProactiveBriefing.cancel(this@AgentControlActivity)
-                    }
-                    if (pack.id == "gaming_hobby") {
-                        if (checked) GamingFocus.schedule(this@AgentControlActivity)
-                        else GamingFocus.cancel(this@AgentControlActivity)
-                    }
-                    refresh()
-                }
-            }
-            row.addView(sw)
-            row.addView(TextView(this).apply { text = pack.description; textSize = 12f; setTextColor(Theme.MUTED); setPadding(0, dp(3), 0, 0) })
-            root.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
-        }
+        section("RUNTIME CAPABILITIES")
+        addText("Registered capabilities are available without app-level permission toggles. Optional bridges still require their real service to be installed or connected; Android-controlled access is never fabricated.", 12f, Theme.MUTED, false, 5)
 
         section("BUDGETS & MODEL SPLIT")
         addText("Current per-task limits: ${AgentPolicy.maxSteps(this)} steps · ${AgentPolicy.maxCalls(this)} calls · ${AgentPolicy.maxMinutes(this)} minutes.", 12f, Theme.MUTED, false, 4)
@@ -215,34 +174,6 @@ class AgentControlActivity : Activity() {
             .setNegativeButton("CANCEL", null).show()
     }
 
-    private fun chooseMode() {
-        val modes = AgentPolicy.Mode.values()
-        AlertDialog.Builder(this).setTitle("Approval mode")
-            .setItems(modes.map { it.label }.toTypedArray()) { _, which ->
-                AgentPolicy.setMode(this, modes[which])
-                AgentPolicy.log(this, "policy", "mode-change", true, "mode set to ${modes[which].name}")
-                refresh()
-            }.show()
-    }
-    private fun startTrusted() {
-        val enabled = AgentPolicy.packs.filter { it.implemented && AgentPolicy.enabled(this, it.id) }
-        if (enabled.isEmpty()) {
-            Toast.makeText(this, "Enable at least one supported pack first.", Toast.LENGTH_LONG).show()
-            return
-        }
-        val names = enabled.map { it.title }.toTypedArray()
-        val selected = BooleanArray(enabled.size) { true }
-        AlertDialog.Builder(this).setTitle("Trust selected packs temporarily")
-            .setMultiChoiceItems(names, selected) { _, i, checked -> selected[i] = checked }
-            .setPositiveButton("CONTINUE") { _, _ ->
-                val minutes = intArrayOf(15, 30, 60, 120)
-                AlertDialog.Builder(this).setTitle("Session duration")
-                    .setItems(arrayOf("15 minutes", "30 minutes", "60 minutes", "120 minutes")) { _, idx ->
-                        AgentPolicy.startTrustedSession(this, minutes[idx], enabled.filterIndexed { i, _ -> selected[i] }.map { it.id }.toSet())
-                        refresh()
-                    }.show()
-            }.setNegativeButton("CANCEL", null).show()
-    }
     private fun chooseBudgets() {
         val current = "${AgentPolicy.maxSteps(this)},${AgentPolicy.maxCalls(this)},${AgentPolicy.maxMinutes(this)}"
         val input = android.widget.EditText(this).apply {
@@ -260,12 +191,6 @@ class AgentControlActivity : Activity() {
     }
 
     private fun proposeSkill() {
-        if (!AgentPolicy.enabled(this, "self_evolution")) {
-            AlertDialog.Builder(this).setTitle("Self-evolution is disabled")
-                .setMessage("Enable the Self-evolution capability pack first. New skills remain disabled until you separately approve them.")
-                .setPositiveButton("OK", null).show()
-            return
-        }
         val id = android.widget.EditText(this).apply { hint = "Skill ID (lowercase, e.g. focus_helper)" }
         val version = android.widget.EditText(this).apply { hint = "Version (MAJOR.MINOR.PATCH)"; setText("1.0.0") }
         val purpose = android.widget.EditText(this).apply { hint = "Purpose and expected behavior"; minLines = 2; maxLines = 4 }
@@ -277,7 +202,7 @@ class AgentControlActivity : Activity() {
             setPadding(dp(18), dp(4), dp(18), dp(4))
             listOf(id, version, purpose, toolIds, calls, seconds).forEach { addView(it) }
         }
-        AlertDialog.Builder(this).setTitle("Propose skill · not enabled")
+        AlertDialog.Builder(this).setTitle("Create declarative skill")
             .setMessage("A skill is metadata referencing existing tools only. No arbitrary code, unrestricted shell, or new Android permissions. Static checks run before saving.")
             .setView(ScrollView(this).apply { addView(container) })
             .setNegativeButton("CANCEL", null)
@@ -289,8 +214,8 @@ class AgentControlActivity : Activity() {
                     allowedTools = toolIds.text.toString().split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet(),
                     maxCalls = calls.text.toString().toIntOrNull() ?: -1,
                     maxDurationMs = (seconds.text.toString().toLongOrNull() ?: -1L) * 1000L,
-                    requiresApproval = true,
-                    enabled = false
+                    requiresApproval = false,
+                    enabled = true
                 )
                 val check = SkillRegistry.validate(candidate)
                 if (!check.allowed) {
@@ -299,19 +224,12 @@ class AgentControlActivity : Activity() {
                     return@setPositiveButton
                 }
                 val registered = SkillRegistry.register(this, candidate)
-                AgentPolicy.log(this, "skill-proposal", "register", registered.allowed, if (registered.allowed) "validated skill saved disabled" else registered.reason)
+                AgentPolicy.log(this, "skill-proposal", "register", registered.allowed, if (registered.allowed) "validated declarative skill saved and enabled" else registered.reason)
                 if (!registered.allowed) {
                     AlertDialog.Builder(this).setTitle("Could not save proposal").setMessage(registered.reason).setPositiveButton("OK", null).show()
                     return@setPositiveButton
                 }
-                AlertDialog.Builder(this).setTitle("Review skill proposal")
-                    .setMessage("ID: ${candidate.id}\nVersion: ${candidate.version}\nPurpose: ${candidate.description}\nTools: ${candidate.allowedTools.sorted().joinToString(", ")}\nBudget: ${candidate.maxCalls} calls / ${candidate.maxDurationMs / 1000}s\nRisk: approval required; only registered tools; disabled by default.\n\nEnable this skill now?")
-                    .setNegativeButton("KEEP DISABLED") { _, _ -> AgentPolicy.log(this, "skill:${candidate.id}", "enable", false, "user kept proposed skill disabled") }
-                    .setPositiveButton("APPROVE & ENABLE") { _, _ ->
-                        val enabled = SkillRegistry.setEnabled(this, candidate.id, true)
-                        AgentPolicy.log(this, "skill:${candidate.id}", "enable", enabled.allowed, if (enabled.allowed) "user approved skill enablement" else enabled.reason)
-                        Toast.makeText(this, if (enabled.allowed) "Skill enabled. You can revoke it here." else enabled.reason, Toast.LENGTH_LONG).show()
-                    }.show()
+                Toast.makeText(this, "Skill saved and enabled. Orion can use it when the request matches.", Toast.LENGTH_LONG).show()
             }.show()
     }
 
@@ -325,7 +243,7 @@ class AgentControlActivity : Activity() {
         AlertDialog.Builder(this).setTitle("Review or revoke skills")
             .setItems(labels) { _, index ->
                 val skill = skills[index]
-                val details = "ID: ${skill.id}\nVersion: ${skill.version}\nPurpose: ${skill.description}\nTools: ${skill.allowedTools.sorted().joinToString(", ")}\nBudget: ${skill.maxCalls} calls / ${skill.maxDurationMs / 1000}s\nApproval required: ${skill.requiresApproval}\nEnabled: ${skill.enabled}"
+                val details = "ID: ${skill.id}\nVersion: ${skill.version}\nPurpose: ${skill.description}\nTools: ${skill.allowedTools.sorted().joinToString(", ")}\nBudget: ${skill.maxCalls} calls / ${skill.maxDurationMs / 1000}s\nSkill-level approval: none\nEnabled: ${skill.enabled}"
                 val builder = AlertDialog.Builder(this).setTitle(skill.id).setMessage(details).setNegativeButton("CLOSE", null)
                 if (skill.enabled) {
                     builder.setPositiveButton("REVOKE / DISABLE") { _, _ ->
@@ -334,18 +252,21 @@ class AgentControlActivity : Activity() {
                         Toast.makeText(this, if (result.allowed) "Skill disabled." else result.reason, Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    if (AgentPolicy.enabled(this, "self_evolution")) {
-                        builder.setPositiveButton("APPROVE & ENABLE") { _, _ ->
-                            val result = SkillRegistry.setEnabled(this, skill.id, true)
-                            AgentPolicy.log(this, "skill:${skill.id}", "enable", result.allowed, if (result.allowed) "user approved skill enablement" else result.reason)
-                            Toast.makeText(this, if (result.allowed) "Skill enabled." else result.reason, Toast.LENGTH_SHORT).show()
-                        }
+                    builder.setPositiveButton("ENABLE") { _, _ ->
+                        val result = SkillRegistry.setEnabled(this, skill.id, true)
+                        AgentPolicy.log(this, "skill:${skill.id}", "enable", result.allowed, if (result.allowed) "skill enabled in partner runtime" else result.reason)
+                        Toast.makeText(this, if (result.allowed) "Skill enabled." else result.reason, Toast.LENGTH_SHORT).show()
                     }
                     if (!skill.id.startsWith("whatsapp_draft") && !skill.id.startsWith("email_draft")) {
                         builder.setNeutralButton("REMOVE") { _, _ ->
-                            val result = SkillRegistry.remove(this, skill.id)
-                            AgentPolicy.log(this, "skill:${skill.id}", "remove", result.allowed, if (result.allowed) "user removed skill" else result.reason)
-                            Toast.makeText(this, if (result.allowed) "Skill removed." else result.reason, Toast.LENGTH_SHORT).show()
+                            AlertDialog.Builder(this).setTitle("Delete skill ${skill.id}?")
+                                .setMessage("This removes the skill definition. Continue?")
+                                .setNegativeButton("CANCEL", null)
+                                .setPositiveButton("DELETE") { _, _ ->
+                                    val result = SkillRegistry.remove(this, skill.id)
+                                    AgentPolicy.log(this, "skill:${skill.id}", "remove", result.allowed, if (result.allowed) "user removed skill" else result.reason)
+                                    Toast.makeText(this, if (result.allowed) "Skill removed." else result.reason, Toast.LENGTH_SHORT).show()
+                                }.show()
                         }
                     }
                 }
@@ -466,7 +387,7 @@ class AgentControlActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (::modeStatus.isInitialized) refresh()
+        refresh()
     }
 
     private fun createCustomAgent() {
@@ -532,15 +453,12 @@ class AgentControlActivity : Activity() {
     }
 
     private fun refresh() {
-        modeStatus.text = "Mode: ${AgentPolicy.mode(this).label} · default is Allow\nTrusted pack session: ${if (AgentPolicy.trustedUntil(this) > System.currentTimeMillis()) java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(AgentPolicy.trustedUntil(this))) else "not active"}"
-        packStatus.text = "Enabled: ${AgentPolicy.packs.count { AgentPolicy.enabled(this, it.id) }} · unsupported packs remain off. Only enabled packs should be dispatchable."
         commandModelStatus.text = commandModelSummary()
         val installed = termuxInstalled()
-        val termuxOn = installed && AgentPolicy.enabled(this, "termux_bridge") &&
-            getSharedPreferences("phoneai", Context.MODE_PRIVATE).getBoolean("termux_bridge_enabled", false)
+        val termuxOn = installed && AgentPolicy.enabled(this, "termux_bridge")
         termuxBridgeStatus.text = "Termux bridge: " + when {
             termuxOn -> "enabled · permissions checked per command"
-            installed -> "installed but bridge is off"
+            installed -> "installed; checking Android RUN_COMMAND access"
             else -> "not installed / off"
         }
         remoteComputerStatus.text = "Remote computer: " + if (Prefs.hasKey(this, "cursor_cloud_agents")) {

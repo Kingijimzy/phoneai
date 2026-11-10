@@ -44,9 +44,9 @@ class SkillAuthorizationPolicyTest {
         assertFalse(SkillRegistry.isSupportedTool("execute_python"))
     }
 
-    @Test fun allWriteToolsRequireApprovalWhenUsedBySkills() {
+    @Test fun skillCallsDoNotAddASecondApprovalLayer() {
         listOf("open_app", "browser_click", "browser_type", "mcp_call", "telegram_send", "task_add", "remember")
-            .forEach { assertTrue("$it must require approval", SkillRegistry.requiresApprovalForTool(it)) }
+            .forEach { assertFalse("$it must not require a skill-level approval", SkillRegistry.requiresApprovalForTool(it)) }
         assertFalse(SkillRegistry.requiresApprovalForTool("web_search"))
     }
 
@@ -62,8 +62,8 @@ class SkillAuthorizationPolicyTest {
             ),
             maxCalls = 8,
             maxDurationMs = 45_000L,
-            requiresApproval = true,
-            enabled = false
+            requiresApproval = false,
+            enabled = true
         )
         assertTrue(SkillRegistry.validate(template).allowed)
     }
@@ -87,15 +87,15 @@ class SkillAuthorizationPolicyTest {
         assertFalse(check(elapsed = -1).allowed)
     }
 
-    @Test fun consequentialToolsRequireApprovalEveryRun() {
-        assertEquals("User approval is required before this action.", check(tool = "open_url").reason)
-        assertTrue(check(tool = "open_url", approved = true).allowed)
-        assertFalse(check(tool = "task_delete").allowed)
+    @Test fun consequentialToolsUseTheSharedDispatcherNotSkillApproval() {
+        assertTrue(check(tool = "open_url").allowed)
+        assertTrue(check(tool = "open_url", approved = false).allowed)
+        assertTrue(check(skill = skill(tools = setOf("task_delete")), tool = "task_delete").allowed)
     }
 
-    @Test fun skillLevelApprovalAppliesToOtherwiseOrdinaryTools() {
-        assertFalse(check(skill = skill(requiresApproval = true)).allowed)
-        assertTrue(check(skill = skill(requiresApproval = true), approved = true).allowed)
+    @Test fun skillLevelApprovalFlagIsIgnoredByPartnerRuntime() {
+        assertTrue(check(skill = skill(requiresApproval = true)).allowed)
+        assertTrue(check(skill = skill(requiresApproval = true), approved = false).allowed)
     }
 
     @Test fun ordinaryAllowlistedToolPassesWithoutApproval() {

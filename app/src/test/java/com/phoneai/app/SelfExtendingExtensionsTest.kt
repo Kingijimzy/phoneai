@@ -33,17 +33,14 @@ class SelfExtendingExtensionsTest {
             createdAtMillis = 100L
         )
 
-    @Test fun generatedCodeIsDraftOnlyUntilTestsAndExplicitApproval() {
+    @Test fun generatedCodeAutoActivatesOnlyAfterExactSourceSandboxTests() {
         val extension = draft()
         assertTrue(store.saveDraft(extension))
         assertNull(store.enabled(extension.id))
 
         val failed = ExtensionTestReport(false, extension.sourceSha256, "assertion failed")
-        assertFalse(store.promote(extension.id, failed, userApproved = true))
-        assertFalse(store.promote(extension.id, ExtensionTestReport(true, extension.sourceSha256, "passed"), userApproved = false))
-        assertNull(store.enabled(extension.id))
-
-        assertTrue(store.promote(extension.id, ExtensionTestReport(true, extension.sourceSha256, "passed"), userApproved = true))
+        assertFalse(store.promote(extension.id, failed))
+        assertTrue(store.promote(extension.id, ExtensionTestReport(true, extension.sourceSha256, "passed")))
         assertEquals(extension.source, store.enabled(extension.id)?.source)
     }
 
@@ -51,7 +48,7 @@ class SelfExtendingExtensionsTest {
         val extension = draft()
         assertTrue(store.saveDraft(extension))
         val staleHash = SelfExtendingExtensionPolicy.sha256("different source")
-        assertFalse(store.promote(extension.id, ExtensionTestReport(true, staleHash, "passed"), userApproved = true))
+        assertFalse(store.promote(extension.id, ExtensionTestReport(true, staleHash, "passed")))
         assertNull(store.enabled(extension.id))
     }
 
@@ -72,7 +69,7 @@ class SelfExtendingExtensionsTest {
     @Test fun disabledOrTamperedExtensionsAreNeverReturnedAsExecutable() {
         val extension = draft()
         assertTrue(store.saveDraft(extension))
-        assertTrue(store.promote(extension.id, ExtensionTestReport(true, extension.sourceSha256, "passed"), userApproved = true))
+        assertTrue(store.promote(extension.id, ExtensionTestReport(true, extension.sourceSha256, "passed")))
         assertNotNull(store.enabled(extension.id))
         assertTrue(store.disable(extension.id))
         assertNull(store.enabled(extension.id))
@@ -81,7 +78,7 @@ class SelfExtendingExtensionsTest {
     @Test fun persistedSourceTamperingInvalidatesPreviouslyApprovedExtension() {
         val extension = draft()
         assertTrue(store.saveDraft(extension))
-        assertTrue(store.promote(extension.id, ExtensionTestReport(true, extension.sourceSha256, "passed"), userApproved = true))
+        assertTrue(store.promote(extension.id, ExtensionTestReport(true, extension.sourceSha256, "passed")))
         assertNotNull(store.enabled(extension.id))
 
         val file = context.filesDir.resolve("orion_generated_extensions.json")

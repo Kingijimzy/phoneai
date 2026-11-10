@@ -4,11 +4,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OrionAutonomyPolicyTest {
-    @Test fun modesMapToExpectedExistingToolPolicies() {
-        assertEquals("balanced", OrionAutonomyPolicy.preset(OrionMode.TALK))
-        assertEquals("balanced", OrionAutonomyPolicy.preset(OrionMode.ASSIST))
-        assertEquals("autonomous", OrionAutonomyPolicy.preset(OrionMode.AUTOPILOT))
-        assertEquals("careful", OrionAutonomyPolicy.preset(OrionMode.BUILDER))
+    @Test fun legacyModeNamesResolveToOnePartnerPosture() {
+        for (mode in OrionMode.values()) assertEquals("partner", OrionAutonomyPolicy.preset(mode))
+    }
+
+    @Test fun oldModeValuesNeverRestrictWritesOrBackgroundExecution() {
+        for (mode in OrionMode.values()) {
+            assertFalse(OrionAutonomyPolicy.blocksWrite(mode, ToolAccess.WRITE))
+            assertTrue(OrionAutonomyRunPolicy.canRun(mode, true, true, true, true, false))
+        }
     }
 
     @Test fun talkModeUsesPerToolPermissionsInsteadOfBlockingAllWrites() {

@@ -13,43 +13,25 @@ import android.widget.TextView
 import android.widget.Switch
 import android.view.ViewGroup
 
-/** Autonomy control center: high-level mode, per-tool standing rules, budgets, notifications and OS grant status. */
+/** Partner control center: execution budgets, notifications and actual Android grant status only. */
 internal fun Activity.showToolPermissions() = showAutonomyControlCenter()
 
 internal fun Activity.showAutonomyControlCenter() {
-    val config = OrionAutonomySettings.read(this)
-    val modeLabels = OrionMode.values().map { "${it.name.lowercase().replaceFirstChar(Char::uppercase)} — ${OrionAutonomyPolicy.description(it)}" }
-    AlertDialog.Builder(this)
-        .setTitle("Orion autonomy control center")
-        .setSingleChoiceItems(modeLabels.toTypedArray(), OrionMode.values().indexOf(config.mode)) { d, which ->
-            d.dismiss()
-            val mode = OrionMode.values()[which]
-            val latest = OrionAutonomySettings.read(this).copy(mode = mode)
-            OrionAutonomySettings.write(this, latest)
-            ToolPermissions.applyLevel(this, OrionAutonomyPolicy.preset(mode))
-            // Keep the existing execution governor in sync with the selected control-center limits.
-            AgentPolicy.setBudgets(this, latest.maxToolSteps, latest.maxAiRequests, AgentPolicy.maxMinutes(this))
-            showControlCenterMenu("Mode saved: ${mode.name}. Existing action-specific confirmations remain in force.")
-        }
-        .setNeutralButton("More controls") { _, _ -> showControlCenterMenu(null) }
-        .setNegativeButton("Close", null)
-        .show()
+    showControlCenterMenu("Partner operation is active. Orion can use registered capabilities without generic mode or per-tool permission prompts. Android OS grants, service sign-in, Trading/Coach controls, and confirmation before destructive deletion remain in place.")
 }
 
 private fun Activity.showControlCenterMenu(message: String?) {
     val rows = listOf(
         "Execution limits",
         "Notifications",
-        "Individual capability permissions",
         "Android permission status"
     )
-    val builder = AlertDialog.Builder(this).setTitle("Autonomy controls")
+    val builder = AlertDialog.Builder(this).setTitle("Partner controls")
         .setItems(rows.toTypedArray()) { _, which ->
             when (which) {
                 0 -> showExecutionLimits()
                 1 -> showAutonomyNotifications()
-                2 -> showToolList()
-                3 -> showAndroidPermissionStatus()
+                2 -> showAndroidPermissionStatus()
             }
         }.setNegativeButton("Close", null)
     if (!message.isNullOrBlank()) builder.setMessage(message)

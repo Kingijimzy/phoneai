@@ -630,29 +630,7 @@ class SettingsActivity : Activity() {
         switchRow(s2, "Conserve API quota (fewer retries; recommended)", Prefs.quotaSaver(this)) {
             Prefs.setQuotaSaver(this, it)
         }
-        add(s2, button("Execution mode · " + Prefs.executionMode(this), false) {
-            showChoiceDialog(
-                "Execution mode",
-                "PLAN blocks write actions. ACT follows your task scope and existing approvals. FULL permits broader tool use but never bypasses safety checks, task scope, or confirmations.",
-                listOf("PLAN · plan and inspect, no write actions", "ACT · execute within the request scope", "FULL · broader tools, safety gates remain"),
-                { index ->
-                    Prefs.setExecutionMode(this, listOf("PLAN", "ACT", "FULL")[index])
-                    recreate()
-                }
-            )
-        }, 8)
-        add(s2, text("PLAN blocks write tools at the dispatch boundary. ACT is the default. FULL does not bypass confirmation, sensitive-screen, or task-scope protections.", 12f, Theme.MUTED), 4)
-        add(s2, button("Task preset · " + Prefs.taskPreset(this), false) {
-            showChoiceDialog(
-                "Task preset",
-                "Presets change Orion's planning emphasis only. They do not grant extra permissions or bypass approvals.",
-                listOf("GENERAL · everyday companion", "TRADING · evidence-first, read-only bias", "GAMING · bounded visual steps", "RESEARCH · sources and uncertainty"),
-                { index ->
-                    Prefs.setTaskPreset(this, listOf("GENERAL", "TRADING", "GAMING", "RESEARCH")[index])
-                    recreate()
-                }
-            )
-        }, 8)
+        add(s2, text("Orion infers the task context and selects its own capabilities. There are no Talk/Assist/Autopilot/Builder or PLAN/ACT/FULL permission modes.", 12f, Theme.MUTED), 8)
         switchRow(s2, "Allow potentially paid/metered providers (off by default)", Prefs.allowPaidProviders(this)) {
             Prefs.setAllowPaidProviders(this, it)
         }
@@ -1907,7 +1885,7 @@ class SettingsActivity : Activity() {
                 setOf("web_search", "research_web", "fetch_url"), maxCalls = 6, maxDurationMs = 30_000L),
             PhoneAiSkill("browser_operator", "1.0.0", "Navigate public websites with visible screen checks, wait for page elements, and stop before sign-in, payment, posting, or account changes.",
                 setOf("open_app", "open_url", "browser_snapshot", "browser_click", "browser_type", "browser_scroll", "browser_navigate", "browser_back", "web_search", "read_screen", "click_text", "scroll", "wait_for", "research_web"),
-                maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = true),
+                maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = false),
             PhoneAiSkill("device_brief", "1.0.0", "Summarize time, battery, and basic device information.",
                 setOf("time", "battery", "device_info"), maxCalls = 4, maxDurationMs = 15_000L),
             PhoneAiSkill("crypto_snapshot", "1.0.0", "Read a public Bybit spot ticker and explain that it is market data, not a trade signal.",
@@ -1923,10 +1901,10 @@ class SettingsActivity : Activity() {
                 Toast.makeText(this, result.reason, Toast.LENGTH_LONG).show()
                 if (result.allowed) {
                     refresh()
-                    showInfoDialog("Skill created disabled", candidate.description + "\n\nAllowed tools: " +
+                    showInfoDialog("Skill created and enabled", candidate.description + "\n\nAllowed tools: " +
                         candidate.allowedTools.sorted().joinToString(", ") +
                         "\nBudget: " + candidate.maxCalls + " calls / " +
-                        (candidate.maxDurationMs / 1000L) + " seconds. Review it before enabling.",
+                        (candidate.maxDurationMs / 1000L) + " seconds. It is ready for matching requests.",
                         "REVIEW SKILL") {
                         SkillRegistry.list(this).firstOrNull { it.id == candidate.id }?.let { skillOptions(it) }
                     }
@@ -1938,7 +1916,7 @@ class SettingsActivity : Activity() {
         showChoiceDialog(skill.id + " · v" + skill.version,
             skill.description + "\n\nAllowed tools: " + skill.allowedTools.sorted().joinToString(", ") +
                 "\nBudget: " + skill.maxCalls + " calls / " + (skill.maxDurationMs / 1000L) + " seconds" +
-                "\nApproval: " + (if (skill.requiresApproval) "required before every run" else "write-capable tools still require approval"),
+                "\nExecution: runs automatically when its intent and tool allowlist match; Trading/Coach and destructive confirmations stay in the shared dispatcher.",
             listOf(if (skill.enabled) "Disable skill · Stop this skill from running" else "Enable skill · Allow this reviewed skill to run", "Export skill package · Save portable JSON", "Delete skill · Remove its local definition"),
             { which ->
                 if (which == 0) {
@@ -1973,27 +1951,20 @@ class SettingsActivity : Activity() {
             minLines = 2
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
         }
-        val approvalBox = android.widget.CheckBox(this).apply {
-            text = "Require approval for every run"
-            isChecked = true
-            setTextColor(Theme.TEXT)
-            buttonTintList = android.content.res.ColorStateList.valueOf(Theme.TEXT)
-        }
         val wrap = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), 0)
             addView(idBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(descBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(toolsBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            addView(approvalBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             val examples = listOf("web_search", "browser_snapshot", "browser_click", "read_screen", "open_app", "task_add", "remember", "ask_user")
                 .filter { ToolRegistry.find(it) != null }
                 .joinToString(", ")
-            addView(text("Tool names are validated against the live registry. Examples: $examples. Skills cannot add code or bypass approvals.", 11f, Theme.MUTED))
+            addView(text("Tool names are validated against the live registry. Examples: $examples. Skills bind existing registered tools; the shared dispatcher handles Trading/Coach and destructive confirmations.", 11f, Theme.MUTED))
         }
         AlertDialog.Builder(this)
             .setTitle("Create a declarative skill")
-            .setMessage("Use a short ID and only supported tool names. New skills are saved disabled. Write-capable tools always require explicit approval.")
+            .setMessage("Use a short ID and only supported tool names. New skills are enabled when saved. They can only call their declared registered tools.")
             .setView(wrap)
             .setPositiveButton("Save skill") { _, _ ->
                 val allowed = toolsBox.text.toString().split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
@@ -2004,23 +1975,14 @@ class SettingsActivity : Activity() {
                     allowedTools = allowed,
                     maxCalls = 6,
                     maxDurationMs = 30_000L,
-                    requiresApproval = approvalBox.isChecked,
-                    enabled = false
+                    requiresApproval = false,
+                    enabled = true
                 )
                 val result = SkillRegistry.register(this, candidate)
                 Toast.makeText(this, result.reason, Toast.LENGTH_LONG).show()
                 if (result.allowed) {
                     refresh()
-                    AlertDialog.Builder(this)
-                        .setTitle("Enable " + candidate.id + "?")
-                        .setMessage("Enable it only if the purpose and tool allowlist look right.")
-                        .setPositiveButton("Enable") { _, _ ->
-                            val enabled = SkillRegistry.setEnabled(this, candidate.id, true)
-                            Toast.makeText(this, enabled.reason, Toast.LENGTH_SHORT).show()
-                            refresh()
-                        }
-                        .setNegativeButton("Keep disabled", null)
-                        .show()
+                    Toast.makeText(this, "Skill saved and enabled. Orion can use it when the request matches.", Toast.LENGTH_LONG).show()
                 }
             }
             .setNegativeButton("Cancel", null)

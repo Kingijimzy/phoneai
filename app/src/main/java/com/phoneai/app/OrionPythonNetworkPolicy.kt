@@ -4,7 +4,7 @@ import android.content.Context
 import java.net.InetAddress
 import java.net.URI
 
-/** Exact-host network grants. RFC1918 LAN endpoints are permitted only after an explicit host grant. */
+/** Python network access follows Android INTERNET/network configuration; no Orion host grants or write toggles. */
 internal object OrionPythonNetworkPolicy {
     private const val PREFS = "orion_python_network_hosts_v1"
     data class Endpoint(
@@ -16,42 +16,23 @@ internal object OrionPythonNetworkPolicy {
     )
 
     fun grantHost(context: Context, hostInput: String, allowPlainHttp: Boolean = false, allowWrites: Boolean = false): Boolean {
-        val host = normalizeHost(hostInput) ?: return false
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putBoolean(host, true)
-            .putBoolean("$host:plain_http", allowPlainHttp)
-            .putBoolean("$host:writes", allowWrites)
-            .apply()
-        return true
+        return normalizeHost(hostInput) != null
     }
 
-    fun grantedHosts(context: Context): List<String> {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        return prefs.all.keys.filter { key ->
-            !key.endsWith(":plain_http") && !key.endsWith(":writes") && prefs.getBoolean(key, false)
-        }.sorted()
-    }
+    fun grantedHosts(context: Context): List<String> = emptyList()
+    fun revokeHost(context: Context, hostInput: String) = Unit
 
-    fun revokeHost(context: Context, hostInput: String) {
-        val host = normalizeHost(hostInput) ?: return
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .remove(host).remove("$host:plain_http").remove("$host:writes").apply()
-    }
 
     fun validate(context: Context, url: String): Endpoint? = validateUrl(context, url, websocket = false)
     fun validateWebSocket(context: Context, url: String): Endpoint? = validateUrl(context, url, websocket = true)
 
     private fun validateUrl(context: Context, url: String, websocket: Boolean): Endpoint? {
-        if (!OrionSensorConsent.read(context, OrionSensorScope.NETWORK).active()) return null
         val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return null
         if (uri.userInfo != null || uri.fragment != null || (uri.rawQuery?.length ?: 0) > 4096) return null
         val scheme = uri.scheme?.lowercase() ?: return null
         val allowedSchemes = if (websocket) setOf("ws", "wss") else setOf("https", "http")
         if (scheme !in allowedSchemes || uri.host.isNullOrBlank() || uri.port !in -1..65535) return null
         val host = normalizeHost(uri.host) ?: return null
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(host, false)) return null
-
         // Resolve once and pin this exact address set in OkHttp. Mixed public/private DNS answers
         // are rejected to prevent a hostname from changing the network trust boundary.
         val addresses = runCatching { InetAddress.getAllByName(host).toList() }.getOrNull()
@@ -66,9 +47,7 @@ internal object OrionPythonNetworkPolicy {
             return null
         }
         val local = allPrivateLan
-        val plainScheme = scheme == "http" || scheme == "ws"
-        if (plainScheme && (!local || !prefs.getBoolean("$host:plain_http", false))) return null
-        return Endpoint(uri, host, local, prefs.getBoolean("$host:writes", false), addresses)
+        return Endpoint(uri, host, local, true, addresses)
     }
 
     private fun isPrivateLanAddress(address: InetAddress): Boolean {

@@ -55,8 +55,7 @@ class SensorContextActivity : Activity() {
             OrionSensorScope.APP_USAGE to "App usage context",
             OrionSensorScope.CHRONOS_AWARENESS to "Chronos background app-category awareness",
             OrionSensorScope.ROUTINE_REMINDERS to "Routine reminders",
-            OrionSensorScope.CONTACTS to "Contacts",
-            OrionSensorScope.NETWORK to "Python network access"
+            OrionSensorScope.CONTACTS to "Contacts"
         )
         scopes.forEach { (scope, label) ->
             val row = LinearLayout(this).apply {
@@ -124,15 +123,6 @@ class SensorContextActivity : Activity() {
             }
         }
         root.addView(TextView(this).apply {
-            text = "PYTHON NETWORK HOSTS"
-            textSize = 12f; setTextColor(0xffc4ccd5.toInt()); setPadding(0, dp(14), 0, dp(6))
-        })
-        root.addView(TextView(this).apply {
-            text = "MANAGE APPROVED PYTHON HOSTS"
-            textSize = 13f; setTextColor(0xffd5e3f2.toInt()); setPadding(0, dp(8), 0, dp(12))
-            setOnClickListener { managePythonHosts() }
-        })
-        root.addView(TextView(this).apply {
             text = "APP USAGE REQUIRES ANDROID SPECIAL ACCESS"
             textSize = 12f; setTextColor(0xffc4ccd5.toInt()); setPadding(0, dp(14), 0, dp(6))
         })
@@ -164,7 +154,9 @@ class SensorContextActivity : Activity() {
                         }
                         stopMotionSampler()
                         OrionSensorContextStore.clear(this@SensorContextActivity)
-                        rebuild()
+                        // The view tree is already built; clear visible toggles and refresh its status in place.
+                        scopeSwitches.values.forEach { it.isChecked = false }
+                        refreshStatus()
                     }.show()
             }
         }
@@ -186,62 +178,7 @@ class SensorContextActivity : Activity() {
         OrionSensorScope.CHRONOS_AWARENESS -> "Separate background grant. Uses Accessibility window-change events to keep only a coarse app category and focus duration locally for up to two hours. No package name, screen text, notifications or sensitive-app context is retained. Requires App usage context and an enabled Orion Accessibility service."
         OrionSensorScope.ROUTINE_REMINDERS -> "Allows only one-time reminders you explicitly schedule for approved routines."
         OrionSensorScope.CONTACTS -> "Allows bounded local contact searches after both this grant and Android Contacts permission are enabled."
-        OrionSensorScope.NETWORK -> "Allows HTTPS/HTTP and persistent WSS/WS connections only to exact hosts you explicitly add below. RFC1918 private LAN hosts (10/8, 172.16/12, 192.168/16) are allowed after exact-host approval; HTTP and ws:// require the local plain-HTTP switch. POST and WebSocket sends ask each time unless you grant writes for that host."
         else -> "Optional context scope; data is read only when explicitly enabled."
-    }
-
-    private fun managePythonHosts() {
-        val hosts = OrionPythonNetworkPolicy.grantedHosts(this)
-        AlertDialog.Builder(this)
-            .setTitle("Approved Python hosts")
-            .setItems(hosts.toTypedArray()) { _, which ->
-                val host = hosts[which]
-                AlertDialog.Builder(this)
-                    .setMessage("Revoke Python network access to $host?")
-                    .setNegativeButton("CANCEL", null)
-                    .setPositiveButton("REVOKE") { _, _ ->
-                        OrionPythonNetworkPolicy.revokeHost(this, host)
-                        Toast.makeText(this, "Revoked $host", Toast.LENGTH_SHORT).show()
-                    }.show()
-            }
-            .setPositiveButton("ADD HOST") { _, _ -> addPythonHost() }
-            .setNegativeButton("CLOSE", null)
-            .show()
-    }
-
-    private fun addPythonHost() {
-        val host = android.widget.EditText(this).apply {
-            hint = "api.example.com or localhost"
-            setSingleLine(true)
-        }
-        val allowHttp = android.widget.CheckBox(this).apply { text = "Allow plain HTTP (local endpoints only)" }
-        val allowWrites = android.widget.CheckBox(this).apply { text = "Allow HTTP POST and WebSocket sends without asking each time" }
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(8), dp(20), 0)
-            addView(host); addView(allowHttp); addView(allowWrites)
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Grant Python host access")
-            .setMessage("Only add services you trust. HTTPS is required for remote hosts.")
-            .setView(panel)
-            .setNegativeButton("CANCEL", null)
-            .setPositiveButton("SAVE") { _, _ ->
-                val ok = OrionPythonNetworkPolicy.grantHost(
-                    this, host.text.toString(), allowHttp.isChecked, allowWrites.isChecked
-                )
-                Toast.makeText(
-                    this,
-                    if (ok) "Host grant saved. Enable Python network access above to use it."
-                    else "Invalid host name.",
-                    Toast.LENGTH_LONG
-                ).show()
-            }.show()
-    }
-
-    private fun rebuild() {
-        // Recreate the consent view so every switch reflects the revoked state.
-        recreate()
     }
 
     private fun refreshStatus() {

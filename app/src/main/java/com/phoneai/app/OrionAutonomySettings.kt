@@ -7,7 +7,7 @@ import org.json.JSONObject
 internal enum class OrionMode { TALK, ASSIST, AUTOPILOT, BUILDER }
 
 internal data class OrionAutonomyConfig(
-    val mode: OrionMode = OrionMode.ASSIST,
+    val mode: OrionMode = OrionMode.AUTOPILOT,
     val maxToolSteps: Int = 100_000,
     val maxAiRequests: Int = 100_000,
     val maxRetries: Int = 2,
@@ -25,8 +25,7 @@ internal object OrionAutonomyRunPolicy {
         serviceConnected: Boolean,
         agentReady: Boolean,
         userTaskRunning: Boolean
-    ): Boolean = mode == OrionMode.AUTOPILOT && coreEnabled && proactiveEnabled &&
-        serviceConnected && agentReady && !userTaskRunning
+    ): Boolean = coreEnabled && proactiveEnabled && serviceConnected && agentReady && !userTaskRunning
 }
 
 internal object OrionAutonomyPolicy {
@@ -43,30 +42,18 @@ internal object OrionAutonomyPolicy {
         maxRetries = c.maxRetries.coerceIn(MIN_RETRIES, MAX_RETRIES)
     )
 
-    /** Talk is a conversational surface, not a permission level. Tool access is governed by owner rules. */
+    /** No conversational or task mode restricts registered tool access. */
     fun blocksWrite(mode: OrionMode, access: ToolAccess?): Boolean = false
-
-    /** Map high-level modes to existing per-tool presets; explicit per-tool overrides remain visible. */
-    fun preset(mode: OrionMode): String = when (mode) {
-        OrionMode.TALK -> "balanced"
-        OrionMode.ASSIST -> "balanced"
-        OrionMode.AUTOPILOT -> "autonomous"
-        OrionMode.BUILDER -> "careful"
-    }
-
-    fun description(mode: OrionMode): String = when (mode) {
-        OrionMode.TALK -> "Conversational front door: answer directly or use registered tools under the owner’s per-tool permissions and action confirmations."
-        OrionMode.ASSIST -> "Help plan and act with the current per-tool policy."
-        OrionMode.AUTOPILOT -> "Run owner-scheduled goals only while Orion Core and Proactive are enabled; Android permissions and action-specific confirmations still apply."
-        OrionMode.BUILDER -> "Create and test disabled drafts; activation follows the current approval policy."
-    }
+    fun preset(mode: OrionMode): String = "partner"
+    fun description(mode: OrionMode): String =
+        "Partner operation: Orion infers intent, uses registered capabilities, verifies outcomes and reports progress."
 }
 
 internal object OrionAutonomySettings {
     private const val FILE = "phoneai"
     fun read(c: Context): OrionAutonomyConfig {
         val p = c.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-        val mode = runCatching { OrionMode.valueOf(p.getString("orion_mode", "ASSIST") ?: "ASSIST") }.getOrDefault(OrionMode.ASSIST)
+        val mode = OrionMode.AUTOPILOT
         return OrionAutonomyPolicy.clamp(OrionAutonomyConfig(
             mode = mode,
             maxToolSteps = p.getInt("orion_max_tool_steps_v5", 100_000),

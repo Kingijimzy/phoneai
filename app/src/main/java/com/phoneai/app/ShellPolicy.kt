@@ -3,8 +3,8 @@ package com.phoneai.app
 enum class ShellRisk { SAFE, BLOCKED }
 
 /**
- * Owner-authorized shell policy. Ordinary workspace and system commands execute without
- * per-command approval; only destructive device-level primitives are hard-blocked.
+ * Shell execution policy. Destructive file/system operations are sent to the shared one-time
+ * confirmation surface; only private credential-store reads and process-fork bombs are hard-blocked.
  * Inspect both the original command and a conservative dequoted form so simple quoting
  * and escaping cannot trivially bypass the guard.
  */
@@ -53,12 +53,10 @@ internal object ShellPolicy {
 
     fun classify(command: String): ShellRisk {
         val forms = inspectionForms(command)
-        if (forms.any { form -> rootOrSystemWipe.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
-        if (forms.any { form -> factoryResetProtection.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
-        if (forms.any { form -> rawBlockDeviceWrite.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
-        if (forms.any { form -> forkBomb.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
         if (forms.any { form -> keyStorage.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
-        // curl|sh style installers are allowed: Orion needs to set up its own tools.
+        if (forms.any { form -> forkBomb.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
+        // rm/rmdir/find -delete, filesystem formats, factory-reset and raw-device writes are
+        // destructive actions: they are not silently blocked; the dispatcher asks once first.
         return ShellRisk.SAFE
     }
 
