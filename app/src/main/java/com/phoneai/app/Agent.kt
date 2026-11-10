@@ -2872,7 +2872,13 @@ Rules:
                     continue
                 }
                 if (!checkpointStarted && toolCalls == 0) {
-                    if (say.isBlank()) ui.say("I understand. What would you like me to do next?")
+                    val unstartedGraph = OrionObjectiveGraph.load(svc)
+                    if (unstartedGraph != null) {
+                        OrionObjectiveGraph.clear(svc)
+                        ui.say("I prepared a plan but could not select a registered action, so I did not start execution. I cleared the unstarted plan rather than leaving a false running task.")
+                    } else if (say.isBlank()) {
+                        ui.say("I understand. What would you like me to do next?")
+                    }
                     return
                 }
                 // Goal check: do not stop just because the model said "done". A cheap second opinion
