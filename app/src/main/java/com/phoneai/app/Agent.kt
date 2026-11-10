@@ -9,6 +9,16 @@ internal object OrionCommandIntentPolicy {
         "(?i)\\bpython\\b.{0,100}\\b(?:code|script|program|calculator)\\b|\\b(?:code|script|program|calculator)\\b.{0,100}\\bpython\\b"
     )
     private val executionVerb = Regex("(?i)\\b(?:run|execute|test|verify)\\b")
+    // Explicit image/artifact creation is an execution objective, not a request for sample code.
+    // This routes the whole request to the guarded planner before Talk can stream a code-only answer.
+    private val imageCreation = Regex(
+        "(?is)\\b(?:generate|create|draw|make|design|produce)\\b.{0,100}\\b(?:image|picture|illustration|artwork|logo|wallpaper|poster)\\b|" +
+            "\\b(?:image|picture|illustration|artwork|logo|wallpaper|poster)\\b.{0,100}\\b(?:generate|create|draw|make|design)\\b"
+    )
+    private val explicitArtifactCreation = Regex(
+        "(?is)\\b(?:create|write|build|generate|make|save)\\b.{0,100}\\b(?:script|program|source\\s+code|code\\s+file|project|application|app|document|spreadsheet|pdf|presentation)\\b|" +
+            "\\b(?:script|program|source\\s+code|code\\s+file|project|application|app|document|spreadsheet|pdf|presentation)\\b.{0,100}\\b(?:create|write|build|generate|make|save)\\b"
+    )
     private val negativeExecution = Regex(
         "(?i)\\b(?:do not|don't|dont|never|without)\\b.{0,35}\\b(?:run|execute|test|verify)\\b"
     )
@@ -68,7 +78,9 @@ internal object OrionCommandIntentPolicy {
         )
 
     fun requiresDirectActionRouting(command: String): Boolean =
-        explicitMemoryWrite.containsMatchIn(command) ||
+        imageCreation.containsMatchIn(command) ||
+            explicitArtifactCreation.containsMatchIn(command) ||
+            explicitMemoryWrite.containsMatchIn(command) ||
             requiresStructuredTaskPlanning(command) ||
             AgentHooks.isPhoneActionRequest(command) ||
             requiresPythonExecution(command) ||
