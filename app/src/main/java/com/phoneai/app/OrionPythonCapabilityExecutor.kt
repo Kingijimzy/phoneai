@@ -30,7 +30,7 @@ internal class OrionPythonCapabilityExecutor(
         if (stopped()) return "error: task was stopped before Python execution."
 
         return when (tool) {
-            "python_exec" -> {
+            "python_exec", "dev_python" -> {
                 val code = args.optString("code")
                 if (stopped()) "error: task was stopped before Python execution."
                 else tools?.pythonExec(code, confirm, stopped)
@@ -218,7 +218,7 @@ internal class OrionPythonCapabilityExecutor(
         fun requiresExplicitApproval(tool: String): Boolean = false
 
         private val supportedTools = setOf(
-            "python_exec", "workspace_list", "extension_list", "extension_create", "extension_update", "extension_test",
+            "python_exec", "dev_python", "workspace_list", "extension_list", "extension_create", "extension_update", "extension_test",
             "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback"
         )
         fun supports(tool: String): Boolean = tool in supportedTools
