@@ -29,8 +29,28 @@ class OrionToolCallRecoveryTest {
         assertEquals("print(1)", r.getJSONObject("args").getString("code"))
     }
 
+    @Test fun detectsImageGenerationPseudoCallBeforeItLeaksIntoChat() {
+        val knownMedia = { n: String -> n == "python_exec" || n == "image_generate" }
+        assertTrue("A streamed partial tool name must remain hidden", OrionToolCallRecovery.shouldHoldFromChat("image_generate", knownMedia))
+        val raw = "On it.\n\n\u0060\u0060\u0060python\nimage_generate(prompt=\"A police cat in New York\")\n\u0060\u0060\u0060"
+        assertTrue(OrionToolCallRecovery.shouldHoldFromChat(raw, knownMedia))
+        val recovered = OrionToolCallRecovery.recover(raw, knownMedia)!!
+        assertEquals("image_generate", recovered.getString("tool"))
+        assertEquals("A police cat in New York", recovered.getJSONObject("args").getString("prompt"))
+    }
+
+    @Test fun ordinaryCodeIsBufferedButNotMistakenForAToolCall() {
+        val raw = "\u0060\u0060\u0060python\\nprint('hello')\\n\u0060\u0060\u0060"
+        assertTrue(OrionToolCallRecovery.shouldHoldFromChat(raw, known))
+        assertNull(OrionToolCallRecovery.recover(raw, known))
+    }
+
+    @Test fun ordinaryConversationDoesNotNeedToBeBuffered() {
+        assertFalse(OrionToolCallRecovery.shouldHoldFromChat("Hello, how can I help?", known))
+    }
+
     @Test fun recoversPositionalFencedCall() {
-        val raw = "```python\npython_exec(\"\"\"\nimport os\nprint(os.getcwd())\n\"\"\")\n```"
+        val raw = "\u0060\u0060\u0060python\npython_exec(\"\"\"\nimport os\nprint(os.getcwd())\n\"\"\")\n\u0060\u0060\u0060"
         val r = OrionToolCallRecovery.recover(raw, known)!!
         assertEquals("python_exec", r.getString("tool"))
         assertTrue(r.getJSONObject("args").getString("code").contains("import os"))
