@@ -22,7 +22,7 @@ object AgentPolicy {
         Pack("proactive", "Proactive", "Opt-in live event-driven Soul watcher and local scheduled task recaps; requires Orion Core and Accessibility Service", true),
         Pack("self_test", "Self-test", "Provider, permission, connectivity and capability checks", true),
         Pack("orion_core", "Orion core", "Local memory, knowledge, tasks, skill discovery and task coordination", true),
-        Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; exact-source sandbox test required, then owner auto-activation setting or explicit extension_enable request", true)
+        Pack("self_evolution", "Self-evolution", "Generated tools are automatically activated only after exact-source sandbox verification; version history and rollback remain available", true)
     )
     private fun p(c: Context) = c.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE)
     /** PLAN is the only global execution stop; legacy saved modes resolve to ALLOW. */
