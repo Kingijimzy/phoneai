@@ -44,6 +44,8 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Send
@@ -352,20 +354,24 @@ private fun ShellActivityCard(raw: String) {
     }
     val clipboard = LocalClipboardManager.current
     var expanded by remember(raw) { mutableStateOf(false) }
+    var open by remember(raw) { mutableStateOf(failed) }
     val mono = androidx.compose.ui.text.font.FontFamily.Monospace
     val green = Color(0xFF7EE787)
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).animateContentSize(animationSpec = tween(220))
-            .background(Color(0xFF0B0B0B)).border(1.dp, if (failed) Color(0xFF6B3A30) else Color(0xFF353535), RoundedCornerShape(12.dp))
+            .background(Color(0xFF1C1C1E)).border(1.dp, if (failed) Color(0xFF6B3A30) else Color(0x40545458), RoundedCornerShape(12.dp))
             .padding(11.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        Row(Modifier.fillMaxWidth().clickable { open = !open }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(if (failed) Color(0xFFE7A18F) else green))
             Text(title, color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
             Spacer(Modifier.weight(1f))
             Text(if (failed) "FAILED" else "DONE", color = if (failed) Color(0xFFE7A18F) else green, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null, tint = ChatMuted, modifier = Modifier.size(16.dp))
         }
+        if (!open) Text(command.take(80), color = ChatMuted, fontSize = 11.sp, fontFamily = mono, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (open) {
         Text(buildAnnotatedString {
             withStyle(SpanStyle(color = green)) { append("$ ") }
             append(command)
@@ -393,6 +399,7 @@ private fun ShellActivityCard(raw: String) {
         }
         Text("COPY", color = ChatMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.clickable { clipboard.setText(AnnotatedString((if (code.isNotBlank()) code + "\n\n" else "") + output)) }.padding(vertical = 2.dp))
+        }
     }
 }
 
@@ -648,7 +655,7 @@ internal fun ImageResultCard(raw: String) {
         if (bmp != null) {
             Image(bmp.asImageBitmap(), contentDescription = caption.ifBlank { "Image from Orion" }, modifier = Modifier.fillMaxWidth(), contentScale = ContentScale.FillWidth)
         } else {
-            Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) { Text("Loading image…", color = ChatMuted, fontSize = 12.sp) }
+            Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) { Text(if (java.io.File(path).exists()) "Loading image…" else "Image file not found: ${path.substringAfterLast('/')}", color = ChatMuted, fontSize = 12.sp) }
         }
         if (caption.isNotBlank()) Text(caption, color = ChatMuted, fontSize = 11.sp, modifier = Modifier.padding(10.dp))
     }
