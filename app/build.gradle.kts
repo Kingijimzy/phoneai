@@ -118,7 +118,6 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        externalNativeBuild { cmake { cppFlags += "-std=c11" } }
         applicationId = "com.phoneai.app"
         minSdk = 30
         targetSdk = 34
@@ -154,10 +153,6 @@ android {
         jvmTarget = "17"
     }
 
-    externalNativeBuild {
-        cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" }
-    }
-
     buildFeatures {
         compose = true
     }
@@ -170,6 +165,7 @@ android {
 dependencies {
     // Resolve after download task; prefer app/libs pre-placement from CI.
     implementation(files(provider { resolveSherpaAar() }).builtBy(downloadSherpaTtsAar))
+    implementation("com.termux.termux-app:terminal-view:0.118.0")
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
