@@ -31,7 +31,7 @@ class OrionToolCallRecoveryTest {
 
     @Test fun detectsImageGenerationPseudoCallBeforeItLeaksIntoChat() {
         val knownMedia = { n: String -> n == "python_exec" || n == "image_generate" }
-        val raw = "On it.\\n\\n\u0060\u0060\u0060python\\nimage_generate(prompt=\\\"A police cat in New York\\\")\\n\u0060\u0060\u0060"
+        val raw = "On it.\n\n\u0060\u0060\u0060python\nimage_generate(prompt=\"A police cat in New York\")\n\u0060\u0060\u0060"
         assertTrue(OrionToolCallRecovery.shouldHoldFromChat(raw, knownMedia))
         val recovered = OrionToolCallRecovery.recover(raw, knownMedia)!!
         assertEquals("image_generate", recovered.getString("tool"))
@@ -49,7 +49,7 @@ class OrionToolCallRecoveryTest {
     }
 
     @Test fun recoversPositionalFencedCall() {
-        val raw = "```python\npython_exec(\"\"\"\nimport os\nprint(os.getcwd())\n\"\"\")\n```"
+        val raw = "\u0060\u0060\u0060python\nprint('hello')\n\u0060\u0060\u0060"
         val r = OrionToolCallRecovery.recover(raw, known)!!
         assertEquals("python_exec", r.getString("tool"))
         assertTrue(r.getJSONObject("args").getString("code").contains("import os"))
