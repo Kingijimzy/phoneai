@@ -6,8 +6,8 @@ import android.content.Context
 internal object PythonExecutionPolicy {
     const val GUARDED_MAX_CODE_CHARS = 8_000
     const val MAX_CODE_CHARS = GUARDED_MAX_CODE_CHARS // compatibility alias for existing tests/callers
-    const val DEVELOPER_MAX_CODE_CHARS = 16_000
-    const val FULL_MAX_CODE_CHARS = 64_000
+    const val DEVELOPER_MAX_CODE_CHARS = 64_000
+    const val FULL_MAX_CODE_CHARS = 256_000
 
     fun rejection(code: String, maxCodeChars: Int = GUARDED_MAX_CODE_CHARS): String? = when {
         code.length > maxCodeChars.coerceIn(GUARDED_MAX_CODE_CHARS, FULL_MAX_CODE_CHARS) ->
