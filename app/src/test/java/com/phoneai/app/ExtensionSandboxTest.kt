@@ -25,8 +25,8 @@ class ExtensionSandboxTest {
         val report = RestrictedPythonSandbox(fake).test(e, listOf(case("{\"values\":[1,2,3]}", 6), case("{\"values\":[]}", 0)))
         assertTrue(report.summary, report.passed)
         assertEquals(SelfExtendingExtensionPolicy.sha256(e.source), report.testedSourceSha256)
-        assertTrue(SelfExtendingExtensionPolicy.mayPromote(report.passed, e.sourceSha256, report.testedSourceSha256))
-        assertTrue("exact-source sandbox success is sufficient", SelfExtendingExtensionPolicy.mayPromote(report.passed, e.sourceSha256, report.testedSourceSha256))
+        assertTrue("exact-source sandbox success is sufficient",
+            SelfExtendingExtensionPolicy.mayPromote(report.passed, e.sourceSha256, report.testedSourceSha256))
     }
 
     @Test fun aWrongResultFailsAndNamesTheCase() {
