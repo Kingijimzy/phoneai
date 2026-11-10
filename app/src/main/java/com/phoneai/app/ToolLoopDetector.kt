@@ -54,6 +54,9 @@ data class ToolLoopConfig(
     val unknownToolThreshold: Int = 10,
     val criticalThreshold: Int = 20,
     val globalCircuitBreakerThreshold: Int = 30,
+    /** Read-only calls with the same arguments and identical output are retried at most twice. */
+    val readOnlyNoProgressWarningThreshold: Int = 1,
+    val readOnlyNoProgressCriticalThreshold: Int = 2,
 ) {
     init {
         require(warningThreshold > 0) { "warningThreshold must be positive" }
@@ -65,6 +68,10 @@ data class ToolLoopConfig(
         }
         require(historySize >= globalCircuitBreakerThreshold) {
             "historySize ($historySize) must be >= globalCircuitBreakerThreshold ($globalCircuitBreakerThreshold)"
+        }
+        require(readOnlyNoProgressWarningThreshold > 0) { "readOnlyNoProgressWarningThreshold must be positive" }
+        require(readOnlyNoProgressWarningThreshold < readOnlyNoProgressCriticalThreshold) {
+            "readOnlyNoProgressWarningThreshold must be < readOnlyNoProgressCriticalThreshold"
         }
     }
 }
@@ -119,6 +126,23 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
         }
 
         val noProgressStreak = getNoProgressStreak(toolName, argsHash)
+
+        // A read-only provider/fetch that returns the exact same result is not making progress.
+        // Warn after the first identical result and block a third attempt after two repeats;
+        // changed output resets the streak. Write tools retain their separate retry policy.
+        if (!isPollTool(toolName, params) && isReadOnlyTool(toolName)) {
+            if (noProgressStreak >= config.readOnlyNoProgressCriticalThreshold) {
+                val msg = "[LOOP BLOCKED] CRITICAL: read-only tool $toolName returned the same result " +
+                    "$noProgressStreak times for identical arguments. Switch source or method; do not repeat this call."
+                Logger.getLogger("ToolLoopDetector").warning(
+                    "CRITICAL read_only_no_progress tool=$toolName streak=$noProgressStreak")
+                return LoopCheckResult(Level.CRITICAL, msg)
+            }
+            if (noProgressStreak >= config.readOnlyNoProgressWarningThreshold) {
+                val msg = "[LOOP WARNING] $toolName returned an unchanged result. Use a different source or method."
+                return LoopCheckResult(Level.WARNING, msg, "read-only:$toolName:$argsHash")
+            }
+        }
 
         // 2. global_circuit_breaker — universal backstop, before poll-specific
         //    rule so a runaway non-poll loop can't slip past on lower thresholds.
@@ -214,6 +238,18 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
                     return LoopCheckResult(Level.WARNING, msg, key)
                 }
             }
+        } else if (isReadOnlyTool(toolName)) {
+            val streak = getNoProgressStreak(toolName, argsHash)
+            if (streak in config.readOnlyNoProgressWarningThreshold until config.readOnlyNoProgressCriticalThreshold) {
+                val key = "read-only:$toolName:$argsHash"
+                if (shouldEmitWarning(key, streak)) {
+                    return LoopCheckResult(
+                        Level.WARNING,
+                        "[LOOP WARNING] $toolName returned an unchanged result. Switch source or method.",
+                        key
+                    )
+                }
+            }
         } else {
             val totalCount = history.count { it.toolName == toolName && it.argsHash == argsHash }
             if (totalCount >= config.warningThreshold) {
@@ -270,6 +306,9 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
         }
         return streak
     }
+
+    private fun isReadOnlyTool(toolName: String): Boolean =
+        ToolRegistry.access(toolName) == ToolAccess.READ
 
     private fun isPollTool(toolName: String, params: Map<String, Any?>): Boolean {
         // task_list is a read-only status poll. Repeating an unchanged task snapshot is not progress.
