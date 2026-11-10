@@ -304,7 +304,7 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
 }
 
 @Composable
-private fun OrionComposeActivityCard(event: OrionActivityEvent, lines: List<OrionChatLine>, onBrowser: (String?) -> Unit, onOpenTerminal: () -> Unit) {
+private fun OrionComposeActivityCard(event: OrionActivityEvent, lines: List<OrionChatLine>, onBrowser: (String?) -> Unit, onOpenTerminal: (String, String) -> Unit) {
     var expanded by rememberSaveable(event.eventId) { mutableStateOf(false) }
     val active = event.status == OrionActivityStatus.ACTIVE
     val accent = when (event.status) {
@@ -436,7 +436,11 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent, lines: List<Orio
             Text(
                 "OPEN TERMINAL  ↗",
                 color = Color(0xFFD5D5D5), fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(start = 13.dp, top = 5.dp).clickable(onClick = onOpenTerminal)
+                modifier = Modifier.padding(start = 13.dp, top = 5.dp).clickable {
+                    val command = OrionEvidenceSanitizer.text(terminalEvidence?.commandLabel ?: event.title, 120)
+                    val output = OrionEvidenceSanitizer.text(terminalEvidence?.outputTail ?: terminalOutput, 400)
+                    onOpenTerminal(command, output)
+                }
             )
         }
         if (expanded) {
@@ -504,6 +508,7 @@ internal fun OrionComposeChatScreen(
     onRemoveImage: (Int) -> Unit,
     onVoice: () -> Unit,
     onBrowser: (String?) -> Unit,
+    onOpenTerminal: (String, String) -> Unit,
     onTasks: () -> Unit,
     onMenuAction: (String) -> Unit,
     onStop: () -> Unit,
@@ -677,7 +682,7 @@ internal fun OrionComposeChatScreen(
                                 event = event,
                                 lines = lines,
                                 onBrowser = onBrowser,
-                                onOpenTerminal = { onMenuAction("terminal") }
+                                onOpenTerminal = onOpenTerminal
                             )
                         }
                     }
