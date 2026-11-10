@@ -43,19 +43,19 @@ internal object OrionAutonomyPolicy {
         maxRetries = c.maxRetries.coerceIn(MIN_RETRIES, MAX_RETRIES)
     )
 
-    fun blocksWrite(mode: OrionMode, access: ToolAccess?): Boolean =
-        mode == OrionMode.TALK && access == ToolAccess.WRITE
+    /** Talk is a conversational surface, not a permission level. Tool access is governed by owner rules. */
+    fun blocksWrite(mode: OrionMode, access: ToolAccess?): Boolean = false
 
     /** Map high-level modes to existing per-tool presets; explicit per-tool overrides remain visible. */
     fun preset(mode: OrionMode): String = when (mode) {
-        OrionMode.TALK -> "read_only"
+        OrionMode.TALK -> "balanced"
         OrionMode.ASSIST -> "balanced"
         OrionMode.AUTOPILOT -> "autonomous"
         OrionMode.BUILDER -> "careful"
     }
 
     fun description(mode: OrionMode): String = when (mode) {
-        OrionMode.TALK -> "Conversation and read-only tools; all registered write tools are hard-blocked."
+        OrionMode.TALK -> "Conversational front door: answer directly or use registered tools under the owner’s per-tool permissions and action confirmations."
         OrionMode.ASSIST -> "Help plan and act with the current per-tool policy."
         OrionMode.AUTOPILOT -> "Run owner-scheduled goals only while Orion Core and Proactive are enabled; Android permissions and action-specific confirmations still apply."
         OrionMode.BUILDER -> "Create and test disabled drafts; activation follows the current approval policy."
