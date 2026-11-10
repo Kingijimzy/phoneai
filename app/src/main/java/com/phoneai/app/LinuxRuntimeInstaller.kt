@@ -183,6 +183,50 @@ internal class LinuxRuntimeInstaller(
             if (packageRecoveryRequired) "\nPackage operation was interrupted; the next Linux command will restore the pinned base rootfs before continuing." else ""
     }
 
+    /**
+     * Starts one persistent Alpine interactive shell on a native PTY. Unlike execute(), this
+     * keeps one guest process alive so cwd, exports, REPLs and foreground jobs persist.
+     */
+    fun startInteractiveSession(workspaceHostPath: String, rows: Int = 24, columns: Int = 80,
+                                onOutput: (String) -> Unit, onClosed: () -> Unit): LinuxTerminalSession {
+        check(isReady(LinuxRuntimePolicy.productionManifest)) {
+            "Alpine runtime is not installed or failed readiness checks."
+        }
+        val expected = File(app.filesDir, "orion-python/workspace")
+        val supplied = File(workspaceHostPath).canonicalFile
+        val canonicalExpected = expected.canonicalFile
+        check(supplied.toPath() == canonicalExpected.toPath() && supplied.isDirectory &&
+            supplied.canRead() && supplied.canWrite() &&
+            !java.nio.file.Files.isSymbolicLink(File(workspaceHostPath).toPath()) &&
+            !java.nio.file.Files.isSymbolicLink(expected.toPath()) &&
+            !java.nio.file.Files.isSymbolicLink(expected.parentFile.toPath())) {
+            "Linux workspace bind mount rejected by runtime policy."
+        }
+        check(proot.isFile && proot.canExecute() && sha256(proot) == LinuxRuntimePolicy.productionManifest.prootSha256) {
+            "Pinned ARM64 PRoot binary is missing or failed checksum verification."
+        }
+        check(prootLoader.isFile && prootLoader.canExecute() &&
+            sha256(prootLoader) == LinuxRuntimePolicy.PROOT_LOADER_SHA256) {
+            "Pinned PRoot loader is missing or failed checksum verification."
+        }
+        check(prootTmp.mkdirs() || prootTmp.isDirectory) { "Could not create PRoot temporary directory." }
+        syncGuestDns()?.let { onOutput("Network DNS setup warning: $it\r\n") }
+        val argv = LinuxRuntimePolicy.prootArgs(
+            proot.absolutePath, rootfs.absolutePath, "exec /bin/sh -i", canonicalExpected.absolutePath
+        ) ?: error("Interactive Linux command rejected by runtime policy.")
+        val environment = arrayOf(
+            "HOME=/root",
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            "TERM=xterm-256color",
+            "LANG=C.UTF-8",
+            "TMPDIR=/tmp",
+            "PS1=orion:/root# ",
+            "PROOT_TMP_DIR=${prootTmp.absolutePath}",
+            "PROOT_LOADER=${prootLoader.absolutePath}"
+        )
+        return LinuxTerminalSession.launch(argv.toTypedArray(), environment, rows, columns, onOutput, onClosed)
+    }
+
     private data class ProcessResult(val exitCode: Int, val output: String, val timedOut: Boolean, val cancelled: Boolean = false)
 
     private fun syncGuestDns(): String? {
