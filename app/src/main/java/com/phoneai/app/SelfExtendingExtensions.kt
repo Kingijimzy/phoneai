@@ -54,8 +54,8 @@ internal object SelfExtendingExtensionPolicy {
         .digest(source.toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
-    fun mayPromote(testPassed: Boolean, sourceHash: String, testedHash: String, userApproved: Boolean): Boolean =
-        testPassed && sourceHash.isNotBlank() && sourceHash == testedHash && userApproved
+    fun mayPromote(testPassed: Boolean, sourceHash: String, testedHash: String): Boolean =
+        testPassed && sourceHash.isNotBlank() && sourceHash == testedHash
 }
 
 internal data class GeneratedExtension(
@@ -139,21 +139,21 @@ internal class SelfExtendingExtensionStore(context: Context) {
         persist(current.map { if (it.id == extension.id) extension.copy(enabled = false, verified = false) else it })
     }
 
-    /** Promote only after sandbox tests passed for the exact source and the user approves it. */
-    fun promote(id: String, report: ExtensionTestReport, userApproved: Boolean): Boolean = synchronized(lock) {
+    /** Promote automatically only after sandbox tests pass for the exact current source hash. */
+    fun promote(id: String, report: ExtensionTestReport): Boolean = synchronized(lock) {
         val current = try { all() } catch (_: Exception) { return@synchronized false }
         val target = current.firstOrNull { it.id == id } ?: return@synchronized false
         val allowed = SelfExtendingExtensionPolicy.mayPromote(
-            report.passed, target.sourceSha256, report.testedSourceSha256, userApproved
+            report.passed, target.sourceSha256, report.testedSourceSha256
         )
         if (!allowed) return@synchronized false
         persist(current.map { if (it.id == id) it.copy(enabled = true, verified = true) else it })
     }
 
     /** Activate an archived source only with a passing receipt for that exact source hash. */
-    fun activateVersion(version: ExtensionVersionHistory.Version, report: ExtensionTestReport, approved: Boolean): Boolean = synchronized(lock) {
+    fun activateVersion(version: ExtensionVersionHistory.Version, report: ExtensionTestReport): Boolean = synchronized(lock) {
         if (!SelfExtendingExtensionPolicy.mayPromote(
-                report.passed, version.sourceSha256, report.testedSourceSha256, approved
+                report.passed, version.sourceSha256, report.testedSourceSha256
             )) return@synchronized false
         if (SelfExtendingExtensionPolicy.validateIdentity(version.id, version.displayName) != null ||
             SelfExtendingExtensionPolicy.validateSource(version.runtime, version.source) != null ||
