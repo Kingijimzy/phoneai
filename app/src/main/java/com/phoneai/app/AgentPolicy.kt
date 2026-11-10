@@ -87,19 +87,16 @@ object AgentPolicy {
         toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false,
         hardBlockReason: String? = null
     ): GatePolicy.Result {
-        val talkReadOnly = OrionAutonomyPolicy.blocksWrite(
-            OrionAutonomySettings.read(c).mode,
-            ToolRegistry.all.firstOrNull { it.name == toolId }?.access
-        )
-        val effectiveToolMode = if (talkReadOnly) ToolMode.DENY else toolMode
+        // Conversation mode does not override the owner's explicit per-tool permission.
+        // TALK can use READ/WRITE capabilities; ASK and DENY are enforced below at dispatch.
+        val effectiveToolMode = toolMode
         return GatePolicy.decide(GatePolicy.Input(
         pack = pack,
         packOn = packs.any { it.id == pack } && enabled(c, pack),
         tool = toolId,
         mode = mode(c),
         toolMode = effectiveToolMode,
-        // Legacy per-tool ASK values are normalized to ALLOW by ToolPermissionPolicy.modeOf.
-        // Only an explicit DENY, PLAN mode or disabled capability pack blocks dispatch.
+        // Explicit DENY, ASK, PLAN mode and disabled capability packs are enforced at dispatch.
         autonomous = ToolPermissions.level(c) == "autonomous",
         dangerous = dangerous,
         approvedThisAction = approvedThisAction,
