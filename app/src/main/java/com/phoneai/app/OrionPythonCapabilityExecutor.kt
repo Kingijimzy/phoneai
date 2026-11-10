@@ -73,6 +73,13 @@ internal class OrionPythonCapabilityExecutor(
             id, name, runtime, source, SelfExtendingExtensionPolicy.sha256(source),
             args.optString("description").take(240), System.currentTimeMillis()
         )
+        val existing = runCatching { extensionStore.all().firstOrNull { it.id == id } }.getOrNull()
+        if (existing != null) {
+            if (existing.sourceSha256 == extension.sourceSha256) return "Extension $id already exists with this exact source. Call extension_test (or extension_run if it is enabled)."
+            runCatching { extensionStore.enabled(id) }.getOrNull()?.let { versionHistory.record(it) }
+            return if (extensionStore.saveRevision(extension)) "Replaced the existing draft $id with your new source (disabled). Next call extension_test."
+            else "error: could not replace existing extension $id; choose a new id."
+        }
         return if (extensionStore.saveDraft(extension)) {
             "Saved disabled extension draft $id. Next call extension_test; the code is not yet active."
         } else {
