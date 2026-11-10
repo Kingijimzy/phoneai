@@ -59,7 +59,7 @@ class OrionTaskOrchestratorTest {
             "check current weather", listOf(tool("weather")), packs, termuxReady = true
         )
         val prompt = context.promptLines().joinToString("\n")
-        assertTrue(prompt.contains("GRANTED CAPABILITY CONTRACT"))
+        assertTrue(prompt.contains("OWNER PERMISSION CONTRACT"))
         assertTrue(prompt.contains("use its documented functionality fully"))
         assertTrue(prompt.contains("Do not invent additional application-level restrictions"))
         assertTrue(prompt.contains("Actual Android permissions"))
