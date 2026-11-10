@@ -1,8 +1,8 @@
 package com.phoneai.app
 
 /**
- * Dispatch policy: capability availability, explicit owner DENY, and PLAN mode only.
- * ASK/ALLOWLIST and generic consequential-action approvals are intentionally not agent gates.
+ * Dispatch policy: enabled capability, per-tool ALLOW / ASK / DENY, PLAN mode,
+ * and deterministic hard blocks. The Agent owns the one user-facing approval prompt.
  */
 internal object GatePolicy {
     enum class Verdict { ALLOW, ASK, DENY, PLAN_ONLY }
@@ -25,6 +25,8 @@ internal object GatePolicy {
     }
 
     fun decide(i: Input): Result {
+        if (!i.hardBlockReason.isNullOrBlank())
+            return Result(Verdict.DENY, i.hardBlockReason)
         if (!i.packOn) return Result(Verdict.DENY, AgentPolicy.packOffMessage(i.pack))
         if (i.pack == "trading_research" && i.tool.contains("order", true))
             return Result(Verdict.DENY, "Trading research is read-only; order execution is unavailable.")
