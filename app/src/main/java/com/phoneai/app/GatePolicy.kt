@@ -5,7 +5,7 @@ package com.phoneai.app
  * ASK/ALLOWLIST and generic consequential-action approvals are intentionally not agent gates.
  */
 internal object GatePolicy {
-    enum class Verdict { ALLOW, DENY, PLAN_ONLY }
+    enum class Verdict { ALLOW, ASK, DENY, PLAN_ONLY }
     data class Input(
         val pack: String, val packOn: Boolean, val tool: String,
         val mode: AgentPolicy.Mode, val toolMode: ToolMode, val autonomous: Boolean,
@@ -32,6 +32,8 @@ internal object GatePolicy {
             return Result(Verdict.DENY, ToolPermissionPolicy.denyMessage(i.tool))
         if (i.mode == AgentPolicy.Mode.PLAN)
             return Result(Verdict.PLAN_ONLY, "Plan mode never executes tools.")
-        return Result(Verdict.ALLOW, "Default ALLOW: execute without per-tool or generic approval.")
+        if (i.toolMode == ToolMode.ASK)
+            return Result(Verdict.ASK, "This tool is configured to ask the owner before each action.")
+        return Result(Verdict.ALLOW, "Owner policy allows this action without an extra prompt.")
     }
 }
