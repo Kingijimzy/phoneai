@@ -52,8 +52,22 @@ class ToolPermissionsPersistenceTest {
 
     @Test fun legacyAskValueRemainsAnAskPermission() {
         context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
+            .putString("tool_level", "custom")
+            .putString("tool_base_level", "balanced")
             .putString("tool_modes", org.json.JSONObject().put(writeTool, "ASK").toString())
             .commit()
+        assertEquals(ToolMode.ASK, ToolPermissions.mode(context, writeTool))
+    }
+
+    @Test fun ownerCanDisableAndReenableCapabilityPacks() {
+        AgentPolicy.setEnabled(context, "phone_control", false)
+        assertEquals(false, AgentPolicy.enabled(context, "phone_control"))
+        AgentPolicy.setEnabled(context, "phone_control", true)
+        assertEquals(true, AgentPolicy.enabled(context, "phone_control"))
+    }
+
+    @Test fun carefulPresetAsksBeforeWriteTools() {
+        ToolPermissions.applyLevel(context, "careful")
         assertEquals(ToolMode.ASK, ToolPermissions.mode(context, writeTool))
     }
 
