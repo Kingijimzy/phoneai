@@ -65,6 +65,9 @@ class ToolLoopDetectorTest {
         val detector = ToolLoopDetector()
         val args = mapOf("url" to "https://example.com/large-page")
         detector.record("fetch_url", args, "page too large")
+        assertEquals(Level.NONE, detector.check("fetch_url", args).level)
+
+        detector.record("fetch_url", args, "page too large")
         assertEquals(Level.WARNING, detector.check("fetch_url", args).level)
 
         detector.record("fetch_url", args, "page too large")
