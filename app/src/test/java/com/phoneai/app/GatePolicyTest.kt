@@ -65,6 +65,10 @@ class GatePolicyTest {
             null,
             IrreversibleActionConfirmationPolicy.approvalReason("shell", org.json.JSONObject().put("command", "ls -la"), "workspace_shell")
         )
+        assertEquals(
+            "destructive deletion (standing_order)",
+            IrreversibleActionConfirmationPolicy.approvalReason("standing_order", org.json.JSONObject().put("action", "remove"), "orion_core")
+        )
     }
 
 }
