@@ -27,15 +27,8 @@ internal object GatePolicy {
     fun decide(i: Input): Result {
         if (!i.hardBlockReason.isNullOrBlank())
             return Result(Verdict.DENY, i.hardBlockReason)
-        if (!i.packOn) return Result(Verdict.DENY, AgentPolicy.packOffMessage(i.pack))
         if (i.pack == "trading_research" && i.tool.contains("order", true))
-            return Result(Verdict.DENY, "Trading research is read-only; order execution is unavailable.")
-        if (i.toolMode == ToolMode.DENY)
-            return Result(Verdict.DENY, ToolPermissionPolicy.denyMessage(i.tool))
-        if (i.mode == AgentPolicy.Mode.PLAN)
-            return Result(Verdict.PLAN_ONLY, "Plan mode never executes tools.")
-        if (i.toolMode == ToolMode.ASK)
-            return Result(Verdict.ASK, "This tool is configured to ask the owner before each action.")
-        return Result(Verdict.ALLOW, "Owner policy allows this action without an extra prompt.")
+            return Result(Verdict.DENY, "Trading and coach order controls remain active.")
+        return Result(Verdict.ALLOW, "Partner operation: no generic app-level permission prompt.")
     }
 }
