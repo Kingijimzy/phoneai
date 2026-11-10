@@ -125,7 +125,9 @@ internal class OrionPythonCapabilityExecutor(
         if (!testReceipts.record(id, report)) {
             return "error: sandbox tests passed but their durable verification receipt could not be saved; extension remains disabled"
         }
-        val ownerAutoActivation = true
+        // Generated extensions must remain disabled until the owner explicitly invokes extension_enable.
+        // No persisted owner auto-activation setting exists yet, so default to the safe opt-out.
+        val ownerAutoActivation = false
         val autoActivated = ownerAutoActivation && activateVerifiedVersion(extension, report, approved = true)
         AgentPolicy.log(
             context, "extension:$id", "auto-activate", autoActivated,
