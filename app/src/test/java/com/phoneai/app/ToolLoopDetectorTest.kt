@@ -92,5 +92,3 @@ class ToolLoopDetectorTest {
         assertEquals(Level.NONE, detector.check("extension_create", args).level)
     }
 }
-
-}
