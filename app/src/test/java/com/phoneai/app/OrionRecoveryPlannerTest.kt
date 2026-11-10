@@ -79,4 +79,28 @@ class OrionRecoveryPlannerTest {
         assertEquals(listOf("research_web", "fetch_url"), selected)
     }
 
+
+    @Test fun oversizedFetchSwitchesToTargetedResearchTools() {
+        val selected = OrionRecoveryPlanner.selectAlternatives(
+            failedTool = "fetch_url",
+            result = "CoinMarketCap page was too big to fetch",
+            registeredAndPermitted = setOf("fetch_url", "research_web", "live_web_search", "web_search")
+        )
+        assertEquals(listOf("research_web", "live_web_search", "web_search"), selected)
+    }
+
+    @Test fun oversizedPageFailureExplainsWhyTheFullPageMustNotBeRetried() {
+        val guidance = OrionRecoveryPlanner.forFailure("fetch_url", "error: response too large to fetch")
+        assertEquals(OrionRecoveryPlanner.Strategy.CHOOSE_DIFFERENT_METHOD, guidance.strategy)
+        assertTrue(guidance.reason.contains("targeted search"))
+    }
+
+    @Test fun rateLimitedResearchSourceUsesARealAlternative() {
+        val selected = OrionRecoveryPlanner.selectAlternatives(
+            failedTool = "live_news",
+            result = "CoinDesk is rate-limited",
+            registeredAndPermitted = setOf("live_news", "live_web_search", "research_web", "fetch_url")
+        )
+        assertEquals(listOf("live_web_search", "research_web", "fetch_url"), selected)
+    }
 }
