@@ -55,4 +55,27 @@ class GatePolicyTest {
             GatePolicy.decide(input(pack = "trading_research", tool = "bybit_order_place")).verdict
         )
     }
+    @Test fun onlyTradingWritesAndDestructiveDeletionNeedOwnerApproval() {
+        assertEquals(
+            "Trading Desk change (paper_trade)",
+            IrreversibleActionConfirmationPolicy.approvalReason("paper_trade", org.json.JSONObject(), "trading_research")
+        )
+        assertEquals(
+            null,
+            IrreversibleActionConfirmationPolicy.approvalReason("bybit_public_ticker", org.json.JSONObject(), "trading_research")
+        )
+        assertEquals(
+            "destructive deletion (workspace_delete)",
+            IrreversibleActionConfirmationPolicy.approvalReason("workspace_delete", org.json.JSONObject(), "workspace_shell")
+        )
+        assertEquals(
+            "shell file deletion",
+            IrreversibleActionConfirmationPolicy.approvalReason("shell", org.json.JSONObject().put("command", "rm -rf ./old-build"), "workspace_shell")
+        )
+        assertEquals(
+            null,
+            IrreversibleActionConfirmationPolicy.approvalReason("shell", org.json.JSONObject().put("command", "ls -la"), "workspace_shell")
+        )
+    }
+
 }
