@@ -30,7 +30,7 @@ class ToolPermissionsPersistenceTest {
 
     @Test fun explicitDenyIsEnforcedAcrossPresets() {
         ToolPermissions.applyLevel(context, "careful")
-        ToolPermissions.cycle(context, writeTool) // would be DENY; free mode never refuses
+        ToolPermissions.cycle(context, writeTool) // careful preset starts at ASK, then becomes DENY
         assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
         ToolPermissions.applyLevel(context, "read_only")
         assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
@@ -96,5 +96,13 @@ class ToolPermissionsPersistenceTest {
             toolMode = ToolMode.ASK, askedThisTask = false
         )
         assertEquals(GatePolicy.Verdict.ASK, result.verdict)
+    }
+
+    @Test fun evaluatePreservesAskForCallersThatUseTheLegacyRuleResult() {
+        ToolPermissions.applyLevel(context, "balanced")
+        ToolPermissions.cycle(context, writeTool)
+        val pack = AgentPolicy.packForTool(writeTool) ?: "orion_core"
+        val result = AgentPolicy.evaluate(context, pack, writeTool, dangerous = false)
+        assertEquals(AgentPolicy.Decision.ASK, result.decision)
     }
 }
