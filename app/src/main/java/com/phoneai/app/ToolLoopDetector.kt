@@ -134,14 +134,16 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
         // 3. known_poll_no_progress — poll tools have a tighter critical bar
         //    because polling without progress is the canonical waste case.
         if (isPollTool(toolName, params)) {
-            if (noProgressStreak >= config.criticalThreshold) {
+            val warningAt = pollWarningThreshold(toolName)
+            val criticalAt = pollCriticalThreshold(toolName)
+            if (noProgressStreak >= criticalAt) {
                 val msg = "[LOOP BLOCKED] CRITICAL: Called $toolName $noProgressStreak " +
                     "times with identical no-progress results. Session execution blocked."
                 Logger.getLogger("ToolLoopDetector").warning(
                     "CRITICAL known_poll_no_progress tool=$toolName streak=$noProgressStreak")
                 return LoopCheckResult(Level.CRITICAL, msg)
             }
-            if (noProgressStreak >= config.warningThreshold) {
+            if (noProgressStreak >= warningAt) {
                 val msg = "[LOOP WARNING] You have called $toolName $noProgressStreak " +
                     "times with no progress. Stop polling and either (1) increase wait " +
                     "time, or (2) report the task as failed."
@@ -201,7 +203,9 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
         // appended). Critical paths are check()-only by spec.
         if (isPollTool(toolName, params)) {
             val streak = getNoProgressStreak(toolName, argsHash)
-            if (streak in config.warningThreshold until config.criticalThreshold) {
+            val warningAt = pollWarningThreshold(toolName)
+            val criticalAt = pollCriticalThreshold(toolName)
+            if (streak in warningAt until criticalAt) {
                 val key = "poll:$toolName:$argsHash"
                 if (shouldEmitWarning(key, streak)) {
                     val msg = "[LOOP WARNING] You have called $toolName $streak times " +
@@ -268,13 +272,21 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
     }
 
     private fun isPollTool(toolName: String, params: Map<String, Any?>): Boolean {
-        if (toolName == "command_status") return true
+        // task_list is a read-only status poll. Repeating an unchanged task snapshot is not progress.
+        if (toolName == "task_list" || toolName == "command_status") return true
         if (toolName == "process") {
             val action = (params["action"] as? String)?.lowercase()
             if (action == "poll" || action == "log") return true
         }
         return false
     }
+
+    /** Stop task-list polling quickly without tightening thresholds for other tools. */
+    private fun pollWarningThreshold(toolName: String): Int =
+        if (toolName == "task_list") 2 else config.warningThreshold
+
+    private fun pollCriticalThreshold(toolName: String): Int =
+        if (toolName == "task_list") 3 else config.criticalThreshold
 
     /**
      * Throttle warnings of the same key to once per `warningThreshold` calls,
