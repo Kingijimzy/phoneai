@@ -1865,8 +1865,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             RoutineReplayPolicy.exactName(MacroStore.names(this), request.name) != null ||
                 RoutineReplayPolicy.isExplicitRoutineCommand(t)
         } == true
-        val routeToAgent = autoRoute && shouldAutoRouteToAgent(t)
-        if (routeToAgent && conversationOnly) notifyModeSwitch(true)
+        // Chat and Command are two surfaces for one agent. Every non-empty user turn enters
+        // the same model-led executor; the model may answer directly or select registered tools.
+        // Capability, permission, cancellation and verification gates remain inside Agent.
+        val routeToAgent = t.isNotBlank()
         if (!savedRoutineCommand && ((conversationOnly && !routeToAgent) || (isConversationStarter(t) && !LiveWebSearch.isSearchRequest(t) && !LiveNews.isNewsRequest(t) && !routeToAgent))) {
             wakeGen++
             appendTranscript("me", t)
