@@ -7,7 +7,7 @@ import org.json.JSONObject
 /** Central agent permission policy. Execution adapters must call evaluate() before dispatch. */
 object AgentPolicy {
     enum class Mode(val label: String) { PLAN("Plan"), ALLOW("Allow") }
-    enum class Decision { ALLOW, PLAN_ONLY, DENY }
+    enum class Decision { ALLOW, ASK, PLAN_ONLY, DENY }
     data class Pack(val id: String, val title: String, val description: String, val implemented: Boolean = false)
     data class RuleResult(val decision: Decision, val reason: String)
     val packs = listOf(
@@ -55,7 +55,7 @@ object AgentPolicy {
         val prefs = p(c)
         val saved = if (prefs.contains("pack_$id")) prefs.getBoolean("pack_$id", false) else null
         return packEnabled(id, saved)
-    }.
+    }
     fun setEnabled(c: Context, id: String, on: Boolean) {
         val pack = packs.firstOrNull { it.id == id }
         p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
@@ -112,6 +112,7 @@ object AgentPolicy {
         val r = gate(c, pack, toolId, dangerous, toolMode = ToolPermissions.mode(c, toolId), askedThisTask = true, approvedThisAction = approvedThisAction)
         val decision = when (r.verdict) {
             GatePolicy.Verdict.ALLOW -> Decision.ALLOW
+            GatePolicy.Verdict.ASK -> Decision.ASK
             GatePolicy.Verdict.DENY -> Decision.DENY
             GatePolicy.Verdict.PLAN_ONLY -> Decision.PLAN_ONLY
         }
