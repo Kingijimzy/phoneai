@@ -41,55 +41,16 @@ class AgentControlActivity : Activity() {
         scroll.addView(root)
         setContentView(scroll)
         addText("ORION / AGENT CONTROL", 10f, Theme.MUTED, true, 0)
-        addText("Approval & capabilities", 26f, Theme.TEXT, true, 4)
-        addText("Core phone and messaging tools are available by default. Optional services may need setup or Android permission. Per-tool Allow / Ask / Deny settings are enforced at dispatch; Trading Desk writes and destructive deletion also require confirmation. Unsupported integrations stay visibly off.", 13f, Theme.MUTED, false, 8)
+        addText("Partner runtime", 26f, Theme.TEXT, true, 4)
+        addText("Orion operates through the registered capability runtime without generic approval modes, per-tool permission switches or capability-pack locks. Actual Android OS permissions, provider sign-in, Trading/Coach controls and confirmation before wiping or deleting data remain active.", 13f, Theme.MUTED, false, 8)
         addButton("‹ Back to settings") { finish() }
 
-        section("APPROVAL MODE")
-        modeStatus = addText("", 14f, Theme.TEXT, true, 5)
-        addText("Plan = suggest actions without executing. Allow = execute immediately, except restart, shutdown and Wi-Fi toggles which ask once. Capability packs and Android permissions still apply.", 12f, Theme.MUTED, false, 4)
-        addButton("Choose approval mode") { chooseMode() }
-        addButton("Start trusted session (15–120 min)") { startTrusted() }
-        addButton("STOP / LOCK TRUST NOW", true) {
-            AgentPolicy.stopTrustedSession(this)
-            refresh()
-            Toast.makeText(this, "Trusted session stopped.", Toast.LENGTH_SHORT).show()
-        }
+        section("OPERATING MODEL")
+        addText("PARTNER OPERATION · ACTIVE", 14f, Theme.TEXT, true, 5)
+        addText("Research, coding, Python, files, phone actions and background objectives run when their real capability and Android prerequisites are available. Orion reports progress and verifies results. It asks before destructive deletion or wiping; Trading/Coach actions keep their own controls.", 12f, Theme.MUTED, false, 4)
 
-        section("CAPABILITY PACKS")
-        packStatus = addText("Enabled packs are stored locally. Packs without a working adapter cannot be enabled yet.", 12f, Theme.MUTED, false, 5)
-        AgentPolicy.packs.forEach { pack ->
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(12), dp(10), dp(12), dp(10))
-                background = GradientDrawable().apply { setColor(0xFF191919.toInt()); cornerRadius = dp(12).toFloat(); setStroke(dp(1), 0xFF343434.toInt()) }
-            }
-            val sw = Switch(this).apply {
-                text = pack.title + if (pack.implemented) "" else " · not ready"
-                setTextColor(Theme.TEXT)
-                isChecked = AgentPolicy.enabled(this@AgentControlActivity, pack.id)
-                isEnabled = pack.implemented
-                setOnCheckedChangeListener { _, checked ->
-                    AgentPolicy.setEnabled(this@AgentControlActivity, pack.id, checked)
-                    if (pack.id == "termux_bridge") {
-                        getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
-                            .putBoolean("termux_bridge_enabled", checked).apply()
-                    }
-                    if (pack.id == "proactive") {
-                        if (checked) ProactiveBriefing.schedule(this@AgentControlActivity)
-                        else ProactiveBriefing.cancel(this@AgentControlActivity)
-                    }
-                    if (pack.id == "gaming_hobby") {
-                        if (checked) GamingFocus.schedule(this@AgentControlActivity)
-                        else GamingFocus.cancel(this@AgentControlActivity)
-                    }
-                    refresh()
-                }
-            }
-            row.addView(sw)
-            row.addView(TextView(this).apply { text = pack.description; textSize = 12f; setTextColor(Theme.MUTED); setPadding(0, dp(3), 0, 0) })
-            root.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
-        }
+        section("RUNTIME CAPABILITIES")
+        addText("Registered capabilities are available without app-level permission toggles. Optional bridges still require their real service to be installed or connected; Android-controlled access is never fabricated.", 12f, Theme.MUTED, false, 5)
 
         section("BUDGETS & MODEL SPLIT")
         addText("Current per-task limits: ${AgentPolicy.maxSteps(this)} steps · ${AgentPolicy.maxCalls(this)} calls · ${AgentPolicy.maxMinutes(this)} minutes.", 12f, Theme.MUTED, false, 4)
@@ -532,8 +493,6 @@ class AgentControlActivity : Activity() {
     }
 
     private fun refresh() {
-        modeStatus.text = "Mode: ${AgentPolicy.mode(this).label} · default is Allow\nTrusted pack session: ${if (AgentPolicy.trustedUntil(this) > System.currentTimeMillis()) java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(AgentPolicy.trustedUntil(this))) else "not active"}"
-        packStatus.text = "Enabled: ${AgentPolicy.packs.count { AgentPolicy.enabled(this, it.id) }} · unsupported packs remain off. Only enabled packs should be dispatchable."
         commandModelStatus.text = commandModelSummary()
         val installed = termuxInstalled()
         val termuxOn = installed && AgentPolicy.enabled(this, "termux_bridge") &&
