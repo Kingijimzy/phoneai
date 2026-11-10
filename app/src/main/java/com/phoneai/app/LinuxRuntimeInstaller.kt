@@ -13,6 +13,8 @@ import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
 
+internal data class LinuxTerminalLaunchConfig(val executable: String, val workingDirectory: String, val arguments: Array<String>, val environment: Array<String>)
+
 /**
  * Installs the pinned Alpine rootfs in app-private storage. PRoot is packaged as an ABI-specific
  * native library and executed from nativeLibraryDir (never copied from downloads to filesDir).
@@ -184,14 +186,12 @@ internal class LinuxRuntimeInstaller(
     }
 
     /**
-     * Starts one persistent Alpine interactive shell on a native PTY. Unlike execute(), this
-     * keeps one guest process alive so cwd, exports, REPLs and foreground jobs persist.
+     * Prepares the exact PRoot launch tuple for the maintained Termux terminal emulator.
+     * The emulator owns PTY creation, VT parsing, keyboard translation and screen resizing.
      */
-    fun startInteractiveSession(workspaceHostPath: String, rows: Int = 24, columns: Int = 80,
-                                onOutput: (String) -> Unit, onClosed: () -> Unit): LinuxTerminalSession {
-        check(isReady(LinuxRuntimePolicy.productionManifest)) {
-            "Alpine runtime is not installed or failed readiness checks."
-        }
+    fun interactiveLaunchConfig(workspaceHostPath: String): LinuxTerminalLaunchConfig {
+        val manifest = LinuxRuntimePolicy.productionManifest
+        check(isReady(manifest)) { "Alpine runtime is not installed or failed readiness checks." }
         val expected = File(app.filesDir, "orion-python/workspace")
         val supplied = File(workspaceHostPath).canonicalFile
         val canonicalExpected = expected.canonicalFile
@@ -202,7 +202,7 @@ internal class LinuxRuntimeInstaller(
             !java.nio.file.Files.isSymbolicLink(expected.parentFile.toPath())) {
             "Linux workspace bind mount rejected by runtime policy."
         }
-        check(proot.isFile && proot.canExecute() && sha256(proot) == LinuxRuntimePolicy.productionManifest.prootSha256) {
+        check(proot.isFile && proot.canExecute() && sha256(proot) == manifest.prootSha256) {
             "Pinned ARM64 PRoot binary is missing or failed checksum verification."
         }
         check(prootLoader.isFile && prootLoader.canExecute() &&
@@ -210,7 +210,10 @@ internal class LinuxRuntimeInstaller(
             "Pinned PRoot loader is missing or failed checksum verification."
         }
         check(prootTmp.mkdirs() || prootTmp.isDirectory) { "Could not create PRoot temporary directory." }
-        syncGuestDns()?.let { onOutput("Network DNS setup warning: $it\r\n") }
+        syncGuestDns()?.let { warning ->
+            // DNS synchronization is best-effort, matching one-shot Linux execution.
+            android.util.Log.w("OrionLinux", warning)
+        }
         val argv = LinuxRuntimePolicy.prootArgs(
             proot.absolutePath, rootfs.absolutePath, "exec /bin/sh -i", canonicalExpected.absolutePath
         ) ?: error("Interactive Linux command rejected by runtime policy.")
@@ -224,7 +227,7 @@ internal class LinuxRuntimeInstaller(
             "PROOT_TMP_DIR=${prootTmp.absolutePath}",
             "PROOT_LOADER=${prootLoader.absolutePath}"
         )
-        return LinuxTerminalSession.launch(argv.toTypedArray(), environment, rows, columns, onOutput, onClosed)
+        return LinuxTerminalLaunchConfig(argv.first(), rootfs.absolutePath, argv.drop(1).toTypedArray(), environment)
     }
 
     private data class ProcessResult(val exitCode: Int, val output: String, val timedOut: Boolean, val cancelled: Boolean = false)
