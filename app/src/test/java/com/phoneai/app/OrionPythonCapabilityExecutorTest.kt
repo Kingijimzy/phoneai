@@ -64,6 +64,7 @@ class OrionPythonCapabilityExecutorTest {
         val v1 = source(1)
         assertTrue(create(v1).contains("disabled extension draft"))
         assertTrue(test(v1).contains("SANDBOX TEST PASSED"))
+        assertTrue("A passing test must not silently activate generated code", test(v1).contains("Next: extension_enable"))
         assertTrue(enable().contains("enabled"))
         val result = executor.execute(
             "extension_run", JSONObject().put("id", "live_helper").put("input", JSONObject().put("x", 2)),
