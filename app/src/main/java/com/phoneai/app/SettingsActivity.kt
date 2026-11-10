@@ -630,29 +630,7 @@ class SettingsActivity : Activity() {
         switchRow(s2, "Conserve API quota (fewer retries; recommended)", Prefs.quotaSaver(this)) {
             Prefs.setQuotaSaver(this, it)
         }
-        add(s2, button("Execution mode · " + Prefs.executionMode(this), false) {
-            showChoiceDialog(
-                "Execution mode",
-                "PLAN blocks write actions. ACT follows your task scope and existing approvals. FULL permits broader tool use but never bypasses safety checks, task scope, or confirmations.",
-                listOf("PLAN · plan and inspect, no write actions", "ACT · execute within the request scope", "FULL · broader tools, safety gates remain"),
-                { index ->
-                    Prefs.setExecutionMode(this, listOf("PLAN", "ACT", "FULL")[index])
-                    recreate()
-                }
-            )
-        }, 8)
-        add(s2, text("PLAN blocks write tools at the dispatch boundary. ACT is the default. FULL does not bypass confirmation, sensitive-screen, or task-scope protections.", 12f, Theme.MUTED), 4)
-        add(s2, button("Task preset · " + Prefs.taskPreset(this), false) {
-            showChoiceDialog(
-                "Task preset",
-                "Presets change Orion's planning emphasis only. They do not grant extra permissions or bypass approvals.",
-                listOf("GENERAL · everyday companion", "TRADING · evidence-first, read-only bias", "GAMING · bounded visual steps", "RESEARCH · sources and uncertainty"),
-                { index ->
-                    Prefs.setTaskPreset(this, listOf("GENERAL", "TRADING", "GAMING", "RESEARCH")[index])
-                    recreate()
-                }
-            )
-        }, 8)
+        add(s2, text("Orion infers the task context and selects its own capabilities. There are no Talk/Assist/Autopilot/Builder or PLAN/ACT/FULL permission modes.", 12f, Theme.MUTED), 8)
         switchRow(s2, "Allow potentially paid/metered providers (off by default)", Prefs.allowPaidProviders(this)) {
             Prefs.setAllowPaidProviders(this, it)
         }
