@@ -25,7 +25,9 @@ class GatePolicyTest {
     @Test fun hardBlocksAndTradingOrderRestrictionsRemain() {
         assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input().copy(hardBlockReason = "Android OS denied access")).verdict)
         assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(pack = "trading_research", tool = "bybit_order_place")).verdict)
-        assertNotNull(GatePolicy.hardBlockReason("shell", org.json.JSONObject().put("command", "rm -rf /")))
+        val wipe = org.json.JSONObject().put("command", "rm -rf /")
+        assertNull(GatePolicy.hardBlockReason("shell", wipe))
+        assertNotNull(IrreversibleActionConfirmationPolicy.approvalReason("shell", wipe, "workspace_shell"))
         assertNull(GatePolicy.hardBlockReason("shell", org.json.JSONObject().put("command", "rm old-build")))
     }
 
