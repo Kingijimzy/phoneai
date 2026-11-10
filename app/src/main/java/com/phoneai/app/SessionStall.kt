@@ -22,6 +22,8 @@ internal class SessionStall(private val repeatLimit: Int = 3, private val failur
         return null
     }
 
+    fun reset() { attempts.clear() }
+
     /** A short, honest account of the last few actions, for the stop message. */
     fun summary(): String {
         if (attempts.isEmpty()) return ""

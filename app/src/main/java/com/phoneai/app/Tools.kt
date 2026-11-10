@@ -181,7 +181,7 @@ class Tools(
             t = t.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<")
                 .replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'")
             t = t.replace(Regex("\\s+"), " ").trim()
-            if (code !in 200..299) "error: HTTP $code ${t.take(200)}" else t.take(3500).ifEmpty { "(empty page)" }
+            if (code !in 200..299) "error: HTTP $code ${t.take(200)}" else t.take(14_000).ifEmpty { "(empty page)" }
         } catch (e: Exception) {
             "error: ${e.message}"
         }

@@ -2584,6 +2584,7 @@ Rules:
         }
         ui.stream("I’m working through this now. I’ll check each result before moving on.")
         val stall = SessionStall()
+        var stallRedirects = 0
         var promiseNudged = false
         var goalChecks = 0
         var planAnnounced = false
@@ -2932,6 +2933,13 @@ Rules:
             ui.note(activityNote(tool, args, result))
             record(tool, args, result)
             stall.add(tool, args.toString(), result)?.let { reason ->
+                if (stallRedirects < 2) {
+                    // A partner redirects itself before giving up: use what it already has, or take a different route.
+                    stallRedirects++
+                    history.put(msg("user", "[ORION SELF-CHECK] You $reason. Do not repeat it. Use the results you already hold, or choose a different tool or source, and finish Kingi's original request: " + command.take(400) + ". If one part is impossible, deliver the rest and say which part."))
+                    stall.reset()
+                    return@let
+                }
                 OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say("I stopped because the task $reason. ${stall.summary()}Tell me what you want instead, or I can try a different approach.")
                 activeObjectiveId = ""
