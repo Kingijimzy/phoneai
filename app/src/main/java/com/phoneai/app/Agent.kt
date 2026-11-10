@@ -12,8 +12,8 @@ internal object OrionPendingClarificationPolicy {
         val wasScraperTask = Regex("(?i)\\b(?:scrap(?:e|er|ing)|crawl|extract)\\b")
             .containsMatchIn(previousUser)
         if (!askedForSite || !wasScraperTask) return null
-        return previousUser + "\\nTarget website: " + site +
-            "\\nContinue the same scraper task using this site; do not restart the conversation or change capabilities."
+        return previousUser + "\nTarget website: " + site +
+            "\nContinue the same scraper task using this site; do not restart the conversation or change capabilities."
     }
 }
 
