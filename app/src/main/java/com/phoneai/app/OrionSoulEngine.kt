@@ -83,7 +83,8 @@ internal object OrionSoulEngine {
             lines += "Resume policy: reconcile each prior step with current observable state; do not repeat completed or uncertain mutations blindly. If an action was in flight at process death, verify its outcome or ask the user before retrying. Update the checkpoint only through the registered executor and report recovered failures honestly."
         }
         lines += "Never pretend a provider is connected because its name is recognized. Never ask for passwords, PINs, one-time codes, or raw tokens in chat. Use official authorization screens and store only provider-issued credentials in the encrypted vault. Keep the task context and resume after authorization returns."
-        lines += "If capability is missing, inspect the real tool/skill registry and available code/build workspace first. Research official documentation only through an available research tool. Modify source or run builds only when a connected workspace provides those operations; distinguish proposed changes from applied changes, passing tests/builds, and installed releases. Never claim the installed app can rebuild or modify itself without an authorized code/build tool. Do not execute downloaded scripts, APKs, or arbitrary skill code. New permission grants, account sign-in, and OS-controlled access require the owner to complete the actual system or provider setup; this is not a generic action approval. Once a capability is enabled and scope and validation checks pass, execute authorized actions immediately without a confirmation prompt. Only restart, shutdown, and Wi-Fi toggling use the confirmation surface."
+        lines += OrionSoulEnginePromptPolicy.OWNER_PERMISSION_AND_CAPABILITY_CONTRACT
+        lines += "If capability is missing, inspect the real tool/skill registry and available code/build workspace first. Research official documentation only through an available research tool. Modify source or run builds only when a connected workspace provides those operations; distinguish proposed changes from applied changes, passing tests/builds, and installed releases. Never claim the installed app can rebuild or modify itself without an authorized code/build tool. Do not execute downloaded scripts, APKs, or arbitrary skill code. New permission grants, account sign-in, and OS-controlled access require the owner to complete the actual system or provider setup; this is not a generic action approval."
         if (planner != null) {
             lines += "Integration intent: ${planner.provider}; observed state: ${planner.state}; next step: ${planner.nextStep}; required capabilities: ${planner.requiredCapabilities.joinToString().ifBlank { "none identified" }}."
             lines += "Integration assessment: ${planner.explanation}"
@@ -114,4 +115,10 @@ internal object OrionSoulEngine {
         return lines.joinToString("\n").take(5000)
     }
 
+}
+
+/** Shared prompt contract so the executive layer cannot contradict the dispatch permission gate. */
+internal object OrionSoulEnginePromptPolicy {
+    const val OWNER_PERMISSION_AND_CAPABILITY_CONTRACT =
+        "OWNER PERMISSION CONTRACT: obey the live per-tool ALLOW, ASK or DENY decision and enabled capability-pack state. ALLOW may execute after prerequisites and validation pass. ASK must use the owner approval surface before dispatch; DENY must never be bypassed through another tool. Talk is a conversational surface, not a read-only override. Careful asks before writes; Read-only denies writes; Autopilot never overrides explicit ASK or DENY. Trading Desk writes and destructive deletion/removal also require action-specific confirmation; if the same ASK prompt approved that exact action, do not ask twice. New Android permission grants, provider sign-in and OS-controlled access still require the owner to complete the actual system/provider flow. Never invent extra restrictions or request duplicate consent."
 }
