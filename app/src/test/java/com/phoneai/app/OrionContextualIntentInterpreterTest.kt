@@ -146,4 +146,16 @@ class OrionContextualIntentInterpreterTest {
         assertEquals(OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE, result.kind)
         assertEquals("What is the weather in Lagos today?", result.resolvedObjective)
     }
+
+    @Test fun standaloneBtcPriceQuestionStartsANewObjectiveInsteadOfResumingResearch() {
+        val previous = "Generate a BTC long setup, explain the trend and research its market drivers."
+        val result = OrionContextualIntentInterpreter.resolve(
+            "What is the price of BTC now?",
+            listOf("user" to previous, "assistant" to "I am still fetching technical analysis."),
+            previous
+        )
+        assertEquals(OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE, result.kind)
+        assertEquals("What is the price of BTC now?", result.resolvedObjective)
+        assertFalse(result.needsClarification)
+    }
 }
