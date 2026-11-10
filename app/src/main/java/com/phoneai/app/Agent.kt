@@ -23,6 +23,10 @@ internal object OrionCommandIntentPolicy {
         "(?i)\\bpython\\b.{0,100}\\b(?:code|script|program|calculator)\\b|\\b(?:code|script|program|calculator)\\b.{0,100}\\bpython\\b"
     )
     private val executionVerb = Regex("(?i)\\b(?:run|execute|test|verify)\\b")
+    private val scraperCreation = Regex(
+        "(?i)\\b(?:write|create|build|make|generate)\\b.{0,100}\\b(?:site\\s+)?scrap(?:er|ing)\\b"
+    )
+
     // Explicit image/artifact creation is an execution objective, not a request for sample code.
     // This routes the whole request to the guarded planner before Talk can stream a code-only answer.
     private val imageCreation = Regex(
@@ -93,6 +97,7 @@ internal object OrionCommandIntentPolicy {
 
     fun requiresDirectActionRouting(command: String): Boolean =
         imageCreation.containsMatchIn(command) ||
+            scraperCreation.containsMatchIn(command) ||
             explicitArtifactCreation.containsMatchIn(command) ||
             explicitMemoryWrite.containsMatchIn(command) ||
             requiresStructuredTaskPlanning(command) ||
