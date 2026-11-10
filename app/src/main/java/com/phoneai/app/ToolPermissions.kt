@@ -16,7 +16,7 @@ internal object ToolPermissionPolicy {
         "careful" -> "Careful: ask before each write action; read-only tools remain available"
         "autonomous" -> "Autonomous: execute owner-authorized actions; per-tool Ask/Deny and consequential-action approvals still apply"
         "read_only" -> "Read-only: look and answer, never change anything"
-        else -> "Balanced: default behaviour"
+        else -> "Balanced: execute allowed tools; ask/deny overrides are enforced"
     }
 
     /** Builds the per-tool map for a preset level from the real registry access classes. */
