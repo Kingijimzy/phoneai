@@ -367,7 +367,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var lastScreenSnapshot: String = ""
     @Volatile private var lastScreenBeforeAction: String = ""
 
-    /** One confirmation surface, reserved for Trading Desk writes and destructive deletions. */
+    /** Shared owner-approval surface for per-tool ASK and action-specific confirmations. */
     private fun requestGateApproval(question: String): Boolean {
         runCatching { OrionRuntimeNotifier.postApprovalRequired(svc) }
         ui.note("[TASK:APPROVAL]\\nWaiting for owner approval")
@@ -516,7 +516,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             (tool in consequentialTools && !(tool == "mcp_call" && mcpReadScopeGranted))
         // Retrieve current durable context immediately before any write/consequential dispatch.
         // The receipt is created inside this Agent instance, never accepted from model arguments.
-        val retrievalRequired = false && OrionRetrieveBeforeActPolicy.requiresRetrieval(
+        val retrievalRequired = OrionRetrieveBeforeActPolicy.requiresRetrieval(
             tool,
             if (mcpReadScopeGranted) ToolAccess.READ else (ToolRegistry.access(tool) ?: ToolAccess.WRITE),
             consequential
@@ -2065,15 +2065,10 @@ Rules:
         if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
             taskProofs.clear()
             failedCallGuard.clear()
+            // A new request invalidates the previous graph. Only structured multi-step
+            // planning creates a replacement graph; ordinary chat must not leave a fake
+            // RUNNING objective behind.
             OrionObjectiveGraph.clear(svc)
-            OrionObjectiveGraph.save(svc, OrionObjectiveGraph.Graph(
-                objective = intentResolution.resolvedObjective.orEmpty(),
-                nodes = listOf(OrionObjectiveGraph.Objective(
-                    id = "main",
-                    title = intentResolution.resolvedObjective.orEmpty().take(240),
-                    status = OrionObjectiveGraph.Status.RUNNING
-                ))
-            ))
         }
         val correctedObjective = intentResolution.resolvedObjective
         if (Regex("(?i)^\\s*(?:no[, ]+)?(?:fix|change|correct|repair|update|adjust|redo|improve)\\s+(?:the\\s+)?integration\\b").containsMatchIn(command) &&
