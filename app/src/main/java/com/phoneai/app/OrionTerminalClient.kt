@@ -1,6 +1,8 @@
 package com.phoneai.app
 
+import android.content.Context
 import android.view.KeyEvent
+import android.view.inputmethod.InputMethodManager
 import android.view.MotionEvent
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
@@ -31,7 +33,7 @@ internal class OrionTerminalClient(
     override fun logStackTrace(tag: String, e: Exception) { android.util.Log.e("OrionTerminal", tag, e) }
 
     override fun onScale(scale: Float): Float = scale
-    override fun onSingleTapUp(e: MotionEvent) { view.requestFocus() }
+    override fun onSingleTapUp(e: MotionEvent) { view.requestFocus(); view.post { (view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(view, InputMethodManager.SHOW_IMPLICIT) } }
     override fun shouldBackButtonBeMappedToEscape(): Boolean = false
     override fun shouldEnforceCharBasedInput(): Boolean = false
     override fun shouldUseCtrlSpaceWorkaround(): Boolean = false
