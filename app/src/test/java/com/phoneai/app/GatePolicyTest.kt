@@ -22,13 +22,17 @@ class GatePolicyTest {
         assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(toolMode = ToolMode.ASK)).verdict)
     }
 
-    @Test fun onlyPlanModeIsAGlobalExecutionStop() {
-        assertEquals(GatePolicy.Verdict.PLAN_ONLY, GatePolicy.decide(input(mode = AgentPolicy.Mode.PLAN)).verdict)
+    @Test fun noModeOrSwitchRefusesATool() {
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(mode = AgentPolicy.Mode.PLAN)).verdict)
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(toolMode = ToolMode.DENY)).verdict)
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(packOn = false)).verdict)
     }
 
-    @Test fun explicitToolDenyAndDisabledPacksStillApply() {
-        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(toolMode = ToolMode.DENY)).verdict)
-        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(packOn = false)).verdict)
+    @Test fun confirmedWipeIsAllowed() {
+        val cmd = "rm -rf /system/confirmed-wipe-test"
+        assertNotNull(GatePolicy.hardBlockReason("shell", org.json.JSONObject().put("command", cmd)))
+        assertNull(GatePolicy.hardBlockReason("shell", org.json.JSONObject().put("command", cmd).put("confirmed", true)))
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify(cmd))
     }
 
     @Test fun genericRiskDoesNotCreateApprovalButDestructiveShellCommandsRemainBlocked() {
