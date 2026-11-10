@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,11 +45,13 @@ internal fun OrionToolPills(lines: List<OrionChatLine>, modifier: Modifier = Mod
     var now by remember { mutableLongStateOf(System.nanoTime()) }
     val anyActive = steps.any { it.active }
     LaunchedEffect(anyActive) { while (anyActive) { now = System.nanoTime(); delay(1000) } }
+    var openKey by remember { mutableStateOf<Long?>(null) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         steps.takeLast(12).forEach { step ->
             val failed = step.status == StepStatus.FAILED || step.status == StepStatus.CANCELLED
             Row(
                 Modifier.orionEnter(18f).widthIn(max = 360.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFF1C1C1E))
+                    .clickable { openKey = if (openKey == step.key) null else step.key }
                     .padding(horizontal = 12.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(9.dp)
@@ -59,6 +63,17 @@ internal fun OrionToolPills(lines: List<OrionChatLine>, modifier: Modifier = Mod
                 }
                 Text(step.label, color = Color(0xFFF2F2F2), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 step.durationLabel(now)?.let { Text(it, color = Color(0xFF8A8F98), fontSize = 11.sp, fontFamily = FontFamily.Monospace) }
+            }
+            if (openKey == step.key) {
+                val detail = remember(step.key, step.resultLineId, lines.size) {
+                    val start = lines.firstOrNull { it.id == step.key }?.text.orEmpty().substringAfter("\n", "")
+                    val result = lines.firstOrNull { it.id == step.resultLineId }?.text.orEmpty().substringAfter("\n", "")
+                    (start + (if (result.isNotBlank()) "\n\n" + result else "")).trim().ifBlank { "No output captured for this step yet." }
+                }
+                Text(
+                    detail.take(3000), color = Color(0xFFBFC5CC), fontSize = 11.sp, lineHeight = 16.sp, fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.widthIn(max = 360.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF111113)).padding(12.dp)
+                )
             }
         }
     }
