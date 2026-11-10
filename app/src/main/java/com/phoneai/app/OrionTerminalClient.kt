@@ -1,6 +1,8 @@
 package com.phoneai.app
 
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.view.KeyEvent
 import android.view.inputmethod.InputMethodManager
 import android.view.MotionEvent
@@ -17,8 +19,17 @@ internal class OrionTerminalClient(
     override fun onTextChanged(changedSession: TerminalSession) { view.onScreenUpdated() }
     override fun onTitleChanged(changedSession: TerminalSession) { view.onScreenUpdated() }
     override fun onSessionFinished(finishedSession: TerminalSession) { onFinished(finishedSession) }
-    override fun onCopyTextToClipboard(session: TerminalSession, text: String) {}
-    override fun onPasteTextFromClipboard(session: TerminalSession?) {}
+    override fun onCopyTextToClipboard(session: TerminalSession, text: String) {
+        val clipboard = view.context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("Orion terminal", text))
+    }
+    override fun onPasteTextFromClipboard(session: TerminalSession?) {
+        val clipboard = view.context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(view.context)?.toString() ?: return
+        val target = session ?: view.currentSession ?: return
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        target.write(bytes, 0, bytes.size)
+    }
     override fun onBell(session: TerminalSession) {}
     override fun onColorsChanged(session: TerminalSession) { view.onScreenUpdated() }
     override fun onTerminalCursorStateChange(state: Boolean) { view.onScreenUpdated() }
