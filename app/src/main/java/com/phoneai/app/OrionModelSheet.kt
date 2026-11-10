@@ -1,0 +1,93 @@
+package com.phoneai.app
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+/** "Chat Model" sheet: a Smart Mode card (automatic model routing) over one row per provider, tagged READY or ADD KEY. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun OrionModelSheet(onDismiss: () -> Unit, onNeedKey: () -> Unit, onChanged: () -> Unit) {
+    val c = LocalContext.current
+    var tick by remember { mutableIntStateOf(0) }
+    val current = remember(tick) { Prefs.provider(c, false).id }
+    val smart = remember(tick) { Prefs.modelRouting(c) }
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color(0xFF1C1C1E)) {
+        Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+            Text("Chat Model", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text("Pick a model to chat with", color = Color(0xFF9AA0AD), fontSize = 12.sp)
+            Spacer(Modifier.height(14.dp))
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(32.dp))
+                    .background(Brush.horizontalGradient(listOf(Color(0xFF7A6BF0), Color(0xFF3F5BFF), Color(0xFF3CC7D8))))
+                    .clickable { Prefs.setModelRouting(c, !smart); tick++; onChanged() }.padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(Modifier.size(46.dp).clip(CircleShape).background(Color(0x33FFFFFF)), contentAlignment = Alignment.Center) { Text("✦", color = Color.White, fontSize = 20.sp) }
+                Column(Modifier.weight(1f)) {
+                    Text("Smart Mode", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Dynamically picks the best model for speed and quality.", color = Color(0xE6FFFFFF), fontSize = 11.sp)
+                }
+                Box(Modifier.size(22.dp).clip(CircleShape).background(if (smart) Color.White else Color(0x33FFFFFF)), contentAlignment = Alignment.Center) {
+                    if (smart) Text("✓", color = Color(0xFF3F5BFF), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(Providers.all, key = { it.id }) { p ->
+                    val ready = p.noKey || Prefs.hasKey(c, p.id)
+                    val selected = p.id == current
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(30.dp)).background(Color(0xFF2C2C2E))
+                            .border(1.dp, if (selected) Color(0xFF5C6BFF) else Color.Transparent, RoundedCornerShape(30.dp))
+                            .clickable {
+                                if (ready) { Prefs.setProvider(c, false, p.id); tick++; onChanged(); onDismiss() } else { onDismiss(); onNeedKey() }
+                            }.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(Modifier.size(38.dp).clip(CircleShape).background(Color.Black), contentAlignment = Alignment.Center) {
+                            Text(p.label.take(1).uppercase(), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Text(p.label, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text(if (selected) "IN USE" else if (ready) "READY" else "ADD KEY", fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                            color = if (ready) Color.White else Color(0xFFE2A16F),
+                            modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                .background(if (ready) Brush.horizontalGradient(listOf(Color(0xFF6B5CF0), Color(0xFF4F8CFF))) else Brush.horizontalGradient(listOf(Color(0xFF3A3A3C), Color(0xFF3A3A3C))))
+                                .padding(horizontal = 12.dp, vertical = 5.dp))
+                    }
+                }
+            }
+        }
+    }
+}

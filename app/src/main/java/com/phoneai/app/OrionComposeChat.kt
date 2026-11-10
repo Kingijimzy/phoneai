@@ -435,7 +435,7 @@ internal fun isCompactExecutionNote(item: OrionChatLine): Boolean {
     return listOf(
         "[TASK:RUNNING]", "[TASK:OUTPUT]", "[TASK:APPROVAL]", "[TASK:RECOVER]",
         "[TASK:FAILED]", "[TASK:COMPLETE]", "[TASK:CANCELLED]", "[TASK:INTERRUPTED]",
-        "[TOOL:", "[TOOL_RESULT:", "[APPROVAL:", "[EVENT:", "[SHELL:", "[BROWSER:", "[SPECIALIST:"
+        "[TOOL:", "[TOOL_RESULT:", "[APPROVAL:", "[EVENT:", "[SPECIALIST:"
     ).any { text.startsWith(it) }
 }
 
@@ -487,6 +487,11 @@ internal fun OrionComposeChatScreen(
     var draft by rememberSaveable { mutableStateOf("") }
     var editingOriginal by rememberSaveable { mutableStateOf<String?>(null) }
     var menuExpanded by remember { mutableStateOf(false) }
+    var showModelSheet by remember { mutableStateOf(false) }
+    var sheetTick by remember { mutableStateOf(0) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val shownProvider = remember(sheetTick, providerLabel) { if (sheetTick == 0) providerLabel else Prefs.provider(ctx, false).label }
+    if (showModelSheet) OrionModelSheet(onDismiss = { showModelSheet = false }, onNeedKey = onProviderClick, onChanged = { sheetTick++ })
     var inlineBrowserUrl by rememberSaveable { mutableStateOf<String?>(null) }
     val composerFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -527,7 +532,7 @@ internal fun OrionComposeChatScreen(
         }
     }
     val busy = status.contains("think", true) || status.contains("work", true) || status.contains("act", true)
-    Column(Modifier.fillMaxSize().background(ChatInk).imePadding()) {
+    Column(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF000000), Color(0xFF04050E), Color(0xFF0E1550), Color(0xFF1F3D9A)))).imePadding()) {
         // Editorial header: quiet branding, no oversized pill around every element.
         Row(
             Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 11.dp),
@@ -693,7 +698,7 @@ internal fun OrionComposeChatScreen(
                     Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
                         .background(Color(0xFF171717))
                         .border(1.dp, if (providerReady) Color(0xFF414141) else Color(0xFF8A5D42), RoundedCornerShape(10.dp))
-                        .clickable(onClick = onProviderClick)
+                        .clickable { showModelSheet = true }
                         .padding(horizontal = 10.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -701,7 +706,7 @@ internal fun OrionComposeChatScreen(
                     Box(Modifier.size(6.dp).clip(CircleShape).background(if (providerReady) Color(0xFFDADADA) else Color(0xFFE2A16F)))
                     Column(Modifier.weight(1f)) {
                         Text("PROVIDER", color = ChatMuted, fontSize = 8.sp, letterSpacing = .8.sp, fontWeight = FontWeight.SemiBold)
-                        Text(providerLabel, color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(shownProvider, color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Icon(Icons.Rounded.ChevronRight, null, tint = ChatMuted, modifier = Modifier.size(14.dp))
                 }
@@ -723,9 +728,9 @@ internal fun OrionComposeChatScreen(
                 }
             }
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFF222222), Color(0xFF101010))))
-                    .border(1.dp, Color(0xFF444444), RoundedCornerShape(19.dp))
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
+                    .background(Brush.horizontalGradient(listOf(Color(0xCC2B3A9E), Color(0xCC4F5BFF), Color(0xCC3D86D6))))
+                    .border(1.dp, Color(0x44FFFFFF), RoundedCornerShape(28.dp))
                     .padding(start = 16.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
