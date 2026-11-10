@@ -19,6 +19,12 @@ class OrionForcedRecoveryTest {
         assertTrue(a.nextToolHint!!.contains("browser state"))
     }
 
+    @Test fun failedSportsCapabilitySwitchesToAlternateResearchSource() {
+        val plan = OrionForcedRecovery.afterFailure("atletico vs barca scoreline", "live_sports", "error: unavailable", 0)
+        assertTrue(plan.shouldRetry)
+        assertTrue(plan.nextToolHint!!.contains("web", ignoreCase = true))
+    }
+
     @Test fun retryBudgetStopsAfterTwoAlternativeAttempts() {
         val plan = OrionForcedRecovery.afterFailure("any goal", "shell", "exit=1", 2)
         assertFalse(plan.shouldRetry)
