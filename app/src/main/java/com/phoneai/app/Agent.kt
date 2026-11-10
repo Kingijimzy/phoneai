@@ -184,16 +184,23 @@ internal object IrreversibleActionConfirmationPolicy {
     private val shellDelete = Regex(
         """(?is)(?:^|[;&|]\s*)(?:command\s+)?(?:rm|rmdir|unlink|shred|truncate)\b|\bfind\b[^;&|]*\s-delete\b"""
     )
+    private val shellWipe = Regex(
+        """(?is)\b(?:mkfs(?:\.\w+)?|wipefs|blkdiscard|factory[ _-]?reset|wipe[ ._-]?(?:data|cache)|format\s+/(?:data|system|vendor|product|odm|boot|cache|sdcard|storage)|fastboot\s+(?:erase|format|wipe)|dd\b[^;&|]*\bof\s*=\s*[^;&|]*/dev/|(?:>|>>)[^;&|]*/dev/(?:block|mmcblk|sd[a-z]))"""
+    )
     private val pythonDelete = Regex(
         """(?is)\b(?:os\.(?:remove|unlink|rmdir)|shutil\.(?:rmtree|move)|Path\([^)]*\)\.(?:unlink|rmdir))\s*\("""
     )
 
     fun approvalReason(tool: String, args: JSONObject, pack: String): String? {
-        if (pack in setOf("trading_research", "trading_desk") && tool in setOf(
-            "strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch",
-            "memecoin_watch", "wallet_watch", "bybit_order_place", "bybit_order_cancel",
-            "bybit_order_amend", "bybit_position_close"
-        )) {
+        val tradingMutation = when (tool) {
+            "paper_trade" -> args.optString("action").lowercase() in setOf("open", "close", "reset")
+            "memecoin_watch", "wallet_watch" -> args.optString("action").lowercase() in setOf("add", "remove")
+            else -> tool in setOf(
+                "strategy_save", "strategy_record_result", "trading_kill_switch",
+                "bybit_order_place", "bybit_order_cancel", "bybit_order_amend", "bybit_position_close"
+            )
+        }
+        if (pack in setOf("trading_research", "trading_desk") && tradingMutation) {
             return "Trading Desk change ($tool)"
         }
         val remoteName = if (tool == "mcp_call") args.optString("name").lowercase() else ""
@@ -206,6 +213,10 @@ internal object IrreversibleActionConfirmationPolicy {
         if (tool == "shell" || tool == "termux_command") {
             val command = args.optString("command").ifBlank { args.optString("cmd") }.ifBlank { args.optString("script") }
             if (command.isNotBlank() && shellDelete.containsMatchIn(command)) return "shell file deletion"
+            if (command.isNotBlank() && shellWipe.containsMatchIn(command)) return "shell filesystem or device wipe"
+        }
+        if (tool == "web_api" && args.optString("method", "GET").equals("DELETE", true)) {
+            return "remote HTTP resource deletion"
         }
         if (tool == "python_exec") {
             val code = args.optString("code").ifBlank { args.optString("script") }
