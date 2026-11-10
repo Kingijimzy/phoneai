@@ -26,6 +26,7 @@ class TerminalActivity : Activity() {
     private lateinit var backendBtn: TextView
     private lateinit var terminalView: TerminalView
     private lateinit var commandRow: LinearLayout
+    private lateinit var toolsRow: LinearLayout
     private enum class Backend { BUILTIN, LINUX }
     private var backend = Backend.BUILTIN
     @Volatile private var terminalSession: TerminalSession? = null
@@ -65,7 +66,8 @@ class TerminalActivity : Activity() {
         row.addView(input, LinearLayout.LayoutParams(0, -2, 1f))
         row.addView(chip("Run") { runInput() }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) })
         root.addView(row)
-        val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(8), 0, 0) }
+        toolsRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(8), 0, 0) }
+        val tools = toolsRow
         tools.addView(chip("✨ Ask AI") { askAi() }, LinearLayout.LayoutParams(0, -2, 1f))
         tools.addView(chip("Clear") { out.text = "" }, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(8) })
         tools.addView(chip("Workspace") { input.setText("ls -la"); runInput() }, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(8) })
@@ -82,6 +84,7 @@ class TerminalActivity : Activity() {
             terminalView.visibility = android.view.View.GONE
             scroll.visibility = android.view.View.VISIBLE
             commandRow.visibility = android.view.View.VISIBLE
+            toolsRow.visibility = android.view.View.VISIBLE
             backend = Backend.BUILTIN
             refreshBackend()
             return
@@ -105,6 +108,7 @@ class TerminalActivity : Activity() {
                     terminalSession = session
                     scroll.visibility = android.view.View.GONE
                     commandRow.visibility = android.view.View.GONE
+                    toolsRow.visibility = android.view.View.GONE
                     terminalView.visibility = android.view.View.VISIBLE
                     terminalView.attachSession(session)
                     terminalView.requestFocus()
