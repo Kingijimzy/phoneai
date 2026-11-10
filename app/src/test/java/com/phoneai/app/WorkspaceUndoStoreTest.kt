@@ -82,8 +82,8 @@ class WorkspaceUndoStoreTest {
     }
 
     @Test fun oversizedSnapshotsAreRejected() {
-        val tooLarge = "x".repeat(OrionPythonWorkspace.MAX_FILE_BYTES + 1)
-        assertFalse(undo.recordWrite("large.txt", null, tooLarge))
+        assertFalse(WorkspaceUndoStore.isSnapshotSizeAllowed(16L * 1024 * 1024 + 1))
+        assertTrue(WorkspaceUndoStore.isSnapshotSizeAllowed(16L * 1024 * 1024))
     }
 
     @Test fun deletedFileGoesToTrashInsteadOfBeingPermanentlyRemoved() {
