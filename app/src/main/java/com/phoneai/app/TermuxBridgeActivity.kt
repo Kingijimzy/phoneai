@@ -20,6 +20,7 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import org.json.JSONObject
 
 /** Optional bridge to the user's installed Termux RUN_COMMAND service. This is not root access. */
 class TermuxBridgeActivity : Activity() {
@@ -28,7 +29,6 @@ class TermuxBridgeActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var output: TextView
     private lateinit var command: EditText
-    private lateinit var enabledSwitch: Switch
     private val prefs by lazy { getSharedPreferences("phoneai", MODE_PRIVATE) }
     private var commandsThisSession = 0
     private var sessionStartedAt = 0L
@@ -47,28 +47,14 @@ class TermuxBridgeActivity : Activity() {
         setContentView(scroll)
 
         addText("ORION / TERMUX BRIDGE", 10f, Theme.MUTED, true, 0)
-        addText("External terminal · explicit approval", 24f, Theme.TEXT, true, 4)
+        addText("External terminal", 24f, Theme.TEXT, true, 4)
         addText(
-            "This bridge calls Termux's documented RUN_COMMAND service. It runs as Termux's app user, not root. Commands can access Termux files and installed packages, so every command is checked against Orion's approval mode and task budget.",
+            "This bridge calls Termux's documented RUN_COMMAND service as Termux's app user, not root. Orion dispatches commands directly; Android's RUN_COMMAND permission and confirmation before destructive file deletion still apply.",
             13f, Theme.MUTED, false, 8
         )
         addButton("‹ Back to Agent Control") { finish() }
 
         section("BRIDGE STATE")
-        enabledSwitch = Switch(this).apply {
-            text = "Enable Termux bridge"
-            setTextColor(Theme.TEXT)
-            isChecked = prefs.getBoolean("termux_bridge_enabled", false) &&
-                AgentPolicy.enabled(this@TermuxBridgeActivity, "termux_bridge")
-            setOnCheckedChangeListener { _, checked ->
-                prefs.edit().putBoolean("termux_bridge_enabled", checked).apply()
-                AgentPolicy.setEnabled(this@TermuxBridgeActivity, "termux_bridge", checked)
-                AgentPolicy.log(this@TermuxBridgeActivity, "termux_bridge", "toggle", true,
-                    if (checked) "user enabled Termux bridge; runtime setup still checked per command" else "user disabled Termux bridge")
-                refreshStatus()
-            }
-        }
-        root.addView(enabledSwitch, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         status = addText("", 13f, Theme.TEXT, false, 6)
         addButton("Open Termux") { openTermux() }
         addButton("Open PhoneAI app permissions") {
@@ -95,7 +81,7 @@ class TermuxBridgeActivity : Activity() {
             setPadding(dp(12), dp(10), dp(12), dp(10))
         }
         root.addView(command, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
-        addText("Examples: pwd · ls -la · git status · python --version. Commands outside the exact read-only set are treated as dangerous and require explicit confirmation unless a valid trusted session covers this pack.", 12f, Theme.MUTED, false, 5)
+        addText("Examples: pwd · ls -la · git status · python --version. Commands run directly. Orion asks only before destructive file deletion; catastrophic device/system wipes remain blocked by the Android shell policy.", 12f, Theme.MUTED, false, 5)
         addButton("RUN COMMAND", true) { requestCommand() }
         addButton("Refresh last result") { refreshOutput() }
 
@@ -154,14 +140,12 @@ class TermuxBridgeActivity : Activity() {
 
     private fun refreshStatus() {
         val installed = isInstalled()
-        val enabled = prefs.getBoolean("termux_bridge_enabled", false) &&
-            AgentPolicy.enabled(this, "termux_bridge")
+        val enabled = AgentPolicy.enabled(this, "termux_bridge")
         val permission = hasRunCommandPermission()
         status.text = buildString {
             append("Termux app: ").append(if (installed) "installed" else "not installed").append("\n")
             append("Bridge pack: ").append(if (enabled) "enabled" else "OFF").append("\n")
             append("RUN_COMMAND permission: ").append(if (permission) "granted" else "not granted").append("\n")
-            append("Approval mode: ").append(AgentPolicy.mode(this@TermuxBridgeActivity).label).append("\n")
             append("Session budget: ").append(commandsThisSession).append("/")
                 .append(minOf(AgentPolicy.maxCalls(this@TermuxBridgeActivity), AgentPolicy.maxSteps(this@TermuxBridgeActivity)))
                 .append(" commands · ").append(AgentPolicy.maxMinutes(this@TermuxBridgeActivity)).append(" min")
@@ -177,9 +161,6 @@ class TermuxBridgeActivity : Activity() {
         if (text.isBlank()) { toast("Enter a command first."); return }
         if (text.length > 2048) { toast("Command is too long (maximum 2,048 characters)."); return }
         if (!isInstalled()) { toast("Termux is not installed; no command was sent."); refreshStatus(); return }
-        if (!prefs.getBoolean("termux_bridge_enabled", false) || !AgentPolicy.enabled(this, "termux_bridge")) {
-            toast("Enable the Termux bridge first."); return
-        }
         if (!hasRunCommandPermission()) {
             AlertDialog.Builder(this).setTitle("Termux permission required")
                 .setMessage("Android has not granted PhoneAI permission to run commands in Termux. Open App Info and grant the additional permission first. No command was sent.")
@@ -195,31 +176,17 @@ class TermuxBridgeActivity : Activity() {
         if (System.currentTimeMillis() - sessionStartedAt >= AgentPolicy.maxMinutes(this) * 60_000L) {
             toast("Termux bridge session time budget reached. Wait for the policy window to reset."); return
         }
-        val decision = AgentPolicy.evaluate(
-            this, "termux_bridge", "termux_command",
-            dangerous = !TermuxCommandPolicy.isReadOnly(text)
+        val destructiveReason = IrreversibleActionConfirmationPolicy.approvalReason(
+            "termux_command", JSONObject().put("command", text), "termux_bridge"
         )
-        when (decision.decision) {
-            AgentPolicy.Decision.DENY, AgentPolicy.Decision.PLAN_ONLY -> {
-                AgentPolicy.log(this, "termux_command", "dispatch", false, decision.reason)
-                toast("BLOCKED: ${decision.reason}")
-            }
-            AgentPolicy.Decision.ASK -> AlertDialog.Builder(this)
-                .setTitle("Run this Termux command?")
-                .setMessage("Orion is configured to ask before using Termux.\n\n" + text.take(1200))
-                .setNegativeButton("Cancel") { _, _ ->
-                    AgentPolicy.log(this, "termux_command", "dispatch", false, "owner declined per-tool ASK")
-                    toast("Command cancelled.")
-                }
-                .setPositiveButton("Run once") { _, _ ->
-                    AgentPolicy.log(this, "termux_command", "dispatch", true, "owner approved per-tool ASK")
-                    dispatchCommand(text)
-                }
+        if (destructiveReason != null) {
+            AlertDialog.Builder(this).setTitle("Confirm destructive deletion")
+                .setMessage("Orion is about to perform $destructiveReason. Continue?\n\n" + text.take(1200))
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Delete") { _, _ -> dispatchCommand(text) }
                 .show()
-            AgentPolicy.Decision.ALLOW -> {
-                AgentPolicy.log(this, "termux_command", "dispatch", null, "allowed by capability and owner execution policy")
-                dispatchCommand(text)
-            }
+        } else {
+            dispatchCommand(text)
         }
     }
 
