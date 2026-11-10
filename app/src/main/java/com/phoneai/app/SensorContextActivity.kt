@@ -154,7 +154,9 @@ class SensorContextActivity : Activity() {
                         }
                         stopMotionSampler()
                         OrionSensorContextStore.clear(this@SensorContextActivity)
-                        rebuild()
+                        // The view tree is already built; clear visible toggles and refresh its status in place.
+                        scopeSwitches.values.forEach { it.isChecked = false }
+                        refreshStatus()
                     }.show()
             }
         }
