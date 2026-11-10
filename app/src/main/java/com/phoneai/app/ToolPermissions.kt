@@ -5,7 +5,7 @@ import org.json.JSONObject
 
 internal enum class ToolMode { ALLOW, ASK, DENY }
 
-/** Default-ALLOW tool permissions with optional explicit DENY; legacy ASK values resolve to ALLOW. */
+/** Owner-controlled per-tool Allow / Ask / Deny policy, combined with the selected preset. */
 internal object ToolPermissionPolicy {
     /** Tools Orion always needs to talk to the user; they can never be denied. */
     val alwaysAllowed = setOf("ask_user", "wait", "time")
@@ -13,15 +13,15 @@ internal object ToolPermissionPolicy {
     val levels = listOf("careful", "balanced", "autonomous", "read_only")
 
     fun levelLabel(level: String) = when (level) {
-        "careful" -> "Careful: default ALLOW; use explicit DENY for tools you want disabled"
-        "autonomous" -> "Autonomous: act without asking; only restart, shutdown and Wi-Fi toggles require confirmation"
+        "careful" -> "Careful: ask before each write action; read-only tools remain available"
+        "autonomous" -> "Autonomous: execute owner-authorized actions; per-tool Ask/Deny and consequential-action approvals still apply"
         "read_only" -> "Read-only: look and answer, never change anything"
         else -> "Balanced: default behaviour"
     }
 
     /** Builds the per-tool map for a preset level from the real registry access classes. */
     fun preset(level: String, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> = when (level) {
-        "careful" -> emptyMap()
+        "careful" -> tools.filter { it.access == ToolAccess.WRITE && it.name !in alwaysAllowed }.associate { it.name to ToolMode.ASK }
         "read_only" -> tools.filter { it.access == ToolAccess.WRITE && it.name !in alwaysAllowed }.associate { it.name to ToolMode.DENY }
         else -> emptyMap()
     }
