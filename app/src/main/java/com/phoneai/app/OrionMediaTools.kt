@@ -19,6 +19,21 @@ import java.net.URL
 import java.util.concurrent.TimeUnit
 import java.util.zip.Inflater
 
+/** Reject provider error pages and truncated/non-image payloads before creating an image file. */
+internal object OrionImagePayload {
+    fun format(bytes: ByteArray): String? {
+        if (bytes.size < 12 || bytes.size > 15 * 1024 * 1024) return null
+        fun u(i: Int) = bytes[i].toInt() and 0xff
+        val png = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
+        if (bytes.size >= png.size && png.indices.all { bytes[it] == png[it] }) return "png"
+        if (u(0) == 0xff && u(1) == 0xd8 && u(2) == 0xff) return "jpg"
+        if (bytes.size >= 12 &&
+            String(bytes, 0, 4, Charsets.US_ASCII) == "RIFF" &&
+            String(bytes, 8, 4, Charsets.US_ASCII) == "WEBP") return "webp"
+        return null
+    }
+}
+
 /** Text from PDFs without a PDF library: inflates content streams and reads the text-showing operators. */
 internal object OrionPdfExtractor {
     private val streamRx = Regex("stream\r?\n", RegexOption.DOT_MATCHES_ALL)
@@ -199,20 +214,51 @@ internal object OrionMediaTools {
 
     /** Writes to the private workspace (for show_file/open_file) and to the phone gallery under Pictures/Orion. */
     private fun saveGenerated(c: Context, png: ByteArray, via: String): String {
-        if (png.size < 200) return "error: the image service returned no image data"
-        val dir = File(c.filesDir, "orion-python/workspace/images").apply { mkdirs() }
-        val f = File(dir, "gen_${System.currentTimeMillis()}.png"); f.writeBytes(png)
+        val extension = OrionImagePayload.format(png)
+            ?: return "error: image service response is not a supported, complete PNG, JPEG or WebP image; no file was saved"
+        val mime = when (extension) { "jpg" -> "image/jpeg"; "webp" -> "image/webp"; else -> "image/png" }
+        val dir = File(c.filesDir, "orion-python/workspace/images")
+        if (!dir.exists() && !dir.mkdirs()) return "error: could not create Orion's image workspace"
+        val name = "gen_${System.currentTimeMillis()}.$extension"
+        val f = File(dir, name)
+        val temp = File(dir, ".$name.tmp")
+        try {
+            temp.writeBytes(png)
+            if (!temp.isFile || temp.length() != png.size.toLong() || OrionImagePayload.format(temp.readBytes()) != extension) {
+                temp.delete()
+                return "error: generated image failed workspace write verification"
+            }
+            if (!temp.renameTo(f) || !f.isFile || f.length() != png.size.toLong()) {
+                temp.delete()
+                f.delete()
+                return "error: generated image could not be committed to Orion's workspace"
+            }
+        } catch (e: Exception) {
+            temp.delete()
+            f.delete()
+            return "error: could not save generated image: ${e.message}".take(220)
+        }
         val gallery = runCatching {
             val v = android.content.ContentValues().apply {
-                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, f.name)
-                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name)
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, mime)
                 put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Orion")
             }
-            val uri = c.contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v)!!
-            c.contentResolver.openOutputStream(uri)!!.use { it.write(png) }
-            "Saved to your gallery: Pictures/Orion/${f.name}."
-        }.getOrDefault("Gallery copy failed; the file is only in Orion's workspace.")
-        return "image saved: images/${f.name} (${png.size} bytes) via $via. $gallery Call show_file with path images/${f.name} to display it in chat."
+            val uri = c.contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v)
+                ?: error("MediaStore did not create an image entry")
+            c.contentResolver.openOutputStream(uri)?.use { it.write(png) }
+                ?: error("MediaStore output stream unavailable")
+            val saved = c.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: error("MediaStore image could not be read back")
+            check(saved.size == png.size && OrionImagePayload.format(saved) == extension) {
+                "MediaStore image read-back did not match the generated image"
+            }
+            "Gallery copy verified: Pictures/Orion/$name."
+        }.getOrElse { "Gallery copy could not be verified; the verified workspace image remains available." }
+        check(f.isFile && f.length() == png.size.toLong() && OrionImagePayload.format(f.readBytes()) == extension) {
+            "Workspace image verification failed after gallery copy"
+        }
+        return "image saved: images/$name (${png.size} bytes; workspace file verified) via $via. $gallery Call show_file with path images/$name to display it in chat."
     }
 
     private fun generateViaProvider(c: Context, p: Provider, key: String, prompt: String, model: String, size: String): String {
