@@ -937,7 +937,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // Suppress the internal ACTION routing sentinel so it is never flashed to the user.
         val visiblePrefix = StringBuilder()
         val heldTail = StringBuilder()
-        val sentinelTail = Regex("(?i)(?:^|\n)[ \t]*A(?:C(?:T(?:I(?:O(?:N)?)?)?)?)?\W*$")
+        val sentinelTail = Regex("(?i)(?:^|\n)[ \t]*A(?:C(?:T(?:I(?:O(?:N)?)?)?)?)?\\W*$")
         val isKnownTool: (String) -> Boolean = { name -> ToolRegistry.find(name) != null }
         var visibleStarted = false
         val raw = talkNim.chat(msgs, false, 1000, 0.75, onDelta = { delta ->
@@ -976,10 +976,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         if (visiblePrefix.isNotEmpty() && !visibleStarted &&
             !visiblePrefix.toString().trim().equals("ACTION", ignoreCase = true) &&
             recoveredToolCall == null && !containsToolMarkup) ui.stream(visiblePrefix.toString())
-        val endsWithAction = Regex("(?i)(?:^|\n)[ \t]*ACTION\W*$").containsMatchIn(raw)
+        val endsWithAction = Regex("(?i)(?:^|\n)[ \t]*ACTION\\W*$").containsMatchIn(raw)
         if (heldTail.isNotEmpty() && !endsWithAction && recoveredToolCall == null && !containsToolMarkup) ui.stream(heldTail.toString())
         if (raw.isEmpty() || raw.uppercase().startsWith("ACTION") || endsWithAction) return null
-        if (containsToolMarkup || Regex("(?i)\b(generat|creat|draw|sav|writ|build|run)(ing|e)\b[^\.\n]{0,40}\b(now|right away|this second)\b").containsMatchIn(raw.take(400)) ||
+        if (containsToolMarkup || Regex("(?i)\\b(generat|creat|draw|sav|writ|build|run)(ing|e)\\b[^\\.\\n]{0,40}\\b(now|right away|this second)\\b").containsMatchIn(raw.take(400)) ||
             recoveredToolCall != null) return null
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", raw))
