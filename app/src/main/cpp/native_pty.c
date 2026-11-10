@@ -55,6 +55,9 @@ Java_com_phoneai_app_NativePty_spawn(JNIEnv *env, jobject thiz, jobjectArray arg
         ioctl(slave,TIOCSWINSZ,&ws);
         dup2(slave,STDIN_FILENO); dup2(slave,STDOUT_FILENO); dup2(slave,STDERR_FILENO);
         if (slave>STDERR_FILENO) close(slave);
+        long max_fd=sysconf(_SC_OPEN_MAX);
+        if (max_fd<0 || max_fd>4096) max_fd=4096;
+        for (int fd=3;fd<max_fd;fd++) close(fd);
         execve(args[0],args,vars);
         _exit(errno==ENOENT?127:126);
     }
@@ -72,7 +75,7 @@ Java_com_phoneai_app_NativePty_read(JNIEnv *env,jobject thiz,jint fd,jbyteArray 
     if(fd<0||!target||length<=0)return -1;
     jsize cap=(*env)->GetArrayLength(env,target); if(length>cap)length=cap;
     jbyte *bytes=(*env)->GetByteArrayElements(env,target,NULL); if(!bytes)return -1;
-    ssize_t n=read(fd,bytes,(size_t)length);
+    ssize_t n; do { n=read(fd,bytes,(size_t)length); } while(n<0 && errno==EINTR);
     if(n>0)(*env)->ReleaseByteArrayElements(env,target,bytes,0); else (*env)->ReleaseByteArrayElements(env,target,bytes,JNI_ABORT);
     return (jint)n;
 }
@@ -81,7 +84,7 @@ Java_com_phoneai_app_NativePty_write(JNIEnv *env,jobject thiz,jint fd,jbyteArray
     if(fd<0||!source||length<=0)return -1;
     jsize cap=(*env)->GetArrayLength(env,source); if(length>cap)length=cap;
     jbyte *bytes=(*env)->GetByteArrayElements(env,source,NULL); if(!bytes)return -1;
-    ssize_t n=write(fd,bytes,(size_t)length);
+    ssize_t n; do { n=write(fd,bytes,(size_t)length); } while(n<0 && errno==EINTR);
     (*env)->ReleaseByteArrayElements(env,source,bytes,JNI_ABORT);
     return (jint)n;
 }
