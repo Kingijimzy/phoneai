@@ -25,8 +25,7 @@ internal object OrionAutonomyRunPolicy {
         serviceConnected: Boolean,
         agentReady: Boolean,
         userTaskRunning: Boolean
-    ): Boolean = mode == OrionMode.AUTOPILOT && coreEnabled && proactiveEnabled &&
-        serviceConnected && agentReady && !userTaskRunning
+    ): Boolean = coreEnabled && proactiveEnabled && serviceConnected && agentReady && !userTaskRunning
 }
 
 internal object OrionAutonomyPolicy {
