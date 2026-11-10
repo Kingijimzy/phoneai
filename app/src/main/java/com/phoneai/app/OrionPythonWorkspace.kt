@@ -15,9 +15,9 @@ internal class OrionPythonWorkspace(context: Context) {
     private val trash = File(filesDir, "orion-python/trash")
     private val backup = File(filesDir, "orion-python/backup")
     companion object {
-        const val MAX_FILE_BYTES = 2 * 1024 * 1024
-        const val MAX_TOTAL_BYTES = 256L * 1024 * 1024
-        private const val MAX_ENTRIES = 50_000
+        const val MAX_FILE_BYTES = 32 * 1024 * 1024
+        const val MAX_TOTAL_BYTES = 1024L * 1024 * 1024
+        private const val MAX_ENTRIES = 100_000
         private val IGNORED_LIST_DIRECTORIES = setOf("node_modules", ".gradle", ".git", ".idea", "build", "dist", "target", "__pycache__", ".venv", "venv")
         private val NAME = Regex("^[A-Za-z0-9.][A-Za-z0-9._/-]{0,179}$")
     }
@@ -105,20 +105,20 @@ internal class OrionPythonWorkspace(context: Context) {
     }
     @Synchronized fun read(path: String): String {
         val file = resolve(path, true) ?: return "error: invalid or missing workspace file"
-        if (!file.isFile || file.length() > MAX_FILE_BYTES) return "error: file is not regular or exceeds 2 MiB"
+        if (!file.isFile || file.length() > MAX_FILE_BYTES) return "error: file is not regular or exceeds 32 MiB"
         return runCatching { FileInputStream(file).use { it.readBytes().toString(Charsets.UTF_8) } }
             .getOrElse { "error: workspace read failed (${it.javaClass.simpleName})" }
     }
     @Synchronized fun write(path: String, content: String): String {
         val bytes = content.toByteArray(Charsets.UTF_8)
-        if (bytes.size > MAX_FILE_BYTES) return "error: workspace files are limited to 2 MiB"
+        if (bytes.size > MAX_FILE_BYTES) return "error: workspace files are limited to 32 MiB"
         val file = resolve(path, false) ?: return "error: invalid workspace path"
         val parent = file.parentFile ?: return "error: invalid workspace path"
         if (!parent.exists() && !parent.mkdirs()) return "error: could not create workspace directory"
         if (!insideRoot(parent) || hasSymlink(parent)) return "error: workspace path crossed a symlink boundary"
         val current = root.walkTopDown().filter { it.isFile }.sumOf { it.length() }
         val previous = if (file.isFile) file.length() else 0L
-        if (current - previous + bytes.size > MAX_TOTAL_BYTES) return "error: workspace storage quota (256 MiB) exceeded"
+        if (current - previous + bytes.size > MAX_TOTAL_BYTES) return "error: workspace storage quota (1 GiB) exceeded"
         // Automatic backup before any destructive overwrite: preserve the exact prior contents
         // so the owner can always restore the pre-write state from the recycle/backup area.
         if (file.isFile) {
