@@ -66,7 +66,7 @@ internal object SoulPolicy {
 /** Event-driven look at connected services. No AI call; notifies only on something new. */
 internal object SoulWatch {
     private fun sp(c: Context) = c.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
-    fun enabled(c: Context) = sp(c).getBoolean("soul_watch_enabled", false)
+    fun enabled(c: Context) = sp(c).getBoolean("soul_watch_enabled", true)
     fun setEnabled(c: Context, v: Boolean) { sp(c).edit().putBoolean("soul_watch_enabled", v).apply() }
     fun lastTick(c: Context) = sp(c).getLong("soul_watch_last", 0L)
 

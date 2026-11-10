@@ -1946,13 +1946,36 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             )) return
         // Claim is persisted atomically before Agent starts; a process interruption will not
         // replay the same consequential goal immediately after service reconnection.
-        val goal = AutonomyGoalStore.claimNextDue(this, System.currentTimeMillis()) ?: return
+        val goal = AutonomyGoalStore.claimNextDue(this, System.currentTimeMillis()) ?: run { runInitiative(); return }
         running = true
         try {
             agent.run(goal.prompt)
             AutonomyGoalStore.recordResult(this, goal.id, "submitted_to_agent")
         } catch (e: Exception) {
             AutonomyGoalStore.recordResult(this, goal.id, "dispatch_error: " + (e.message ?: "failed"))
+        } finally {
+            main.post { finishRun() }
+        }
+    }
+
+    /**
+     * Orion's own initiative: with no goal queued it still thinks about what is worth doing, every few hours, with
+     * its mood, lessons and facts already in its prompt. It acts through its tools, or says nothing is needed.
+     */
+    private fun runInitiative() {
+        val prefs = getSharedPreferences("phoneai", MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        if (now - prefs.getLong("initiative_last", 0L) < 3 * 60 * 60_000L) return
+        prefs.edit().putLong("initiative_last", now).apply()
+        running = true
+        try {
+            agent.run(
+                "[ORION INITIATIVE — Kingi did not ask for this; you are acting on your own judgment] Review your mood, lessons, " +
+                    "memory and recent failures. Decide whether there is something worth doing now for Kingi or for yourself " +
+                    "(finish unfinished work, fix a tool that keeps failing, build a missing capability, check something he cares about). " +
+                    "If yes, do it with your tools and report briefly what you did. If not, reply with one short line saying nothing is needed."
+            )
+        } catch (_: Exception) {
         } finally {
             main.post { finishRun() }
         }
