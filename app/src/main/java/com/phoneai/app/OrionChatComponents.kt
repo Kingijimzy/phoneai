@@ -190,6 +190,8 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
     val replyType = if (mine) OrionReplyType.NORMAL else classifyOrionReply(item)
     val clipboard = LocalClipboardManager.current
     var actionsVisible by remember(item.id) { mutableStateOf(false) }
+    var openBlock by remember(item.id) { mutableStateOf(false) }
+    val collapsible = !mine && (replyType != OrionReplyType.NORMAL || (note && !item.text.startsWith("[")))
     AnimatedVisibility(
         visible = true,
         enter = fadeIn(animationSpec = tween(260)) +
@@ -245,7 +247,7 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                     )
             ) {
                 if (note || replyType != OrionReplyType.NORMAL) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Row(Modifier.fillMaxWidth().clickable(enabled = collapsible) { openBlock = !openBlock }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         Text(
                             when (replyType) {
                                 OrionReplyType.RESEARCH -> "RESEARCH"
@@ -265,6 +267,7 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                         )
                         Spacer(Modifier.weight(1f))
                         Text("ORION", color = ChatMuted, fontSize = 8.sp, letterSpacing = 1.sp)
+                        if (collapsible) Icon(if (openBlock) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null, tint = ChatMuted, modifier = Modifier.size(16.dp))
                     }
                     Spacer(Modifier.height(7.dp))
                 }
@@ -279,6 +282,7 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                         if (!mine && !note) {
                             val formatted = formatOrionMarkdown(item.text)
                             ClickableText(
+                                maxLines = if (collapsible && !openBlock) 3 else Int.MAX_VALUE,
                                 text = formatted,
                                 style = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 22.sp),
                                 onClick = { offset ->
@@ -296,7 +300,8 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                                 color = if (note) ChatMuted else ChatCopy,
                                 fontSize = 14.sp,
                                 lineHeight = 22.sp,
-                                modifier = Modifier.clickable(enabled = !note) { actionsVisible = !actionsVisible }
+                                maxLines = if (collapsible && !openBlock) 3 else Int.MAX_VALUE,
+                                modifier = Modifier.clickable { if (collapsible) openBlock = !openBlock else actionsVisible = !actionsVisible }
                             )
                         }
                     }
