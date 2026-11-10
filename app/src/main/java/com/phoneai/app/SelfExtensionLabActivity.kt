@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.sp
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Self-extension workflow: save draft -> execute sandbox tests -> explicit or owner pre-approval -> promote. */
+/** Self-extension workflow: save draft -> execute sandbox tests -> automatically promote the exact tested source. */
 class SelfExtensionLabActivity : ComponentActivity() {
     private val ink = Color(0xFF080808)
     private val panel = Color(0xFF171717)
@@ -63,7 +63,6 @@ class SelfExtensionLabActivity : ComponentActivity() {
     private val testsState = mutableStateOf("[{\"input\": {\"value\": 3}, \"expect\": 6}]")
     private val runInputState = mutableStateOf("{\"value\": 5}")
     private val runOutputState = mutableStateOf("")
-    private val confirmEnableState = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,7 +91,7 @@ class SelfExtensionLabActivity : ComponentActivity() {
                         onSaveDraft = ::saveDraft,
                         onDraftWithOrion = ::draftWithOrion,
                         onTest = ::testExtension,
-                        onEnable = { id -> confirmEnableState.value = id },
+                        onEnable = ::enableExtension,
                         onDisable = ::disableExtension,
                         onRun = ::runExtension
                     )
@@ -190,7 +189,7 @@ class SelfExtensionLabActivity : ComponentActivity() {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (report.passed) reports[id] = report else reports.remove(id)
                 val autoActivate = report.passed
-                val activated = if (autoActivate) store.promote(id, report, userApproved = true) else false
+                val activated = if (autoActivate) store.promote(id, report) else false
                 statusState.value = when {
                     activated -> "TEST PASSED · ${report.summary} · AUTO-ACTIVATED by your owner pre-approval"
                     report.passed -> "TEST PASSED · ${report.summary} · awaiting enable approval"
@@ -204,6 +203,12 @@ class SelfExtensionLabActivity : ComponentActivity() {
                 }, Toast.LENGTH_SHORT).show()
             }
         }.start()
+    }
+
+    private fun enableExtension(id: String) {
+        val report = reports[id]
+        val ok = report != null && store.promote(id, report)
+        refresh(if (ok) "Extension enabled from its passing sandbox report." else "Enable failed: run a successful test on this exact source first.")
     }
 
     private fun disableExtension(id: String) {
@@ -251,16 +256,16 @@ class SelfExtensionLabActivity : ComponentActivity() {
             TextButton(onClick = onBack) { Text("← Back to Command Center", color = muted) }
             Text("SELF-EXTENSION LAB", color = muted, fontSize = 10.sp, letterSpacing = 1.5.sp)
             Text("Build a new skill", color = white, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-            Text("Drafts are inert by default. Orion runs the constrained Python sandbox and checks expected results. Activation requires your explicit approval or the narrow owner pre-approval dial for exact-hash, sandbox-tested extensions.", color = muted, fontSize = 12.sp, lineHeight = 18.sp)
+            Text("Drafts are inert until Orion runs the constrained Python sandbox. A passing report promotes only the exact source hash that was tested.", color = muted, fontSize = 12.sp, lineHeight = 18.sp)
             PanelCard {
                 Text("WHAT THIS LAB CHANGES", color = white, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 Text(
-                    "Self-extensions add small, reusable data-processing skills to Orion's registered extension tool after sandbox tests and approval. They do not rewrite the Soul Engine, change its personality or core prompt, grant phone permissions, add arbitrary Android actions, or bypass policy.",
+                    "Self-extensions add reusable data-processing skills after their exact source passes the sandbox tests. They do not rewrite the Soul Engine or grant Android system permissions.",
                     color = muted, fontSize = 12.sp, lineHeight = 18.sp
                 )
                 Text("TO CHANGE THE SOUL ENGINE", color = white, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 Text(
-                    "Open Soul Engine to change its saved goal and Talk / Command mode, pause or resume its core, review learning proposals, and inspect capability status. Use Settings and the Owner Control Center for the separate provider, permission and autonomy controls.",
+                    "Open Soul Engine to inspect its activity and capability state. Android system permissions remain controlled by Android settings.",
                     color = muted, fontSize = 12.sp, lineHeight = 18.sp
                 )
             }
@@ -312,24 +317,7 @@ class SelfExtensionLabActivity : ComponentActivity() {
             }
             Spacer(Modifier.height(18.dp))
         }
-        val idToConfirm = confirmEnableState.value
-        if (idToConfirm != null) {
-            AlertDialog(
-                onDismissRequest = { confirmEnableState.value = null },
-                title = { Text("Enable this extension?") },
-                text = { Text("Only the exact source hash that passed the sandbox test will be promoted. Enabling makes this data-processing extension available through the registered extension tool; it does not grant phone, network, file, or shell access.") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        val report = reports[idToConfirm]
-                        val ok = report != null && store.promote(idToConfirm, report, userApproved = true)
-                        confirmEnableState.value = null
-                        refresh(if (ok) "Extension enabled after test and approval." else "Enable failed: run a successful test on this exact draft first.")
-                    }) { Text("Approve & enable") }
-                },
-                dismissButton = { TextButton(onClick = { confirmEnableState.value = null }) { Text("Cancel") }
-                }
-            )
-        }
+
     }
 
     @Composable
