@@ -304,7 +304,7 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
 }
 
 @Composable
-private fun OrionComposeActivityCard(event: OrionActivityEvent) {
+private fun OrionComposeActivityCard(event: OrionActivityEvent, lines: List<OrionChatLine>, onBrowser: (String?) -> Unit, onOpenTerminal: () -> Unit) {
     var expanded by rememberSaveable(event.eventId) { mutableStateOf(false) }
     val active = event.status == OrionActivityStatus.ACTIVE
     val accent = when (event.status) {
@@ -418,9 +418,29 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
                 maxLines = if (expanded) 4 else 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 13.dp, top = 2.dp))
         }
+        val browserEvidence = event.typedEvidence.filterIsInstance<OrionActivityEvidence.Browser>().lastOrNull()
+        if (browserEvidence != null && browserEvidence.url.isNotBlank()) {
+            Text(
+                "OPEN SITE  ↗",
+                color = Color(0xFFD5D5D5), fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 13.dp, top = 5.dp).clickable { onBrowser(browserEvidence.url) }
+            )
+        }
+        if (terminalEvidence != null) {
+            Text(
+                "OPEN TERMINAL  ↗",
+                color = Color(0xFFD5D5D5), fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 13.dp, top = 5.dp).clickable(onClick = onOpenTerminal)
+            )
+        }
         if (expanded) {
             event.evidence.takeLast(10).forEach { line ->
                 Text(line, color = Color(0xFFAAAAAA), fontSize = 8.sp, lineHeight = 11.sp)
+            }
+            if (lines.any { it.kind == "note" && (it.text.startsWith("[TASK:RUNNING]") || it.text.startsWith("[BROWSER:") || it.text.startsWith("[SHELL:")) }) {
+                Text("ACTIVITY STEPS", color = Color(0xFF888888), fontSize = 8.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 13.dp, top = 7.dp, bottom = 3.dp))
+                OrionToolPills(lines, Modifier.padding(start = 13.dp))
             }
             Text("Task ${event.taskId}", color = Color(0xFF666666), fontSize = 8.sp)
         }
@@ -642,11 +662,19 @@ internal fun OrionComposeChatScreen(
                         } else null
                     ) }
                 }
-                item(key = "orion-tool-pills") { OrionToolPills(lines) }
-                // Keep the conversation primary: show one live task card for the latest
-                // task only. Full event history remains available from the Tasks surface.
+                // Keep all execution detail inside one expandable task surface instead of
+                // scattering a separate pill/message for every tool call through the chat.
                 OrionActivityTimeline.latestChatCard(activityEvents)?.let { event ->
-                    item(key = "activity-${event.eventId}") { androidx.compose.foundation.layout.Box(Modifier.orionEnter()) { OrionComposeActivityCard(event) } }
+                    item(key = "activity-${event.eventId}") {
+                        androidx.compose.foundation.layout.Box(Modifier.orionEnter()) {
+                            OrionComposeActivityCard(
+                                event = event,
+                                lines = lines,
+                                onBrowser = onBrowser,
+                                onOpenTerminal = { onMenuAction("terminal") }
+                            )
+                        }
+                    }
                 }
                 val assistantAlreadyStreaming = lines.lastOrNull()?.let {
                     it.kind == "ai" && it.text.isNotBlank()
