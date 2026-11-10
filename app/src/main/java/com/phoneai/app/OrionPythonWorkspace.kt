@@ -20,6 +20,7 @@ internal class OrionPythonWorkspace(context: Context) {
         // Preserve space for Android, databases and other apps.
         private const val MIN_FREE_SPACE_BYTES = 1024L * 1024 * 1024
         private const val MAX_ENTRIES = 100_000
+        internal fun isFileSizeAllowed(byteCount: Long): Boolean = byteCount >= 0L && byteCount <= MAX_FILE_BYTES.toLong()
         private val IGNORED_LIST_DIRECTORIES = setOf("node_modules", ".gradle", ".git", ".idea", "build", "dist", "target", "__pycache__", ".venv", "venv")
         private val NAME = Regex("^[A-Za-z0-9.][A-Za-z0-9._/-]{0,179}$")
     }
@@ -112,8 +113,9 @@ internal class OrionPythonWorkspace(context: Context) {
             .getOrElse { "error: workspace read failed (${it.javaClass.simpleName})" }
     }
     @Synchronized fun write(path: String, content: String): String {
+        if (content.length.toLong() > MAX_FILE_BYTES.toLong()) return "error: workspace files are limited to 512 MiB"
         val bytes = content.toByteArray(Charsets.UTF_8)
-        if (bytes.size > MAX_FILE_BYTES) return "error: workspace files are limited to 512 MiB"
+        if (!isFileSizeAllowed(bytes.size.toLong())) return "error: workspace files are limited to 512 MiB"
         val file = resolve(path, false) ?: return "error: invalid workspace path"
         val parent = file.parentFile ?: return "error: invalid workspace path"
         if (!parent.exists() && !parent.mkdirs()) return "error: could not create workspace directory"
