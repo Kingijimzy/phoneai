@@ -314,12 +314,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var lastActionScopeAt: Long = 0L
 
     /** Local command shortcuts must still respect capability-pack availability. */
-    private fun requiresToolPolicy(command: String): Boolean =
-        TaskScopePolicy.modeFor(command) != TaskMode.CHAT ||
-            OrionCommandIntentPolicy.requiresPythonExecution(command) ||
-            OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(command) ||
-            AgentHooks.isPhoneActionRequest(command) ||
-            Regex("(?i)\\b(note down|take a note|remember|forget|update memory|undo|task|remind|routine|macro|teach|run .* times|trading settings|bybit settings|trading|trade|bybit|watchlist|portfolio|position|balance|alert|market|crypto|forex|symbol|buy|sell|place order|trade now|where am i|my location|current location|device location|gps|send (a )?(message|sms|email)|telegram|github|repository|repo|python version|python3|linux runtime|apkvision|apk size|file size|save (?:the )?(?:generated )?(?:code|script|file)|create (?:a )?(?:text|code|python)? ?file|write (?:the )?(?:code|script|text) to (?:a )?file|bitcoin headline|latest headline|search the web|look up)\\b").containsMatchIn(command)
+    /** No word lists: chatReply() lets the model itself answer or hand the job to the tool loop with ACTION. */
+    private fun requiresToolPolicy(command: String): Boolean = false
 
     /** Every entry point (chat, command, resume) must set the scope, or a stale one blocks real tools. */
     private fun setRequestScope(command: String) {
@@ -1544,6 +1540,39 @@ Rules:
         // Remember what Kingi tells Orion about himself automatically, without a tool call or a prompt.
         runCatching { OrionFactExtractor.extract(inputCommand, Prefs.userName(svc)).forEach { (s, p, o) -> OrionFactStore.add(svc, s, p, o) } }
         runInternal(inputCommand, reuseCommandBudget = false)
+        reflectOnExchange(inputCommand)
+    }
+
+    /**
+     * After every exchange Orion thinks about what it just learned, using the model rather than word lists:
+     * durable facts about Kingi go to the memory graph, and mistakes, corrections or better ways of working
+     * become lessons that are injected into every later prompt.
+     */
+    private fun reflectOnExchange(command: String) {
+        if (command.trim().length < 8 || stopped) return
+        val lastReply = runCatching {
+            val a = if (chatHist.length() > 0) chatHist.getJSONObject(chatHist.length() - 1) else null
+            a?.optString("content").orEmpty()
+        }.getOrDefault("").take(700)
+        Thread {
+            runCatching {
+                val msgs = JSONArray()
+                    .put(msg("system", "You are Orion's memory. Read one exchange between Kingi and Orion. Reply with ONLY compact JSON: " +
+                        "{\"facts\":[[subject,predicate,object]],\"lessons\":[string]}. facts = durable things Kingi stated about himself, his people, " +
+                        "projects, preferences or plans (subject is usually \"Kingi\"); lessons = how Orion should behave differently next time because Kingi " +
+                        "corrected, was frustrated, or something failed (written as a short instruction to Orion). Use [] when there is nothing. Never invent."))
+                    .put(msg("user", "Kingi: " + command.take(900) + "\nOrion: " + lastReply))
+                val raw = talkNim.chat(msgs, false, 400, 0.0)
+                val json = JSONObject(raw.substring(raw.indexOf('{'), raw.lastIndexOf('}') + 1))
+                val facts = json.optJSONArray("facts")
+                if (facts != null) for (i in 0 until facts.length()) {
+                    val t = facts.optJSONArray(i) ?: continue
+                    if (t.length() >= 3) OrionFactStore.add(svc, t.optString(0), t.optString(1), t.optString(2))
+                }
+                val lessons = json.optJSONArray("lessons")
+                if (lessons != null) for (i in 0 until lessons.length()) OrionLessons.learn(svc, lessons.optString(i))
+            }
+        }.apply { isDaemon = true }.start()
     }
 
     /**
