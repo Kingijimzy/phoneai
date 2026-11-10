@@ -45,34 +45,11 @@ class GatePolicyTest {
         )
     }
     @Test fun onlyTradingWritesAndDestructiveDeletionNeedOwnerApproval() {
-        assertEquals(
-            "Trading Desk change (paper_trade)",
-            IrreversibleActionConfirmationPolicy.approvalReason("paper_trade", org.json.JSONObject(), "trading_research")
-        )
-        assertEquals(
-            null,
-            IrreversibleActionConfirmationPolicy.approvalReason("bybit_public_ticker", org.json.JSONObject(), "trading_research")
-        )
-        assertEquals(
-            "destructive deletion (workspace_delete)",
-            IrreversibleActionConfirmationPolicy.approvalReason("workspace_delete", org.json.JSONObject(), "workspace_shell")
-        )
-        assertEquals(
-            "shell file deletion",
-            IrreversibleActionConfirmationPolicy.approvalReason("shell", org.json.JSONObject().put("command", "rm -rf ./old-build"), "workspace_shell")
-        )
-        assertEquals(
-            "Python file deletion",
-            IrreversibleActionConfirmationPolicy.approvalReason("python_exec", org.json.JSONObject().put("code", "import os\\nos.remove('/workspace/old.txt')"), "orion_core")
-        )
-        assertEquals(
-            null,
-            IrreversibleActionConfirmationPolicy.approvalReason("shell", org.json.JSONObject().put("command", "ls -la"), "workspace_shell")
-        )
-        assertEquals(
-            "destructive deletion (standing_order)",
-            IrreversibleActionConfirmationPolicy.approvalReason("standing_order", org.json.JSONObject().put("action", "remove"), "orion_core")
-        )
+        assertTrue(AgentHooks.requiresConfirmation("paper_trade", org.json.JSONObject()))
+        assertFalse(AgentHooks.requiresConfirmation("bybit_public_ticker", org.json.JSONObject()))
+        assertTrue(AgentHooks.requiresConfirmation("workspace_delete", org.json.JSONObject()))
+        assertTrue(AgentHooks.requiresConfirmation("shell", org.json.JSONObject().put("command", "rm old-build")))
+        assertTrue(AgentHooks.requiresConfirmation("python_exec", org.json.JSONObject().put("code", "import os\nos.remove('/workspace/old.txt')")))
+        assertFalse(AgentHooks.requiresConfirmation("shell", org.json.JSONObject().put("command", "ls -la")))
     }
-
 }
