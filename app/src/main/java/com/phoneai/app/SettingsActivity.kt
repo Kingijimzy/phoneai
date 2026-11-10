@@ -1916,7 +1916,7 @@ class SettingsActivity : Activity() {
         showChoiceDialog(skill.id + " · v" + skill.version,
             skill.description + "\n\nAllowed tools: " + skill.allowedTools.sorted().joinToString(", ") +
                 "\nBudget: " + skill.maxCalls + " calls / " + (skill.maxDurationMs / 1000L) + " seconds" +
-                "\nApproval: " + (if (skill.requiresApproval) "required before every run" else "write-capable tools still require approval"),
+                "\nExecution: runs automatically when its intent and tool allowlist match; Trading/Coach and destructive confirmations stay in the shared dispatcher.",
             listOf(if (skill.enabled) "Disable skill · Stop this skill from running" else "Enable skill · Allow this reviewed skill to run", "Export skill package · Save portable JSON", "Delete skill · Remove its local definition"),
             { which ->
                 if (which == 0) {
@@ -1951,27 +1951,20 @@ class SettingsActivity : Activity() {
             minLines = 2
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
         }
-        val approvalBox = android.widget.CheckBox(this).apply {
-            text = "Require approval for every run"
-            isChecked = true
-            setTextColor(Theme.TEXT)
-            buttonTintList = android.content.res.ColorStateList.valueOf(Theme.TEXT)
-        }
         val wrap = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), 0)
             addView(idBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(descBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(toolsBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            addView(approvalBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             val examples = listOf("web_search", "browser_snapshot", "browser_click", "read_screen", "open_app", "task_add", "remember", "ask_user")
                 .filter { ToolRegistry.find(it) != null }
                 .joinToString(", ")
-            addView(text("Tool names are validated against the live registry. Examples: $examples. Skills cannot add code or bypass approvals.", 11f, Theme.MUTED))
+            addView(text("Tool names are validated against the live registry. Examples: $examples. Skills bind existing registered tools; the shared dispatcher handles Trading/Coach and destructive confirmations.", 11f, Theme.MUTED))
         }
         AlertDialog.Builder(this)
             .setTitle("Create a declarative skill")
-            .setMessage("Use a short ID and only supported tool names. New skills are saved disabled. Write-capable tools always require explicit approval.")
+            .setMessage("Use a short ID and only supported tool names. New skills are enabled when saved. They can only call their declared registered tools.")
             .setView(wrap)
             .setPositiveButton("Save skill") { _, _ ->
                 val allowed = toolsBox.text.toString().split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
@@ -1982,23 +1975,14 @@ class SettingsActivity : Activity() {
                     allowedTools = allowed,
                     maxCalls = 6,
                     maxDurationMs = 30_000L,
-                    requiresApproval = approvalBox.isChecked,
-                    enabled = false
+                    requiresApproval = false,
+                    enabled = true
                 )
                 val result = SkillRegistry.register(this, candidate)
                 Toast.makeText(this, result.reason, Toast.LENGTH_LONG).show()
                 if (result.allowed) {
                     refresh()
-                    AlertDialog.Builder(this)
-                        .setTitle("Enable " + candidate.id + "?")
-                        .setMessage("Enable it only if the purpose and tool allowlist look right.")
-                        .setPositiveButton("Enable") { _, _ ->
-                            val enabled = SkillRegistry.setEnabled(this, candidate.id, true)
-                            Toast.makeText(this, enabled.reason, Toast.LENGTH_SHORT).show()
-                            refresh()
-                        }
-                        .setNegativeButton("Keep disabled", null)
-                        .show()
+                    Toast.makeText(this, "Skill saved and enabled. Orion can use it when the request matches.", Toast.LENGTH_LONG).show()
                 }
             }
             .setNegativeButton("Cancel", null)
