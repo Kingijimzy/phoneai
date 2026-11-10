@@ -283,10 +283,10 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
 
     /** Stop task-list polling quickly without tightening thresholds for other tools. */
     private fun pollWarningThreshold(toolName: String): Int =
-        if (toolName == "task_list") 2 else config.warningThreshold
+        if (toolName == "task_list") 1 else config.warningThreshold
 
     private fun pollCriticalThreshold(toolName: String): Int =
-        if (toolName == "task_list") 3 else config.criticalThreshold
+        if (toolName == "task_list") 2 else config.criticalThreshold
 
     /**
      * Throttle warnings of the same key to once per `warningThreshold` calls,
