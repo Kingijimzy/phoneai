@@ -135,7 +135,11 @@ internal object AgentHooks {
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean {
   val pack = AgentPolicy.packForTool(tool) ?: "orion_core"
   // Only Trading Desk writes and destructive deletion require owner confirmation.
-  if (pack in setOf("trading_research", "trading_desk") && ToolRegistry.access(tool) == ToolAccess.WRITE) return true
+  if (pack in setOf("trading_research", "trading_desk") && tool in setOf(
+      "strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch",
+      "memecoin_watch", "wallet_watch", "bybit_order_place", "bybit_order_cancel",
+      "bybit_order_amend", "bybit_position_close"
+  )) return true
   if (tool in setOf("workspace_delete", "file_delete", "delete_file", "wipe_workspace", "workspace_wipe", "trash_empty")) return true
   val command = args.optString("command").ifBlank { args.optString("cmd") }.ifBlank { args.optString("script") }
   if (tool in setOf("shell", "termux_command") && Regex("(?i)(^|[;&|\\s])rm\\s+").containsMatchIn(command)) return true
