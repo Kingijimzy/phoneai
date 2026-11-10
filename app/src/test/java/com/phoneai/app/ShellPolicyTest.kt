@@ -19,10 +19,7 @@ class ShellPolicyTest {
             "echo x > /dev/block/mmcblk0", "mkfs.ext4 /dev/block/by-name/vendor")
             .forEach { assertEquals(it, ShellRisk.SAFE, r(it)) }
         listOf(":(){ :|:& };:", "fork(){ fork|fork& };fork")
-            .forEach {
-                assertEquals(it, ShellRisk.SAFE, r(it))
-                assertNotNull(IrreversibleActionConfirmationPolicy.approvalReason("shell", org.json.JSONObject().put("command", it), "workspace_shell"))
-            }
+            .forEach { assertEquals(it, ShellRisk.BLOCKED, r(it)) }
     }
     @Test fun normalUserDataPathsAreNotClassifiedAsCatastrophic() {
         listOf("rm -rf ~/Downloads/old", "rm -rf /sdcard/Download/old", "dd if=file.img of=backup.img")
@@ -69,7 +66,10 @@ class ShellPolicyTest {
             "erase all", "recovery --wipe data", "recovery --wipe cache", "recovery --wipe all",
             "fastboot erase system", "fastboot format userdata", "fastboot wipe data",
             "settings put global device_provisioned 0",
-            "settings put secure setup_wizard_finished 0").forEach { assertEquals(it, ShellRisk.BLOCKED, r(it)) }
+            "settings put secure setup_wizard_finished 0").forEach {
+                assertEquals(it, ShellRisk.SAFE, r(it))
+                assertNotNull(IrreversibleActionConfirmationPolicy.approvalReason("shell", org.json.JSONObject().put("command", it), "workspace_shell"))
+            }
     }
 
     @Test fun normalSettingsChangesAreNotFactoryReset() {
