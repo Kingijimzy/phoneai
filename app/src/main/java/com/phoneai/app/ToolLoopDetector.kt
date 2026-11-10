@@ -55,8 +55,8 @@ data class ToolLoopConfig(
     val criticalThreshold: Int = 20,
     val globalCircuitBreakerThreshold: Int = 30,
     /** Read-only calls with the same arguments and identical output are retried at most twice. */
-    val readOnlyNoProgressWarningThreshold: Int = 1,
-    val readOnlyNoProgressCriticalThreshold: Int = 2,
+    val readOnlyNoProgressWarningThreshold: Int = 2,
+    val readOnlyNoProgressCriticalThreshold: Int = 3,
 ) {
     init {
         require(warningThreshold > 0) { "warningThreshold must be positive" }
