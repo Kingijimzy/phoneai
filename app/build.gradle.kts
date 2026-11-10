@@ -118,6 +118,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
+        externalNativeBuild { cmake { cppFlags += "-std=c11" } }
         applicationId = "com.phoneai.app"
         minSdk = 30
         targetSdk = 34
@@ -151,6 +152,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    externalNativeBuild {
+        cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" }
     }
 
     buildFeatures {
