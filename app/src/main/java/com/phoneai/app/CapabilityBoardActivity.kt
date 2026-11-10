@@ -57,17 +57,12 @@ class CapabilityBoardActivity : Activity() {
         page.addView(text("What Orion can reach", 26f, 0xFFF2F2F2.toInt(), true))
         page.addView(text("Credentials stay encrypted on this phone and are sent only to the service you configure. Orion may summarize returned data in chat. Never paste passwords or API keys into chat.", 12f, 0xFF9A9A9A.toInt()))
 
-        val pack = Switch(this).apply {
-            text = "Allow Orion to use connected services"; setTextColor(0xFFE4E4E4.toInt())
-            isChecked = AgentPolicy.enabled(this@CapabilityBoardActivity, "connected_services")
-            setOnCheckedChangeListener { _, on -> AgentPolicy.setEnabled(this@CapabilityBoardActivity, "connected_services", on) }
-        }
         val watch = Switch(this).apply {
             text = "Let Orion watch for new mail and GitHub activity"; setTextColor(0xFFE4E4E4.toInt())
             isChecked = SoulWatch.enabled(this@CapabilityBoardActivity)
             setOnCheckedChangeListener { _, on -> SoulWatch.setEnabled(this@CapabilityBoardActivity, on) }
         }
-        val settings = card(); settings.addView(pack); settings.addView(watch)
+        val settings = card(); settings.addView(text("Connected services are available to Orion when a real account connection exists. Android and provider authentication requirements still apply.", 11f, 0xFF8A8A8A.toInt())); settings.addView(watch)
         settings.addView(text("Read-only checks run while Orion’s accessibility service is alive. Android battery restrictions may delay them. No AI call is used; notifications are sent only for new results.", 11f, 0xFF8A8A8A.toInt()))
         page.addView(settings)
 
