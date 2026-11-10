@@ -2047,6 +2047,22 @@ Rules:
         }
         val contextualObjective = contextualObjectiveForRequest(command)
         var intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualObjective)
+        // A genuinely new user objective supersedes the old graph. This also runs when the
+        // message entered through the direct Agent path (rather than runConversationBody),
+        // preventing stale nodes and proof from steering a fresh request.
+        if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
+            taskProofs.clear()
+            failedCallGuard.clear()
+            OrionObjectiveGraph.clear(svc)
+            OrionObjectiveGraph.save(svc, OrionObjectiveGraph.Graph(
+                objective = intentResolution.resolvedObjective.orEmpty(),
+                nodes = listOf(OrionObjectiveGraph.Objective(
+                    id = "main",
+                    title = intentResolution.resolvedObjective.orEmpty().take(240),
+                    status = OrionObjectiveGraph.Status.RUNNING
+                ))
+            ))
+        }
         val correctedObjective = intentResolution.resolvedObjective
         if (Regex("(?i)^\\s*(?:no[, ]+)?(?:fix|change|correct|repair|update|adjust|redo|improve)\\s+(?:the\\s+)?integration\\b").containsMatchIn(command) &&
             intentResolution.kind == OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS &&
