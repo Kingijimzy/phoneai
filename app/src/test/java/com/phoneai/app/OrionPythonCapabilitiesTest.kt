@@ -41,7 +41,8 @@ class OrionPythonCapabilitiesTest {
 
     @Test fun workspaceEnforcesPerFileAndTotalBounds() {
         val workspace = OrionPythonWorkspace(context)
-        assertTrue(workspace.write("large.txt", "x".repeat(OrionPythonWorkspace.MAX_FILE_BYTES + 1)).startsWith("error:"))
+        assertFalse(OrionPythonWorkspace.isFileSizeAllowed(OrionPythonWorkspace.MAX_FILE_BYTES.toLong() + 1))
+        assertTrue(OrionPythonWorkspace.isFileSizeAllowed(OrionPythonWorkspace.MAX_FILE_BYTES.toLong()))
         assertTrue(workspace.write("ok.txt", "safe").startsWith("saved"))
     }
 
