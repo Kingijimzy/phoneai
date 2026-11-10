@@ -41,6 +41,9 @@ class ToolLoopDetectorTest {
         val detector = ToolLoopDetector()
         val args = mapOf("objective_id" to "main")
         detector.record("task_list", args, "same task snapshot")
+        assertEquals(Level.NONE, detector.check("task_list", args).level)
+
+        detector.record("task_list", args, "same task snapshot")
         val warning = detector.check("task_list", args)
         assertEquals(Level.WARNING, warning.level)
         assertTrue(warning.message.orEmpty().contains("no progress"))
