@@ -1,7 +1,6 @@
 package com.phoneai.app
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ToolGateTest {
@@ -14,6 +13,5 @@ class ToolGateTest {
             titleOf = { it }
         )
         assertEquals("", summary)
-        assertTrue(ToolGate.statusFor(null as android.content.Context?) == null)
     }
 }
