@@ -8,7 +8,7 @@ class ToolLoopDetectorTest {
     @Test fun warnsAfterRepeatedIdenticalArguments() {
         val detector = ToolLoopDetector()
         var last = LoopCheckResult.NONE
-        repeat(10) { last = detector.record("read_file", mapOf("path" to "notes.txt"), "same content") }
+        repeat(10) { last = detector.record("extension_create", mapOf("id" to "test"), "same content") }
         assertEquals(Level.WARNING, last.level)
         assertTrue(last.message.orEmpty().contains("identical arguments"))
     }
@@ -60,6 +60,33 @@ class ToolLoopDetectorTest {
         detector.record("task_list", args, "queued; recorded_steps=2")
         detector.record("task_list", args, "running; recorded_steps=3")
         assertEquals(Level.NONE, detector.check("task_list", args).level)
+    
+    @Test fun warnsAfterFirstIdenticalReadOnlyResultAndBlocksThirdAttempt() {
+        val detector = ToolLoopDetector()
+        val args = mapOf("url" to "https://example.com/large-page")
+        detector.record("fetch_url", args, "page too large")
+        assertEquals(Level.WARNING, detector.check("fetch_url", args).level)
+
+        detector.record("fetch_url", args, "page too large")
+        val blocked = detector.check("fetch_url", args)
+        assertEquals(Level.CRITICAL, blocked.level)
+        assertTrue(blocked.message.orEmpty().contains("Switch source or method"))
     }
+
+    @Test fun changedReadOnlyResultResetsNoProgressStreak() {
+        val detector = ToolLoopDetector()
+        val args = mapOf("url" to "https://example.com/data")
+        detector.record("fetch_url", args, "temporary network error")
+        detector.record("fetch_url", args, "fresh page content")
+        assertEquals(Level.NONE, detector.check("fetch_url", args).level)
+    }
+
+    @Test fun readOnlyLoopGuardDoesNotApplyToWriteTools() {
+        val detector = ToolLoopDetector()
+        val args = mapOf("id" to "draft")
+        detector.record("extension_create", args, "saved")
+        assertEquals(Level.NONE, detector.check("extension_create", args).level)
+    }
+}
 
 }
