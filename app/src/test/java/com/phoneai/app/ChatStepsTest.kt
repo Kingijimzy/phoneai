@@ -185,6 +185,22 @@ class ChatStepsTest {
         assertEquals(StepTracker.TaskState.NONE, st(note(2, "[TASK:BLOCKED]\nold"), StepLine(3, "me", "new request")))
     }
 
+    @Test fun recordingEvidenceDoesNotOverrideBlockedTaskState() {
+        fun st(vararg l: StepLine) = StepTracker.taskState(l.toList())
+        val me = StepLine(1, "me", "remember this")
+        assertEquals(StepTracker.TaskState.WAITING, st(
+            me,
+            note(2, "[TASK:BLOCKED]\\nCompletion evidence missing"),
+            note(3, "[TASK:RECORD]\\nSaved checkpoint")
+        ))
+        assertEquals(StepTracker.TaskState.DONE, st(
+            me,
+            note(2, "[TASK:COMPLETE]\\nVerified outcome"),
+            note(3, "[TASK:RECORD]\\nSaved checkpoint")
+        ))
+        assertEquals(StepTracker.TaskState.NONE, st(me, note(2, "[TASK:RECORD]\\nSaved checkpoint")))
+    }
+
     @Test fun onlyTheCurrentTasksStepsAreShown() {
         val steps = StepTracker.currentTaskSteps(listOf(
             note(1 * sec, "[TASK:RUNNING]\nRunning old"), note(2 * sec, "[TASK:RESULT]\nold — ok"),

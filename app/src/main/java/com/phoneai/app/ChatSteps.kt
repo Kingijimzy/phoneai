@@ -139,7 +139,7 @@ internal object StepTracker {
                 t.startsWith("[TASK:APPROVED]") || t.startsWith("[TASK:DENIED]") -> TaskState.WORKING
                 t.startsWith("[TASK:BLOCKED]") -> TaskState.WAITING
                 t.startsWith("[TASK:CANCELLED]") -> TaskState.CANCELLED
-                t.startsWith("[TASK:COMPLETE]") || t.startsWith("[TASK:RECORD]") -> TaskState.DONE
+                t.startsWith("[TASK:COMPLETE]") -> TaskState.DONE
                 t.startsWith("[TASK:RUNNING]") || t.startsWith("[TASK:EXECUTE]") || t.startsWith("[TASK:PLAN]") -> TaskState.WORKING
                 t.startsWith("[TASK:FAILED]") -> if (state == TaskState.RECOVERING) state else TaskState.FAILED
                 else -> state

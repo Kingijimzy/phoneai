@@ -48,8 +48,11 @@ class ToolRegistryTest {
             assertTrue("MCP executor must implement $name", OrionMcpCapabilityExecutor.supports(name))
             assertTrue("Runtime owner must implement $name", OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.MCP, name))
         }
-        assertTrue(ToolRegistry.detailedToolNames("inspect MCP resources and prompt templates")
-            .containsAll(readTools))
+        val prompt = ToolRegistry.promptSection("inspect MCP resources and prompt templates")
+        readTools.forEach { name ->
+            val signature = ToolRegistry.find(name)!!.promptLine.substringBefore(":")
+            assertTrue("MCP read capability remains discoverable: $name", prompt.contains(signature))
+        }
     }
 
     @Test fun tradingDeskToolsHaveOneConcreteOwnerAndSafeAccessClasses() {
@@ -190,26 +193,31 @@ class ToolRegistryPromptAvailabilityTest {
         }
     }
 
-    @Test fun requestGetsFullContractsForRelevantToolsAndCompactSignaturesForTheRest() {
-        val prompt = ToolRegistry.promptSection("scan BTCUSDT and EURUSD trading setups and review the market")
-        val setup = ToolRegistry.find("setup_scan")!!
-        val browser = ToolRegistry.find("browser_navigate")!!
-        assertTrue("Trading request must include the complete setup-scan contract", prompt.contains("- " + setup.promptLine))
-        assertTrue("Unrelated browser capability must remain discoverable", prompt.contains(browser.promptLine.substringBefore(":")))
-        assertFalse("Unrelated browser contract should not inflate the prompt", prompt.contains("- " + browser.promptLine))
+    @Test fun naturalLanguageDoesNotSelectToolsThroughHardcodedKeywordFamilies() {
+        val launch = ToolRegistry.detailedToolNames("Open WhatsApp and find the right conversation")
+        val research = ToolRegistry.detailedToolNames("Investigate a current event and compare evidence")
+        val coding = ToolRegistry.detailedToolNames("Build a small Python scraper and run it")
+        assertEquals("Natural-language wording must not change the hardcoded detail-selection set", launch, research)
+        assertEquals(launch, coding)
+        assertFalse("A natural-language phrase must not secretly route to a tool", launch.contains("open_app"))
+        assertTrue("Core Python execution contract is always available", launch.contains("python_exec"))
+        assertTrue("Core image generation contract is always available", launch.contains("image_generate"))
     }
 
-    @Test fun requestFamiliesSelectTheirRelevantCapabilityContracts() {
-        val launchOnly = ToolRegistry.detailedToolNames("Open WhatsApp")
-        assertTrue("A direct app-launch request must include open_app's full contract", launchOnly.contains("open_app"))
-        val phone = ToolRegistry.detailedToolNames("open WhatsApp and tap the search box")
-        assertTrue(phone.containsAll(setOf("open_app", "read_screen", "click", "type")))
-        val research = ToolRegistry.detailedToolNames("research the latest OpenAI news and verify sources")
-        assertTrue(research.containsAll(setOf("live_news", "live_web_search", "research_web")))
-        val memory = ToolRegistry.detailedToolNames("remember this decision and recall my previous lesson")
-        assertTrue(memory.containsAll(setOf("remember", "recall", "discussion_search")))
-        val agents = ToolRegistry.detailedToolNames("create a research subagent and delegate the task")
-        assertTrue(agents.containsAll(setOf("create_agent", "ask_agent")))
+    @Test fun exactRegisteredToolNameCanRequestItsFullContract() {
+        val selected = ToolRegistry.detailedToolNames("Please call open_app now")
+        assertTrue(selected.contains("open_app"))
+        assertTrue(ToolRegistry.detailedToolNames("inspect MCP resources").contains("mcp_call").not())
+    }
+
+    @Test fun allToolContractsAndSignaturesRemainDiscoverableWithoutKeywordSelection() {
+        val prompt = ToolRegistry.promptSection("an unrelated natural-language request")
+        ToolRegistry.all.forEach { tool ->
+            val signature = tool.promptLine.substringBefore(":")
+            assertTrue("Missing signature for ${tool.name}", prompt.contains(signature))
+        }
+        assertTrue(prompt.contains("- " + ToolRegistry.find("python_exec")!!.promptLine))
+        assertTrue(prompt.contains("- " + ToolRegistry.find("image_generate")!!.promptLine))
     }
 
     @Test fun baselineAndFullRegistrySnapshotsRemainAvailableForDiagnostics() {
