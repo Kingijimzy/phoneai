@@ -185,7 +185,7 @@ internal object IrreversibleActionConfirmationPolicy {
         """(?is)(?:^|[;&|]\s*)(?:command\s+)?(?:rm|rmdir|unlink|shred|truncate)\b|\bfind\b[^;&|]*\s-delete\b"""
     )
     private val shellWipe = Regex(
-        """(?is)\b(?:mkfs(?:\.\w+)?|wipefs|blkdiscard|factory[ _-]?reset|wipe[ ._-]?(?:data|cache)|format\s+/(?:data|system|vendor|product|odm|boot|cache|sdcard|storage)|fastboot\s+(?:erase|format|wipe)|dd\b[^;&|]*\bof\s*=\s*[^;&|]*/dev/|(?:>|>>)[^;&|]*/dev/(?:block|mmcblk|sd[a-z]))"""
+        """(?is)\b(?:mkfs(?:\.\w+)?|wipefs|blkdiscard|factory[ _-]?reset|wipe[ ._-]?(?:data|cache)|format\s+(?:userdata|/(?:data|system|vendor|product|odm|boot|cache|sdcard|storage))|erase\s+all|fastboot\s+(?:erase|format|wipe)|recovery\s+--wipe\s+(?:data|cache|all)|dd\b[^;&|]*\bof\s*=\s*[^;&|]*/dev/|(?:>|>>)[^;&|]*/dev/(?:block|mmcblk|sd[a-z])|\b(?:cp|mv|tee|truncate)\b[^;&|]*/dev/(?:block|mmcblk|sd[a-z])|(?:python(?:3)?|perl|ruby|node)\b[^;&|]*/dev/(?:block|mmcblk|sd[a-z])|settings\s+put\s+(?:global|secure|system)\s+(?:device_provisioned|setup_wizard_finished).*0)"""
     )
     private val pythonDelete = Regex(
         """(?is)\b(?:os\.(?:remove|unlink|rmdir)|shutil\.(?:rmtree|move)|Path\([^)]*\)\.(?:unlink|rmdir))\s*\("""
