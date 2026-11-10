@@ -107,6 +107,9 @@ class TerminalActivity : Activity() {
                         if (!isFinishing && !isDestroyed) append("\n[Linux session exited: ${finished.exitStatus}]\n")
                     }
                     terminalView.setTerminalViewClient(client)
+                    // Termux TerminalView does not create its renderer in the constructor.
+                    // Initialize it before attachSession(), whose updateSize() reads font metrics.
+                    terminalView.setTextSize(12)
                     val session = TerminalSession(
                         config.executable, config.workingDirectory, config.arguments,
                         config.environment, 2000, client
