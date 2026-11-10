@@ -314,11 +314,19 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var lastActionScopeAt: Long = 0L
 
     /** Local command shortcuts must still respect capability-pack availability. */
+    /** Asking Orion to make, write, run or fetch something is work for the tool loop, never a one-shot chat reply. */
+    private val BUILD_INTENT = Regex(
+        "(?i)\\b(write|code|create|make|build|generate|develop|draw|design|program|compose)\\b.{0,50}\\b(script|scraper|scrapper|scraping|program|app|bot|tool|code|python|image|picture|photo|logo|website|file|function|api|extension|skill|dataset|chart|pdf)\\b" +
+            "|\\b(scrape|scrapper|scraper|run (this|the|that) (code|script)|execute|pip install|install|download|debug|fix (the|this|my) (code|script|bug))\\b" +
+            "|\\b(image|picture|photo|drawing|logo) (of|for)\\b"
+    )
+
     private fun requiresToolPolicy(command: String): Boolean =
         TaskScopePolicy.modeFor(command) != TaskMode.CHAT ||
             OrionCommandIntentPolicy.requiresPythonExecution(command) ||
             OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(command) ||
             AgentHooks.isPhoneActionRequest(command) ||
+            BUILD_INTENT.containsMatchIn(command) ||
             Regex("(?i)\\b(note down|take a note|remember|forget|update memory|undo|task|remind|routine|macro|teach|run .* times|trading settings|bybit settings|trading|trade|bybit|watchlist|portfolio|position|balance|alert|market|crypto|forex|symbol|buy|sell|place order|trade now|where am i|my location|current location|device location|gps|send (a )?(message|sms|email)|telegram|github|repository|repo|python version|python3|linux runtime|apkvision|apk size|file size|save (?:the )?(?:generated )?(?:code|script|file)|create (?:a )?(?:text|code|python)? ?file|write (?:the )?(?:code|script|text) to (?:a )?file|bitcoin headline|latest headline|search the web|look up)\\b").containsMatchIn(command)
 
     /** Every entry point (chat, command, resume) must set the scope, or a stale one blocks real tools. */
