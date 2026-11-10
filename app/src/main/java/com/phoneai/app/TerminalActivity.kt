@@ -73,6 +73,18 @@ class TerminalActivity : Activity() {
             append("$ $cmd\nBlocked: this command is on Orion's catastrophic hard-block list (root/system wipe, raw block-device write, or fork bomb).\n")
             return
         }
+        val approval = IrreversibleActionConfirmationPolicy.approvalReason(
+            "shell", JSONObject().put("command", cmd), "workspace_shell"
+        )
+        if (approval != null) {
+            AlertDialog.Builder(this)
+                .setTitle("Confirm deletion")
+                .setMessage("Orion is about to run a command that can delete files:\\n\\n$cmd\\n\\nContinue only if this is the intended target.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Approve and run") { _, _ -> executeCommand(cmd) }
+                .show()
+            return
+        }
         executeCommand(cmd)
     }
 
