@@ -36,7 +36,7 @@ internal object ToolGate {
             sb.append("- The user has set these to DENY: ").append(denied.take(8).joinToString(", "))
                 .append(". Do not use them; say the user can change this in Tool permissions.\n")
         }
-        sb.append("- Everything else is ready. Tools marked ASK ask the user once per task.")
+        sb.append("- Everything else is ready. Tools marked ASK pause for owner approval before each action.")
         return sb.toString()
     }
 
