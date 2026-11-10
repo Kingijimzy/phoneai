@@ -2676,23 +2676,34 @@ Rules:
                 commandNim.chat(history, false, 6000)
             } catch (e: Exception) {
                 if (stopped) break
-                if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
-                ui.say("I could not reach the AI. ${e.message}. I saved the task progress locally; say \"continue\" when the connection is back.")
+                if (checkpointStarted) {
+                    OrionTasksCapabilityExecutor.pauseRun(svc)
+                    ui.say("I could not reach the AI. ${e.message}. I saved the task progress locally; say \"continue\" when the connection is back.")
+                } else {
+                    ui.say("I could not reach the AI before selecting an action. No tool was dispatched and no task checkpoint was created. ${e.message}")
+                }
                 return
             }
             // A Stop tap can race with an in-flight model request. Discard any late plan
             // before it can be checkpointed or dispatched; the dispatch gate below also
             // rechecks cancellation to close the next small race window.
             if (stopped) {
-                managedTask = managedTask.cancel() ?: managedTask
-                moveTaskPhase(TaskLifecycle.Phase.CANCELLED, "User stopped while the model was responding; no planned action was dispatched")
-                if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
-                ui.say("Stopped before the next action could start. I saved the task progress locally.")
+                if (checkpointStarted) {
+                    managedTask = managedTask.cancel() ?: managedTask
+                    moveTaskPhase(TaskLifecycle.Phase.CANCELLED, "User stopped while the model was responding; no planned action was dispatched")
+                    OrionTasksCapabilityExecutor.pauseRun(svc)
+                    ui.say("Stopped before the next action could start. I saved the task progress locally.")
+                } else {
+                    ui.say("Stopped before any tool action was selected. No action was dispatched and no task checkpoint was created.")
+                }
                 return
             }
             if (HermesRepetitionGuard.isRunawayRepetition(raw)) {
                 if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
-                ui.say("The model returned a repeated or corrupted task response. I stopped before parsing or dispatching any actions; the task checkpoint is preserved. Retry or switch models.")
+                ui.say(
+                    if (checkpointStarted) "The model returned a repeated or corrupted task response. I stopped before dispatch; the task checkpoint is preserved. Retry or switch models."
+                    else "The model returned a repeated or corrupted response before selecting a tool. No action was dispatched. Retry or switch models."
+                )
                 return
             }
             val parsedStep = AgentJson.parse(raw)
@@ -2702,7 +2713,10 @@ Rules:
                 damagedReplies++
                 if (damagedReplies > 2) {
                     if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
-                    ui.say("The AI model keeps returning incomplete replies, so I stopped before acting. Try again, or pick a different chat model in Settings.")
+                    ui.say(
+                        if (checkpointStarted) "The AI model keeps returning incomplete replies, so I stopped before acting. The task checkpoint is preserved; try again or pick a different model."
+                        else "The AI model keeps returning incomplete replies. No action was started; try again or pick a different model."
+                    )
                     return
                 }
                 history.put(msg("assistant", AgentJson.sayFromDamaged(raw).ifBlank { "(incomplete reply)" }))
@@ -3088,7 +3102,14 @@ Rules:
             history.put(msg("user", "RESULT: " + result.take(3500)))
             compact()
         }
-        if (checkpointStarted) OrionTasksCapabilityExecutor.pauseRun(svc)
+        if (!checkpointStarted) {
+            ui.say(
+                if (stopped) "Stopped before any tool action was selected. No action was dispatched and no task checkpoint was created."
+                else "I could not select a registered action within the planning budget. No action was dispatched."
+            )
+            return
+        }
+        OrionTasksCapabilityExecutor.pauseRun(svc)
         if (stopped) {
             managedTask = managedTask.cancel() ?: managedTask
             moveTaskPhase(TaskLifecycle.Phase.CANCELLED, "User stopped execution; checkpoint preserved and no new actions will start")
