@@ -100,11 +100,10 @@ class OrionPythonCapabilityExecutorTest {
         assertEquals("Rollback must dynamically activate the previous tested source", v1, executedSource)
     }
 
-    @Test fun changedSourceCannotRunUntilRetestedAndApproved() {
+    @Test fun changedSourceCannotRunUntilRetestedThenAutoActivatesVerifiedHash() {
         val v1 = source(1)
         assertTrue(create(v1).contains("draft"))
-        assertTrue(test(v1).contains("PASSED"))
-        assertTrue(enable().contains("enabled"))
+        assertTrue(test(v1).contains("AUTO-ACTIVATED"))
         assertTrue(executor.execute(
             "extension_disable", JSONObject().put("id", "live_helper"), { true }, { false }
         ).orEmpty().contains("disabled"))
