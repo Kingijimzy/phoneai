@@ -59,7 +59,8 @@ class LinuxRuntimePolicyTest {
 
     @Test fun prootArgumentsAreFixedAndBounded() {
         val args = LinuxRuntimePolicy.prootArgs("/data/app/lib/libproot.so", "/data/files/linux/rootfs", "printf ORION_PROOT_OK")!!
-        assertEquals("-r", args[1])
+        assertEquals("-0", args[1])
+        assertEquals("-r", args[2])
         assertEquals("/data/files/linux/rootfs", args[2])
         assertEquals(listOf("/bin/sh", "-c", "printf ORION_PROOT_OK"), args.takeLast(3))
         assertFalse(args.contains("/usr/bin/env"))
