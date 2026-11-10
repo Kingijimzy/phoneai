@@ -60,7 +60,6 @@ class TerminalActivity : Activity() {
             hint = "command (e.g. ls, cat notes.txt)"; typeface = Typeface.MONOSPACE; textSize = 13f; setTextColor(0xFFF0F0F0.toInt()); setHintTextColor(0xFF777777.toInt())
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or InputType.TYPE_TEXT_FLAG_MULTI_LINE; maxLines = 4
             imeOptions = EditorInfo.IME_ACTION_DONE
-            setOnKeyListener { _, keyCode, event -> if (keyCode == KeyEvent.KEYCODE_C && event.action == KeyEvent.ACTION_DOWN && event.isCtrlPressed) { if (backend == Backend.LINUX && linuxSession?.send("\u0003") == true) { append("^C\n"); true } else false } else false }
             setPadding(dp(12), dp(10), dp(12), dp(10)); background = GradientDrawable().apply { setColor(0xFF151515.toInt()); cornerRadius = dp(12).toFloat() }
         }
         row.addView(input, LinearLayout.LayoutParams(0, -2, 1f))
