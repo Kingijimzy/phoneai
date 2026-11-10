@@ -270,69 +270,16 @@ internal object ToolRegistry {
         "model_decision_log", "model_decision_search", "model_status", "model_offline_mode",
         "dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan", "dev_summary",
         "macro_save", "macro_run", "macro_list", "macro_delete",
-        "voice_speak", "voice_listen", "document_extract"
-    )
-
-    private val requestFamilies: List<Pair<Regex, Set<String>>> = listOf(
-        Regex("(?i)\\b(mcp|remote\\s+server|resource|prompt\\s+template)\\b") to setOf(
-            "mcp_status", "mcp_list_tools", "mcp_call", "mcp_list_resources",
-            "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt"
-        ),
-        Regex("(?i)\\b(phone|screen|tap|click|swipe|scroll|type|keyboard|open|launch|start|switch|go to|install|uninstall|notification|device|settings|flashlight|volume|alarm|timer|chronos|soul|calendar|voice|speak|listen)\\b") to setOf(
-            "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "notification_action",
-            "media_status", "media_control", "play_media", "chrome_search", "list_apps", "read_screen",
-            "validate_action", "verify_action", "click", "click_text", "wait_for", "tap", "long_press",
-            "swipe", "swipe_path", "scroll", "type", "key", "look", "play", "settings", "dial", "sms",
-            "alarm", "timer", "volume", "flashlight", "battery", "device_info", "record_screen",
-            "chronos_awareness", "soul_state", "calendar_events", "voice_speak", "voice_listen"
-        ),
-        Regex("(?i)\\b(browser|website|webpage|url|browse|internet|search|research|investigate|source|news|headline|weather|github|repository|repo|documentation|docs|document|extract|pdf|text file)\\b") to setOf(
-            "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify", "browser_click",
-            "browser_click_verify", "browser_type", "browser_scroll", "browser_navigate", "browser_back",
-            "browser_handoff", "browser_wait", "browser_tabs", "browser_upload", "browser_close", "web_search",
-            "live_sports", "weather", "live_news", "live_web_search", "github_public", "github_search_repositories",
-            "fetch_url", "research_web", "document_extract"
-        ),
-        Regex("(?i)\\b(trad(e|ing)|forex|crypto|bitcoin|btc|bybit|deriv|market|chart|setup|strategy|backtest|position|wallet|memecoin|token|funding|liquidation|risk|cpi|nfp)\\b") to setOf(
-            "trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan", "strategy_list",
-            "strategy_backtest", "market_forecast", "market_conditions", "positions_monitor", "bybit_sync",
-            "habit_report", "crypto_derivatives", "memecoin_check", "memecoin_watch", "wallet_check",
-            "wallet_watch", "chain_overview", "strategy_save", "strategy_record_result", "paper_trade",
-            "trading_kill_switch", "trade_history_summary", "bybit_public_ticker"
-        ),
-        Regex("(?i)\\b(memory|remember|forget|recall|lesson|decision|knowledge|conversation|history|preference)\\b") to setOf(
-            "remember", "update_memory", "forget", "recall", "discussion_search", "decision_history",
-            "knowledge_search", "graph_link", "graph_query", "self_review", "undo_last", "undo_status"
-        ),
-        Regex("(?i)\\b(agent|subagent|sub-agent|delegate|delegat(e|ion)|specialist|team|researcher|coder|writer|planner)\\b") to setOf(
-            "ask_agent", "queue_agent", "specialist_job_status", "create_agent", "task_list", "task_add", "task_update", "skills_list"
-        ),
-        Regex("(?i)\\b(code|coding|program|python|script|calculator|file|folder|save|download|build|compile|test|apk|linux|termux|shell|extension|skill|dev\\s|macro\\s|routine)\\b") to setOf(
-            "extension_list", "extension_create", "extension_test", "extension_enable", "extension_run",
-            "extension_disable", "find_files", "open_file", "save_file", "termux_command", "shell",
-            "python_exec", "workspace_list", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty", "project_create", "project_list", "project_inspect", "skills_list",
-            "dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan", "dev_summary",
-            "macro_save", "macro_run", "macro_list", "macro_delete"
-        ),
-        Regex("(?i)\\b(message|send|telegram|sms|email|gmail|call|contact|notification|publish|post|social|communication)\\b") to setOf(
-            "resolve_contact", "telegram_status", "telegram_inbox", "telegram_send", "dial", "sms",
-            "notification_action", "integration_status", "connect_service", "gmail_list_messages",
-            "vault_list", "vault_request", "vault_get"
-        ),
-        Regex("(?i)\\b(task|todo|remind|reminder|schedule|deadline|routine|standing order|watch|monitor|brief|proactive|follow.?up|quiet period|calendar event)\\b") to setOf(
-            "task_list", "task_add", "task_update", "task_delete", "specialist_job_status", "standing_order", "morning_brief",
-            "alarm", "timer", "wait", "positions_monitor", "memecoin_watch", "wallet_watch",
-            "proactive_check", "proactive_status", "followup_add", "followup_list", "followup_done", "quiet_period_set"
-        ),
-        Regex("(?i)\\b(game|gaming|fc mobile|play|fps|hobby|session)\\b") to setOf(
-            "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset", "look", "play"
-        )
+        "voice_speak", "voice_listen", "document_extract",
+        "python_exec", "image_generate", "shell", "workspace_read", "workspace_write",
+        "browser_navigate", "browser_snapshot", "fetch_url", "web_search", "live_web_search"
     )
 
     internal fun detailedToolNames(request: String?): Set<String> {
+        // Tool discovery is model-led, not selected by a hardcoded natural-language keyword catalogue.
+        // Every capability remains visible by signature; core execution contracts are always expanded.
         val selected = alwaysDetailed.toMutableSet()
         if (!request.isNullOrBlank()) {
-            requestFamilies.filter { it.first.containsMatchIn(request) }.forEach { selected += it.second }
             all.filter { tool ->
                 Regex("(?i)(^|[^a-z0-9_])" + Regex.escape(tool.name) + "([^a-z0-9_]|$)").containsMatchIn(request)
             }.forEach { selected += it.name }
