@@ -50,7 +50,7 @@ class TerminalActivity : Activity() {
         out = TextView(this).apply { typeface = Typeface.MONOSPACE; textSize = 12f; setTextColor(0xFFCFE8CF.toInt()); setTextIsSelectable(true); setPadding(dp(10), dp(10), dp(10), dp(10)) }
         scroll = ScrollView(this).apply { background = GradientDrawable().apply { setColor(0xFF0E0E0E.toInt()); cornerRadius = dp(12).toFloat(); setStroke(dp(1), 0xFF2E2E2E.toInt()) } }
         scroll.addView(out)
-        terminalView = TerminalView(this).apply { visibility = android.view.View.GONE }
+        terminalView = TerminalView(this, null).apply { visibility = android.view.View.GONE }
         val terminalFrame = FrameLayout(this)
         terminalFrame.addView(scroll, FrameLayout.LayoutParams(-1, -1))
         terminalFrame.addView(terminalView, FrameLayout.LayoutParams(-1, -1))
