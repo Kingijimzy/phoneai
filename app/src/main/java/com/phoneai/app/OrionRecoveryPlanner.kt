@@ -45,6 +45,8 @@ internal object OrionRecoveryPlanner {
                 .any(text::contains)) return emptyList()
 
         val preferred = when {
+            failedTool == "github_account_read" && listOf("path is not allowed", "endpoint is not allowed", "allowlist", "unsupported endpoint").any(text::contains) ->
+                listOf("github_public", "fetch_url", "live_web_search", "research_web")
             listOf("target not found", "ambiguous", "stale", "invalid target").any(text::contains) ->
                 listOf("read_screen", "wait_for", "click_text", "validate_action")
             (listOf("provider", "network", "http 5", "503", "429", "rate limit").any(text::contains) ||
@@ -83,6 +85,8 @@ internal object OrionRecoveryPlanner {
                 Guidance(Strategy.STOP_AND_REPORT, "The task was stopped or cancelled; do not continue acting.")
             text.contains("did not approve") || text.contains("user declined") || text.contains("not approved") ->
                 Guidance(Strategy.STOP_AND_REPORT, "The user declined authorization; do not ask again for the same action in this task.")
+            listOf("path is not allowed", "endpoint is not allowed", "allowlist", "unsupported endpoint", "route is not supported").any(text::contains) ->
+                Guidance(Strategy.CHOOSE_DIFFERENT_METHOD, "The connector rejected this API path; this is an endpoint allowlist limitation, not a user permission. Use a registered public/repository endpoint or a connector that supports the requested account API.")
             text.contains("permission") || text.contains("accessibility") ||
                 text.contains("not connected") || text.contains("not enabled") ||
                 text.contains("not ready") || text.contains("setup") ->
