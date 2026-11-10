@@ -63,8 +63,7 @@ class OrionPythonCapabilityExecutorTest {
     @Test fun exactTestedSourceIsLoadedForEveryLiveInvocation() {
         val v1 = source(1)
         assertTrue(create(v1).contains("disabled extension draft"))
-        assertTrue(test(v1).contains("SANDBOX TEST PASSED"))
-        assertTrue(enable().contains("enabled"))
+        assertTrue(test(v1).contains("SANDBOX TEST PASSED and AUTO-ACTIVATED"))
         val result = executor.execute(
             "extension_run", JSONObject().put("id", "live_helper").put("input", JSONObject().put("x", 2)),
             { true }, { false }
@@ -76,8 +75,7 @@ class OrionPythonCapabilityExecutorTest {
     @Test fun rollbackReactivatesOnlyPreviouslyTestedExactHashAndLoadsItLive() {
         val v1 = source(1)
         assertTrue(create(v1).contains("draft"))
-        assertTrue(test(v1).contains("PASSED"))
-        assertTrue(enable().contains("enabled"))
+        assertTrue(test(v1).contains("AUTO-ACTIVATED"))
 
         assertTrue(executor.execute(
             "extension_disable", JSONObject().put("id", "live_helper"), { true }, { false }
@@ -90,8 +88,7 @@ class OrionPythonCapabilityExecutorTest {
                 .put("runtime", "python").put("source", v2).put("description", "revision"),
             { true }, { false }
         ).orEmpty().contains("revision"))
-        assertTrue(test(v2).contains("PASSED"))
-        assertTrue(enable().contains("enabled"))
+        assertTrue(test(v2).contains("AUTO-ACTIVATED"))
 
         val rolledBack = executor.execute(
             "extension_rollback", JSONObject().put("id", "live_helper"), { true }, { false }
@@ -121,5 +118,9 @@ class OrionPythonCapabilityExecutorTest {
         val run = executor.execute("extension_run", JSONObject().put("id", "live_helper"), { true }, { false }).orEmpty()
         assertTrue(run.startsWith("error:"))
         assertEquals("", executedSource)
+        assertTrue(test(v2).contains("AUTO-ACTIVATED"))
+        val afterVerification = executor.execute("extension_run", JSONObject().put("id", "live_helper"), { true }, { false }).orEmpty()
+        assertTrue(afterVerification.contains("EXTENSION RESULT"))
+        assertEquals("Only the exact source that passed the sandbox may auto-activate", v2, executedSource)
     }
 }
