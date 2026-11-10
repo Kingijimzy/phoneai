@@ -23,9 +23,7 @@ import android.widget.Toast
 class AgentControlActivity : Activity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private lateinit var root: LinearLayout
-    private lateinit var modeStatus: TextView
     private lateinit var testReport: TextView
-    private lateinit var packStatus: TextView
     private lateinit var commandModelStatus: TextView
     private lateinit var termuxBridgeStatus: TextView
     private lateinit var remoteComputerStatus: TextView
@@ -221,12 +219,6 @@ class AgentControlActivity : Activity() {
     }
 
     private fun proposeSkill() {
-        if (!AgentPolicy.enabled(this, "self_evolution")) {
-            AlertDialog.Builder(this).setTitle("Self-evolution is disabled")
-                .setMessage("Enable the Self-evolution capability pack first. New skills remain disabled until you separately approve them.")
-                .setPositiveButton("OK", null).show()
-            return
-        }
         val id = android.widget.EditText(this).apply { hint = "Skill ID (lowercase, e.g. focus_helper)" }
         val version = android.widget.EditText(this).apply { hint = "Version (MAJOR.MINOR.PATCH)"; setText("1.0.0") }
         val purpose = android.widget.EditText(this).apply { hint = "Purpose and expected behavior"; minLines = 2; maxLines = 4 }
@@ -238,7 +230,7 @@ class AgentControlActivity : Activity() {
             setPadding(dp(18), dp(4), dp(18), dp(4))
             listOf(id, version, purpose, toolIds, calls, seconds).forEach { addView(it) }
         }
-        AlertDialog.Builder(this).setTitle("Propose skill · not enabled")
+        AlertDialog.Builder(this).setTitle("Create declarative skill")
             .setMessage("A skill is metadata referencing existing tools only. No arbitrary code, unrestricted shell, or new Android permissions. Static checks run before saving.")
             .setView(ScrollView(this).apply { addView(container) })
             .setNegativeButton("CANCEL", null)
@@ -250,8 +242,8 @@ class AgentControlActivity : Activity() {
                     allowedTools = toolIds.text.toString().split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet(),
                     maxCalls = calls.text.toString().toIntOrNull() ?: -1,
                     maxDurationMs = (seconds.text.toString().toLongOrNull() ?: -1L) * 1000L,
-                    requiresApproval = true,
-                    enabled = false
+                    requiresApproval = false,
+                    enabled = true
                 )
                 val check = SkillRegistry.validate(candidate)
                 if (!check.allowed) {
@@ -260,19 +252,12 @@ class AgentControlActivity : Activity() {
                     return@setPositiveButton
                 }
                 val registered = SkillRegistry.register(this, candidate)
-                AgentPolicy.log(this, "skill-proposal", "register", registered.allowed, if (registered.allowed) "validated skill saved disabled" else registered.reason)
+                AgentPolicy.log(this, "skill-proposal", "register", registered.allowed, if (registered.allowed) "validated declarative skill saved and enabled" else registered.reason)
                 if (!registered.allowed) {
                     AlertDialog.Builder(this).setTitle("Could not save proposal").setMessage(registered.reason).setPositiveButton("OK", null).show()
                     return@setPositiveButton
                 }
-                AlertDialog.Builder(this).setTitle("Review skill proposal")
-                    .setMessage("ID: ${candidate.id}\nVersion: ${candidate.version}\nPurpose: ${candidate.description}\nTools: ${candidate.allowedTools.sorted().joinToString(", ")}\nBudget: ${candidate.maxCalls} calls / ${candidate.maxDurationMs / 1000}s\nRisk: approval required; only registered tools; disabled by default.\n\nEnable this skill now?")
-                    .setNegativeButton("KEEP DISABLED") { _, _ -> AgentPolicy.log(this, "skill:${candidate.id}", "enable", false, "user kept proposed skill disabled") }
-                    .setPositiveButton("APPROVE & ENABLE") { _, _ ->
-                        val enabled = SkillRegistry.setEnabled(this, candidate.id, true)
-                        AgentPolicy.log(this, "skill:${candidate.id}", "enable", enabled.allowed, if (enabled.allowed) "user approved skill enablement" else enabled.reason)
-                        Toast.makeText(this, if (enabled.allowed) "Skill enabled. You can revoke it here." else enabled.reason, Toast.LENGTH_LONG).show()
-                    }.show()
+                Toast.makeText(this, "Skill saved and enabled. Orion can use it when the request matches.", Toast.LENGTH_LONG).show()
             }.show()
     }
 
@@ -286,7 +271,7 @@ class AgentControlActivity : Activity() {
         AlertDialog.Builder(this).setTitle("Review or revoke skills")
             .setItems(labels) { _, index ->
                 val skill = skills[index]
-                val details = "ID: ${skill.id}\nVersion: ${skill.version}\nPurpose: ${skill.description}\nTools: ${skill.allowedTools.sorted().joinToString(", ")}\nBudget: ${skill.maxCalls} calls / ${skill.maxDurationMs / 1000}s\nApproval required: ${skill.requiresApproval}\nEnabled: ${skill.enabled}"
+                val details = "ID: ${skill.id}\nVersion: ${skill.version}\nPurpose: ${skill.description}\nTools: ${skill.allowedTools.sorted().joinToString(", ")}\nBudget: ${skill.maxCalls} calls / ${skill.maxDurationMs / 1000}s\nSkill-level approval: none\nEnabled: ${skill.enabled}"
                 val builder = AlertDialog.Builder(this).setTitle(skill.id).setMessage(details).setNegativeButton("CLOSE", null)
                 if (skill.enabled) {
                     builder.setPositiveButton("REVOKE / DISABLE") { _, _ ->
@@ -295,8 +280,8 @@ class AgentControlActivity : Activity() {
                         Toast.makeText(this, if (result.allowed) "Skill disabled." else result.reason, Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    if (AgentPolicy.enabled(this, "self_evolution")) {
-                        builder.setPositiveButton("APPROVE & ENABLE") { _, _ ->
+                    if (true) {
+                        builder.setPositiveButton("ENABLE") { _, _ ->
                             val result = SkillRegistry.setEnabled(this, skill.id, true)
                             AgentPolicy.log(this, "skill:${skill.id}", "enable", result.allowed, if (result.allowed) "user approved skill enablement" else result.reason)
                             Toast.makeText(this, if (result.allowed) "Skill enabled." else result.reason, Toast.LENGTH_SHORT).show()
@@ -304,9 +289,14 @@ class AgentControlActivity : Activity() {
                     }
                     if (!skill.id.startsWith("whatsapp_draft") && !skill.id.startsWith("email_draft")) {
                         builder.setNeutralButton("REMOVE") { _, _ ->
-                            val result = SkillRegistry.remove(this, skill.id)
-                            AgentPolicy.log(this, "skill:${skill.id}", "remove", result.allowed, if (result.allowed) "user removed skill" else result.reason)
-                            Toast.makeText(this, if (result.allowed) "Skill removed." else result.reason, Toast.LENGTH_SHORT).show()
+                            AlertDialog.Builder(this).setTitle("Delete skill ${skill.id}?")
+                                .setMessage("This removes the skill definition. Continue?")
+                                .setNegativeButton("CANCEL", null)
+                                .setPositiveButton("DELETE") { _, _ ->
+                                    val result = SkillRegistry.remove(this, skill.id)
+                                    AgentPolicy.log(this, "skill:${skill.id}", "remove", result.allowed, if (result.allowed) "user removed skill" else result.reason)
+                                    Toast.makeText(this, if (result.allowed) "Skill removed." else result.reason, Toast.LENGTH_SHORT).show()
+                                }.show()
                         }
                     }
                 }
@@ -427,7 +417,7 @@ class AgentControlActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (::modeStatus.isInitialized) refresh()
+        refresh()
     }
 
     private fun createCustomAgent() {
