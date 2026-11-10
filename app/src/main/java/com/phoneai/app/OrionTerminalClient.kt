@@ -23,7 +23,7 @@ internal class OrionTerminalClient(
     override fun onColorsChanged(session: TerminalSession) { view.onScreenUpdated() }
     override fun onTerminalCursorStateChange(state: Boolean) { view.onScreenUpdated() }
     override fun setTerminalShellPid(session: TerminalSession, pid: Int) {}
-    override fun getTerminalCursorStyle(): Integer? = null
+    override fun getTerminalCursorStyle(): Int? = null
     override fun logError(tag: String, message: String) { android.util.Log.e("OrionTerminal", "$tag: $message") }
     override fun logWarn(tag: String, message: String) { android.util.Log.w("OrionTerminal", "$tag: $message") }
     override fun logInfo(tag: String, message: String) { android.util.Log.i("OrionTerminal", "$tag: $message") }
