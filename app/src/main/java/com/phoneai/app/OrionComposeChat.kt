@@ -384,6 +384,11 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent, lines: List<Orio
                 }
             }
         }
+        // Keep the clickable nanoMuse-style activity pills visible in the compact task card.
+        // Raw transcripts stay collapsed; each pill opens its own captured command/result.
+        if (currentTaskLines.any { it.kind == "note" && (it.text.startsWith("[TASK:RUNNING]") || it.text.startsWith("[BROWSER:") || it.text.startsWith("[SHELL:") || it.text.startsWith("[TASK:OUTPUT]")) }) {
+            OrionToolPills(currentTaskLines, Modifier.padding(start = 13.dp, top = 7.dp))
+        }
         val terminalEvidence = event.typedEvidence.filterIsInstance<OrionActivityEvidence.Terminal>().lastOrNull()
         if (terminalEvidence != null) {
             Text(
@@ -447,11 +452,8 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent, lines: List<Orio
             event.evidence.takeLast(10).forEach { line ->
                 Text(line, color = Color(0xFFAAAAAA), fontSize = 8.sp, lineHeight = 11.sp)
             }
-            if (currentTaskLines.any { it.kind == "note" && (it.text.startsWith("[TASK:RUNNING]") || it.text.startsWith("[BROWSER:") || it.text.startsWith("[SHELL:")) }) {
-                Text("ACTIVITY STEPS", color = Color(0xFF888888), fontSize = 8.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 13.dp, top = 7.dp, bottom = 3.dp))
-                OrionToolPills(currentTaskLines, Modifier.padding(start = 13.dp))
-            }
+            Text("ACTIVITY EVIDENCE", color = Color(0xFF888888), fontSize = 8.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 13.dp, top = 7.dp, bottom = 3.dp))
             Text("Task ${event.taskId}", color = Color(0xFF666666), fontSize = 8.sp)
         }
     }
@@ -675,7 +677,20 @@ internal fun OrionComposeChatScreen(
                 }
                 // Keep all execution detail inside one expandable task surface instead of
                 // scattering a separate pill/message for every tool call through the chat.
-                OrionActivityTimeline.latestChatCard(activityEvents)?.let { event ->
+                val latestUserIndex = lines.indexOfLast { it.kind == "me" }
+                val taskLines = lines.drop(latestUserIndex + 1)
+                val fallbackTaskId = "chat-fallback-" + (lines.getOrNull(latestUserIndex)?.id ?: "session")
+                val fallbackEvents = taskLines.mapIndexedNotNull { index, line ->
+                    if (line.kind != "note") null else OrionActivityTimeline.fromLegacyNote(
+                        fallbackTaskId, line.text, line.id.takeIf { it > 0L } ?: (index + 1L)
+                    )
+                }
+                val fallbackTimeline = remember(fallbackTaskId, fallbackEvents.size, fallbackEvents.lastOrNull()?.eventId) {
+                    OrionActivityTimeline().apply { replay(fallbackEvents) }.compactForChat()
+                }
+                val activityCard = OrionActivityTimeline.latestChatCard(activityEvents)
+                    ?: OrionActivityTimeline.latestChatCard(fallbackTimeline)
+                activityCard?.let { event ->
                     item(key = "activity-${event.eventId}") {
                         androidx.compose.foundation.layout.Box(Modifier.orionEnter()) {
                             OrionComposeActivityCard(
