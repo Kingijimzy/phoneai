@@ -69,10 +69,24 @@ object McpConnector {
         pendingPairExpiry = 0L
     }
 
-    // Least-privilege scopes: read-only is the default.
+    // The owner explicitly requested full MCP capability access. Keep the scopes visible and
+    // editable, and preserve the read scope as the protocol baseline.
     private val knownScopes = setOf("read", "write", "communication", "system", "other")
+    internal val allScopes: Set<String> get() = knownScopes
+
     fun scopes(c: Context): Set<String> {
-        val saved = c.getSharedPreferences(PREFS, 0).getString("allowed_scopes", "read") ?: "read"
+        val prefs = c.getSharedPreferences(PREFS, 0)
+        // One-time migration for existing read-only installs following the owner's explicit
+        // request for full access. A later explicit read-only selection is respected.
+        if (!prefs.getBoolean("full_access_migration_done", false)) {
+            val previous = prefs.getString("allowed_scopes", null)
+            val editor = prefs.edit().putBoolean("full_access_migration_done", true)
+            if (previous.isNullOrBlank() || previous.trim() == "read") {
+                editor.putString("allowed_scopes", knownScopes.sorted().joinToString(","))
+            }
+            editor.commit()
+        }
+        val saved = prefs.getString("allowed_scopes", knownScopes.sorted().joinToString(",")) ?: ""
         return saved.split(",").map { it.trim() }.filter { it in knownScopes }.toSet() + "read"
     }
     fun setScopes(c: Context, selected: Set<String>): String {
@@ -120,7 +134,7 @@ object McpConnector {
                 edit.putString(TOKEN_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP))
                     .putString(IV_KEY, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
             }
-            if (edit.commit()) "MCP endpoint saved. Tool discovery, resource reads and prompt retrieval use the paired read-only scope."
+            if (edit.commit()) "MCP endpoint saved. Pair this endpoint to enable the configured MCP scopes: " + scopes(c).sorted().joinToString(", ") + "."
             else "Could not save MCP settings."
         } catch (_: Exception) { "Could not securely save MCP settings." }
     }
@@ -139,7 +153,7 @@ object McpConnector {
         return "MCP endpoint configured for " + host + ". Bearer token: " + auth +
             ". Local endpoint approval: " + pairing +
             ". Enabled scopes: " + scopes(c).sorted().joinToString(", ") +
-            ". Paired tools run immediately within their enabled scopes; no per-call approval prompt is used. Unclassified tools require the 'other' scope. Transport is HTTP(S); WebRTC is not configured."
+            ". All MCP scopes are enabled by default on this device: read, write, communication, system and other. Paired tools run immediately within enabled scopes. Review server trust carefully; server-provided tool metadata and results remain untrusted. Transport is HTTP(S); WebRTC is not configured."
     }
 
     @Volatile private var sessionId: String? = null
