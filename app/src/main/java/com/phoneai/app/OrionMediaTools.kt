@@ -217,6 +217,10 @@ internal object OrionMediaTools {
         val extension = OrionImagePayload.format(png)
             ?: return "error: image service response is not a supported, complete PNG, JPEG or WebP image; no file was saved"
         val mime = when (extension) { "jpg" -> "image/jpeg"; "webp" -> "image/webp"; else -> "image/png" }
+        val decoded = runCatching {
+            BitmapFactory.decodeByteArray(png, 0, png.size, BitmapFactory.Options().apply { inSampleSize = 8 })
+        }.getOrNull() ?: return "error: image payload has a recognized header but cannot be decoded; no file was saved"
+        decoded.recycle()
         val dir = File(c.filesDir, "orion-python/workspace/images")
         if (!dir.exists() && !dir.mkdirs()) return "error: could not create Orion's image workspace"
         val name = "gen_${System.currentTimeMillis()}.$extension"
