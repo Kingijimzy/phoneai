@@ -314,6 +314,7 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent, lines: List<Orio
         OrionActivityStatus.FAILED -> Color(0xFFE09B9B)
         else -> Color(0xFFAAAAAA)
     }
+    val currentTaskLines = lines.drop(lines.indexOfLast { it.kind == "me" } + 1)
     val terminalOutput = event.evidence.lastOrNull { it.contains("Python terminal", true) || it.contains("TASK:OUTPUT", true) }
         ?: event.summary
     val pulse = rememberInfiniteTransition(label = "task-stream-pulse")
@@ -419,7 +420,7 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent, lines: List<Orio
                 modifier = Modifier.padding(start = 13.dp, top = 2.dp))
         }
         val browserEvidence = event.typedEvidence.filterIsInstance<OrionActivityEvidence.Browser>().lastOrNull()
-        val transcriptUrl = lines.asReversed().firstOrNull { it.text.contains("URL:") }?.text
+        val transcriptUrl = currentTaskLines.asReversed().firstOrNull { it.text.contains("URL:") }?.text
             ?.substringAfter("URL:")?.lineSequence()?.firstOrNull()?.trim()
         val browserUrl = browserEvidence?.url?.takeIf { it.isNotBlank() } ?: transcriptUrl
         if (!browserUrl.isNullOrBlank()) {
@@ -430,7 +431,7 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent, lines: List<Orio
                 modifier = Modifier.padding(start = 13.dp, top = 5.dp).clickable { onBrowser(safeUrl) }
             )
         }
-        val hasTerminalActivity = terminalEvidence != null || lines.any { it.text.startsWith("[SHELL:") || it.text.startsWith("[TASK:OUTPUT]") }
+        val hasTerminalActivity = terminalEvidence != null || currentTaskLines.any { it.text.startsWith("[SHELL:") || it.text.startsWith("[TASK:OUTPUT]") }
         if (hasTerminalActivity) {
             Text(
                 "OPEN TERMINAL  ↗",
@@ -442,10 +443,10 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent, lines: List<Orio
             event.evidence.takeLast(10).forEach { line ->
                 Text(line, color = Color(0xFFAAAAAA), fontSize = 8.sp, lineHeight = 11.sp)
             }
-            if (lines.any { it.kind == "note" && (it.text.startsWith("[TASK:RUNNING]") || it.text.startsWith("[BROWSER:") || it.text.startsWith("[SHELL:")) }) {
+            if (currentTaskLines.any { it.kind == "note" && (it.text.startsWith("[TASK:RUNNING]") || it.text.startsWith("[BROWSER:") || it.text.startsWith("[SHELL:")) }) {
                 Text("ACTIVITY STEPS", color = Color(0xFF888888), fontSize = 8.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = 13.dp, top = 7.dp, bottom = 3.dp))
-                OrionToolPills(lines, Modifier.padding(start = 13.dp))
+                OrionToolPills(currentTaskLines, Modifier.padding(start = 13.dp))
             }
             Text("Task ${event.taskId}", color = Color(0xFF666666), fontSize = 8.sp)
         }
