@@ -23,7 +23,7 @@ jobs:
       - name: Set up Android SDK for pinned PRoot build
         uses: android-actions/setup-android@v3
         with:
-          packages: 'ndk;27.2.12479018' 'cmake;3.22.1'
+          packages: 'ndk;27.2.12479018'
 
       - name: Build pinned Android PRoot and stage ABI-specific native runtime
         shell: bash
