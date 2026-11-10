@@ -556,9 +556,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 return blocked
             }
         }
-        // A paired MCP endpoint plus an explicitly enabled read scope is already a standing
-        // user grant for read-only remote tools. Do not ask again for every read call.
-        val effectiveToolMode = if (mcpReadScopeGranted) ToolMode.ALLOW else ToolPermissions.mode(svc, tool)
+        // A paired MCP read scope satisfies the remote service prerequisite, but it must
+        // never override an explicit per-tool ASK or DENY selected by the owner.
+        val effectiveToolMode = ToolPermissions.mode(svc, tool)
         val gate = AgentPolicy.gate(
             svc, pack, tool,
             dangerous = consequential,
