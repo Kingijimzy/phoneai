@@ -23,6 +23,6 @@ class AgentPermissionSettingsPolicyTest {
     @Test fun legacyModeNamesNoLongerChangeTheDecision() {
         assertEquals(ToolMode.ALLOW, ToolPermissionPolicy.effectiveMode("careful", emptyMap(), "shell"))
         assertEquals(ToolMode.ALLOW, ToolPermissionPolicy.effectiveMode("read_only", emptyMap(), "open_app"))
-        assertEquals("partner", "partner")
+        assertEquals("partner", OrionAutonomyPolicy.preset(OrionMode.ASSIST))
     }
 }
