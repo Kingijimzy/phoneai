@@ -88,14 +88,14 @@ class TerminalActivity : Activity() {
         }
         backend = Backend.LINUX
         refreshBackend()
-        append("Preparing persistent Alpine terminal…\\n")
+        append("Preparing persistent Alpine terminal…\n")
         Thread {
             try {
                 val config = ShellRunner.prepareLinuxTerminalConfig(applicationContext)
                 runOnUiThread {
                     val client = OrionTerminalClient(terminalView) { finished ->
                         if (terminalSession === finished) terminalSession = null
-                        append("\\n[Linux session exited: ${finished.exitStatus}]\\n")
+                        append("\n[Linux session exited: ${finished.exitStatus}]\n")
                     }
                     terminalView.setTerminalViewClient(client)
                     val session = TerminalSession(
@@ -113,7 +113,7 @@ class TerminalActivity : Activity() {
                 runOnUiThread {
                     backend = Backend.BUILTIN
                     refreshBackend()
-                    append("Could not open Alpine terminal: " + (failure.message ?: failure.javaClass.simpleName) + "\\n")
+                    append("Could not open Alpine terminal: " + (failure.message ?: failure.javaClass.simpleName) + "\n")
                 }
             }
         }.apply { name = "OrionLinuxTerminalStart"; isDaemon = true; start() }
@@ -146,28 +146,28 @@ class TerminalActivity : Activity() {
     private fun executeCommand(cmd: String) {
         input.setText("")
         if (cmd.equals("clear", ignoreCase = true) || cmd.equals("cls", ignoreCase = true)) {
-            if (backend == Backend.LINUX) terminalSession?.write("clear\\n".toByteArray(), 0, 6) else out.text = ""
+            if (backend == Backend.LINUX) terminalSession?.write("clear\n".toByteArray(), 0, 6) else out.text = ""
             return
         }
         if (backend == Backend.LINUX) {
             val session = terminalSession
             if (session == null || !session.isRunning) {
-                append("Linux terminal is not connected. Switch back to Built-in and reopen Linux.\\n")
+                append("Linux terminal is not connected. Switch back to Built-in and reopen Linux.\n")
                 return
             }
-            val bytes = (cmd + "\\n").toByteArray(Charsets.UTF_8)
+            val bytes = (cmd + "\n").toByteArray(Charsets.UTF_8)
             session.write(bytes, 0, bytes.size)
             return
         }
-        append("$ $cmd\\n")
-        append("⏳ Running — live output will appear below…\\n")
+        append("$ $cmd\n")
+        append("⏳ Running — live output will appear below…\n")
         Thread {
             val r = ShellRunner.runStreaming(applicationContext, cmd, "builtin") { chunk -> runOnUiThread { append(chunk) } }
             runOnUiThread { when {
-                r.startsWith("exit=") -> append("\\n[" + r.substringBefore('\\n') + "]\\n")
-                r.startsWith("error:") -> append("\\n" + r + "\\n")
-                r.isNotBlank() -> append("\\n" + r + "\\n")
-                else -> append("\\n[Command finished]\\n")
+                r.startsWith("exit=") -> append("\n[" + r.substringBefore('\n') + "]\n")
+                r.startsWith("error:") -> append("\n" + r + "\n")
+                r.isNotBlank() -> append("\n" + r + "\n")
+                else -> append("\n[Command finished]\n")
             } }
         }.apply { name = "OrionTerminalCommand"; isDaemon = true; start() }
     }
