@@ -495,11 +495,10 @@ class AgentControlActivity : Activity() {
     private fun refresh() {
         commandModelStatus.text = commandModelSummary()
         val installed = termuxInstalled()
-        val termuxOn = installed && AgentPolicy.enabled(this, "termux_bridge") &&
-            getSharedPreferences("phoneai", Context.MODE_PRIVATE).getBoolean("termux_bridge_enabled", false)
+        val termuxOn = installed && AgentPolicy.enabled(this, "termux_bridge")
         termuxBridgeStatus.text = "Termux bridge: " + when {
             termuxOn -> "enabled · permissions checked per command"
-            installed -> "installed but bridge is off"
+            installed -> "installed; checking Android RUN_COMMAND access"
             else -> "not installed / off"
         }
         remoteComputerStatus.text = "Remote computer: " + if (Prefs.hasKey(this, "cursor_cloud_agents")) {
