@@ -79,6 +79,8 @@ internal object OrionToolCallRecovery {
     /** True while a streamed response contains syntax that may be a tool call; keep it out of chat until parsed. */
     fun shouldHoldFromChat(raw: String, isKnownTool: (String) -> Boolean): Boolean {
         if (raw.contains("DSML") || raw.contains("<tool_call") || Regex("[\\x60]{3}").containsMatchIn(raw)) return true
+        val trailing = Regex("\\b([a-z][a-z0-9_]{2,40})$").find(raw.trimEnd())
+        if (trailing != null && isKnownTool(trailing.groupValues[1])) return true
         if (Regex("\\b([a-z][a-z0-9_]{2,40})\\s*\\(").findAll(raw)
                 .any { isKnownTool(it.groupValues[1]) }) return true
         return recover(raw, isKnownTool) != null
