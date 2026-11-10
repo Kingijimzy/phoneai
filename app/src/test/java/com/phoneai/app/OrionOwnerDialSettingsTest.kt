@@ -15,10 +15,10 @@ import org.robolectric.annotation.Config
 class OrionOwnerDialSettingsTest {
     private val context: Context get() = RuntimeEnvironment.getApplication()
 
-    @Test fun extensionAutoActivationDefaultsOffAndMatchesTheModelDefault() {
+    @Test fun extensionAutoActivationDefaultsOnAndMatchesTheModelDefault() {
         context.getSharedPreferences("orion_owner_dials", Context.MODE_PRIVATE).edit().clear().commit()
-        assertFalse(OrionOwnerDials().autoActivateVerifiedExtensions)
-        assertFalse(OrionOwnerDialSettings.read(context).autoActivateVerifiedExtensions)
+        assertTrue(OrionOwnerDials().autoActivateVerifiedExtensions)
+        assertTrue(OrionOwnerDialSettings.read(context).autoActivateVerifiedExtensions)
     }
 
     @Test fun recoveryDialsAreClampedAndPersisted() {
@@ -37,7 +37,7 @@ class OrionOwnerDialSettingsTest {
         assertEquals(8_000, PythonExecutionPolicy.maxCodeChars(context))
         assertTrue(PythonExecutionPolicy.rejection("x".repeat(8_001)) != null)
         OrionOwnerDialSettings.write(context, OrionOwnerDials(pythonProfile = OrionPythonProfile.DEVELOPER))
-        assertEquals(16_000, PythonExecutionPolicy.maxCodeChars(context))
-        assertTrue(PythonExecutionPolicy.rejection("x".repeat(16_001), PythonExecutionPolicy.maxCodeChars(context)) != null)
+        assertEquals(64_000, PythonExecutionPolicy.maxCodeChars(context))
+        assertTrue(PythonExecutionPolicy.rejection("x".repeat(64_001), PythonExecutionPolicy.maxCodeChars(context)) != null)
     }
 }
