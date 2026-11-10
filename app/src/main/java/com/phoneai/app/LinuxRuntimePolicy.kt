@@ -19,11 +19,13 @@ internal object LinuxRuntimePolicy {
     }
 
     val productionManifest = Manifest(
-        version = "alpine-3.22.7-proot-1a71df0-recovery3",
+        // Bump the install epoch so devices discard the rootfs installed with the broken PRoot pin.
+        version = "alpine-3.22.7-proot-1a71df0-recovery4",
         rootfsUrl = "https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/aarch64/alpine-minirootfs-3.22.7-aarch64.tar.gz",
         rootfsSha256 = "7e9b34ff3304381909e566e2c93de450664ccc724191261423974fc121c11623",
         rootfsBytes = 3971679L,
-        prootSha256 = "91c3f3ce38482fba523c0dcbfa5eb883e8aae063236bff3d091da6a58f1c94c4",
+        // Must match the exact libproot.so produced and verified by .github/workflows/build.yml.
+        prootSha256 = "22c0959bd03feedc20d98335681166992eace5fd4c369971975b4a116b351b50",
         prootBytes = 294416L
     )
     // SHA-256 pinned in .github/workflows/build.yml for the APK-packaged Android W^X loader.
@@ -63,8 +65,7 @@ internal object LinuxRuntimePolicy {
         return buildList {
             addAll(listOf(prootPath, "-r", rootfsDir, "-b", "/dev", "-b", "/proc"))
             if (workspaceHostPath != null) addAll(listOf("-b", "$workspaceHostPath:/workspace"))
-            addAll(listOf("-w", "/root",
-            "/bin/sh", "-c", command))
+            addAll(listOf("-w", "/root", "/bin/sh", "-c", command))
         }
     }
 }

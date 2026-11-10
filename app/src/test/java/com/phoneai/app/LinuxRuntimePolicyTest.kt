@@ -10,6 +10,9 @@ class LinuxRuntimePolicyTest {
         assertNull(LinuxRuntimePolicy.validate(good))
         assertEquals(3971679L, good.rootfsBytes)
         assertEquals("7e9b34ff3304381909e566e2c93de450664ccc724191261423974fc121c11623", good.rootfsSha256)
+        // Keep the runtime's executable pin in lockstep with the build workflow's verified artifact.
+        assertEquals("22c0959bd03feedc20d98335681166992eace5fd4c369971975b4a116b351b50", good.prootSha256)
+        assertEquals(294416L, good.prootBytes)
     }
 
     @Test fun rejectsUnsafeManifest() {
@@ -39,7 +42,8 @@ class LinuxRuntimePolicyTest {
     }
 
     @Test fun recoveryEpochInvalidatesPreviouslyInstalledRuntime() {
-        assertTrue(good.version.endsWith("-recovery3"))
+        assertTrue(good.version.endsWith("-recovery4"))
+        assertFalse(LinuxRuntimePolicy.isReady("alpine-3.22.7-proot-1a71df0-recovery3", good))
         assertFalse(LinuxRuntimePolicy.isReady("alpine-3.22.7-proot-1a71df0", good))
     }
 
@@ -71,6 +75,7 @@ class LinuxRuntimePolicyTest {
         assertNull(LinuxRuntimePolicy.prootArgs("/bin/proot", "/rootfs", "a".repeat(LinuxRuntimePolicy.MAX_COMMAND + 1)))
         assertNull(LinuxRuntimePolicy.prootArgs("/bin/proot", "/rootfs", "ls\u0000"))
     }
+
     @Test fun pythonWorkspaceBindIsExplicitAndPrivate() {
         val args = LinuxRuntimePolicy.prootArgs(
             "/data/app/lib/libproot.so", "/data/files/linux/rootfs", "python3 -I /workspace/main.py",
@@ -87,5 +92,4 @@ class LinuxRuntimePolicyTest {
         assertNull(LinuxRuntimePolicy.prootArgs("/bin/proot", "/rootfs", "python3 x.py", "/data/files/../secrets"))
         assertNull(LinuxRuntimePolicy.prootArgs("/bin/proot", "/rootfs", "python3 x.py", "/data/work:guest"))
     }
-
 }
