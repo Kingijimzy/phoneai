@@ -189,7 +189,11 @@ internal object IrreversibleActionConfirmationPolicy {
     )
 
     fun approvalReason(tool: String, args: JSONObject, pack: String): String? {
-        if (pack == "trading_research" && ToolRegistry.access(tool) == ToolAccess.WRITE) {
+        if (pack in setOf("trading_research", "trading_desk") && tool in setOf(
+            "strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch",
+            "memecoin_watch", "wallet_watch", "bybit_order_place", "bybit_order_cancel",
+            "bybit_order_amend", "bybit_position_close"
+        )) {
             return "Trading Desk change ($tool)"
         }
         val remoteName = if (tool == "mcp_call") args.optString("name").lowercase() else ""
