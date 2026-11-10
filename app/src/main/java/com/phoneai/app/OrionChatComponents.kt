@@ -268,6 +268,7 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                 }
                 when {
                     note && item.text.startsWith("[SHELL:") -> ShellActivityCard(item.text)
+                    note && item.text.startsWith("[IMAGE]") -> ImageResultCard(item.text)
                     note && item.text.startsWith("[BROWSER:") -> BrowserActivityCard(item.text) { url -> onOpenBrowser(url) }
                     note && item.text.startsWith("[TASK:") -> TaskActivityCard(item.text)
                     note && (item.text.startsWith("[TOOL:") || item.text.startsWith("[TOOL_RESULT:") ||
@@ -624,4 +625,31 @@ private fun highlightCode(line: String): AnnotatedString = buildAnnotatedString 
         last = m.range.last + 1
     }
     append(line.substring(last))
+}
+
+/** A generated or shown image drawn inline in the conversation. */
+@Composable
+internal fun ImageResultCard(raw: String) {
+    val lines = raw.lines()
+    val path = lines.getOrNull(1).orEmpty()
+    val caption = lines.getOrNull(2).orEmpty()
+    val context = LocalContext.current
+    val bitmap by produceState<Bitmap?>(initialValue = null, path) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(path, bounds)
+                BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = orionImageSampleSize(bounds.outWidth, bounds.outHeight) })
+            }.getOrNull()
+        }
+    }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0xFF111114)).border(1.dp, Color(0xFF2A2A30), RoundedCornerShape(18.dp))) {
+        val bmp = bitmap
+        if (bmp != null) {
+            Image(bmp.asImageBitmap(), contentDescription = caption.ifBlank { "Image from Orion" }, modifier = Modifier.fillMaxWidth(), contentScale = ContentScale.FillWidth)
+        } else {
+            Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) { Text("Loading image…", color = ChatMuted, fontSize = 12.sp) }
+        }
+        if (caption.isNotBlank()) Text(caption, color = ChatMuted, fontSize = 11.sp, modifier = Modifier.padding(10.dp))
+    }
 }

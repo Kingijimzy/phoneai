@@ -200,6 +200,16 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     /** Structured, bounded events are rendered as in-chat activity cards; never pretend a tool succeeded. */
     private fun activityNote(tool: String, args: JSONObject, result: String): String {
         val failed = result.trimStart().startsWith("error", ignoreCase = true)
+        // Generated or shown images render inline in the chat instead of only opening an external viewer.
+        if (!failed && (tool == "image_generate" || tool == "show_file")) {
+            val name = Regex("images/([A-Za-z0-9_.-]+\\.(?:png|jpg|jpeg|webp))").find(result)?.groupValues?.get(1)
+                ?: args.optString("path").takeIf { it.substringAfterLast('.').lowercase() in setOf("png", "jpg", "jpeg", "webp", "gif") }?.substringAfterLast('/')
+            val file = name?.let { n ->
+                listOf(java.io.File(svc.filesDir, "orion-python/workspace/images/$n"), java.io.File(svc.filesDir, "orion-python/workspace/" + args.optString("path")), java.io.File(args.optString("path")))
+                    .firstOrNull { it.isFile && it.canRead() }
+            }
+            if (file != null) return "[IMAGE]\n${file.absolutePath}\n${args.optString("prompt").take(120)}"
+        }
         if (tool in setOf("python_exec", "dev_python", "dev_shell", "termux_command", "dev_write", "workspace_write", "dev_read", "workspace_read", "show_file")) {
             val head: String
             val code: String
