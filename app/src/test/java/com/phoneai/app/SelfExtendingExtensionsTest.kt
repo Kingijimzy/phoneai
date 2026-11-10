@@ -78,7 +78,7 @@ class SelfExtendingExtensionsTest {
     @Test fun persistedSourceTamperingInvalidatesPreviouslyApprovedExtension() {
         val extension = draft()
         assertTrue(store.saveDraft(extension))
-        assertTrue(store.promote(extension.id, ExtensionTestReport(true, extension.sourceSha256, "passed"), userApproved = true))
+        assertTrue(store.promote(extension.id, ExtensionTestReport(true, extension.sourceSha256, "passed")))
         assertNotNull(store.enabled(extension.id))
 
         val file = context.filesDir.resolve("orion_generated_extensions.json")
