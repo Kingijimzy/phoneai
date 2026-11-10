@@ -9,7 +9,7 @@ internal object OrionPendingClarificationPolicy {
         val site = ChatBrowserUrlPolicy.normalize(reply.trim()) ?: return null
         val askedForSite = Regex("(?i)\\b(?:which|what)\\s+(?:site|website|domain|url)\\b|\\bsite\\s+(?:do you want|should i)\\b")
             .containsMatchIn(previousAssistant)
-        val wasScraperTask = Regex("(?i)\\b(?:scrap(?:e|er|ing)|crawl|extract)\\b")
+        val wasScraperTask = Regex("(?i)\\b(?:scrap{1,2}(?:e|er|ing)|crawl|extract)\\b")
             .containsMatchIn(previousUser)
         if (!askedForSite || !wasScraperTask) return null
         return previousUser + "\nTarget website: " + site +
