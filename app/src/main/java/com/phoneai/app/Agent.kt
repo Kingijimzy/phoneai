@@ -566,17 +566,29 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             askedThisTask = true,
             hardBlockReason = GatePolicy.hardBlockReason(tool, args)
         )
+        val actionApprovalReason = IrreversibleActionConfirmationPolicy.approvalReason(tool, args, pack)
+        var approvedByPerToolAsk = false
         when (gate.verdict) {
             GatePolicy.Verdict.DENY, GatePolicy.Verdict.PLAN_ONLY -> {
                 val blocked = "error: " + gate.reason
                 recordDispatchBlocked(tool, args, "capability_policy_denied")
                 return blocked
             }
+            GatePolicy.Verdict.ASK -> {
+                val reason = actionApprovalReason ?: "tool permission ($tool)"
+                if (!requestGateApproval("Allow $tool for this action? $reason")) {
+                    val denied = "error: owner did not approve $tool; no action was dispatched."
+                    recordDispatchBlocked(tool, args, "per_tool_ask_denied")
+                    taskProofs.record(tool, denied)
+                    return denied
+                }
+                approvedByPerToolAsk = true
+            }
             GatePolicy.Verdict.ALLOW -> Unit
         }
-        // Only Trading Desk writes and destructive deletions pause for owner approval.
-        // All ordinary authorized tools execute automatically after capability and validation checks.
-        IrreversibleActionConfirmationPolicy.approvalReason(tool, args, pack)?.let { reason ->
+        // Trading Desk writes and destructive deletion still require approval unless the
+        // same per-tool ASK dialog already approved this exact action.
+        if (!approvedByPerToolAsk) actionApprovalReason?.let { reason ->
             if (!requestGateApproval("Approve $reason?")) {
                 val denied = "error: owner did not approve $reason; no action was dispatched."
                 recordDispatchBlocked(tool, args, "owner_approval_denied")
