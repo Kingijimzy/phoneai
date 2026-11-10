@@ -6,35 +6,23 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AgentPermissionSettingsPolicyTest {
-    @Test fun explicitToolDenyOverridesTheDefaultAllowPreset() {
-        assertEquals(
-            ToolMode.DENY,
-            ToolPermissionPolicy.effectiveMode("balanced", mapOf("shell" to ToolMode.DENY), "shell")
-        )
+    @Test fun everyRegisteredToolUsesPartnerOperationInsteadOfPerToolModes() {
+        ToolRegistry.all.forEach { tool ->
+            assertEquals("Tool ${tool.name} should not have an app-level permission gate", ToolMode.ALLOW,
+                ToolPermissionPolicy.effectiveMode("read_only", mapOf(tool.name to ToolMode.DENY), tool.name))
+        }
     }
 
-    @Test fun explicitToolAllowOverridesReadOnlyPreset() {
-        assertEquals(
-            ToolMode.ALLOW,
-            ToolPermissionPolicy.effectiveMode("read_only", mapOf("open_app" to ToolMode.ALLOW), "open_app")
-        )
-    }
-
-    @Test fun readOnlyPresetDeniesRegisteredWriteTools() {
-        assertEquals(
-            ToolMode.DENY,
-            ToolPermissionPolicy.effectiveMode("read_only", emptyMap(), "open_app")
-        )
-    }
-
-    @Test fun ownerCanDisableARegisteredCapabilityPack() {
-        assertFalse(AgentPolicy.packEnabled("phone_control", false))
-        assertTrue(AgentPolicy.packEnabled("phone_control", true))
-    }
-
-    @Test fun unsetPackUsesDeclaredDefaultAndUnknownPackFailsClosed() {
-        assertTrue(AgentPolicy.packEnabled("orion_core", null))
-        assertFalse(AgentPolicy.packEnabled("proactive", null))
+    @Test fun allImplementedPacksAreAvailableAndUnknownPacksRemainUnsupported() {
+        AgentPolicy.packs.filter { it.implemented }.forEach {
+            assertTrue("Pack ${it.id}", AgentPolicy.packEnabled(it.id, false))
+        }
         assertFalse(AgentPolicy.packEnabled("made_up_pack", true))
+    }
+
+    @Test fun legacyModeNamesNoLongerChangeTheDecision() {
+        assertEquals(ToolMode.ALLOW, ToolPermissionPolicy.effectiveMode("careful", emptyMap(), "shell"))
+        assertEquals(ToolMode.ALLOW, ToolPermissionPolicy.effectiveMode("read_only", emptyMap(), "open_app"))
+        assertEquals("partner", "partner")
     }
 }
