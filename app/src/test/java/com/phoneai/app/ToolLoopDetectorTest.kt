@@ -40,7 +40,7 @@ class ToolLoopDetectorTest {
     @Test fun stopsUnchangedTaskListAfterThreeExecutions() {
         val detector = ToolLoopDetector()
         val args = mapOf("objective_id" to "main")
-        repeat(2) { detector.record("task_list", args, "same task snapshot") }
+        detector.record("task_list", args, "same task snapshot")
         val warning = detector.check("task_list", args)
         assertEquals(Level.WARNING, warning.level)
         assertTrue(warning.message.orEmpty().contains("no progress"))
@@ -54,7 +54,7 @@ class ToolLoopDetectorTest {
     @Test fun changedTaskListSnapshotResetsNoProgressStreak() {
         val detector = ToolLoopDetector()
         val args = mapOf("objective_id" to "main")
-        repeat(2) { detector.record("task_list", args, "queued; recorded_steps=2") }
+        detector.record("task_list", args, "queued; recorded_steps=2")
         detector.record("task_list", args, "running; recorded_steps=3")
         assertEquals(Level.NONE, detector.check("task_list", args).level)
     }
