@@ -38,12 +38,29 @@ internal class FullPythonSandbox(
         val inputText = when (input) { null, JSONObject.NULL -> "null"; is JSONObject, is org.json.JSONArray, is Number, is Boolean -> input.toString(); else -> JSONObject.quote(input.toString()) }
         val hex = inputText.toByteArray().joinToString("") { "%02x".format(it) }
         val code = "import json\nINPUT = json.loads(bytes.fromhex('$hex').decode())\nRESULT = None\n" +
-            source + "\nprint('$marker' + json.dumps(RESULT))\n"
+            source + "\n" +
+            // Forgiving contract: if the source did not assign RESULT, call its entry function (run/main/handler/execute/tool).
+            "if RESULT is None:\n" +
+            "    for _n in ('run', 'main', 'handler', 'execute', 'tool', 'solve'):\n" +
+            "        _f = globals().get(_n)\n" +
+            "        if callable(_f):\n" +
+            "            try:\n" +
+            "                RESULT = _f(INPUT)\n" +
+            "            except TypeError:\n" +
+            "                RESULT = _f()\n" +
+            "            break\n" +
+            "print('$marker' + json.dumps(RESULT, default=str))\n"
         val out = try { runFull(code) } catch (e: Exception) { return JSONObject().put("ok", false).put("error", (e.message ?: "run failed").take(200)) }
         val line = out.lineSequence().lastOrNull { it.contains(marker) }
             ?: return JSONObject().put("ok", false).put("error", out.take(300).ifBlank { "no result produced" })
         return try {
-            JSONObject().put("ok", true).put("result", org.json.JSONTokener(line.substringAfter(marker)).nextValue())
+            val parsed = org.json.JSONTokener(line.substringAfter(marker)).nextValue()
+            val printed = out.substringBefore(marker).lineSequence().filterNot { it.startsWith("[ran in") || it.startsWith("exit=") }.joinToString("\n").trim()
+            // A tool that only prints still has a usable result: its printed output.
+            val result = if ((parsed == null || parsed == JSONObject.NULL) && printed.isNotBlank()) printed else parsed
+            if (result == null || result == JSONObject.NULL) return JSONObject().put("ok", false)
+                .put("error", "RESULT was null: assign RESULT = <json value> or define run(INPUT) that returns one")
+            JSONObject().put("ok", true).put("result", result)
                 .put("printed", out.substringBefore(marker).take(1000))
         } catch (_: Exception) { JSONObject().put("ok", false).put("error", "RESULT was not JSON serialisable") }
     }

@@ -936,11 +936,20 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // cache fast path above, but never make a fresh request wait for the entire response.
         // Suppress the internal ACTION routing sentinel so it is never flashed to the user.
         val visiblePrefix = StringBuilder()
+        val heldTail = StringBuilder()
+        val sentinelTail = Regex("(?i)(?:^|\\n)[ \\t]*A(?:C(?:T(?:I(?:O(?:N)?)?)?)?)?\\W*$")
         var visibleStarted = false
         val raw = talkNim.chat(msgs, false, 1000, 0.75, onDelta = { delta ->
             if (!stopped && delta.isNotEmpty()) {
                 if (visibleStarted) {
-                    ui.stream(delta)
+                    // Hold back a trailing, possibly partial routing word ("...\n\nACT") so it never flashes in the bubble.
+                    heldTail.append(delta)
+                    val text = heldTail.toString()
+                    val m = sentinelTail.find(text)
+                    if (m != null) {
+                        if (m.range.first > 0) ui.stream(text.substring(0, m.range.first))
+                        heldTail.setLength(0); heldTail.append(text.substring(m.range.first))
+                    } else { ui.stream(text); heldTail.setLength(0) }
                 } else {
                     visiblePrefix.append(delta)
                     val candidate = visiblePrefix.toString()
@@ -964,7 +973,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             !visiblePrefix.toString().trim().equals("ACTION", ignoreCase = true)) {
             ui.stream(visiblePrefix.toString())
         }
-        if (raw.isEmpty() || raw.uppercase().startsWith("ACTION")) return null
+        // The model may write a short line first and then the routing word on its own line: that is still a hand-off to the tools.
+        val endsWithAction = Regex("(?i)(?:^|\\n)[ \\t]*ACTION\\W*$").containsMatchIn(raw)
+        if (heldTail.isNotEmpty() && !endsWithAction) ui.stream(heldTail.toString())
+        if (raw.isEmpty() || raw.uppercase().startsWith("ACTION") || endsWithAction) return null
         // A chat reply that promises work ("generating now") or prints a tool call must run the tool loop, not stand as the answer.
         if (raw.contains("<tool_call>") || raw.contains("DSML") || Regex("(?i)\\b(generat|creat|draw|sav|writ|build|run)(ing|e)\\b[^.\\n]{0,40}\\b(now|right away|this second)\\b").containsMatchIn(raw.take(400)) ||
             OrionToolCallRecovery.recover(raw) { ToolRegistry.find(it) != null } != null) return null
