@@ -24,7 +24,7 @@ internal object OrionCommandIntentPolicy {
     )
     private val executionVerb = Regex("(?i)\\b(?:run|execute|test|verify)\\b")
     private val scraperCreation = Regex(
-        "(?i)\\b(?:write|create|build|make|generate)\\b.{0,100}\\b(?:site\\s+)?scrap(?:er|ing)\\b"
+        "(?i)\\b(?:write|create|build|make|generate)\\b.{0,100}\\b(?:site\\s+)?scrap{1,2}(?:er|ing)\\b"
     )
 
     // Explicit image/artifact creation is an execution objective, not a request for sample code.
