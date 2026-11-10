@@ -7,7 +7,7 @@ internal enum class OrionPythonProfile { GUARDED, DEVELOPER, FULL }
 
 internal data class OrionOwnerDials(
     val autoActivateVerifiedExtensions: Boolean = false,
-    val pythonProfile: OrionPythonProfile = OrionPythonProfile.GUARDED,
+    val pythonProfile: OrionPythonProfile = OrionPythonProfile.FULL,
     val recoveryMaxAttempts: Int = 3,
     val recoveryBackoffSeconds: Int = 30
 )
@@ -18,8 +18,8 @@ internal object OrionOwnerDialSettings {
     fun read(context: Context): OrionOwnerDials {
         val p = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         val profile = runCatching {
-            OrionPythonProfile.valueOf(p.getString("python_profile", "GUARDED") ?: "GUARDED")
-        }.getOrDefault(OrionPythonProfile.GUARDED)
+            OrionPythonProfile.valueOf(p.getString("python_profile", "FULL") ?: "FULL")
+        }.getOrDefault(OrionPythonProfile.FULL)
         return OrionOwnerDials(
             autoActivateVerifiedExtensions = p.getBoolean("auto_activate_verified_extensions", false),
             pythonProfile = profile,
@@ -40,7 +40,7 @@ internal object OrionOwnerDialSettings {
     /** GUARDED/DEVELOPER relax size only. FULL (owner opt-in, set in the credential-gated Owner Control Centre) also lifts the in-guest socket/subprocess block; per-run approval and the guest isolation stay. */
     fun pythonMaxCodeChars(context: Context): Int = when (read(context).pythonProfile) {
         OrionPythonProfile.GUARDED -> 8_000
-        OrionPythonProfile.DEVELOPER -> 16_000
+        OrionPythonProfile.DEVELOPER -> 64_000
         OrionPythonProfile.FULL -> PythonExecutionPolicy.FULL_MAX_CODE_CHARS
     }
 }
