@@ -63,6 +63,13 @@ class RecoveryPolicyTest {
         assertEquals("the next action must differ from the failing one", Decision.REPLAN, RecoveryPolicy.decide(r, f, 0))
     }
 
+    @Test fun unsupportedGithubEndpointIsNotMisclassifiedAsPermission() {
+        val failure = RecoveryPolicy.classify("error: that GitHub path is not allowed (read-only: /user/repos)")
+        assertEquals(Failure.UNSUPPORTED_ROUTE, failure)
+        assertEquals(Decision.REPLAN, RecoveryPolicy.decide(Risk.READ_ONLY, failure, 0))
+        assertEquals(Decision.REPLAN, RecoveryPolicy.decide(Risk.WRITE, failure, 0))
+    }
+
     @Test fun classifyPrefersPermissionThenAmbiguityThenTransient() {
         assertEquals(Failure.PERMISSION, RecoveryPolicy.classify("error: permission not granted"))
         assertEquals(Failure.AMBIGUOUS, RecoveryPolicy.classify("error: timed out waiting for the app"))
