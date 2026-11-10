@@ -60,8 +60,9 @@ class ToolLoopDetectorTest {
         detector.record("task_list", args, "queued; recorded_steps=2")
         detector.record("task_list", args, "running; recorded_steps=3")
         assertEquals(Level.NONE, detector.check("task_list", args).level)
-    
-    @Test fun warnsAfterFirstIdenticalReadOnlyResultAndBlocksThirdAttempt() {
+    }
+
+    @Test fun warnsAfterRepeatedIdenticalReadOnlyResultsAndBlocksFurtherRepeats() {
         val detector = ToolLoopDetector()
         val args = mapOf("url" to "https://example.com/large-page")
         detector.record("fetch_url", args, "page too large")
