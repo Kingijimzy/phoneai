@@ -39,7 +39,7 @@ class ExtensionVersionHistoryTest {
         assertTrue(registry.saveDraft(extension))
         val report = ExtensionTestReport(true, extension.sourceSha256, "passed")
         assertTrue(receipts.record(extension.id, report))
-        assertTrue(registry.promote(extension.id, report, userApproved = true))
+        assertTrue(registry.promote(extension.id, report))
         assertTrue(history.record(extension.copy(enabled = true, verified = true)))
     }
 
@@ -59,7 +59,7 @@ class ExtensionVersionHistoryTest {
         val secondReport = ExtensionTestReport(true, second.sourceSha256, "passed")
         assertTrue(receipts.record(second.id, secondReport))
         assertNotNull(receipts.get("format_helper", firstHash))
-        assertTrue(registry.promote(second.id, secondReport, userApproved = true))
+        assertTrue(registry.promote(second.id, secondReport))
         assertTrue(history.record(second.copy(enabled = true, verified = true)))
 
         val previous = history.previous("format_helper", second.sourceSha256)
@@ -67,7 +67,7 @@ class ExtensionVersionHistoryTest {
         assertEquals(firstHash, previous!!.sourceSha256)
         val exactReceipt = receipts.get("format_helper", previous.sourceSha256)
         assertNotNull(exactReceipt)
-        assertTrue(registry.activateVersion(previous, exactReceipt!!, approved = true))
+        assertTrue(registry.activateVersion(previous, exactReceipt!!))
         assertEquals(firstHash, registry.enabled("format_helper")!!.sourceSha256)
     }
 
@@ -75,7 +75,7 @@ class ExtensionVersionHistoryTest {
         activate("RESULT = INPUT")
         val archived = history.all("format_helper").single()
         val wrong = ExtensionTestReport(true, SelfExtendingExtensionPolicy.sha256("different"), "passed")
-        assertFalse(registry.activateVersion(archived, wrong, approved = true))
+        assertFalse(registry.activateVersion(archived, wrong))
     }
 
     @Test fun corruptHistoryFailsClosedWithoutInventingVersions() {
