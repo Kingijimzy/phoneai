@@ -36,7 +36,7 @@ internal fun OrionHome(commandMode: Boolean, onSend: (String) -> Unit, modifier:
     val chips = if (commandMode) listOf("Check my battery and storage", "Summarise my notifications", "Build me a small tool", "What can you do?")
     else listOf("Tell me a fun fact", "Help me think something through", "Explain it simply", "Plan my next step")
     Box(
-        modifier.background(Brush.verticalGradient(listOf(Color(0xFF000000), Color(0xFF050716), Color(0xFF16206B), Color(0xFF2E5FC0))))
+        modifier.background(Brush.verticalGradient(listOf(Color(0xFF000000), Color(0xFF000000))))
     ) {
         Column(Modifier.fillMaxSize().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.weight(1f))
@@ -50,8 +50,8 @@ internal fun OrionHome(commandMode: Boolean, onSend: (String) -> Unit, modifier:
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 chips.forEach { c ->
                     Text(c, color = Color(0xFFD8DCFF), fontSize = 13.sp,
-                        modifier = Modifier.pressScale(0.94f).clip(RoundedCornerShape(22.dp)).background(Color(0x334F5BFF))
-                            .border(1.dp, Color(0x445C6BFF), RoundedCornerShape(22.dp))
+                        modifier = Modifier.pressScale(0.94f).clip(RoundedCornerShape(22.dp)).background(Color(0xFF2C2C30))
+                            .border(1.dp, Color(0x40545458), RoundedCornerShape(22.dp))
                             .clickable { onSend(c) }.padding(horizontal = 16.dp, vertical = 11.dp))
                 }
             }

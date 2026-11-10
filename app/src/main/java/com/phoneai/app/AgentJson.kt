@@ -56,7 +56,7 @@ internal object OrionToolCallRecovery {
 
     private val PRIMARY_ARG = mapOf(
         "python_exec" to "code", "shell" to "command", "workspace_read" to "path", "fetch_url" to "url",
-        "open_url" to "url", "research_web" to "query", "web_search" to "query", "dev_shell" to "command",
+        "open_url" to "url", "image_generate" to "prompt", "research_web" to "query", "web_search" to "query", "dev_shell" to "command",
     )
 
     /** `python_exec("""code""")` / `shell("ls")`: one positional string argument, optionally inside a code fence. */
