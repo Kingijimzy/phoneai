@@ -16,7 +16,7 @@ class AgentPermissionSettingsPolicyTest {
     @Test fun explicitToolAllowOverridesReadOnlyPreset() {
         assertEquals(
             ToolMode.ALLOW,
-            ToolPermissionPolicy.effectiveMode("read_only", mapOf("read_screen" to ToolMode.ALLOW), "read_screen")
+            ToolPermissionPolicy.effectiveMode("read_only", mapOf("open_app" to ToolMode.ALLOW), "open_app")
         )
     }
 
