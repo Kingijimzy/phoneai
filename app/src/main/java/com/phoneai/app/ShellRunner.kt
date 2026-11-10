@@ -134,7 +134,7 @@ object ShellRunner {
     }
 
     /** Installs/validates Alpine and prepares a persistent interactive terminal launch. */
-    fun prepareLinuxTerminalConfig(c: Context): LinuxTerminalLaunchConfig {
+    internal fun prepareLinuxTerminalConfig(c: Context): LinuxTerminalLaunchConfig {
         val runtime = LinuxRuntimeInstaller(c.applicationContext)
         val manifest = LinuxRuntimePolicy.productionManifest
         if (!runtime.isReady(manifest)) {
