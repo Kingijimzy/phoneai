@@ -450,7 +450,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recordDispatchBlocked(tool, args, "accessibility_disclosure_required")
             return blocked
         }
-        // One pre-flight gate for user DENY and switched-off packs, before any prompt is shown.
+        // Legacy pre-flight hook; generic DENY and pack switches are retired.
         ToolGate.preflightDenial(svc, tool)?.let { denied ->
             try { ActionLogStore.record(svc, tool, denied) } catch (_: Exception) { }
             AgentPolicy.log(svc, tool, "dispatch", false, "preflight: " + denied.take(120))
@@ -484,7 +484,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return blocked
         }
 
-        // Capability-pack and owner permission policy runs at the real dispatch boundary for every built-in tool.
+        // Registered-tool routing and domain-specific confirmation checks run at the real dispatch boundary.
         // Unknown tools fail closed; the model cannot select a capability pack for itself.
         val pack = AgentPolicy.packForTool(tool) ?: "orion_core"
         if (ToolRegistry.find(tool) == null) {
@@ -560,7 +560,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
         }
         // A paired MCP read scope satisfies the remote service prerequisite, but it must
-        // never override an explicit per-tool ASK or DENY selected by the owner.
+        // never override Trading/Coach domain controls or destructive-action confirmation.
         val effectiveToolMode = ToolPermissions.mode(svc, tool)
         val gate = AgentPolicy.gate(
             svc, pack, tool,
@@ -918,7 +918,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         "CAPABILITY ANSWER — do not overstate this snapshot:\n" +
             "Eligible to attempt, NOT proven successful: $eligible\n" +
             "Blocked / permission / setup / disabled / denied:\n$blocked\n" +
-            "Unsupported tools must be described as unsupported. Tools default to ALLOW; Trading Desk writes and destructive deletions require confirmation. A successful dispatch and observable result are the only proof of completion."
+            "Unsupported tools must be described as unsupported. Registered tools use partner operation without generic permission modes; Trading Desk mutations and destructive deletions require confirmation. A successful dispatch and observable result are the only proof of completion."
     }.getOrDefault("Capability inventory could not be read safely. Do not guess or list tools as executable.")
 
     private fun chatSystem(query: String? = null): String {
@@ -2633,7 +2633,7 @@ Rules:
                     if (resumeRequest) "Replanning from the saved checkpoint before any further action" else "Planning the requested outcome"
                 )
                 managedTask = managedTask.advance() ?: managedTask // PLAN -> CHECK_CAPABILITIES
-                moveTaskPhase(TaskLifecycle.Phase.CHECK_CAPABILITIES, "Checking registered tools, enabled packs and permissions")
+                moveTaskPhase(TaskLifecycle.Phase.CHECK_CAPABILITIES, "Checking registered tools and actual platform prerequisites")
                 managedTask = managedTask.advance() ?: managedTask // CHECK_CAPABILITIES -> AUTHORIZE
                 moveTaskPhase(TaskLifecycle.Phase.AUTHORIZE, "Checking Android/provider prerequisites, target validation and destructive/Trading confirmations")
                 managedTask = managedTask.advance() ?: managedTask // AUTHORIZE -> EXECUTE
@@ -2671,7 +2671,7 @@ Rules:
                 managedTask = managedTask.advance() ?: managedTask // PLAN -> CHECK_CAPABILITIES
                 moveTaskPhase(TaskLifecycle.Phase.CHECK_CAPABILITIES, "Rechecking available capabilities before recovery")
                 managedTask = managedTask.advance() ?: managedTask // CHECK_CAPABILITIES -> AUTHORIZE
-                moveTaskPhase(TaskLifecycle.Phase.AUTHORIZE, "Existing capability, scope, validation and Trading Desk and destructive-deletion confirmation checks will be applied again")
+                moveTaskPhase(TaskLifecycle.Phase.AUTHORIZE, "Actual platform prerequisites, validation and Trading Desk/destructive-deletion confirmation will be applied again")
                 managedTask = managedTask.advance() ?: managedTask // AUTHORIZE -> EXECUTE
                 moveTaskPhase(TaskLifecycle.Phase.EXECUTE, "Resuming with a newly planned action")
             }
