@@ -60,6 +60,11 @@ class OrionPythonCapabilityExecutorTest {
         "extension_enable", JSONObject().put("id", "live_helper"), { true }, { false }
     ).orEmpty()
 
+    @Test fun developerPythonUsesTheFullRegisteredPythonExecutor() {
+        assertTrue(OrionPythonCapabilityExecutor.supports("python_exec"))
+        assertTrue(OrionPythonCapabilityExecutor.supports("dev_python"))
+    }
+
     @Test fun exactTestedSourceIsLoadedForEveryLiveInvocation() {
         val v1 = source(1)
         assertTrue(create(v1).contains("disabled extension draft"))
