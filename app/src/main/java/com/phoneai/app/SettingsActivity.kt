@@ -1885,7 +1885,7 @@ class SettingsActivity : Activity() {
                 setOf("web_search", "research_web", "fetch_url"), maxCalls = 6, maxDurationMs = 30_000L),
             PhoneAiSkill("browser_operator", "1.0.0", "Navigate public websites with visible screen checks, wait for page elements, and stop before sign-in, payment, posting, or account changes.",
                 setOf("open_app", "open_url", "browser_snapshot", "browser_click", "browser_type", "browser_scroll", "browser_navigate", "browser_back", "web_search", "read_screen", "click_text", "scroll", "wait_for", "research_web"),
-                maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = true),
+                maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = false),
             PhoneAiSkill("device_brief", "1.0.0", "Summarize time, battery, and basic device information.",
                 setOf("time", "battery", "device_info"), maxCalls = 4, maxDurationMs = 15_000L),
             PhoneAiSkill("crypto_snapshot", "1.0.0", "Read a public Bybit spot ticker and explain that it is market data, not a trade signal.",
@@ -1901,10 +1901,10 @@ class SettingsActivity : Activity() {
                 Toast.makeText(this, result.reason, Toast.LENGTH_LONG).show()
                 if (result.allowed) {
                     refresh()
-                    showInfoDialog("Skill created disabled", candidate.description + "\n\nAllowed tools: " +
+                    showInfoDialog("Skill created and enabled", candidate.description + "\n\nAllowed tools: " +
                         candidate.allowedTools.sorted().joinToString(", ") +
                         "\nBudget: " + candidate.maxCalls + " calls / " +
-                        (candidate.maxDurationMs / 1000L) + " seconds. Review it before enabling.",
+                        (candidate.maxDurationMs / 1000L) + " seconds. It is ready for matching requests.",
                         "REVIEW SKILL") {
                         SkillRegistry.list(this).firstOrNull { it.id == candidate.id }?.let { skillOptions(it) }
                     }
