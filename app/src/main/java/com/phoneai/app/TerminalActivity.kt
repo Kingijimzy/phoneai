@@ -104,7 +104,7 @@ class TerminalActivity : Activity() {
                     backendBtn.isEnabled = true
                     val client = OrionTerminalClient(terminalView) { finished ->
                         if (terminalSession === finished) terminalSession = null
-                        append("\n[Linux session exited: ${finished.exitStatus}]\n")
+                        if (!isFinishing && !isDestroyed) append("\n[Linux session exited: ${finished.exitStatus}]\n")
                     }
                     terminalView.setTerminalViewClient(client)
                     val session = TerminalSession(
