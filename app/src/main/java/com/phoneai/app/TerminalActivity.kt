@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -23,6 +24,7 @@ class TerminalActivity : Activity() {
     private lateinit var backendBtn: TextView
     private enum class Backend { BUILTIN, LINUX }
     private var backend = Backend.BUILTIN
+    @Volatile private var linuxSession: LinuxTerminalSession? = null
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun chip(caption: String, action: () -> Unit) = TextView(this).apply {
         text = caption; textSize = 13f; typeface = Typeface.DEFAULT_BOLD; setTextColor(0xFFE4E4E4.toInt()); gravity = Gravity.CENTER
@@ -37,7 +39,7 @@ class TerminalActivity : Activity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(0xFF090909.toInt()); setPadding(dp(14), dp(40), dp(14), dp(12)) }
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(TextView(this).apply { text = "Terminal"; textSize = 24f; typeface = Typeface.DEFAULT_BOLD; setTextColor(0xFFF2F2F2.toInt()); layoutParams = LinearLayout.LayoutParams(0, -2, 1f) })
-        backendBtn = chip("Built-in") { backend = if (backend == Backend.BUILTIN) Backend.LINUX else Backend.BUILTIN; refreshBackend() }
+        backendBtn = chip("Built-in") { switchBackend() }
         top.addView(backendBtn); root.addView(top)
         out = TextView(this).apply { typeface = Typeface.MONOSPACE; textSize = 12f; setTextColor(0xFFCFE8CF.toInt()); setTextIsSelectable(true); setPadding(dp(10), dp(10), dp(10), dp(10)) }
         scroll = ScrollView(this).apply { background = GradientDrawable().apply { setColor(0xFF0E0E0E.toInt()); cornerRadius = dp(12).toFloat(); setStroke(dp(1), 0xFF2E2E2E.toInt()) } }
@@ -48,6 +50,7 @@ class TerminalActivity : Activity() {
             hint = "command (e.g. ls, cat notes.txt)"; typeface = Typeface.MONOSPACE; textSize = 13f; setTextColor(0xFFF0F0F0.toInt()); setHintTextColor(0xFF777777.toInt())
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or InputType.TYPE_TEXT_FLAG_MULTI_LINE; maxLines = 4
             imeOptions = EditorInfo.IME_ACTION_DONE
+            setOnKeyListener { _, keyCode, event -> if (keyCode == KeyEvent.KEYCODE_C && event.action == KeyEvent.ACTION_DOWN && event.isCtrlPressed) { if (backend == Backend.LINUX && linuxSession?.send("\u0003") == true) { append("^C\\n"); true } else false } else false }
             setPadding(dp(12), dp(10), dp(12), dp(10)); background = GradientDrawable().apply { setColor(0xFF151515.toInt()); cornerRadius = dp(12).toFloat() }
         }
         row.addView(input, LinearLayout.LayoutParams(0, -2, 1f))
@@ -63,8 +66,28 @@ class TerminalActivity : Activity() {
         append("Orion Terminal. Built-in runs in Orion's private workspace; Linux runs in managed Alpine Linux.\n")
     }
 
-    private fun refreshBackend() { backendBtn.text = if (backend == Backend.BUILTIN) "Built-in" else "Linux"; append("— using " + (if (backend == Backend.BUILTIN) "built-in shell" else "Alpine Linux") + " —\n") }
+    private fun switchBackend() {
+        if (backend == Backend.LINUX) { linuxSession?.close(); linuxSession = null; backend = Backend.BUILTIN; refreshBackend(); return }
+        backend = Backend.LINUX
+        refreshBackend()
+        append("Opening persistent Alpine PTY session…\\n")
+        Thread {
+            try {
+                val session = ShellRunner.startLinuxTerminalSession(applicationContext, { chunk -> runOnUiThread { append(chunk) } }) {
+                    runOnUiThread { linuxSession = null; append("\\n[Linux session closed]\\n") }
+                }
+                linuxSession = session
+                runOnUiThread { append("Alpine interactive shell connected. Commands share cwd, environment and running processes.\\n") }
+            } catch (failure: Exception) {
+                runOnUiThread { backend = Backend.BUILTIN; refreshBackend(); append("Could not open Alpine PTY: " + (failure.message ?: failure.javaClass.simpleName) + "\\n") }
+            }
+        }.apply { name = "OrionLinuxPtyStart"; isDaemon = true; start() }
+    }
 
+    private fun refreshBackend() {
+        backendBtn.text = if (backend == Backend.BUILTIN) "Built-in" else "Linux"
+        append("— using " + (if (backend == Backend.BUILTIN) "built-in shell" else "Alpine Linux PTY") + " —\\n")
+    }
     private fun append(s: String) {
         // TextView cannot render VT100 control sequences. Consume clear-screen commands
         // and remove unsupported ANSI sequences instead of printing escape bytes literally.
@@ -87,28 +110,23 @@ class TerminalActivity : Activity() {
 
     private fun executeCommand(cmd: String) {
         input.setText("")
-        if (cmd.equals("clear", ignoreCase = true) || cmd.equals("cls", ignoreCase = true)) {
-            out.text = ""
+        if (cmd.equals("clear", ignoreCase = true) || cmd.equals("cls", ignoreCase = true)) { out.text = ""; if (backend == Backend.LINUX) linuxSession?.send("clear\\n"); return }
+        if (backend == Backend.LINUX) {
+            val session = linuxSession
+            if (session == null) { append("Linux PTY is not connected. Switch to Built-in and back to Linux to reconnect.\\n"); return }
+            append("$ $cmd\\n")
+            if (!session.send(cmd + "\\n")) append("[Could not write to Linux PTY]\\n")
             return
         }
-        append("$ $cmd\n")
-        append("⏳ Running — live output will appear below…\n")
-        val where = if (backend == Backend.BUILTIN) "builtin" else "linux"
+        append("$ $cmd\\n")
+        append("⏳ Running — live output will appear below…\\n")
         Thread {
-            val r = ShellRunner.runStreaming(applicationContext, cmd, where) { chunk ->
-                runOnUiThread { append(chunk) }
-            }
-            runOnUiThread {
-                when {
-                    r.startsWith("exit=") -> append("\n[${r.substringBefore('\n')}]\n")
-                    r.startsWith("error:") -> append("\n$r\n")
-                    r.isNotBlank() -> append("\n$r\n")
-                    else -> append("\n[Command finished]\n")
-                }
-            }
+            val r = ShellRunner.runStreaming(applicationContext, cmd, "builtin") { chunk -> runOnUiThread { append(chunk) } }
+            runOnUiThread { when { r.startsWith("exit=") -> append("\\n[" + r.substringBefore('\n') + "]\\n"); r.startsWith("error:") -> append("\\n" + r + "\\n"); r.isNotBlank() -> append("\\n" + r + "\\n"); else -> append("\\n[Command finished]\\n") } }
         }.apply { name = "OrionTerminalCommand"; isDaemon = true; start() }
     }
 
+    override fun onDestroy() { linuxSession?.close(); linuxSession = null; super.onDestroy() }
     private fun askAi() {
         val box = EditText(this).apply { hint = "What do you want to do?"; setPadding(dp(16), dp(12), dp(16), dp(12)) }
         AlertDialog.Builder(this).setTitle("Ask AI for a command").setView(box).setNegativeButton("Cancel", null)
