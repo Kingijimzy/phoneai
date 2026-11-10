@@ -64,8 +64,8 @@ class TerminalActivity : Activity() {
         val activityCommand = intent.getStringExtra("orion_activity_command").orEmpty()
         val activityOutput = intent.getStringExtra("orion_activity_output").orEmpty()
         if (activityCommand.isNotBlank()) {
-            append("\\n— captured task activity —\\n$ $activityCommand\\n")
-            if (activityOutput.isNotBlank()) append(activityOutput + "\\n")
+            append("\n— captured task activity —\n$ $activityCommand\n")
+            if (activityOutput.isNotBlank()) append(activityOutput + "\n")
         }
     }
 
