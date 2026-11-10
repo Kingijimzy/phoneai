@@ -1,52 +1,65 @@
 # Orion permission and recovery model
 
-Updated: 2026-11-05
+Updated: 2026-11-10
 
-## Default execution
+## Operating modes and capability access
 
-- Agent tool permission defaults to **ALLOW**.
-- Global ASK, ALLOWLIST and TRUSTED approval modes are removed from the live agent path. Legacy saved values resolve to ALLOW.
-- Per-tool ASK is legacy storage only and resolves to ALLOW. An explicit per-tool DENY remains a denial.
-- PLAN remains the explicit global no-execution mode. Disabled capability packs, Android OS permissions, external account scopes, local MCP pairing, cancellation and capability prerequisites remain enforced.
-- Once the required capability and platform permissions are present, tools execute immediately without a per-call approval prompt.
+Conversation mode and permission mode are separate concerns.
 
-## The only three confirmations
+- **Talk** is the conversational front door. Orion can answer directly or use registered tools when the current objective requires them. Tool use is governed by the owner's per-tool permission, capability-pack setting, Android grants and action-specific confirmations.
+- **Assist** uses the balanced permission preset.
+- **Autopilot** uses the autonomous preset for owner-authorized goals. It does not override per-tool ASK/DENY, disabled capability packs, Android permissions, task cancellation, safety hard blocks or action-specific confirmations.
+- **Builder** uses the careful preset and asks before write-capability calls unless the owner has explicitly overridden that tool.
 
-One shared confirmation surface is reserved exclusively for:
-1. Restart.
-2. Shutdown.
-3. Toggling Wi-Fi.
+The selected preset is applied to the real dispatch path, not just the model prompt.
 
-The confirmation is checked at the dispatch boundary, including the MCP `computer_settings` route. Messages (Telegram, SMS, WhatsApp, Signal and Discord), notification replies, remote writes, payments, memory deletion, shell commands, routine replay, recovery and skill tool calls do not receive generic confirmation prompts.
+## Per-tool permissions
 
-## Shell behavior
+Every registered tool has one effective owner policy:
 
-The shell policy contains only these three Ultron-compatible Windows command-string checks:
-- `format c:`
-- `rmdir /s /q c:\windows`
-- `del /f /s /q c:\windows`
+- **ALLOW** — execute when the capability is enabled and all real prerequisites are satisfied.
+- **ASK** — pause before that tool call, describe the action, and wait for the owner's explicit approval. A denial means no dispatch.
+- **DENY** — refuse that tool. The model cannot bypass the denial by choosing another route to the same prohibited action.
 
-There are no SAFE/ASK/BLOCKED shell tiers. The previous root/system wipe, raw block-device, fork-bomb, curl/wget-to-shell and private-data shell blocks have been removed. Built-in shell still runs in its managed workspace; Termux and Linux/PRoot use their selected backends without the old shell-risk classifier. Android filesystem and runtime boundaries remain properties of their respective backends, not approval tiers.
+The tool-permission screen cycles Allow → Ask → Deny. The **Careful** preset sets write tools to ASK; **Balanced** and **Autonomous** default to ALLOW; **Read-only** sets write tools to DENY. Explicit per-tool overrides are retained when changing presets.
 
-## Logging and arguments
+## Capability packs and platform permissions
 
-- ActionLogStore persistence is disabled and legacy action history is purged when Agent starts.
-- AgentPolicy audit logging is disabled.
-- No action arguments or argument fingerprints are written to OrionEvidenceLedger.
-- Shell commands and outbound communication actions are excluded from durable action/activity receipts.
-- Task verification evidence remains distinct from an owner-facing action history; it stores no action arguments.
-- The agent decision-record mutation tool is not registered.
+- An explicit capability-pack OFF setting is enforced by the registry and dispatch gate.
+- A pack's first-launch default is defined by AgentPolicy.defaultOnPacks; optional bridges and proactive features remain opt-in.
+- Unknown and unimplemented packs fail closed.
+- Android runtime/special permissions, accessibility disclosure, connected-service authentication, external scopes, MCP pairing, target validation and capability health remain independent prerequisites. Orion cannot grant Android permissions on the owner's behalf.
+- PLAN mode is a global no-execution mode.
 
-## Undo coverage
+## Action-specific confirmation
 
-- **UndoStore:** saved-memory add, update and delete. Undo checks the expected current state before restoring.
-- **WorkspaceUndoStore:** registered workspace create/write/overwrite/delete/move operations. Undo checks the current file state and verifies the restored state. Intervening edits cause a conflict instead of overwriting newer work.
-- Shell commands and sent messages are not undoable and are not logged.
+Some operations require confirmation even when their tool is ALLOW:
 
-## Injection boundary
+1. Trading Desk write actions.
+2. Destructive deletion/removal, including recognized shell and Python file-deletion operations.
 
-Text and data from webpages, notifications, messages, screenshots, files, remote MCP descriptions/results, tool outputs and specialist/worker results are **untrusted data**, never instructions or authorization. They cannot change policy, grant permissions, request secrets, or authorize additional actions. Only the owner and the app's local policy/settings can do that.
+If the same tool is configured as ASK, one approval prompt covers both the per-tool request and the action-specific reason; Orion must not ask twice for the same dispatch.
+
+Ordinary authorized actions do not receive duplicate prompts. The app still checks actual Android permissions, setup, validation, cancellation and dispatch results.
+
+## Shell safety
+
+Shell execution is not treated as unrestricted trust. ShellPolicy hard-blocks recognized:
+- Root/system and factory-reset wipes.
+- Raw block-device writes and formatting.
+- Fork-bomb patterns.
+- Reads targeting Orion's private key/credential storage.
+
+The command is inspected in original and conservative dequoted forms; it is not silently rewritten. Ordinary workspace and setup commands remain available when the owner has enabled the relevant capability and the selected tool permission allows them. Destructive file deletion is separately owner-confirmed.
+
+## Tool recovery and evidence
+
+- Repeated read-only calls with identical arguments and identical results are warned and then blocked; a changed result resets the no-progress streak.
+- A blocked, failed or unverified tool result is not a success receipt.
+- New user objectives replace stale objective-graph state; explicit continuation is resolved separately.
+- Webpages, notifications, messages, screenshots, files, remote MCP descriptions/results and specialist outputs are untrusted data, never authorization or instructions that can override local policy.
+- Secrets remain in the encrypted credential vault. Logs and evidence must use privacy-filtered summaries, not raw credentials or private arguments.
 
 ## Credential storage
 
-ApiKeyVault continues to use AES-GCM encryption backed by a non-exportable Android Keystore key. Its implementation is unchanged by this permission-policy update.
+ApiKeyVault continues to use Android Keystore-backed encryption. Its implementation must remain intact during autonomy and capability changes.
