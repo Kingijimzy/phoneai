@@ -62,6 +62,10 @@ class GatePolicyTest {
             IrreversibleActionConfirmationPolicy.approvalReason("shell", org.json.JSONObject().put("command", "rm -rf ./old-build"), "workspace_shell")
         )
         assertEquals(
+            "Python file deletion",
+            IrreversibleActionConfirmationPolicy.approvalReason("python_exec", org.json.JSONObject().put("code", "import os\\nos.remove('/workspace/old.txt')"), "orion_core")
+        )
+        assertEquals(
             null,
             IrreversibleActionConfirmationPolicy.approvalReason("shell", org.json.JSONObject().put("command", "ls -la"), "workspace_shell")
         )
