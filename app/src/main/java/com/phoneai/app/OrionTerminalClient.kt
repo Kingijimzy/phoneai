@@ -2,8 +2,6 @@ package com.phoneai.app
 
 import android.view.KeyEvent
 import android.view.MotionEvent
-import android.view.ScaleGestureDetector
-import android.view.View
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalView
