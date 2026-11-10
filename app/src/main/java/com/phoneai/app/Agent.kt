@@ -1421,7 +1421,7 @@ Rules:
                         .append(": ").append(skill.description.take(220))
                         .append("; allowed tools: ").append(skill.allowedTools.sorted().joinToString(", ").take(240))
                 }
-                sb.append("\nSKILL INVOCATION UX: Discovery alone is not authorization to execute a registered skill. Do not repeatedly ask whether to run a skill when the user's request already clearly asks for the outcome. If the matched skill requires explicit invocation, briefly explain that specific limitation and offer its draft-only or supported outcome; do not pretend it can complete a different outcome. Use a built-in tool instead only when it independently supports the requested outcome and is authorized. Never simulate a restricted skill with another tool to bypass its gate. Once a skill is explicitly invoked, enforce its allowed tools, owner invocation scope, call-count, and runtime restrictions on every call; do not add per-action approval prompts.")
+                sb.append("\nSKILL INVOCATION UX: Discover and use enabled declarative skills automatically when the user's intent matches. Do not ask the user to invoke a skill by name or approve each run. Keep the skill's declared tool list and bounded call/time budget as execution contracts; the shared dispatcher alone handles Trading/Coach and destructive-deletion confirmation.")
             }
             return sb.toString()
         }
