@@ -18,7 +18,8 @@ internal class WorkspaceUndoStore(context: Context) {
 
     companion object {
         private const val MAX_ENTRIES = 10
-        private const val MAX_SNAPSHOT_BYTES = OrionPythonWorkspace.MAX_FILE_BYTES
+        private const val MAX_SNAPSHOT_BYTES = 16 * 1024 * 1024
+        internal fun isSnapshotSizeAllowed(byteCount: Long): Boolean = byteCount >= 0L && byteCount <= MAX_SNAPSHOT_BYTES.toLong()
     }
 
     fun recordWrite(path: String, before: String?, after: String): Boolean = synchronized(lock) {
@@ -97,7 +98,7 @@ internal class WorkspaceUndoStore(context: Context) {
     }
 
     private fun validSnapshot(value: String?): Boolean =
-        value == null || value.toByteArray(Charsets.UTF_8).size <= MAX_SNAPSHOT_BYTES
+        value == null || isSnapshotSizeAllowed(value.toByteArray(Charsets.UTF_8).size.toLong())
 
     private fun append(entry: JSONObject): Boolean {
         val rows = readRows() ?: return false

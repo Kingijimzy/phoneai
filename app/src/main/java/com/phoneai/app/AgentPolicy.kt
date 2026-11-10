@@ -7,7 +7,7 @@ import org.json.JSONObject
 /** Central agent permission policy. Execution adapters must call evaluate() before dispatch. */
 object AgentPolicy {
     enum class Mode(val label: String) { PLAN("Plan"), ALLOW("Allow") }
-    enum class Decision { ALLOW, PLAN_ONLY, DENY }
+    enum class Decision { ALLOW, ASK, PLAN_ONLY, DENY }
     data class Pack(val id: String, val title: String, val description: String, val implemented: Boolean = false)
     data class RuleResult(val decision: Decision, val reason: String)
     val packs = listOf(
@@ -22,7 +22,7 @@ object AgentPolicy {
         Pack("proactive", "Proactive", "Opt-in live event-driven Soul watcher and local scheduled task recaps; requires Orion Core and Accessibility Service", true),
         Pack("self_test", "Self-test", "Provider, permission, connectivity and capability checks", true),
         Pack("orion_core", "Orion core", "Local memory, knowledge, tasks, skill discovery and task coordination", true),
-        Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; exact-source sandbox test required, then owner auto-activation setting or explicit extension_enable request", true)
+        Pack("self_evolution", "Self-evolution", "Generated tools are automatically activated only after exact-source sandbox verification; version history and rollback remain available", true)
     )
     private fun p(c: Context) = c.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE)
     /** PLAN is the only global execution stop; legacy saved modes resolve to ALLOW. */
@@ -33,10 +33,16 @@ object AgentPolicy {
     fun setMode(c: Context, v: Mode) {
         p(c).edit().putString("mode", if (v == Mode.PLAN) Mode.PLAN.name else Mode.ALLOW.name).apply()
     }
+    /** Resolve an installed pack's persisted owner choice; unknown or unimplemented packs fail closed. */
+    internal fun packEnabled(id: String, savedValue: Boolean?): Boolean {
+        val pack = packs.firstOrNull { it.id == id } ?: return false
+        return pack.implemented && (savedValue ?: defaultOn(id))
+    }
+
     /**
      * Core companion packs are enabled on first launch so phone and messaging features are discoverable.
      * This only makes their tools available: Android OS permissions, explicit capability scope and validation
-     * still apply. Only restart, shutdown and Wi-Fi toggles require an action confirmation. Optional bridges remain opt-in.
+     * still apply. Per-tool ASK and DENY are enforced at dispatch, while Trading Desk writes and destructive deletion retain action-specific confirmation. Optional bridges remain opt-in.
      */
     internal val defaultOnPacks = setOf(
         "orion_core", "connected_services", "workspace_shell", "self_test",
@@ -44,8 +50,12 @@ object AgentPolicy {
     )
     internal fun defaultOn(id: String) = id in defaultOnPacks
 
-    /** An explicit user choice always wins; only a never-set pack falls back to its default. */
-    @Suppress("UNUSED_PARAMETER") fun enabled(c: Context, id: String) = true // Free mode: every capability pack is on.
+    /** An explicit user choice always wins; only a never-set pack falls back to its declared default. */
+    fun enabled(c: Context, id: String): Boolean {
+        val prefs = p(c)
+        val saved = if (prefs.contains("pack_$id")) prefs.getBoolean("pack_$id", false) else null
+        return packEnabled(id, saved)
+    }
     fun setEnabled(c: Context, id: String, on: Boolean) {
         val pack = packs.firstOrNull { it.id == id }
         p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
@@ -77,19 +87,16 @@ object AgentPolicy {
         toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false,
         hardBlockReason: String? = null
     ): GatePolicy.Result {
-        val talkReadOnly = OrionAutonomyPolicy.blocksWrite(
-            OrionAutonomySettings.read(c).mode,
-            ToolRegistry.all.firstOrNull { it.name == toolId }?.access
-        )
-        val effectiveToolMode = if (talkReadOnly) ToolMode.DENY else toolMode
+        // Conversation mode does not override the owner's explicit per-tool permission.
+        // TALK can use READ/WRITE capabilities; ASK and DENY are enforced below at dispatch.
+        val effectiveToolMode = toolMode
         return GatePolicy.decide(GatePolicy.Input(
         pack = pack,
         packOn = packs.any { it.id == pack } && enabled(c, pack),
         tool = toolId,
         mode = mode(c),
         toolMode = effectiveToolMode,
-        // Legacy per-tool ASK values are normalized to ALLOW by ToolPermissionPolicy.modeOf.
-        // Only an explicit DENY, PLAN mode or disabled capability pack blocks dispatch.
+        // Explicit DENY, ASK, PLAN mode and disabled capability packs are enforced at dispatch.
         autonomous = ToolPermissions.level(c) == "autonomous",
         dangerous = dangerous,
         approvedThisAction = approvedThisAction,
@@ -105,6 +112,7 @@ object AgentPolicy {
         val r = gate(c, pack, toolId, dangerous, toolMode = ToolPermissions.mode(c, toolId), askedThisTask = true, approvedThisAction = approvedThisAction)
         val decision = when (r.verdict) {
             GatePolicy.Verdict.ALLOW -> Decision.ALLOW
+            GatePolicy.Verdict.ASK -> Decision.ASK
             GatePolicy.Verdict.DENY -> Decision.DENY
             GatePolicy.Verdict.PLAN_ONLY -> Decision.PLAN_ONLY
         }

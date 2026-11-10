@@ -204,6 +204,18 @@ class TermuxBridgeActivity : Activity() {
                 AgentPolicy.log(this, "termux_command", "dispatch", false, decision.reason)
                 toast("BLOCKED: ${decision.reason}")
             }
+            AgentPolicy.Decision.ASK -> AlertDialog.Builder(this)
+                .setTitle("Run this Termux command?")
+                .setMessage("Orion is configured to ask before using Termux.\n\n" + text.take(1200))
+                .setNegativeButton("Cancel") { _, _ ->
+                    AgentPolicy.log(this, "termux_command", "dispatch", false, "owner declined per-tool ASK")
+                    toast("Command cancelled.")
+                }
+                .setPositiveButton("Run once") { _, _ ->
+                    AgentPolicy.log(this, "termux_command", "dispatch", true, "owner approved per-tool ASK")
+                    dispatchCommand(text)
+                }
+                .show()
             AgentPolicy.Decision.ALLOW -> {
                 AgentPolicy.log(this, "termux_command", "dispatch", null, "allowed by capability and owner execution policy")
                 dispatchCommand(text)

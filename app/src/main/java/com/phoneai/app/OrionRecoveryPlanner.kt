@@ -44,10 +44,24 @@ internal object OrionRecoveryPlanner {
                 "safety policy", "user denied", "cancelled", "canceled", "task was stopped")
                 .any(text::contains)) return emptyList()
 
+        val oversizedResponse = listOf(
+            "page too big", "page too large", "too big to fetch", "too large to fetch",
+            "response too large", "payload too large", "response size limit", "page-size limit",
+            "fetch limit", "http 413", "status 413"
+        ).any(text::contains)
         val preferred = when {
+            oversizedResponse && failedTool in setOf("fetch_url", "research_web", "live_web_search", "web_search", "live_news", "github_public", "github_account_read") ->
+                when (failedTool) {
+                    "fetch_url" -> listOf("research_web", "live_web_search", "web_search")
+                    "research_web" -> listOf("live_web_search", "web_search", "fetch_url")
+                    "live_web_search" -> listOf("research_web", "web_search")
+                    "web_search" -> listOf("research_web", "live_web_search")
+                    "live_news" -> listOf("live_web_search", "research_web")
+                    else -> listOf("research_web", "live_web_search", "fetch_url")
+                }
             listOf("target not found", "ambiguous", "stale", "invalid target").any(text::contains) ->
                 listOf("read_screen", "wait_for", "click_text", "validate_action")
-            (listOf("provider", "network", "http 5", "503", "429", "rate limit").any(text::contains) ||
+            (listOf("provider", "network", "http 5", "503", "429", "rate limit", "rate-limit", "rate-limited").any(text::contains) ||
                 (failedTool in setOf("live_web_search", "web_search", "research_web", "fetch_url", "live_news", "github_public", "github_account_read", "weather") &&
                     listOf("timeout", "timed out").any(text::contains))) ->
                 when (failedTool) {
@@ -93,9 +107,12 @@ internal object OrionRecoveryPlanner {
             text.contains("ambiguous") || text.contains("target") && text.contains("not found") ||
                 text.contains("invalid") && (tool.contains("click") || tool == "type") ->
                 Guidance(Strategy.CHOOSE_DIFFERENT_METHOD, "The target or arguments did not resolve; refresh screen evidence and select a grounded target instead of reusing stale arguments.")
+            text.contains("too large") || text.contains("too big to fetch") ||
+                text.contains("page-size") || text.contains("response size") || text.contains("413") ->
+                Guidance(Strategy.CHOOSE_DIFFERENT_METHOD, "The full page exceeds fetch limits; use targeted search or a smaller relevant section instead of repeating the full-page URL.")
             text.contains("timeout") || text.contains("temporarily unavailable") ||
-                text.contains("rate limit") || text.contains("429") || text.contains("503") ||
-                text.contains("http 5") || text.contains("network") ->
+                text.contains("rate limit") || text.contains("rate-limit") || text.contains("rate-limited") ||
+                text.contains("429") || text.contains("503") || text.contains("http 5") || text.contains("network") ->
                 Guidance(Strategy.CHOOSE_DIFFERENT_METHOD, "A transient provider or network failure occurred; switch to a different registered source/provider and do not repeat the same endpoint immediately. Ask the user only after compatible alternatives are exhausted.")
             text.contains("sensitive") || text.contains("safety") || text.contains("refuses") ||
                 text.contains("blocked by safety") || text.contains("consequential") ->

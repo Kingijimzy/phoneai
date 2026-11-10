@@ -131,9 +131,19 @@ internal object AgentHooks {
   val explicitSendIntent = !explicitlyWithheld && (explicit.containsMatchIn(request) || (target.equals("Send", true) && messagingIntent.containsMatchIn(request)))
   return if((riskyTarget||riskyTool)&&!explicitSendIntent) "Request does not explicitly authorize this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
  }
- /** Confirmation is reserved for the three irreversible computer settings only. */
- fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean =
-  IrreversibleActionConfirmationPolicy.computerSettingAction(tool,args) != null
+ /** Owner confirmation is limited to Trading Desk writes and destructive deletions. */
+ fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean {
+  val pack = AgentPolicy.packForTool(tool) ?: "orion_core"
+  // Only Trading Desk writes and destructive deletion require owner confirmation.
+  if (pack in setOf("trading_research", "trading_desk") && ToolRegistry.access(tool) == ToolAccess.WRITE) return true
+  if (tool in setOf("workspace_delete", "file_delete", "delete_file", "wipe_workspace", "workspace_wipe", "trash_empty")) return true
+  val command = args.optString("command").ifBlank { args.optString("cmd") }.ifBlank { args.optString("script") }
+  if (tool in setOf("shell", "termux_command") && Regex("(?i)(^|[;&|\\s])rm\\s+").containsMatchIn(command)) return true
+  val code = args.optString("code")
+  if (tool in setOf("python_exec", "dev_python") &&
+      Regex("(?i)(os\\s*\\.\\s*remove|os\\s*\\.\\s*unlink|shutil\\s*\\.\\s*rmtree|\\.\\s*unlink\\s*\\()").containsMatchIn(code)) return true
+  return false
+ }
  fun goalAuditUnavailableVerdict(): String = "CONTINUE: independent goal audit unavailable; task completion cannot be confirmed."
 
  fun completionDecision(request:String,proofs:List<Proof>):GateDecision =

@@ -61,6 +61,12 @@ class TerminalActivity : Activity() {
         setContentView(root)
         refreshBackend()
         append("Orion Terminal. Built-in runs in Orion's private workspace; Linux runs in managed Alpine Linux.\n")
+        val activityCommand = intent.getStringExtra("orion_activity_command").orEmpty()
+        val activityOutput = intent.getStringExtra("orion_activity_output").orEmpty()
+        if (activityCommand.isNotBlank()) {
+            append("\n— captured task activity —\n$ $activityCommand\n")
+            if (activityOutput.isNotBlank()) append(activityOutput + "\n")
+        }
     }
 
     private fun refreshBackend() { backendBtn.text = if (backend == Backend.BUILTIN) "Built-in" else "Linux"; append("— using " + (if (backend == Backend.BUILTIN) "built-in shell" else "Alpine Linux") + " —\n") }
@@ -71,6 +77,18 @@ class TerminalActivity : Activity() {
         val cmd = input.text.toString().trim(); if (cmd.isEmpty()) return
         if (ShellPolicy.classify(cmd) == ShellRisk.BLOCKED) {
             append("$ $cmd\nBlocked: this command is on Orion's catastrophic hard-block list (root/system wipe, raw block-device write, or fork bomb).\n")
+            return
+        }
+        val approval = IrreversibleActionConfirmationPolicy.approvalReason(
+            "shell", JSONObject().put("command", cmd), "workspace_shell"
+        )
+        if (approval != null) {
+            AlertDialog.Builder(this)
+                .setTitle("Confirm deletion")
+                .setMessage("Orion is about to run a command that can delete files:\\n\\n$cmd\\n\\nContinue only if this is the intended target.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Approve and run") { _, _ -> executeCommand(cmd) }
+                .show()
             return
         }
         executeCommand(cmd)

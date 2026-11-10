@@ -15,9 +15,9 @@ import java.io.File
  */
 internal object OrionPythonRuntime {
     private const val SCRIPT_NAME = "orion_main.py"
-    private const val MAX_OUTPUT_CHARS = 24_000
+    private const val MAX_OUTPUT_CHARS = 100_000
     private const val EXECUTION_TIMEOUT_MS = 100_000L
-    private const val FULL_EXECUTION_TIMEOUT_MS = 300_000L
+    private const val FULL_EXECUTION_TIMEOUT_MS = 900_000L
 
     @Synchronized
     fun execute(context: Context, code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }, onOutput: (String) -> Unit = {}, toolInvoker: ((String, org.json.JSONObject) -> String)? = null): String {
@@ -66,11 +66,37 @@ internal object OrionPythonRuntime {
             }
         }
 
+        // FULL profile includes pip so Orion can install ordinary Python dependencies and build wheels.
+        // Keep the package manager in the guest rootfs; project files remain in the shared workspace.
+        val full = OrionOwnerDialSettings.read(app).pythonProfile == OrionPythonProfile.FULL
+        if (full) {
+            val pipProbe = installer.execute(
+                manifest, "python3 -m pip --version", 12_000L,
+                workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
+            )
+            if (!pipProbe.startsWith("exit=0")) {
+                val pipInstall = installer.execute(
+                    manifest, "apk add --no-cache py3-pip", 180_000L,
+                    onOutput = onOutput, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
+                )
+                if (!pipInstall.startsWith("exit=0")) {
+                    return runBundled(app, workspaceRoot, code, "Alpine pip installation failed: " + pipInstall.take(160).replace("\\n", " "))
+                }
+                val pipVerify = installer.execute(
+                    manifest, "python3 -m pip --version", 12_000L,
+                    workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
+                )
+                if (!pipVerify.startsWith("exit=0")) {
+                    return runBundled(app, workspaceRoot, code, "Alpine pip verification failed")
+                }
+            }
+        }
+
         // CPython can write directly through the bind mount, bypassing OrionPythonWorkspace.write().
         // Refuse to start with an already exhausted/unsafe workspace and audit it again after exit.
         when (workspace.quotaStatus()) {
             "ok" -> Unit
-            "exceeded" -> return "error: Python workspace is already over its 256 MiB quota; remove files before execution."
+            "exceeded" -> return "error: Python workspace is already over its 1 GiB quota; remove files before execution."
             else -> return "error: Python workspace failed its integrity check; refusing execution."
         }
 
@@ -81,9 +107,8 @@ internal object OrionPythonRuntime {
         }
         var quotaExceededDuringRun = false
         val result = try {
-            val full = OrionOwnerDialSettings.read(app).pythonProfile == OrionPythonProfile.FULL
             val bootstrap = OrionPythonPhoneBridge.bootstrapCommand(full)
-            val limits = if (full) "ulimit -c 0; ulimit -t 3500; ulimit -f 1048576; ulimit -n 1024; ulimit -u 512" else "ulimit -c 0; ulimit -t 90; ulimit -f 4096; ulimit -n 64; ulimit -u 32"
+            val limits = if (full) "ulimit -c 0; ulimit -t 9000; ulimit -f 8388608; ulimit -n 2048; ulimit -u 1024" else "ulimit -c 0; ulimit -t 90; ulimit -f 4096; ulimit -n 64; ulimit -u 32"
             installer.execute(
                 manifest,
                 "$limits; cd /workspace && exec python3 -I -c '$bootstrap'",
@@ -104,7 +129,7 @@ internal object OrionPythonRuntime {
         }
         val quotaAfter = workspace.quotaStatus()
         if (quotaAfter == "unsafe") return "error: Python finished, but workspace integrity validation failed; inspect the workspace before using its files.\n${result.take(MAX_OUTPUT_CHARS)}"
-        if (quotaExceededDuringRun || quotaAfter == "exceeded") return "error: Python exceeded the 256 MiB workspace quota and was stopped. Further execution is blocked until the workspace is cleaned.\n${result.take(MAX_OUTPUT_CHARS)}"
+        if (quotaExceededDuringRun || quotaAfter == "exceeded") return "error: Python exceeded the 1 GiB workspace quota and was stopped. Further execution is blocked until the workspace is cleaned.\n${result.take(MAX_OUTPUT_CHARS)}"
         return result.take(MAX_OUTPUT_CHARS)
     }
 

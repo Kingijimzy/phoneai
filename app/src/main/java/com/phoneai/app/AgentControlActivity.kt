@@ -42,7 +42,7 @@ class AgentControlActivity : Activity() {
         setContentView(scroll)
         addText("ORION / AGENT CONTROL", 10f, Theme.MUTED, true, 0)
         addText("Approval & capabilities", 26f, Theme.TEXT, true, 4)
-        addText("Core phone and messaging tools are available by default. Optional services may need setup or Android permission. Only restart, shutdown and Wi-Fi toggles require confirmation; all other authorized actions run immediately. Unsupported integrations stay visibly off.", 13f, Theme.MUTED, false, 8)
+        addText("Core phone and messaging tools are available by default. Optional services may need setup or Android permission. Per-tool Allow / Ask / Deny settings are enforced at dispatch; Trading Desk writes and destructive deletion also require confirmation. Unsupported integrations stay visibly off.", 13f, Theme.MUTED, false, 8)
         addButton("‹ Back to settings") { finish() }
 
         section("APPROVAL MODE")
@@ -366,6 +366,18 @@ class AgentControlActivity : Activity() {
                 AgentPolicy.log(this, "self_test", "run", false, policy.reason)
                 return
             }
+            AgentPolicy.Decision.ASK -> AlertDialog.Builder(this)
+                .setTitle("Allow Orion self-test?")
+                .setMessage(policy.reason + "\n\nThe self-test performs bounded local checks and public-data probes.")
+                .setNegativeButton("Cancel") { _, _ ->
+                    AgentPolicy.log(this, "self_test", "run", false, "owner declined per-tool ASK")
+                    testReport.text = "CANCELLED · Owner did not approve the self-test."
+                }
+                .setPositiveButton("Run once") { _, _ ->
+                    AgentPolicy.log(this, "self_test", "run", true, "owner approved per-tool ASK")
+                    executeSelfTest()
+                }
+                .show()
             AgentPolicy.Decision.ALLOW -> executeSelfTest()
         }
     }

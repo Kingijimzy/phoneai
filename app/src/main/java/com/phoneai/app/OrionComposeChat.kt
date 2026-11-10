@@ -304,7 +304,7 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
 }
 
 @Composable
-private fun OrionComposeActivityCard(event: OrionActivityEvent) {
+private fun OrionComposeActivityCard(event: OrionActivityEvent, lines: List<OrionChatLine>, onBrowser: (String?) -> Unit, onOpenTerminal: (String, String) -> Unit) {
     var expanded by rememberSaveable(event.eventId) { mutableStateOf(false) }
     val active = event.status == OrionActivityStatus.ACTIVE
     val accent = when (event.status) {
@@ -314,6 +314,7 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
         OrionActivityStatus.FAILED -> Color(0xFFE09B9B)
         else -> Color(0xFFAAAAAA)
     }
+    val currentTaskLines = lines.drop(lines.indexOfLast { it.kind == "me" } + 1)
     val terminalOutput = event.evidence.lastOrNull { it.contains("Python terminal", true) || it.contains("TASK:OUTPUT", true) }
         ?: event.summary
     val pulse = rememberInfiniteTransition(label = "task-stream-pulse")
@@ -383,6 +384,11 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
                 }
             }
         }
+        // Keep the clickable nanoMuse-style activity pills visible in the compact task card.
+        // Raw transcripts stay collapsed; each pill opens its own captured command/result.
+        if (currentTaskLines.any { it.kind == "note" && (it.text.startsWith("[TASK:RUNNING]") || it.text.startsWith("[BROWSER:") || it.text.startsWith("[SHELL:") || it.text.startsWith("[TASK:OUTPUT]")) }) {
+            OrionToolPills(currentTaskLines, Modifier.padding(start = 13.dp, top = 7.dp))
+        }
         val terminalEvidence = event.typedEvidence.filterIsInstance<OrionActivityEvidence.Terminal>().lastOrNull()
         if (terminalEvidence != null) {
             Text(
@@ -418,10 +424,36 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
                 maxLines = if (expanded) 4 else 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 13.dp, top = 2.dp))
         }
+        val browserEvidence = event.typedEvidence.filterIsInstance<OrionActivityEvidence.Browser>().lastOrNull()
+        val transcriptUrl = currentTaskLines.asReversed().firstOrNull { it.text.contains("URL:") }?.text
+            ?.substringAfter("URL:")?.lineSequence()?.firstOrNull()?.trim()
+        val browserUrl = browserEvidence?.url?.takeIf { it.isNotBlank() } ?: transcriptUrl
+        if (!browserUrl.isNullOrBlank()) {
+            val safeUrl = (OrionEvidenceSanitizer.evidence(OrionActivityEvidence.Browser("Site", browserUrl)) as OrionActivityEvidence.Browser).url
+            if (safeUrl.isNotBlank()) Text(
+                "OPEN SITE  ↗",
+                color = Color(0xFFD5D5D5), fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 13.dp, top = 5.dp).clickable { onBrowser(safeUrl) }
+            )
+        }
+        val hasTerminalActivity = terminalEvidence != null || currentTaskLines.any { it.text.startsWith("[SHELL:") || it.text.startsWith("[TASK:OUTPUT]") }
+        if (hasTerminalActivity) {
+            Text(
+                "OPEN TERMINAL  ↗",
+                color = Color(0xFFD5D5D5), fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 13.dp, top = 5.dp).clickable {
+                    val command = OrionEvidenceSanitizer.text(terminalEvidence?.commandLabel ?: event.title, 120)
+                    val output = OrionEvidenceSanitizer.text(terminalEvidence?.outputTail ?: terminalOutput, 400)
+                    onOpenTerminal(command, output)
+                }
+            )
+        }
         if (expanded) {
             event.evidence.takeLast(10).forEach { line ->
                 Text(line, color = Color(0xFFAAAAAA), fontSize = 8.sp, lineHeight = 11.sp)
             }
+            Text("ACTIVITY EVIDENCE", color = Color(0xFF888888), fontSize = 8.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 13.dp, top = 7.dp, bottom = 3.dp))
             Text("Task ${event.taskId}", color = Color(0xFF666666), fontSize = 8.sp)
         }
     }
@@ -478,6 +510,7 @@ internal fun OrionComposeChatScreen(
     onRemoveImage: (Int) -> Unit,
     onVoice: () -> Unit,
     onBrowser: (String?) -> Unit,
+    onOpenTerminal: (String, String) -> Unit,
     onTasks: () -> Unit,
     onMenuAction: (String) -> Unit,
     onStop: () -> Unit,
@@ -642,11 +675,30 @@ internal fun OrionComposeChatScreen(
                         } else null
                     ) }
                 }
-                item(key = "orion-tool-pills") { OrionToolPills(lines) }
-                // Keep the conversation primary: show one live task card for the latest
-                // task only. Full event history remains available from the Tasks surface.
-                OrionActivityTimeline.latestChatCard(activityEvents)?.let { event ->
-                    item(key = "activity-${event.eventId}") { androidx.compose.foundation.layout.Box(Modifier.orionEnter()) { OrionComposeActivityCard(event) } }
+                // Keep all execution detail inside one expandable task surface instead of
+                // scattering a separate pill/message for every tool call through the chat.
+                val latestUserIndex = lines.indexOfLast { it.kind == "me" }
+                val taskLines = lines.drop(latestUserIndex + 1)
+                val fallbackTaskId = "chat-fallback-" + (lines.getOrNull(latestUserIndex)?.id ?: "session")
+                val fallbackEvents = taskLines.mapIndexedNotNull { index, line ->
+                    if (line.kind != "note") null else OrionActivityTimeline.fromLegacyNote(
+                        fallbackTaskId, line.text, line.id.takeIf { it > 0L } ?: (index + 1L)
+                    )
+                }
+                val fallbackTimeline = OrionActivityTimeline().apply { replay(fallbackEvents) }.compactForChat()
+                val activityCard = OrionActivityTimeline.latestChatCard(activityEvents)
+                    ?: OrionActivityTimeline.latestChatCard(fallbackTimeline)
+                activityCard?.let { event ->
+                    item(key = "activity-${event.eventId}") {
+                        androidx.compose.foundation.layout.Box(Modifier.orionEnter()) {
+                            OrionComposeActivityCard(
+                                event = event,
+                                lines = lines,
+                                onBrowser = onBrowser,
+                                onOpenTerminal = onOpenTerminal
+                            )
+                        }
+                    }
                 }
                 val assistantAlreadyStreaming = lines.lastOrNull()?.let {
                     it.kind == "ai" && it.text.isNotBlank()

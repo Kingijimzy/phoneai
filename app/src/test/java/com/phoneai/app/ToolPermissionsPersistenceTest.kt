@@ -28,31 +28,47 @@ class ToolPermissionsPersistenceTest {
         assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
     }
 
-    @Test fun explicitDenyIsIgnoredInFreeMode() {
+    @Test fun explicitDenyIsEnforcedAcrossPresets() {
         ToolPermissions.applyLevel(context, "careful")
-        ToolPermissions.cycle(context, writeTool) // would be DENY; free mode never refuses
-        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
+        ToolPermissions.cycle(context, writeTool) // careful preset starts at ASK, then becomes DENY
+        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
         ToolPermissions.applyLevel(context, "read_only")
-        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
+        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
     }
 
-    @Test fun readOnlyPresetDoesNotBlockInFreeMode() {
+    @Test fun readOnlyPresetBlocksWriteTools() {
         ToolPermissions.applyLevel(context, "read_only")
-        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
+        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
     }
 
-    @Test fun autonomousPresetStaysAllowEvenAfterCycling() {
+    @Test fun autonomousPresetStillHonorsPerToolAskAndDeny() {
         ToolPermissions.applyLevel(context, "autonomous")
         assertEquals("autonomous", ToolPermissions.level(context))
         ToolPermissions.cycle(context, writeTool)
-        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
+        assertEquals(ToolMode.ASK, ToolPermissions.mode(context, writeTool))
+        ToolPermissions.cycle(context, writeTool)
+        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
     }
 
-    @Test fun legacyAskValueMigratesToAllowWithoutPrompt() {
+    @Test fun legacyAskValueRemainsAnAskPermission() {
         context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
+            .putString("tool_level", "custom")
+            .putString("tool_base_level", "balanced")
             .putString("tool_modes", org.json.JSONObject().put(writeTool, "ASK").toString())
             .commit()
-        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
+        assertEquals(ToolMode.ASK, ToolPermissions.mode(context, writeTool))
+    }
+
+    @Test fun ownerCanDisableAndReenableCapabilityPacks() {
+        AgentPolicy.setEnabled(context, "phone_control", false)
+        assertEquals(false, AgentPolicy.enabled(context, "phone_control"))
+        AgentPolicy.setEnabled(context, "phone_control", true)
+        assertEquals(true, AgentPolicy.enabled(context, "phone_control"))
+    }
+
+    @Test fun carefulPresetAsksBeforeWriteTools() {
+        ToolPermissions.applyLevel(context, "careful")
+        assertEquals(ToolMode.ASK, ToolPermissions.mode(context, writeTool))
     }
 
     @Test fun noModeIsAGlobalExecutionStop() {
@@ -72,13 +88,21 @@ class ToolPermissionsPersistenceTest {
         assertEquals(GatePolicy.Verdict.ALLOW, allowed.verdict)
     }
 
-    @Test fun legacyAskDoesNotCreateAnApprovalVerdict() {
+    @Test fun legacyAskCreatesAnApprovalVerdict() {
         AgentPolicy.setMode(context, AgentPolicy.Mode.ALLOW)
         AgentPolicy.setEnabled(context, "trading_research", true)
         val result = AgentPolicy.gate(
             context, "trading_research", "live_sports", dangerous = false,
             toolMode = ToolMode.ASK, askedThisTask = false
         )
-        assertEquals(GatePolicy.Verdict.ALLOW, result.verdict)
+        assertEquals(GatePolicy.Verdict.ASK, result.verdict)
+    }
+
+    @Test fun evaluatePreservesAskForCallersThatUseTheLegacyRuleResult() {
+        ToolPermissions.applyLevel(context, "balanced")
+        ToolPermissions.cycle(context, writeTool)
+        val pack = AgentPolicy.packForTool(writeTool) ?: "orion_core"
+        val result = AgentPolicy.evaluate(context, pack, writeTool, dangerous = false)
+        assertEquals(AgentPolicy.Decision.ASK, result.decision)
     }
 }

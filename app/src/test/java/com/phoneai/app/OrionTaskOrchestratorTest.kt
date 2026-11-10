@@ -54,17 +54,21 @@ class OrionTaskOrchestratorTest {
         assertTrue(context.readiness.reason.contains("GitHub is not connected"))
     }
 
-    @Test fun grantedCapabilityContractIsIncludedInTheActualPlannerContext() {
+    @Test fun ownerPermissionAndEvidenceContractsAreIncludedInTheActualPlannerContext() {
         val context = OrionTaskOrchestrator.build(
             "check current weather", listOf(tool("weather")), packs, termuxReady = true
         )
         val prompt = context.promptLines().joinToString("\n")
-        assertTrue(prompt.contains("GRANTED CAPABILITY CONTRACT"))
-        assertTrue(prompt.contains("use its documented functionality fully"))
-        assertTrue(prompt.contains("Do not invent additional application-level restrictions"))
-        assertTrue(prompt.contains("Actual Android permissions"))
+        assertTrue(prompt.contains("OWNER PERMISSION CONTRACT"))
+        assertTrue(prompt.contains("ALLOW may execute after prerequisites"))
+        assertTrue(prompt.contains("ASK must use the owner approval surface"))
+        assertTrue(prompt.contains("DENY must never be bypassed"))
+        assertTrue(prompt.contains("Android permissions"))
         assertTrue(prompt.contains("EXECUTION ERROR HONESTY CONTRACT"))
         assertTrue(prompt.contains("is not proof permission is missing"))
+        assertTrue(prompt.contains("FRESHNESS AND EVIDENCE CONTRACT"))
+        assertTrue(prompt.contains("Never describe support as holding when price is below it"))
+        assertTrue(prompt.contains("Confidence must reflect evidence quality"))
     }
 
     @Test fun clarificationMustPrecedeDispatch() {
