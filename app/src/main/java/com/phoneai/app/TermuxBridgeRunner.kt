@@ -72,10 +72,7 @@ object TermuxBridgeRunner {
     fun readiness(context: Context): String? = preflight(context)
 
     private fun preflight(context: Context): String? {
-        val prefs = context.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
-        if (!prefs.getBoolean("termux_bridge_enabled", false) || !AgentPolicy.enabled(context, "termux_bridge")) {
-            return "Termux bridge is disabled."
-        }
+        if (!AgentPolicy.enabled(context, "termux_bridge")) return "Termux bridge is not implemented in this build."
         try {
             @Suppress("DEPRECATION")
             val info = context.packageManager.getPackageInfo("com.termux", 0)
