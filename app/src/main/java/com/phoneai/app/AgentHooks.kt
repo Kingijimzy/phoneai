@@ -131,7 +131,7 @@ internal object AgentHooks {
   val explicitSendIntent = !explicitlyWithheld && (explicit.containsMatchIn(request) || (target.equals("Send", true) && messagingIntent.containsMatchIn(request)))
   return if((riskyTarget||riskyTool)&&!explicitSendIntent) "Request does not explicitly authorize this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
  }
- /** Confirmation is reserved for the three irreversible computer settings only. */
+ /** Owner confirmation is limited to Trading Desk writes and destructive deletions. */
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean =
   IrreversibleActionConfirmationPolicy.approvalReason(tool,args,AgentPolicy.packForTool(tool) ?: "orion_core") != null
  fun goalAuditUnavailableVerdict(): String = "CONTINUE: independent goal audit unavailable; task completion cannot be confirmed."
