@@ -13,7 +13,7 @@ import android.widget.TextView
 import android.widget.Switch
 import android.view.ViewGroup
 
-/** Autonomy control center: high-level mode, per-tool standing rules, budgets, notifications and OS grant status. */
+/** Partner control center: execution budgets, notifications and actual Android grant status only. */
 internal fun Activity.showToolPermissions() = showAutonomyControlCenter()
 
 internal fun Activity.showAutonomyControlCenter() {
@@ -26,7 +26,7 @@ private fun Activity.showControlCenterMenu(message: String?) {
         "Notifications",
         "Android permission status"
     )
-    val builder = AlertDialog.Builder(this).setTitle("Autonomy controls")
+    val builder = AlertDialog.Builder(this).setTitle("Partner controls")
         .setItems(rows.toTypedArray()) { _, which ->
             when (which) {
                 0 -> showExecutionLimits()
