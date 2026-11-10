@@ -685,9 +685,7 @@ internal fun OrionComposeChatScreen(
                         fallbackTaskId, line.text, line.id.takeIf { it > 0L } ?: (index + 1L)
                     )
                 }
-                val fallbackTimeline = remember(fallbackTaskId, fallbackEvents.size, fallbackEvents.lastOrNull()?.eventId) {
-                    OrionActivityTimeline().apply { replay(fallbackEvents) }.compactForChat()
-                }
+                val fallbackTimeline = OrionActivityTimeline().apply { replay(fallbackEvents) }.compactForChat()
                 val activityCard = OrionActivityTimeline.latestChatCard(activityEvents)
                     ?: OrionActivityTimeline.latestChatCard(fallbackTimeline)
                 activityCard?.let { event ->
