@@ -18,8 +18,12 @@ class McpConnectorScopePolicyTest {
         assertEquals("system", McpConnector.scopeForTool("shell_command"))
     }
 
-    @Test fun unclassifiedToolsDoNotInheritReadScope() {
+    @Test fun unclassifiedToolsUseTheExplicitOtherScope() {
         assertEquals("other", McpConnector.scopeForTool("custom_magic_tool"))
+    }
+
+    @Test fun fullAccessIncludesEverySupportedMcpScope() {
+        assertEquals(setOf("read", "write", "communication", "system", "other"), McpConnector.allScopes)
     }
 }
 
