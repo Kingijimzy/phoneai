@@ -30,6 +30,7 @@ class TerminalActivity : Activity() {
     private enum class Backend { BUILTIN, LINUX }
     private var backend = Backend.BUILTIN
     @Volatile private var terminalSession: TerminalSession? = null
+    @Volatile private var terminalStarting = false
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun chip(caption: String, action: () -> Unit) = TextView(this).apply {
         text = caption; textSize = 13f; typeface = Typeface.DEFAULT_BOLD; setTextColor(0xFFE4E4E4.toInt()); gravity = Gravity.CENTER
@@ -77,6 +78,7 @@ class TerminalActivity : Activity() {
     }
 
     private fun switchBackend() {
+        if (terminalStarting) return
         if (backend == Backend.LINUX) {
             terminalSession?.finishIfRunning()
             terminalSession = null
@@ -89,12 +91,17 @@ class TerminalActivity : Activity() {
             return
         }
         backend = Backend.LINUX
+        terminalStarting = true
+        backendBtn.isEnabled = false
         refreshBackend()
         append("Preparing persistent Alpine terminal…\n")
         Thread {
             try {
                 val config = ShellRunner.prepareLinuxTerminalConfig(applicationContext)
                 runOnUiThread {
+                    if (isFinishing || isDestroyed || backend != Backend.LINUX) return@runOnUiThread
+                    terminalStarting = false
+                    backendBtn.isEnabled = true
                     val client = OrionTerminalClient(terminalView) { finished ->
                         if (terminalSession === finished) terminalSession = null
                         append("\n[Linux session exited: ${finished.exitStatus}]\n")
@@ -114,6 +121,9 @@ class TerminalActivity : Activity() {
                 }
             } catch (failure: Exception) {
                 runOnUiThread {
+                    terminalStarting = false
+                    backendBtn.isEnabled = true
+                    if (isFinishing || isDestroyed) return@runOnUiThread
                     backend = Backend.BUILTIN
                     refreshBackend()
                     append("Could not open Alpine terminal: " + (failure.message ?: failure.javaClass.simpleName) + "\n")
@@ -176,6 +186,7 @@ class TerminalActivity : Activity() {
     }
 
     override fun onDestroy() {
+        terminalStarting = false
         terminalSession?.finishIfRunning()
         terminalSession = null
         super.onDestroy()
