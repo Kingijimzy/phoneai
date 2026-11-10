@@ -532,7 +532,7 @@ internal fun OrionComposeChatScreen(
         }
     }
     val busy = status.contains("think", true) || status.contains("work", true) || status.contains("act", true)
-    Column(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF000000), Color(0xFF04050E), Color(0xFF0E1550), Color(0xFF1F3D9A)))).imePadding()) {
+    Column(Modifier.fillMaxSize().background(Color(0xFF000000)).imePadding()) {
         // Editorial header: quiet branding, no oversized pill around every element.
         Row(
             Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 11.dp),
@@ -696,8 +696,8 @@ internal fun OrionComposeChatScreen(
             ) {
                 Row(
                     Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF171717))
-                        .border(1.dp, if (providerReady) Color(0xFF414141) else Color(0xFF8A5D42), RoundedCornerShape(10.dp))
+                        .background(Color(0xFF1C1C1E))
+                        .border(1.dp, if (providerReady) Color(0x40545458) else Color(0xFF8A5D42), RoundedCornerShape(10.dp))
                         .clickable { showModelSheet = true }
                         .padding(horizontal = 10.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -712,8 +712,8 @@ internal fun OrionComposeChatScreen(
                 }
                 Row(
                     Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF171717))
-                        .border(1.dp, ChatHairline, RoundedCornerShape(10.dp))
+                        .background(Color(0xFF1C1C1E))
+                        .border(1.dp, Color(0x40545458), RoundedCornerShape(10.dp))
                         .clickable(onClick = onModelClick)
                         .padding(horizontal = 10.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -729,8 +729,8 @@ internal fun OrionComposeChatScreen(
             }
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
-                    .background(Brush.horizontalGradient(listOf(Color(0xCC2B3A9E), Color(0xCC4F5BFF), Color(0xCC3D86D6))))
-                    .border(1.dp, Color(0x44FFFFFF), RoundedCornerShape(28.dp))
+                    .background(Color(0xFF2C2C30))
+                    .border(1.dp, Color(0x40545458), RoundedCornerShape(28.dp))
                     .padding(start = 16.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
                 verticalAlignment = Alignment.Bottom
             ) {

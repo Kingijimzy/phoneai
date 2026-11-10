@@ -28,4 +28,11 @@ class OrionToolCallRecoveryTest {
         assertEquals("python_exec", r.getString("tool"))
         assertEquals("print(1)", r.getJSONObject("args").getString("code"))
     }
+
+    @Test fun recoversPositionalFencedCall() {
+        val raw = "```python\npython_exec(\"\"\"\nimport os\nprint(os.getcwd())\n\"\"\")\n```"
+        val r = OrionToolCallRecovery.recover(raw, known)!!
+        assertEquals("python_exec", r.getString("tool"))
+        assertTrue(r.getJSONObject("args").getString("code").contains("import os"))
+    }
 }
