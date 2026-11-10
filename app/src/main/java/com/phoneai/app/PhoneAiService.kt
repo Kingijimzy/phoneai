@@ -1865,8 +1865,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             RoutineReplayPolicy.exactName(MacroStore.names(this), request.name) != null ||
                 RoutineReplayPolicy.isExplicitRoutineCommand(t)
         } == true
-        val routeToAgent = autoRoute && shouldAutoRouteToAgent(t)
-        if (routeToAgent && conversationOnly) notifyModeSwitch(true)
+        // Talk and Command are one mind: every message goes through the agent, whose first step lets the model
+        // answer directly or take the job to tools. No mode switch and no phrase list decides that.
+        val routeToAgent = true
         if (!savedRoutineCommand && ((conversationOnly && !routeToAgent) || (isConversationStarter(t) && !LiveWebSearch.isSearchRequest(t) && !LiveNews.isNewsRequest(t) && !routeToAgent))) {
             wakeGen++
             appendTranscript("me", t)
