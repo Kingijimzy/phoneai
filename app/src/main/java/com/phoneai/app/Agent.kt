@@ -894,6 +894,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "GITHUB ROUTING: If the user supplies a github.com URL, use the exact owner, repository name, and run/PR number from that URL; never rewrite casing, insert hyphens, or infer an owner from a display name. If they name a public repository but provide no owner or URL, search public GitHub by the exact repository name first; do not require private account access to explain a public repository. Use github_account_read only for requests that truly require private account identity or private repository listings, and if that connector fails, explain the limit and use a public search fallback when possible. For an Actions run URL, inspect that exact run instead of substituting a repository-wide search. " +
             "ORION CAPABILITY TRUTH: Describe a capability as available only when the current registered tool/skill inventory, settings, permissions, and actual connection state support it. A name in a prompt or a recognized provider name is not proof of an implementation. Distinguish public GitHub lookup from private repository access; a Telegram bot bridge from a Telegram user account; accessible screen nodes from complete screen understanding; recorded gesture routines from semantic automation; and local Android speech recognition/TTS from a remote live-voice provider. Do not claim private Gmail/Drive/GitHub access, Gemini Live, source editing, builds, installs, task completion, or live facts unless the corresponding authorized capability actually exists and its call/result verifies the claim. State whether work is proposed, applied, built, tested, or installed. Never ask the user to run a skill or command themselves when Orion has a registered, authorized tool to do it; otherwise state the precise missing tool, permission, connection, or workspace. " +
             "If the answer depends on anything current (news, prices, scores, weather, who holds a role today, recent releases, nearby places, the user's location), reply with exactly the single word ACTION so the research tools run instead of guessing. "+
+            "If the user wants code, a script, a scraper, a file, a tool or an image created, reply with exactly the single word ACTION so it is saved, run and shown rather than pasted. "+
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Only restart, shutdown and Wi-Fi toggles require confirmation through the app interface; every other authorized action executes immediately after its capability, scope and validation checks. " +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
@@ -1242,6 +1243,9 @@ RESPONSE QUALITY AND FORMAT:
     }
 
     companion object {
+        /** Phrase-matching shortcuts (weather, news, scores, search, quotes, one-line phone commands) bypassed the model and
+         *  misfired on wording. Off: the model reads the situation and picks the registered tool itself. */
+        const val KEYWORD_SHORTCUTS = false
         private const val MAX_VISION_STEPS_PER_MINUTE = 5
         private val visionStepTimes = java.util.concurrent.ConcurrentLinkedDeque<Long>()
 
@@ -2130,7 +2134,7 @@ Rules:
             OrionPreActionContext.assess(svc, command)
         }
         // One-intent commands (play music, Google it in Chrome) skip the model entirely.
-        if (!resumeRequest && !browserActionTask && !structuredTask) {
+        if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask) {
             val fast = FastIntents.parse(command)
             if (fast != null) {
                 ui.phase("acting")
@@ -2220,7 +2224,7 @@ Rules:
         // explicit place so a follow-up like "weather" does not lose the user's context.
         val rememberedWeatherPlace = WeatherService.lastPlace(svc)
         val weatherFollowUp = WeatherService.isWeatherTopic(command) && rememberedWeatherPlace.isNotBlank()
-        if (!resumeRequest && !browserActionTask && !structuredTask && (WeatherService.isWeatherRequest(command) || weatherFollowUp)) {
+        if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask && (WeatherService.isWeatherRequest(command) || weatherFollowUp)) {
             ui.phase("acting")
             val extractedPlace = WeatherService.requestedPlace(command)
             val place = extractedPlace.ifBlank { rememberedWeatherPlace }
@@ -2232,7 +2236,7 @@ Rules:
             return
         }
         // Recent-news lookup uses GDELT directly; don't spend a model request to discover headlines.
-        if (!resumeRequest && !browserActionTask && !structuredTask && LiveNews.isNewsRequest(command)) {
+        if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask && LiveNews.isNewsRequest(command)) {
             ui.phase("acting")
             val answer = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("live_news", JSONObject().put("query", LiveNews.queryFrom(command)))))
             logShortcut("live_news", answer)
@@ -2241,7 +2245,7 @@ Rules:
             return
         }
         // Scores are structured live data: answer from the scoreboard feed, not a list of links.
-        if (!resumeRequest && !browserActionTask && !structuredTask && LiveSports.isScoreRequest(command)) {
+        if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask && LiveSports.isScoreRequest(command)) {
             ui.phase("acting")
             val scores = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("live_sports", JSONObject().put("query", command))))
             if (!scores.startsWith("error:", true)) {
@@ -2392,7 +2396,7 @@ Rules:
             return
         }
         // Explicit web-search requests use a public search endpoint directly instead of consuming model quota.
-        if (!resumeRequest && !browserActionTask && !structuredTask && !explicitAppAction &&
+        if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask && !explicitAppAction &&
             !Regex("(?i)\\b(chrome|google chrome)\\b").containsMatchIn(command) && LiveWebSearch.isSearchRequest(command)) {
             ui.phase("acting")
             val answer = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("live_web_search", JSONObject().put("query", LiveWebSearch.queryFrom(command))))).let { raw -> if (raw.startsWith("Web search results for")) summarizeSearch(command, raw) else raw }
@@ -2402,7 +2406,7 @@ Rules:
             return
         }
         // Freshness-dependent questions should use live web results, not a model's stale training data.
-        if (!resumeRequest && !browserActionTask && !structuredTask && !explicitAppAction && LiveWebSearch.isLiveInfoRequest(command)) {
+        if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask && !explicitAppAction && LiveWebSearch.isLiveInfoRequest(command)) {
             ui.phase("acting")
             val query = LiveWebSearch.liveQueryFrom(command)
             val raw = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("live_web_search", JSONObject().put("query", query))))
@@ -2415,7 +2419,7 @@ Rules:
         // Common public crypto spot quotes can be fetched directly, without spending an LLM request.
         val quoteIntent = Regex("(?i)\\b(price|quote|ticker|trading at|current value)\\b").containsMatchIn(command)
         val quoteMatch = Regex("(?i)\\b(BTC|BITCOIN|ETH|ETHEREUM|SOL|SOLANA|XRP|RIPPLE|BNB|DOGE|ADA|AVAX|DOT|LINK|LTC|TRX|TON)(USDT)?\\b").find(command)
-        if (!resumeRequest && !browserActionTask && !structuredTask && quoteIntent && quoteMatch != null) {
+        if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask && quoteIntent && quoteMatch != null) {
             ui.phase("acting")
             val rawSymbol = quoteMatch.groupValues[1].uppercase()
             val baseSymbol = when (rawSymbol) {
@@ -2435,7 +2439,7 @@ Rules:
         // Instant path: common commands need no AI at all.
         ui.phase("acting")
         val quick = try {
-            if (!resumeRequest && !browserActionTask && !structuredTask && activeSkillId == null && !requiresToolPolicy(command)) local.tryRun(command) else null
+            if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask && activeSkillId == null && !requiresToolPolicy(command)) local.tryRun(command) else null
         } catch (e: Exception) {
             null
         }
