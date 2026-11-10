@@ -33,8 +33,9 @@ internal object OrionForcedRecovery {
                 "inspect the selected shell backend and runtime readiness, then choose a shorter non-destructive command"
             tool.startsWith("browser_") || tool == "open_url" ->
                 "inspect the current browser state, then choose a different registered read-only retrieval capability"
-            tool.contains("web") || tool == "fetch_url" || tool == "research_web" ->
-                "inspect the actual network error, then choose a different registered research source"
+            tool.contains("web") || tool.contains("sport") || tool.contains("livescore") ||
+                tool.contains("live_score") || tool == "fetch_url" || tool == "research_web" ->
+                "inspect the actual failure, then switch to a different registered web/research source"
             else ->
                 "re-read the current state and choose a different registered capability that can verify the same outcome"
         }
