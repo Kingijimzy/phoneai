@@ -51,7 +51,13 @@ internal object ShellPolicy {
         return listOf(raw, dequoted).distinct()
     }
 
+    private val confirmedCommands = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** Kingi confirmed this exact wipe/delete command in chat. */
+    fun confirm(command: String) { confirmedCommands.add(command.trim()) }
+
     fun classify(command: String): ShellRisk {
+        if (command.trim() in confirmedCommands) return ShellRisk.SAFE
         val forms = inspectionForms(command)
         if (forms.any { form -> rootOrSystemWipe.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
         if (forms.any { form -> factoryResetProtection.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED

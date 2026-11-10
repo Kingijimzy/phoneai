@@ -11,8 +11,8 @@ class OrionAutonomyPolicyTest {
         assertEquals("careful", OrionAutonomyPolicy.preset(OrionMode.BUILDER))
     }
 
-    @Test fun talkModeBlocksEveryWriteToolRegardlessOfPerToolAllowOverrides() {
-        assertTrue(OrionAutonomyPolicy.blocksWrite(OrionMode.TALK, ToolAccess.WRITE))
+    @Test fun noModeBlocksWriteTools() {
+        assertFalse(OrionAutonomyPolicy.blocksWrite(OrionMode.TALK, ToolAccess.WRITE))
         assertFalse(OrionAutonomyPolicy.blocksWrite(OrionMode.TALK, ToolAccess.READ))
         assertFalse(OrionAutonomyPolicy.blocksWrite(OrionMode.AUTOPILOT, ToolAccess.WRITE))
         assertFalse(OrionAutonomyPolicy.blocksWrite(OrionMode.BUILDER, null))

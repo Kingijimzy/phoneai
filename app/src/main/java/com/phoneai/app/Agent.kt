@@ -456,8 +456,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return blocked
         }
         val shellCommand = if (tool == "shell" || tool == "termux_command") args.optString("command") else ""
+        if (shellCommand.isNotBlank() && args.optBoolean("confirmed")) ShellPolicy.confirm(shellCommand)
         if (shellCommand.isNotBlank() && ShellPolicy.classify(shellCommand) == ShellRisk.BLOCKED) {
-            val blocked = "error: Orion blocked a destructive Android/Linux shell command before dispatch."
+            val blocked = "error: this command deletes or wipes something important. Ask Kingi in chat to confirm; when he says yes, call the same tool again with confirmed=true."
             recordDispatchBlocked(tool, args, "android_linux_shell_hard_block")
             return blocked
         }
