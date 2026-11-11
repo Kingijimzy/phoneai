@@ -142,6 +142,22 @@ class OrionWorkerJobStoreTest {
         assertFalse(store.cancel(queued.id))
     }
 
+    @Test fun repeatedParentCancellationKeepsRunningJobPendingUntilWorkerAcknowledges() {
+        val store = OrionWorkerJobStore(context)
+        val job = store.enqueue("parent-1", "Long analysis")!!
+        assertNotNull(store.claim(job.id) { true })
+
+        assertEquals(1, store.cancelParent("parent-1", "first_stop"))
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, store.all().single().status)
+        assertEquals(1, store.cancelParent("parent-1", "retry_stop"))
+        val pending = store.all().single()
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, pending.status)
+        assertEquals("retry_stop", pending.lastError)
+        assertTrue(store.hasPendingForParent("parent-1"))
+        assertTrue(store.confirmCancellation(job.id, "worker_acknowledged"))
+        assertFalse(store.hasPendingForParent("parent-1"))
+    }
+
     @Test fun directCancellationRequestsStopWithoutErasingRunningProviderOwnership() {
         val store = OrionWorkerJobStore(context)
         val job = store.enqueue("parent-1", "Long analysis")!!
