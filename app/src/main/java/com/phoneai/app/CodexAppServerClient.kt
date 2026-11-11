@@ -3,6 +3,8 @@ package com.phoneai.app
 import org.json.JSONObject
 import java.io.Closeable
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 
 /** Synchronous JSON-RPC client for the official Codex app-server. Call only from worker threads. */
 internal class CodexAppServerClient(
@@ -12,6 +14,7 @@ internal class CodexAppServerClient(
     private val onClose: () -> Unit = {}
 ) : Closeable {
     private val ids = AtomicInteger(1)
+    private val events = LinkedBlockingQueue<JSONObject>()
     @Volatile private var initialized = false
 
     fun initialize(): Boolean {
@@ -48,6 +51,39 @@ internal class CodexAppServerClient(
     fun startTurn(threadId: String, text: String, model: String? = null): JSONObject =
         request(CodexAppServerProtocol.startTurn(ids.getAndIncrement(), threadId, text, model))
 
+    fun runTurnAndAwait(
+        threadId: String,
+        text: String,
+        model: String? = null,
+        timeoutMs: Long = 300_000L,
+        onDelta: ((String) -> Unit)? = null
+    ): String {
+        startTurn(threadId, text, model)
+        val answer = StringBuilder()
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (true) {
+            val remaining = deadline - System.currentTimeMillis()
+            if (remaining <= 0L) error("Codex turn timed out before turn/completed")
+            val event = events.poll(remaining, TimeUnit.MILLISECONDS)
+                ?: error("Codex app-server stopped sending turn events")
+            when (event.optString("method")) {
+                "item/agentMessage/delta" -> {
+                    val delta = event.optJSONObject("params")?.optString("delta").orEmpty()
+                    if (delta.isNotEmpty()) {
+                        answer.append(delta)
+                        onDelta?.invoke(delta)
+                    }
+                }
+                "turn/completed" -> {
+                    val turn = event.optJSONObject("params")?.optJSONObject("turn")
+                    val status = turn?.optString("status").orEmpty()
+                    check(status == "completed") { "Codex turn ended with status: ${status.ifBlank { "unknown" }}" }
+                    return answer.toString()
+                }
+            }
+        }
+    }
+
     private fun request(request: CodexAppServerProtocol.Request): JSONObject {
         check(session.isAlive()) { "Codex app-server process is not running" }
         session.writeLine(request.toJson().toString())
@@ -59,6 +95,7 @@ internal class CodexAppServerClient(
                 ?: error("Codex app-server stopped or timed out during " + request.method)
             val message = runCatching { JSONObject(line) }.getOrNull() ?: continue
             if (CodexAppServerProtocol.isNotification(message)) {
+                events.offer(message)
                 onNotification(message)
                 continue
             }
