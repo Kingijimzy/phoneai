@@ -1099,19 +1099,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return
         }
         val soulContext = OrionSessionContextProvider.forChat(svc, command)
-        val safeSystem = (chatSystem(command) + "\n\n" + soulContext + "\n\n" + intentResolution.contextBlock)
-            .replace(
-                "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Never bypass capability, scope, validation, or the action-specific confirmation and approval policy.",
-                "TALK MODE: You are Orion and manage capabilities automatically. For phone actions, memory, files, code, shell, research and other tasks, call the exact registered native tool directly when it is available. Do not emit ACTION merely to route a task to another planner. Inspect each real tool result and continue until the requested outcome is verified. Never claim an action succeeded without evidence."
-            )
-            .replace(
-                "If the user wants code, a script, a scraper, a file, a tool or an image created, reply with exactly the single word ACTION so it is saved, run and shown rather than pasted.",
-                "For code, scripts, files, tools and images, use the registered native tools directly: write or generate the requested artifact, save it to the requested workspace/location, execute and test when requested, inspect the actual result, repair failures, and report verified paths and outputs. Do not replace execution with a description or ACTION."
-            )
-            .replace(
-                "If the answer depends on anything current (news, prices, scores, weather, who holds a role today, recent releases, nearby places, the user's location), reply with exactly the single word ACTION so the research tools run instead of guessing.",
-                "For current facts, use the relevant registered native live-data or research tool and base the answer on its returned evidence; do not use ACTION when the appropriate native tool is available."
-            )
+        // The shared system prompt already describes direct native-tool execution.
+        // Do not maintain a second set of ACTION-sentinel string rewrites here.
+        val safeSystem = chatSystem(command) + "\n\n" + soulContext + "\n\n" + intentResolution.contextBlock
         val responseQualityPolicy = """
 RESPONSE QUALITY AND FORMAT:
 - Answer the actual question first. For current/live facts, use successful live-tool results, not model memory. Include the relevant date and timezone, competition/event, source links, and any important context the user reasonably needs.
