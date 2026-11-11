@@ -171,6 +171,22 @@ class OrionWorkerJobStoreTest {
         assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW, store.all().single().status)
     }
 
+    @Test fun repeatedDirectCancellationCannotReleaseActiveProviderSlot() {
+        val store = OrionWorkerJobStore(context)
+        val active = store.enqueue("parent-1", "Provider call still running")!!
+        val waiting = store.enqueue("parent-2", "Wait for the active slot")!!
+        assertNotNull(store.claim(active.id) { true })
+
+        assertTrue(store.cancel(active.id, "first_request"))
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, store.all().first { it.id == active.id }.status)
+        assertTrue(store.cancel(active.id, "retry_request"))
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, store.all().first { it.id == active.id }.status)
+        assertNull(store.claim(waiting.id) { true })
+
+        assertTrue(store.confirmCancellation(active.id, "worker_stopped"))
+        assertNotNull(store.claim(waiting.id) { true })
+    }
+
     @Test fun acknowledgedRunningCancellationBecomesTerminalAndReleasesActiveSlot() {
         val store = OrionWorkerJobStore(context)
         val running = store.enqueue("parent-1", "Cancel this running analysis")!!
