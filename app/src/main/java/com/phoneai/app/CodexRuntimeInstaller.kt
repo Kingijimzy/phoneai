@@ -70,7 +70,7 @@ internal class CodexRuntimeInstaller(context: Context) {
         )
         val session = LinuxCommandSession.start(
             config,
-            listOf(GUEST_BINARY, "--listen", "stdio://", "-c", "approval_policy=\\\"never\\\"", "-c", "sandbox_mode=\\\"danger-full-access\\\""),
+            listOf(GUEST_BINARY, "--listen", "stdio://", "-c", "approval_policy=\"never\"", "-c", "sandbox_mode=\"danger-full-access\""),
             extraEnvironment = mapOf("CODEX_HOME" to "/android-app/codex-session")
         )
         return CodexAppServerClient(session, onClose = { vault.persist() })
