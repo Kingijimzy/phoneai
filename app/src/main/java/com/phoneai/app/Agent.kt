@@ -1660,14 +1660,28 @@ Rules:
         if (ownerTurn) runCatching { svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit().putLong("owner_last_active", System.currentTimeMillis()).apply() }
         // Remember what Kingi tells Orion about himself automatically, without a tool call or a prompt.
         if (ownerTurn) runCatching { OrionFactExtractor.extract(inputCommand, Prefs.userName(svc)).forEach { (s, p, o) -> OrionFactStore.add(svc, s, p, o) } }
-        // The public command/voice/autonomy entry now shares the same conversational
-        // brain and native-tool dispatcher as typed chat. Keep the legacy skill runner only
-        // for its explicit skill contract until skill execution is represented natively.
-        if (Regex("(?is)^\\s*run skill\\s+[a-z0-9._-]{2,48}\\s*:").containsMatchIn(inputCommand.trim())) {
-            runInternal(inputCommand, reuseCommandBudget = false)
-            if (ownerTurn) reflectOnExchange(inputCommand)
-        } else {
+        // Explicit skill invocation uses the same native-tool loop. The skill's allowed-tool,
+        // invocation-scope and call-count checks remain enforced by preflightTool on every call.
+        val skillMatch = Regex("(?is)^\\s*run skill\\s+([a-z0-9._-]{2,48})\\s*:\\s*(.+)$")
+            .matchEntire(inputCommand.trim())
+        if (skillMatch == null) {
             runConversation(inputCommand)
+            return
+        }
+        val skillRun = OrionSkillsCapabilityExecutor.beginRun(svc, skillMatch.groupValues[1])
+        if (skillRun == null) {
+            ui.say("That skill is not available or enabled. Open the Skills section to review your registered skills.")
+            return
+        }
+        activeSkillId = skillRun.skillId
+        activeSkillStartedAt = skillRun.startedAt
+        activeSkillCalls = skillRun.callsUsed
+        try {
+            runConversation(inputCommand)
+        } finally {
+            activeSkillId = null
+            activeSkillStartedAt = 0L
+            activeSkillCalls = 0
         }
     }
 
