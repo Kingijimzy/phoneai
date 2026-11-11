@@ -214,7 +214,12 @@ object ShellRunner {
                             sharedStoragePath = File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath
                         )
                     }
-                } else runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), safeEmitter, workspaceHostPath = workspace(c).absolutePath)
+                } else runtime.execute(
+                    manifest, command, ShellExecutionRouting.commandTimeoutMs(command), safeEmitter,
+                    workspaceHostPath = workspace(c).absolutePath,
+                    androidAppDataPath = c.applicationInfo.dataDir,
+                    sharedStoragePath = File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath
+                )
             }
             ShellExecutionRouting.Backend.INVALID -> "error: unknown shell backend. Use where=builtin, where=linux, or where=termux."
         }
