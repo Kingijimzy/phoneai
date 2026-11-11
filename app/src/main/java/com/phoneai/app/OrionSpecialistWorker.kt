@@ -185,9 +185,14 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
                             "cancelled: parent stopped; late output discarded", cancelled = true)
                         return Result.success()
                     }
-                    store.needsReview(jobId, if (providerThread.isAlive)
-                        "provider_thread_still_active_after_cancellation_timeout"
-                    else "workmanager_stopped_during_provider_request")
+                    if (providerThread.isAlive) {
+                        // Keep the provider slot owned while the daemon thread may still be
+                        // completing a request. A later process-restart recovery moves this
+                        // unresolved state to NEEDS_REVIEW; do not publish a false stop receipt.
+                        store.cancel(jobId, "provider_thread_still_active_after_cancellation_timeout")
+                        return Result.failure()
+                    }
+                    store.needsReview(jobId, "workmanager_stopped_during_provider_request")
                     OrionAgentDelegation.finish(applicationContext, manifest,
                         "error: Android stopped the worker during a provider request; inspect before retrying", failed = true)
                     return Result.failure()
@@ -202,9 +207,13 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
                 OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: parent stopped", cancelled = true)
                 return Result.success()
             }
-            store.needsReview(jobId, if (providerThread.isAlive)
-                "provider_thread_still_active_after_interruption_timeout"
-            else "worker_interrupted_during_provider_request")
+            if (providerThread.isAlive) {
+                // Interruption does not prove the provider call stopped. Retain the active slot
+                // until process-restart recovery can safely move the uncertain job to review.
+                store.cancel(jobId, "provider_thread_still_active_after_interruption_timeout")
+                return Result.failure()
+            }
+            store.needsReview(jobId, "worker_interrupted_during_provider_request")
             OrionAgentDelegation.finish(applicationContext, manifest,
                 "error: worker interruption left provider outcome uncertain", failed = true)
             return Result.failure()
