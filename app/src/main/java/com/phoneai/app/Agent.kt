@@ -1049,6 +1049,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // ordinary code, file, shell, research and phone requests go straight to real tool calls.
         val directActionRoute = OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
             routeFor(command).needsTools
+        val activeModel = if (directActionRoute) commandNim else talkNim
         val needsCentralPlanning = OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command)
         if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
             (directActionRoute && needsCentralPlanning)) {
@@ -1062,7 +1063,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             reflectOnExchange(command)
             return
         }
-        talkNim.beginCommand()
+        activeModel.beginCommand()
         stopped = false
         setRequestScope(command)
         if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
@@ -1076,7 +1077,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             ))
         }
         researchCancelled.set(false)
-        talkNim.resume()
+        activeModel.resume()
 
         // A short explicit research continuation inherits the last substantive user request.
         // Skip previous follow-up phrases so chains like "research it" → "verify it" keep the topic.
@@ -1148,7 +1149,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             chatHist.put(msg("assistant", note))
         }
         val answer = try {
-            var turn = talkNim.chatTurn(
+            var turn = activeModel.chatTurn(
                 messages, false, 32768, 0.7, tools = nativeTools
             )
             while (turn.toolCalls.isNotEmpty() && !stopped && toolRounds < OrionNativeToolDispatcher.MAX_ROUNDS_PER_COMMAND) {
@@ -1181,7 +1182,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                         .put("content", outcome.content))
                 }
                 if (!stopped) {
-                    turn = talkNim.chatTurn(
+                    turn = activeModel.chatTurn(
                         messages, false, 32768, 0.7, tools = nativeTools
                     )
                 }
