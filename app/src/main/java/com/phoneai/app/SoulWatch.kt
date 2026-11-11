@@ -33,6 +33,15 @@ internal object SoulEngineWatcher {
         val c = context.applicationContext
         // Genuine lifecycle state: the watcher tick means the Soul is monitoring.
         OrionSoulLifecycle.watcherTick(c)
+        // Persist the capability baseline so later watcher ticks can identify additions/removals.
+        // A read-only state() call alone cannot discover deltas unless scan() advances this baseline.
+        val capabilityAwareness = runCatching { OrionCapabilityAwareness.scan(c) }
+            .getOrElse { OrionCapabilityAwareness.State(emptyList(), emptyList(), emptyList(), emptyList()) }
+        val awarenessSummary = buildList {
+            if (capabilityAwareness.added.isNotEmpty()) add("new capabilities: ${capabilityAwareness.added.take(8).joinToString()}")
+            if (capabilityAwareness.removed.isNotEmpty()) add("missing capabilities: ${capabilityAwareness.removed.take(8).joinToString()}")
+            if (capabilityAwareness.failing.isNotEmpty()) add("degraded tools: ${capabilityAwareness.failing.take(5).joinToString()}")
+        }.joinToString("; ")
         val service = PhoneAiService.instance
         // Force a fresh durable schedule read before reporting scheduler health; a stale
         // process-global storage-error flag is not evidence that disk is currently healthy.
@@ -145,6 +154,6 @@ internal object SoulEngineWatcher {
         runCatching { SoulEngineState.recordLesson(c, "watcher_tick", "Watcher action: $action; status=$status.", "observed") }
         runCatching { SoulEngineState.recordWatcherStatus(c, status, action) }
         AgentPolicy.log(c, "soul_watcher", action, null, "status=$status; limitations=${limitations.joinToString(",").ifBlank { "none" }}")
-        return TickResult(status, action, limitations, next + " " + p3.summary + " " + subagents.summary)
+        return TickResult(status, action, limitations, next + " " + awarenessSummary + " " + p3.summary + " " + subagents.summary)
     }
 }
