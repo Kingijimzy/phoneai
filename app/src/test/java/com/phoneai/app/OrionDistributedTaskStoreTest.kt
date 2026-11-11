@@ -7,6 +7,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -57,6 +60,33 @@ class OrionDistributedTaskStoreTest {
         assertTrue(store.reconcileCancellation(task.taskId, needsReview = false, reason = "lease_expired_no_owner_action"))
         assertEquals("cancelled", store.get(task.taskId)?.status)
         assertEquals(0, store.cancel(task.taskId, "too_late"))
+    }
+
+    @Test fun separateStoreInstancesCannotClaimTheSameTaskConcurrently() {
+        val seed = OrionDistributedTaskStore(context())
+        val task = OrionTaskEnvelope.create("single owner claim")
+        assertTrue(seed.enqueue(task))
+
+        val workers = 12
+        val pool = Executors.newFixedThreadPool(workers)
+        val gate = CountDownLatch(1)
+        val done = CountDownLatch(workers)
+        val claims = java.util.concurrent.atomic.AtomicInteger(0)
+        repeat(workers) {
+            pool.execute {
+                try {
+                    gate.await(3, TimeUnit.SECONDS)
+                    if (OrionDistributedTaskStore(context()).claim(task.taskId)) claims.incrementAndGet()
+                } finally {
+                    done.countDown()
+                }
+            }
+        }
+        gate.countDown()
+        assertTrue(done.await(5, TimeUnit.SECONDS))
+        pool.shutdownNow()
+        assertEquals(1, claims.get())
+        assertEquals("running", OrionDistributedTaskStore(context()).get(task.taskId)?.status)
     }
 
     @Test fun completionIsIdempotentAndTerminalStatesDoNotReopen() {
