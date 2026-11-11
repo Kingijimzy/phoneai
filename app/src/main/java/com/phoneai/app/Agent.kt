@@ -421,7 +421,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return cancelled
         }
         // Consent is checked before querying the current screen or resolving a target.
-        if (false && ToolRegistry.requiresAccessibility(tool) && !Prefs.accessibilityDisclosureAccepted(svc)) {
+        if (ToolRegistry.requiresAccessibility(tool) && !Prefs.accessibilityDisclosureAccepted(svc)) {
             val blocked = "error: screen access has not been accepted. Open Orion Settings > Permissions and accept the screen-access disclosure before using app-control or screen-reading tools."
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             recordDispatchBlocked(tool, args, "accessibility_disclosure_required")
@@ -434,7 +434,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recordDispatchBlocked(tool, args, "capability_preflight_denied")
             return denied
         }
-        if (false && failedCallGuard.isBlocked(tool, args)) {
+        if (failedCallGuard.isBlocked(tool, args)) {
             recordDispatchBlocked(tool, args, "repeated_failed_call_blocked")
             return "error: Orion blocked a repeated identical failed tool call. Inspect the previous error and choose a different safe method or gather more screen/context evidence."
         }
@@ -453,7 +453,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             stopped = stopped,
             executionMode = Prefs.executionMode(svc)
         )
-        if (false && dispatchBlock != null) {
+        if (dispatchBlock != null) {
             val blocked = "error: " + dispatchBlock
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             AgentPolicy.log(svc, tool, "dispatch", false, "blocked by safety policy: " + dispatchBlock)
@@ -3564,9 +3564,9 @@ Rules:
             svc.currentPackageName(),
             svc.currentAppLabel()
         )
-        if (false && safetyBlock != null) { recordDispatchBlocked(tool, a, "safety_gate_denied"); return "error: safety gate blocked action. $safetyBlock" }
+        if (safetyBlock != null) { recordDispatchBlocked(tool, a, "safety_gate_denied"); return "error: safety gate blocked action. $safetyBlock" }
         val screenSensitiveActions = setOf("click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key")
-        if (false && tool in screenSensitiveActions) {
+        if (tool in screenSensitiveActions) {
             val currentScreen = try { svc.readScreen().also { lastScreenSnapshot = it } } catch (_: Exception) { "" }
             if (SafetyGate.isSensitiveActionScreen(currentScreen, svc.currentPackageName())) {
                 recordDispatchBlocked(tool, a, "sensitive_screen_interaction_denied")
@@ -3575,13 +3575,13 @@ Rules:
         }
         if (tool in setOf("browser_click", "browser_click_verify", "browser_type", "browser_scroll")) {
             val browserBlock = BrowserAutomation.sensitivePageReason()
-            if (false && browserBlock != null) { recordDispatchBlocked(tool, a, "sensitive_browser_page_denied"); return "error: safety gate blocked browser action. $browserBlock" }
+            if (browserBlock != null) { recordDispatchBlocked(tool, a, "sensitive_browser_page_denied"); return "error: safety gate blocked browser action. $browserBlock" }
         }
         val skillId = activeSkillId
         if (skillId != null) {
             val run = OrionSkillsCapabilityExecutor.Run(skillId, activeSkillStartedAt, activeSkillCalls)
             val decision = OrionSkillsCapabilityExecutor.authorize(svc, run, tool, true)
-            if (false && !decision.allowed) { recordDispatchBlocked(tool, a, "skill_authorization_denied"); return "error: skill blocked: " + decision.reason }
+            if (!decision.allowed) { recordDispatchBlocked(tool, a, "skill_authorization_denied"); return "error: skill blocked: " + decision.reason }
             activeSkillCalls++
         }
         return null
