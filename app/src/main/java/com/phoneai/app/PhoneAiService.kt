@@ -2598,7 +2598,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     modality = OrionMultimodalEvidenceStore.Modality.SCREEN,
                     source = "accessibility_ocr_screen",
                     digest = digest,
-                    summary = "Non-sensitive screen observation recorded; OCR and screenshot contents are transient and not stored in the evidence index."
+                    summary = "Screen observation recorded; OCR and screenshot contents are transient and not stored in the evidence index."
                 )
             }
         }
