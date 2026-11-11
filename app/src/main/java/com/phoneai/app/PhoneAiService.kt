@@ -208,21 +208,26 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         agent = Agent(this, this)
         val runtime = OrionRuntime(this)
         orionRuntime = runtime
-        runtime.start()
-        val scheduler = OrionDecisionScheduler(runtime)
-        decisionScheduler = scheduler
-        scheduler.onServiceReady()
-        scheduleRuntimeDrain()
-        OrionProactiveWork.ensureScheduled(this)
-        main.removeCallbacks(autonomyTick)
-        main.postDelayed(autonomyTick, 5 * 60_000L)
-        requestContinuousWatcherObservation("service_connected")
-        showBubble()
-        startWake()
+        if (OrionMasterControl.isEnabled(this)) {
+            runtime.start()
+            val scheduler = OrionDecisionScheduler(runtime)
+            decisionScheduler = scheduler
+            scheduler.onServiceReady()
+            scheduleRuntimeDrain()
+            OrionProactiveWork.ensureScheduled(this)
+            main.removeCallbacks(autonomyTick)
+            main.postDelayed(autonomyTick, 5 * 60_000L)
+            requestContinuousWatcherObservation("service_connected")
+            showBubble()
+            startWake()
+        } else {
+            runtime.stop()
+            main.removeCallbacks(autonomyTick)
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event == null || orionRuntime == null) return
+        if (event == null || orionRuntime == null || !OrionMasterControl.isEnabled(this)) return
         // Window transitions are meaningful state changes; ignore noisy text/content events.
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             // Android may interrupt and later resume an accessibility service without recreating it.
@@ -248,8 +253,41 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         return decision.accepted
     }
 
+    /** Stop every Orion-owned activity while leaving Android's user-managed accessibility grant intact. */
+    internal fun stopOrionForMasterShutdown() {
+        main.post {
+            main.removeCallbacks(autonomyTick)
+            wakeGen++
+            stopOfflineWakeDetector()
+            if (listening) runCatching { voice.stopListening() }
+            orionRuntime?.stop()
+            runCatching { bubble?.let { wm.removeView(it) } }
+            bubble = null
+        }
+    }
+
+    /** Resume the existing connected service only after an explicit owner Start action. */
+    internal fun startOrionAfterMasterStart() {
+        if (!OrionMasterControl.isEnabled(this)) return
+        main.post {
+            val runtime = orionRuntime ?: OrionRuntime(this).also { orionRuntime = it }
+            runtime.start()
+            val scheduler = OrionDecisionScheduler(runtime)
+            decisionScheduler = scheduler
+            scheduler.onServiceReady()
+            OrionProactiveWork.refresh(this)
+            main.removeCallbacks(autonomyTick)
+            main.postDelayed(autonomyTick, 5 * 60_000L)
+            scheduleRuntimeDrain()
+            requestContinuousWatcherObservation("master_started")
+            if (bubble == null) showBubble()
+            startWake()
+        }
+    }
+
     /** WorkManager may request a drain only while this already-enabled service is connected. */
     internal fun requestRuntimeDrain(): Boolean {
+        if (!OrionMasterControl.isEnabled(this)) return false
         val runtime = orionRuntime ?: return false
         if (runtime.snapshot().state in setOf(
                 OrionRuntime.State.STOPPED,
@@ -300,6 +338,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     private fun scheduleRuntimeDrain() {
+        if (!OrionMasterControl.isEnabled(this)) return
         if (runtimeDrainScheduled) {
             runtimeDrainRequested = true
             return
@@ -2122,7 +2161,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     // ---------------------------------------------------------------- wake word "Orion"
 
     private fun wakeAllowed(): Boolean =
-        Prefs.wake(this) && !running && !listening && !mainChatActive && panel == null && confirmView == null &&
+        OrionMasterControl.isEnabled(this) && Prefs.wake(this) && !running && !listening && !mainChatActive && panel == null && confirmView == null &&
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     private fun startWake() {
