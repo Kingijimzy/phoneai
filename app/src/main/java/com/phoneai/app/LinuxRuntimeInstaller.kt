@@ -129,7 +129,7 @@ internal class LinuxRuntimeInstaller(
         if (!isReady(manifest)) return "error: Alpine runtime is not installed or failed readiness checks. Install/repair the pinned Linux runtime first."
         // Never leak provider/model timeout values into the process supervisor unchecked.
         // The old rejection caused otherwise valid Python work to fail before launch when a
-        // caller supplied a sub-250 ms timeout or requested the FULL profile's 300 seconds.
+        // caller supplied a sub-250 ms timeout or requested the FULL profile's 30 minutes.
         val boundedTimeoutMs = LinuxRuntimePolicy.normalizeProcessTimeout(timeoutMs)
         if (command == "__orion_install__") return "error: internal command is not executable"
         val workspace = workspaceHostPath?.let { candidate ->
@@ -327,7 +327,7 @@ internal class LinuxRuntimeInstaller(
             start()
         }
 
-        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs.coerceIn(250L, 180_000L))
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(LinuxRuntimePolicy.normalizeProcessTimeout(timeoutMs))
         var cancelled = false
         val finished = try {
             var done = process.waitFor(200, TimeUnit.MILLISECONDS)
