@@ -4,7 +4,7 @@ import android.content.Context
 
 /** Installs and invokes Google's official Antigravity CLI in the Alpine ARM64 guest. */
 internal class AntigravityRuntimeInstaller(context: Context) {
-    private val runtime = LinuxRuntimeInstaller(context)
+    private val runtime = LinuxRuntimeInstaller(context.applicationContext)
 
     companion object {
         const val VERSION_MARKER = "/root/.local/bin/agy"
@@ -47,11 +47,12 @@ internal class AntigravityRuntimeInstaller(context: Context) {
         return LinuxCommandSession.start(config, listOf(VERSION_MARKER, "acp", "--login"))
     }
 
-    /** Starts a single headless request; requires a previously authenticated agy session. */
+    /** Starts one headless prompt; an existing Google-account CLI session is required. */
     fun openPromptSession(workspaceHostPath: String, prompt: String, model: String? = null): LinuxCommandSession {
         val invocation = AntigravityCliProtocol.headlessPrompt(prompt, model)
         val config = runtime.interactiveLaunchConfig(workspaceHostPath)
         return LinuxCommandSession.start(config, listOf(VERSION_MARKER, *invocation.argv.drop(1).toTypedArray()))
+    }
 
     fun listModels(workspaceHostPath: String): List<String> {
         val config = runtime.interactiveLaunchConfig(workspaceHostPath)
@@ -59,23 +60,32 @@ internal class AntigravityRuntimeInstaller(context: Context) {
         val session = LinuxCommandSession.start(config, listOf(VERSION_MARKER, *invocation.argv.drop(1).toTypedArray()))
         val output = StringBuilder()
         val deadline = System.currentTimeMillis() + 60_000L
-        while ((session.isAlive() || session.hasPendingOutput()) && System.currentTimeMillis() < deadline) {
-            (session.readLine(500L) ?: session.readStderrLine(20L))?.let { output.append(it).append('\n') }
+        try {
+            while ((session.isAlive() || session.hasPendingOutput()) && System.currentTimeMillis() < deadline) {
+                val line = session.readLine(500L) ?: session.readStderrLine(20L) ?: continue
+                output.append(line).append('\n')
+            }
+            check(!session.isAlive()) { "Antigravity model discovery timed out." }
+            check(session.exitCodeOrNull() == 0) { "Antigravity model discovery failed: ${session.stderrSnapshot().joinToString(" ").take(500)}" }
+            return AntigravityCliProtocol.parseModelList(output.toString())
+        } finally {
+            session.close()
         }
-        val exit = session.exitCodeOrNull()
-        session.close()
-        check(exit == 0) { "Antigravity model discovery failed (exit=${exit ?: "timeout"})." }
-        return AntigravityCliProtocol.parseModelList(output.toString())
     }
 
-    fun runPrompt(workspaceHostPath: String, prompt: String, model: String? = null, onSession: ((LinuxCommandSession) -> Unit)? = null): String {
+    fun runPrompt(
+        workspaceHostPath: String,
+        prompt: String,
+        model: String? = null,
+        onSession: ((LinuxCommandSession) -> Unit)? = null
+    ): String {
         val session = openPromptSession(workspaceHostPath, prompt, model)
         onSession?.invoke(session)
         val output = StringBuilder()
         val deadline = System.currentTimeMillis() + 300_000L
         try {
-        while ((session.isAlive() || session.hasPendingOutput()) && System.currentTimeMillis() < deadline) {
-            (session.readLine(500L) ?: session.readStderrLine(20L))?.let { output.append(it).append('\n') }
+            while ((session.isAlive() || session.hasPendingOutput()) && System.currentTimeMillis() < deadline) {
+                val line = session.readLine(500L) ?: session.readStderrLine(20L) ?: continue
                 val event = AntigravityCliProtocol.parseStreamEvent(line) ?: continue
                 if (AntigravityCliProtocol.isAuthenticationRequired(event)) {
                     error("Antigravity requires Google-account sign-in.")
@@ -84,11 +94,14 @@ internal class AntigravityRuntimeInstaller(context: Context) {
                 if (event.text.isNotBlank()) output.append(event.text)
             }
             check(!session.isAlive()) { "Antigravity model request timed out." }
-            check(session.exitCodeOrNull() == 0) { "Antigravity model request failed: ${session.stderrSnapshot().joinToString(" ").take(500)}" }
-            return output.toString().trim().also { check(it.isNotBlank()) { "Antigravity returned no model response." } }
+            check(session.exitCodeOrNull() == 0) {
+                "Antigravity model request failed: ${session.stderrSnapshot().joinToString(" ").take(500)}"
+            }
+            return output.toString().trim().also {
+                check(it.isNotBlank()) { "Antigravity returned no model response." }
+            }
         } finally {
             session.close()
         }
-    }
     }
 }
