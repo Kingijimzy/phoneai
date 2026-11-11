@@ -4,7 +4,7 @@ import android.content.Context
 import java.net.InetAddress
 import java.net.URI
 
-/** Public HTTPS reads use global NETWORK consent; LAN, WebSocket and write access retain exact-host grants. */
+/** Public HTTPS GET is allowed by task intent; LAN, WebSocket and write access retain explicit consent and exact-host grants. */
 internal object OrionPythonNetworkPolicy {
     private const val PREFS = "orion_python_network_hosts_v1"
     data class Endpoint(
