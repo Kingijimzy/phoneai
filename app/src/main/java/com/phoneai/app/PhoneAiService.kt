@@ -246,6 +246,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     /** Called by optional system event sources; never starts the accessibility service. */
     internal fun onExternalPresenceEvent(eventKey: String, safeDescription: String): Boolean {
+        if (!OrionMasterControl.isEnabled(this)) return false
         val runtime = orionRuntime ?: return false
         if (!AgentPolicy.enabled(this, "orion_core")) return false
         val decision = decisionScheduler?.onExternalPresenceEvent(eventKey, safeDescription) ?: return false
@@ -305,6 +306,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
      * a recovery/standing-order fallback, not the primary observer.
      */
     private fun requestContinuousWatcherObservation(reason: String) {
+        if (!OrionMasterControl.isEnabled(this)) return
         val now = SystemClock.elapsedRealtime()
         synchronized(this) {
             val elapsed = if (lastContinuousWatcherAt == 0L) Long.MAX_VALUE else now - lastContinuousWatcherAt
@@ -318,7 +320,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             lastContinuousWatcherAt = now
         }
         worker.execute {
-            if (instance !== this ||
+            if (!OrionMasterControl.isEnabled(this) || instance !== this ||
                 !AgentPolicy.enabled(this, "orion_core") ||
                 !AgentPolicy.enabled(this, "proactive")) return@execute
             val gate = runCatching { OrionProactiveGate.decide(OrionProactiveGate.gather(this)) }
@@ -326,6 +328,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             AgentPolicy.log(this, "soul_watcher", "continuous_gate", null,
                 "event=$reason; open=${gate.open}; score=${"%.2f".format(gate.score)}; reason=${gate.reason}")
             runCatching {
+                if (!OrionMasterControl.isEnabled(this)) return@runCatching
                 val result = SoulEngineWatcher.run(this, allowUnpromptedInitiative = gate.open)
                 if (gate.open && result.action == "chronos_review_suggestion") OrionProactiveGate.recordAction(this)
             }.onFailure {
@@ -348,6 +351,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             try {
                 // Bounded event-driven drain; no polling loop and no provider/network calls.
                 repeat(4) {
+                    if (!OrionMasterControl.isEnabled(this)) return@repeat
                     val runtime = orionRuntime ?: return@repeat
                     val item = runtime.claimNext() ?: return@repeat
                     val brainTracked = item.type in setOf(
