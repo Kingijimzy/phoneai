@@ -2729,7 +2729,7 @@ Rules:
             }
             ui.phase("thinking")
             val raw = try {
-                commandNim.chat(history, false, 6000)
+                commandNim.chat(history, false, 32768)
             } catch (e: Exception) {
                 if (stopped) break
                 OrionTasksCapabilityExecutor.pauseRun(svc)
