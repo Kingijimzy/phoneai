@@ -2589,7 +2589,10 @@ Rules:
         }
         while (ranSteps.length() > 0) ranSteps.remove(0)
         // Plain chat and questions: ONE small AI call (saves your free limits and is much faster).
-        if (!resumeRequest && !browserActionTask && activeSkillId == null && !requiresToolPolicy(command)) {
+        // The router already judged whether this needs tools; a request that does must never be answered
+        // by a chat reply that only promises to do it ("On it, I'll check...") and then ends the turn.
+        if (!resumeRequest && !browserActionTask && activeSkillId == null && !requiresToolPolicy(command) &&
+            !routeFor(command).needsTools) {
             ui.phase("thinking")
             val r = try {
                 chatReply(command)
@@ -2598,7 +2601,8 @@ Rules:
                 ui.say("I could not reach the AI. ${e.message}")
                 return
             }
-            if (r != null) {
+            // A chat answer that only announces a next step is not an answer: hand it to the tool loop.
+            if (r != null && !ActionPromise.announcesUnfinishedStep(r, 0)) {
                 history.put(msg("assistant", JSONObject().put("say", r).put("tool", "done").toString()))
                 ui.say(r)
                 return
