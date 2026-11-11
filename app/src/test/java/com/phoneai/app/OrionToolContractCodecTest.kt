@@ -44,6 +44,19 @@ class OrionToolContractCodecTest {
             .getJSONObject("properties").getJSONObject("input").getString("type"))
     }
 
+    @Test fun infersArrayAndDefaultedLiteralContracts() {
+        val ask = ToolRegistry.find("ask_user") ?: error("ask_user must be registered")
+        val options = OrionToolContractCodec.parameters(ask)
+            .getJSONObject("properties").getJSONObject("options")
+        assertEquals("array", options.getString("type"))
+        assertEquals("string", options.getJSONObject("items").getString("type"))
+        val extension = ToolRegistry.find("extension_create") ?: error("extension_create must be registered")
+        val schema = OrionToolContractCodec.parameters(extension)
+        assertFalse(schema.getJSONArray("required").toString().contains("runtime"))
+        assertEquals("python", schema.getJSONObject("properties")
+            .getJSONObject("runtime").getJSONArray("enum").getString(0))
+    }
+
     @Test fun derivesNestedArrayAndObjectArgumentSchemas() {
         val tool = ToolDefinition(
             "batch",
