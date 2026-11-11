@@ -10,7 +10,7 @@ import org.json.JSONObject
  * ToolRegistry lookup, argument validation, objective checks, ToolGate and the shared executor.
  */
 internal object OrionNativeToolCallCodec {
-    data class Call(val id: String, val name: String, val arguments: JSONObject)
+    data class Call(val id: String, val name: String, val arguments: JSONObject, val available: Boolean)
     data class Turn(val text: String, val calls: List<Call>)
 
     private const val MAX_CALLS = 8
@@ -22,7 +22,7 @@ internal object OrionNativeToolCallCodec {
         val calls = ArrayList<Call>()
 
         fun add(id: String, name: String, rawArguments: Any?) {
-            if (calls.size >= MAX_CALLS || name.isBlank() || !isKnownTool(name)) return
+            if (calls.size >= MAX_CALLS || name.isBlank()) return
             val args = when (rawArguments) {
                 is JSONObject -> rawArguments
                 is String -> {
@@ -32,7 +32,7 @@ internal object OrionNativeToolCallCodec {
                 else -> null
             } ?: return
             if (args.length() > 64) return
-            calls.add(Call(id.take(160), name, JSONObject(args.toString())))
+            calls.add(Call(id.take(160), name, JSONObject(args.toString()), isKnownTool(name)))
         }
 
         when {
