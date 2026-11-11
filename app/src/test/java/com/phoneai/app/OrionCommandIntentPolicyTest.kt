@@ -82,10 +82,10 @@ class OrionCommandIntentPolicyTest {
         ))
     }
 
-    @Test fun compoundResearchMemoryAndReminderRequestUsesStructuredPlanning() {
+    @Test fun compoundRequestIsNotForcedIntoThePlannerByWordCount() {
+        // Which route a request needs is the model's judgment, not a count of verbs in the sentence.
         val request = "Create a task to research the latest Android AI developments, summarize the findings, save the important lessons to memory and remind me tomorrow."
-        assertTrue(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
-        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+        assertFalse(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
     }
 
     @Test fun simpleResearchRoutesDirectlyWithoutBecomingAMultiStepTask() {

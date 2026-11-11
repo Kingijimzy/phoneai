@@ -46,25 +46,12 @@ internal object OrionCommandIntentPolicy {
     private val explicitMemoryWrite = Regex(
         "(?i)\\b(?:remember|record|save|store)\\b.{0,100}\\b(?:this\\s+)?(?:decision|preference|fact|rule|lesson)\\b|\\b(?:decision|preference|fact|rule|lesson)\\b.{0,80}\\b(?:remember|record|save|store)\\b"
     )
-    // Detect requests spanning independent executor families. Keep these on the task planner.
-    private val compoundActionFamilies = listOf(
-        Regex("(?i)\\b(research|investigate|search|browse|look up|fetch|inspect|review)\\b"),
-        Regex("(?i)\\b(remember|recall|forget|save|store|record|update)\\b.{0,70}\\b(memory|lesson|fact|decision|preference|knowledge|note)\\b"),
-        Regex("(?i)\\b(remind|reminder|schedule|alarm|timer)\\b"),
-        Regex("(?i)\\b(write|create|generate|build)\\b.{0,90}\\b(code|script|calculator|document|report|summary|file|pdf|apk)\\b"),
-        Regex("(?i)\\b(save|download|extract|write)\\b.{0,70}\\b(file|filename|document|report|pdf|apk|script)\\b"),
-        Regex("(?i)\\b(run|execute|test|verify|compile)\\b"),
-        Regex("(?i)\\b(send|message|text|email|telegram|sms|call|reply|publish|post)\\b"),
-        Regex("(?i)\\b(open|launch|tap|click|press|install|uninstall|change|turn on|turn off)\\b")
-    )
-
     /** Explicit multi-objective plans and memory writes must enter the guarded executor directly. */
     fun requiresStructuredTaskPlanning(command: String): Boolean =
         !isCalculatorExecutionRequest(command) && (
             explicitObjectiveGraph.containsMatchIn(command) ||
                 createMultiStepTask.containsMatchIn(command) ||
-                (multiStepTask.containsMatchIn(command) && resumableProgress.containsMatchIn(command)) ||
-                compoundActionFamilies.count { it.containsMatchIn(command) } >= 2
+                (multiStepTask.containsMatchIn(command) && resumableProgress.containsMatchIn(command))
         )
 
     fun requiresDirectActionRouting(command: String): Boolean =
