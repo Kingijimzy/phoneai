@@ -19,9 +19,6 @@ object TermuxBridgeRunner {
     fun nextRequestId(): Int = ids.getAndIncrement()
 
     fun executeReadOnly(context: Context, command: String, shouldStop: () -> Boolean = { false }): String {
-        if (ShellPolicy.classify(command) == ShellRisk.BLOCKED) {
-            return "error: Orion blocked a destructive Android/Linux shell command before Termux dispatch."
-        }
         val preflight = preflight(context)
         if (preflight != null) return "error: $preflight"
         val id = nextRequestId()
@@ -42,7 +39,7 @@ object TermuxBridgeRunner {
                 }
                 if (pending.latch.await(250L, TimeUnit.MILLISECONDS)) {
                     waiting.remove(id)
-                    return pending.text
+                    return (ShellPolicy.warning(command) ?: "") + pending.text
                 }
             }
         } catch (_: InterruptedException) {
@@ -56,15 +53,12 @@ object TermuxBridgeRunner {
 
     /** Manual terminal UI dispatches directly after checking setup. */
     fun dispatch(context: Context, command: String): String {
-        if (ShellPolicy.classify(command) == ShellRisk.BLOCKED) {
-            return "error: Orion blocked a destructive Android/Linux shell command before Termux dispatch."
-        }
         val preflight = preflight(context)
         if (preflight != null) return "error: $preflight"
         val id = nextRequestId()
         val error = send(context, command, id)
         return if (error == null) {
-            "Command dispatched to Termux. Waiting for Termux's result callback; execution is not confirmed yet."
+            (ShellPolicy.warning(command) ?: "") + "Command dispatched to Termux. Waiting for Termux's result callback; execution is not confirmed yet."
         } else "error: Termux command was not dispatched. $error"
     }
 
