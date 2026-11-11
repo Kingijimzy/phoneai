@@ -174,7 +174,7 @@ class AccountConnectionsActivity : Activity() {
                 val session = installer.openLoginSession(filesDir.absolutePath)
                 antigravity = session
                 runOnUiThread { if (!isFinishing) antigravityOutput.text = "Antigravity login process started. Waiting for its official Google OAuth instructions…" }
-                while (session.isAlive() && !isFinishing) {
+                while ((session.isAlive() || session.hasPendingOutput()) && !isFinishing) {
                     val line = session.readLine(1_000L) ?: session.readStderrLine(50L) ?: continue
                     runOnUiThread {
                         if (!isFinishing) {
