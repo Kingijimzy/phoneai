@@ -5,6 +5,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OrionRecoveryPlannerTest {
+    @Test fun githubAllowlistFailureUsesDifferentReadPathInsteadOfAskingForPermission() {
+        val error = "error: that GitHub path is not allowed (read-only: /user, /user/repos)"
+        val guidance = OrionRecoveryPlanner.forFailure("github_account_read", error)
+        assertEquals(OrionRecoveryPlanner.Strategy.CHOOSE_DIFFERENT_METHOD, guidance.strategy)
+        val alternatives = OrionRecoveryPlanner.selectAlternatives(
+            "github_account_read", error,
+            setOf("github_account_read", "github_public", "fetch_url", "live_web_search")
+        )
+        assertEquals(listOf("github_public", "fetch_url", "live_web_search"), alternatives)
+    }
+
     @Test fun unverifiedActionInspectsStateBeforeAnyRetry() {
         val guidance = OrionRecoveryPlanner.forFailure("click", "error: verification failed: no visible screen change")
         assertEquals(OrionRecoveryPlanner.Strategy.INSPECT_STATE, guidance.strategy)
