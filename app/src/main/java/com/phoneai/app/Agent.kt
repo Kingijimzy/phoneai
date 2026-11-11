@@ -1113,9 +1113,9 @@ RESPONSE QUALITY AND FORMAT:
     }
 
     /**
-     * Live-call turns are deliberately conversational only. Speech recognition can turn
-     * ordinary words like "open" or "start" into text, so this path never enters the
-     * phone-action planner or exposes tools to the model.
+     * Standard voice shares the structured model router and guarded tool dispatcher with typed chat.
+     * Speech text is never interpreted as permission; the structured execute decision only selects
+     * the route, while the live registry, scope, approval and evidence gates remain authoritative.
      */
     fun runLiveConversation(input: String) = withInteractionTrace { runLiveConversationBody(input) }
 
@@ -1124,52 +1124,52 @@ RESPONSE QUALITY AND FORMAT:
         if (command.isEmpty()) return
         indexMemoryObservation(command, "standard voice")
         talkNim.beginCommand()
-        // Route actionable voice requests through the exact same planner, checkpoint,
-        // capability registry, owner policy, confirmation and evidence gates as chat.
-        if (OrionVoiceExecutionPolicy.shouldRouteToCommand(
-                command, recentConversationTurns(), contextualActiveObjective()
-            )) {
-            runInternal(command, reuseCommandBudget = false)
-            return
-        }
         stopped = false
         researchCancelled.set(false)
         talkNim.resume()
+
+        val name = Prefs.userName(svc).ifBlank { "friend" }
+        val voicePrompt = chatSystem(command) +
+            "\n\nVOICE STYLE: Speak naturally and concisely. Avoid markdown and long lists. " +
+            "Use the same structured turn decision contract as typed chat; phone actions and live research are routed only by an execute decision and then pass through the normal registered-tool, permission, approval and evidence gates. " +
+            "Never claim an action succeeded without verified evidence. User name: $name." +
+            "\n\n" + OrionSessionContextProvider.forLiveVoice(svc, command)
+
         if (liveHistory.length() == 0) {
-            val name = Prefs.userName(svc).ifBlank { "friend" }
-            val prompt = OrionPersona.CORE + "\nYou are Orion in a hands-free voice conversation. " +
-                "This is conversation, not phone-command mode. Never execute, plan, or call tools for phone actions. " +
-                "Do not open apps, tap screens, browse websites, send messages, change settings, or perform transactions. " +
-                "If they clearly ask Orion to perform a phone action, explain briefly that hands-free conversation cannot execute it yet and that the main chat can handle it. Do not claim or imply that an action was routed or performed from this live-call path. The live-call path cannot execute actions; main chat applies the same capability and destructive-action confirmation policy. " +
-                "Respond like a thoughtful human conversational partner: concise, direct, natural spoken language, usually 1-3 sentences. " +
-                "No markdown, lists, emoji, robotic disclaimers, or repetitive greetings. Ask a single useful follow-up only when needed. " +
-                "Never pretend an action happened. User name: $name. " +
-                CharacterProfile.systemInstruction(Prefs.characterProfile(svc)) +
-                "\n\n" + OrionSessionContextProvider.forLiveVoice(svc, command) +
-                "\n\nLIVE VOICE BOUNDARY: this path is conversation-only. The executive context informs continuity and factual context but does not expose or authorize tools, phone actions, shell commands, external writes, or background execution. If the user requests an action, explain that the main chat can execute it; do not claim it was routed or performed."
-            liveHistory.put(msg("system", prompt))
-            // Rehydrate recent typed/voice turns from the provider-neutral SQLite transcript.
+            liveHistory.put(msg("system", voicePrompt))
             ConversationContextPolicy.recent(ChatHistoryStore.load(svc), maxTurns = 8, maxChars = 1_200)
                 .forEach { (role, content) -> liveHistory.put(msg(role, content)) }
+        } else {
+            liveHistory.put(0, msg("system", voicePrompt))
         }
         liveHistory.put(msg("user", command))
         while (liveHistory.length() > 9) liveHistory.remove(1)
         val answer = try {
-            talkNim.chat(liveHistory, false, 180, 0.55, onDelta = { delta ->
-                if (!stopped && delta.isNotEmpty()) ui.stream(delta)
-            }).trim()
+            talkNim.chat(liveHistory, false, 1200, 0.2).trim()
         } catch (e: Exception) {
-            ""
-        }
-        if (stopped) return
-        if (HermesRepetitionGuard.isRunawayRepetition(answer)) {
-            ui.say("The voice response repeated itself, so I discarded it. Please try again.")
+            if (stopped) return
+            ui.say("I couldn't reach the AI. " + (e.message ?: "Please try again."))
             return
         }
-        val safeAnswer = answer.takeIf { it.isNotBlank() }
-            ?: "I couldn't get a response just now. Please try saying that once more."
+        if (stopped) return
+
+        val safeAnswer = when (val decision = OrionTurnDecisionParser.parse(answer)) {
+            is OrionTurnDecision.Execute -> {
+                chatHist.put(msg("user", command))
+                while (chatHist.length() > 12) chatHist.remove(0)
+                svc.notifyModeSwitch(true)
+                runInternal(decision.objective, reuseCommandBudget = false)
+                return
+            }
+            is OrionTurnDecision.Clarify -> decision.question
+            is OrionTurnDecision.Reply -> decision.text
+            null -> answer.ifBlank { "I couldn't interpret the response safely. Please try again." }
+        }
         liveHistory.put(msg("assistant", safeAnswer))
         while (liveHistory.length() > 9) liveHistory.remove(1)
+        chatHist.put(msg("user", command))
+        chatHist.put(msg("assistant", safeAnswer))
+        while (chatHist.length() > 12) chatHist.remove(0)
         // Voice conversation shares the same durable episodic memory as typed chat.
         // The raw audio is not stored; only the recognized text and final reply are indexed.
         runCatching {
