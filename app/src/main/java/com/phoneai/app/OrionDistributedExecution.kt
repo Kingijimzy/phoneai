@@ -54,6 +54,30 @@ internal class OrionDistributedTaskStore(context: Context, private val clock: ()
         write(root)
     }
 
+    /** A durable fenced lease receipt wins a late cancellation race; never discard completed work. */
+    fun completeFromReceipt(taskId: String, resultRef: String): Boolean = synchronized(lock) {
+        if (!SAFE_REF.matches(resultRef)) return@synchronized false
+        val root = read(); val rows = root.optJSONObject("tasks") ?: return@synchronized false
+        val row = rows.optJSONObject(taskId) ?: return@synchronized false
+        val status = row.optString("status")
+        if (status == "completed") return@synchronized row.optString("resultRef") == resultRef
+        if (status !in setOf("running", "retry_wait", "cancel_requested")) return@synchronized false
+        row.put("status", "completed").put("resultRef", resultRef).put("updatedAt", clock())
+        rows.put(taskId, row); root.put("tasks", rows)
+        write(root)
+    }
+
+    /** Finalize a cancellation only after its worker lease is no longer active. */
+    fun reconcileCancellation(taskId: String, needsReview: Boolean, reason: String): Boolean = synchronized(lock) {
+        val root = read(); val rows = root.optJSONObject("tasks") ?: return@synchronized false
+        val row = rows.optJSONObject(taskId) ?: return@synchronized false
+        if (row.optString("status") != "cancel_requested") return@synchronized false
+        row.put("status", if (needsReview) "needs_review" else "cancelled")
+            .put("lastError", reason.take(240)).put("updatedAt", clock())
+        rows.put(taskId, row); root.put("tasks", rows)
+        write(root)
+    }
+
     fun fail(taskId: String, retryable: Boolean): Boolean =
         transition(taskId, setOf("running"), if (retryable) "retry_wait" else "failed")
 
@@ -324,11 +348,26 @@ internal class OrionExecutionCoordinator(
     fun reconcile(): Int {
         var repaired = 0
         val now = System.currentTimeMillis()
-        tasks.all().filter { it.status == "running" || it.status == "retry_wait" }.forEach { record ->
+        tasks.all().filter { it.status == "running" || it.status == "retry_wait" || it.status == "cancel_requested" }.forEach { record ->
             val id = record.envelope.taskId
             val result = leases.completedResult(id, record.envelope.idempotencyKey)
-            if (result != null && tasks.complete(id, result)) {
+            if (result != null && tasks.completeFromReceipt(id, result)) {
                 repaired++
+            } else if (record.status == "cancel_requested") {
+                // A cancellation request is not terminal while a worker still owns a live lease.
+                // Once the lease expires, inspect the checkpoint before choosing cancelled vs review.
+                when (leases.state(id)) {
+                    OrionWorkerLeaseStore.LeaseState.ACTIVE -> Unit
+                    OrionWorkerLeaseStore.LeaseState.COMPLETED -> Unit
+                    OrionWorkerLeaseStore.LeaseState.EXPIRED,
+                    OrionWorkerLeaseStore.LeaseState.MISSING -> {
+                        val needsOwner = runCatching { OrionTaskCheckpointStore(context).needsOwner(id) }.getOrDefault(true)
+                        if (tasks.reconcileCancellation(
+                                id, needsOwner,
+                                if (needsOwner) "cancelled_worker_outcome_requires_owner_review" else "cancelled_after_worker_lease_ended"
+                            )) repaired++
+                    }
+                }
             } else if (record.status == "running" && now - record.updatedAt >= STALE_TASK_MS) {
                 when (leases.state(id)) {
                     OrionWorkerLeaseStore.LeaseState.ACTIVE,
