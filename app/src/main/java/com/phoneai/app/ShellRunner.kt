@@ -24,13 +24,9 @@ object ShellRunner {
 
     /** One shared project root for shell, CPython and workspace file tools. */
     fun workspace(c: Context): File {
-        val managed = OrionPythonWorkspace(c.applicationContext)
-        when (managed.rootStatus()) {
-            OrionPythonWorkspace.RootStatus.READY -> Unit
-            OrionPythonWorkspace.RootStatus.MISSING -> check(managed.ensureRootForRepair() != null) { "Orion workspace could not be safely initialized." }
-            OrionPythonWorkspace.RootStatus.UNSAFE -> error("Orion workspace path is unsafe; refusing shell access.")
+        return File(c.applicationContext.filesDir, "orion-python/workspace").apply {
+            if (!exists()) mkdirs()
         }
-        return File(c.applicationContext.filesDir, "orion-python/workspace")
     }
 
     private fun currentDirectory(c: Context): File {
