@@ -1035,18 +1035,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             ui.say("Orion is shut down. Start the brain from the Soul Engine command center before sending another request.")
             return
         }
-        val command = input.trim()
+        var command = input.trim()
         if (command.isEmpty()) return
         // Record genuine foreground activity for the Proactive Gate.
         svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit()
             .putLong("owner_last_active", System.currentTimeMillis()).apply()
         indexMemoryObservation(command, "typed chat")
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
-        // Orion Chat is the front door: explicit repository, terminal/runtime and website tasks
-        // must enter the same guarded Agent path instead of being answered as plain conversation.
-        // Keep the Central Brain's native tool loop as the default execution path.
-        // The legacy JSON planner is reserved for explicit dependency-graph/task-management work;
-        // ordinary code, file, shell, research and phone requests go straight to real tool calls.
+        // Orion Chat is the front door. Requests use one model-facing native tool loop;
+        // task coordination and multi-step execution are model-selected tools, not a second planner.
         val directActionRoute =
             intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
                 OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
@@ -1084,10 +1081,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         val contextualResearchCommand = ResearchFollowUpPolicy.commandFor(command, previousUserRequest)
         if (contextualResearchCommand != command) {
-            chatHist.put(msg("user", command))
-            svc.notifyModeSwitch(true)
-            runInternal(contextualResearchCommand, reuseCommandBudget = false)
-            return
+            // Resolve short follow-ups in-place. Keep the same conversation, model turn,
+            // native tool registry and dispatcher instead of switching to runInternal().
+            command = contextualResearchCommand
+            setRequestScope(command)
         }
         val soulContext = OrionSessionContextProvider.forChat(svc, command)
         // The shared system prompt already describes direct native-tool execution.
