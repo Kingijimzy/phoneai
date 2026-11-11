@@ -47,6 +47,14 @@ class OrionRecallTest {
         assertTrue(hits.first { it.memory.id == 1 }.why.contains("linked"))
     }
 
+    @Test fun provenanceGraphCanRecoverApprovedMemoryIntoAutomaticRecall() {
+        val saved = MemoryStore.addOwnerConfirmed(context, "project", "Orion phone assistant uses a local knowledge graph for long term recall")
+            ?: error("memory write failed")
+        val approved = MemoryStore.all(context).first { it.id == saved.id }
+        val hits = OrionRecall.top(context, listOf(approved), "Orion knowledge graph")
+        assertTrue(hits.any { it.memory.id == saved.id && it.why.contains("knowledge-graph") })
+    }
+
     @Test fun unreviewedAndSensitiveMemoryNeverReachesTheRecall() {
         MemoryStore.add(context, "fact", "My favourite team is Real Madrid")
         assertEquals("", OrionRecall.forTurn(context, "which club do I support?"))
