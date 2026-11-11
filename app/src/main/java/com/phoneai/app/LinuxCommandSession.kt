@@ -43,7 +43,9 @@ internal class LinuxCommandSession private constructor(
         return null
     }
 
-    fun readStderrLine(timeoutMs: Long = 0L): String? = stderr.poll(timeoutMs.coerceAtLeast(0L), TimeUnit.MILLISECONDS)\n\n    fun isAlive(): Boolean = !closed.get() && process.isAlive\n
+    fun readStderrLine(timeoutMs: Long = 0L): String? = stderr.poll(timeoutMs.coerceAtLeast(0L), TimeUnit.MILLISECONDS)
+
+    fun isAlive(): Boolean = !closed.get() && process.isAlive
     fun awaitExit(timeoutMs: Long): Boolean = process.waitFor(timeoutMs.coerceAtLeast(0L), TimeUnit.MILLISECONDS)
 
     fun exitCodeOrNull(): Int? = if (process.isAlive) null else runCatching { process.exitValue() }.getOrNull()
