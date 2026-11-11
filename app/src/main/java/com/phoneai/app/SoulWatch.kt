@@ -87,7 +87,8 @@ internal object SoulEngineWatcher {
         }
         val schedulerLimitations = if (schedulerStorageError) listOf("standing_order_storage_unavailable") else emptyList()
         val limitations = (report.limitations +
-            (if (!coreEnabled) listOf("orion_core_disabled") else emptyList()) +\n            (if (!proactiveEnabled) listOf("proactive_pack_disabled") else emptyList()) +
+            (if (!coreEnabled) listOf("orion_core_disabled") else emptyList()) +
+            (if (!proactiveEnabled) listOf("proactive_pack_disabled") else emptyList()) +
             schedulerLimitations).distinct()
         val summary = "Watcher readiness=$status; registered_tools=$registered; enabled_packs=$enabled; limitations=${limitations.joinToString(",").ifBlank { "none" }}."
         runCatching { SoulEngineState.recordLesson(c, "watcher_health", summary, status) }
@@ -167,7 +168,8 @@ internal object SoulEngineWatcher {
         }
 
         val next = when {
-            !coreEnabled -> "Enable Orion Core explicitly to resume Soul planning."\n            !proactiveEnabled -> "Enable the Proactive pack explicitly to resume scheduled Soul observations."
+            !coreEnabled -> "Enable Orion Core explicitly to resume Soul planning."
+            !proactiveEnabled -> "Enable the Proactive pack explicitly to resume scheduled Soul observations."
             limitations.isNotEmpty() -> "Review the Capability board; watcher will not grant permissions or enable packs."
             else -> "Continue bounded checks; review Stage 5 probe/composition reports before adopting any planning guidance."
         }
