@@ -14,10 +14,17 @@ internal class CodexSessionVault(context: Context) {
 
     fun prepare(): File {
         check(home.mkdirs() || home.isDirectory) { "Could not create private Codex session directory" }
-        if (!authFile.isFile) {
-            val encrypted = ApiKeyVault.read(app, ENCRYPTED_KEY, LEGACY_KEY)
-            if (encrypted.isNotBlank()) authFile.writeText(encrypted)
+        if (authFile.isFile) {
+            val recovered = runCatching { authFile.readText() }.getOrNull().orEmpty()
+            if (recovered.isNotBlank()) {
+                check(ApiKeyVault.write(app, ENCRYPTED_KEY, LEGACY_KEY, recovered)) {
+                    "Could not protect recovered Codex account credentials"
+                }
+                authFile.delete()
+            }
         }
+        val encrypted = ApiKeyVault.read(app, ENCRYPTED_KEY, LEGACY_KEY)
+        if (encrypted.isNotBlank()) authFile.writeText(encrypted)
         return home
     }
 
