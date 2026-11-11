@@ -153,6 +153,17 @@ internal object OrionCentralBrain {
                     appendLine("DURABLE EXECUTION CHECKPOINT")
                     appendLine("status=$status; recorded_steps=${steps?.length() ?: 0}; in_flight_tool=${active?.optString("tool", "unknown") ?: "none"}.")
                     if (notice.isNotBlank()) appendLine("recovery_notice=$notice")
+                    // Include only sanitized tool names and stored safe result summaries. The
+                    // checkpoint deliberately omits raw tool arguments and private payloads.
+                    if (steps != null) {
+                        for (index in 0 until steps.length()) {
+                            val step = steps.optJSONObject(index) ?: continue
+                            val tool = step.optString("tool", "unknown").take(80)
+                            val result = step.optString("result", "result unavailable")
+                                .replace(Regex("\\s+"), " ").take(220)
+                            appendLine("recorded_action[$index]=$tool; result=$result")
+                        }
+                    }
                     appendLine("Resume from this checkpoint when it belongs to the user's current goal. If an in-flight action remains unresolved, inspect its outcome before any possible repeat. Do not restart completed steps without evidence that they need repeating.")
                 }
             }
