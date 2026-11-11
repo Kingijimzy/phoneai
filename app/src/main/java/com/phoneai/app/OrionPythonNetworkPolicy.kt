@@ -38,11 +38,16 @@ internal object OrionPythonNetworkPolicy {
             .remove(host).remove("$host:plain_http").remove("$host:writes").apply()
     }
 
-    fun validate(context: Context, url: String): Endpoint? = validateUrl(context, url, websocket = false)
-    fun validateWebSocket(context: Context, url: String): Endpoint? = validateUrl(context, url, websocket = true)
+    fun validate(context: Context, url: String, requireNetworkConsent: Boolean = false): Endpoint? =
+        validateUrl(context, url, websocket = false, requireNetworkConsent = requireNetworkConsent)
+    fun validateWebSocket(context: Context, url: String): Endpoint? =
+        validateUrl(context, url, websocket = true, requireNetworkConsent = true)
 
-    private fun validateUrl(context: Context, url: String, websocket: Boolean): Endpoint? {
-        if (!OrionSensorConsent.read(context, OrionSensorScope.NETWORK).active()) return null
+    private fun validateUrl(
+        context: Context, url: String, websocket: Boolean, requireNetworkConsent: Boolean
+    ): Endpoint? {
+        val networkConsent = OrionSensorConsent.read(context, OrionSensorScope.NETWORK).active()
+        if (requireNetworkConsent && !networkConsent) return null
         val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return null
         if (uri.userInfo != null || uri.fragment != null || (uri.rawQuery?.length ?: 0) > 4096) return null
         val scheme = uri.scheme?.lowercase() ?: return null
@@ -68,6 +73,7 @@ internal object OrionPythonNetworkPolicy {
             return null
         }
         val local = allPrivateLan
+        if (local && !networkConsent) return null
         val plainScheme = scheme == "http" || scheme == "ws"
         if (plainScheme && (!local || !prefs.getBoolean("$host:plain_http", false))) return null
         return Endpoint(uri, host, local, prefs.getBoolean("$host:writes", false), addresses)
