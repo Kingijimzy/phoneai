@@ -39,6 +39,13 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
 
         // Result delivery and finalization are independently retryable and never re-run the model.
         if (existing.status == OrionWorkerJobStore.Status.COMPLETED) return deliverResult(existing)
+        if (existing.status == OrionWorkerJobStore.Status.CANCEL_REQUESTED) {
+            // A restarted worker cannot prove that the previous provider thread stopped.
+            // Preserve the uncertain outcome for owner review instead of silently leaking
+            // an active slot or falsely acknowledging cancellation.
+            store.needsReview(jobId, "worker_restarted_with_unacknowledged_cancellation")
+            return Result.failure()
+        }
         if (existing.status !in setOf(OrionWorkerJobStore.Status.QUEUED, OrionWorkerJobStore.Status.RESULT_PENDING)) return Result.success()
 
         val parentIsLive: (String) -> Boolean = { parentId ->
