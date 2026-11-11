@@ -143,22 +143,12 @@ internal class LinuxRuntimeInstaller(
         val boundedTimeoutMs = LinuxRuntimePolicy.normalizeProcessTimeout(timeoutMs)
         if (command == "__orion_install__") return "error: internal command is not executable"
         val workspace = workspaceHostPath?.let { candidate ->
-            // Keep the project workspace mount stable. The separately supplied app-data and
-            // shared-storage mounts are passed through under the Android app UID; OS permissions
-            // and SELinux determine which of those host paths can actually be read or changed.
-            val expected = File(app.filesDir, "orion-python/workspace")
-            val dir = File(candidate)
-            val canonical = runCatching { dir.canonicalFile }.getOrNull()
-            val expectedCanonical = runCatching { expected.canonicalFile }.getOrNull()
-            if (canonical == null || expectedCanonical == null ||
-                canonical.toPath() != expectedCanonical.toPath() ||
-                !canonical.isDirectory || !canonical.canRead() || !canonical.canWrite() ||
-                java.nio.file.Files.isSymbolicLink(dir.toPath()) ||
-                java.nio.file.Files.isSymbolicLink(expected.toPath()) ||
-                java.nio.file.Files.isSymbolicLink(expected.parentFile.toPath())) {
-                return "error: Python workspace bind mount rejected by runtime policy."
+            val directory = runCatching { File(candidate).canonicalFile }.getOrNull()
+                ?: return "error: Linux working directory is unavailable."
+            if (!directory.isDirectory || !directory.canRead() || !directory.canWrite()) {
+                return "error: Linux working directory is unavailable."
             }
-            canonical.absolutePath
+            directory.absolutePath
         }
         val args = LinuxRuntimePolicy.prootArgs(
             proot.absolutePath, rootfs.absolutePath, command, workspace,
@@ -212,15 +202,9 @@ internal class LinuxRuntimeInstaller(
     ): LinuxTerminalLaunchConfig {
         val manifest = LinuxRuntimePolicy.productionManifest
         check(isReady(manifest)) { "Alpine runtime is not installed or failed readiness checks." }
-        val expected = File(app.filesDir, "orion-python/workspace")
         val supplied = File(workspaceHostPath).canonicalFile
-        val canonicalExpected = expected.canonicalFile
-        check(supplied.toPath() == canonicalExpected.toPath() && supplied.isDirectory &&
-            supplied.canRead() && supplied.canWrite() &&
-            !java.nio.file.Files.isSymbolicLink(File(workspaceHostPath).toPath()) &&
-            !java.nio.file.Files.isSymbolicLink(expected.toPath()) &&
-            !java.nio.file.Files.isSymbolicLink(expected.parentFile.toPath())) {
-            "Linux workspace bind mount rejected by runtime policy."
+        check(supplied.isDirectory && supplied.canRead() && supplied.canWrite()) {
+            "Linux working directory is unavailable."
         }
         check(proot.isFile && proot.canExecute() && sha256(proot) == manifest.prootSha256) {
             "Pinned ARM64 PRoot binary is missing or failed checksum verification."
@@ -235,7 +219,7 @@ internal class LinuxRuntimeInstaller(
             android.util.Log.w("OrionLinux", warning)
         }
         val argv = LinuxRuntimePolicy.prootArgs(
-            proot.absolutePath, rootfs.absolutePath, "exec /bin/sh -i", canonicalExpected.absolutePath,
+            proot.absolutePath, rootfs.absolutePath, "exec /bin/sh -i", supplied.absolutePath,
             androidAppDataPath, sharedStoragePath
         ) ?: error("Interactive Linux command rejected by runtime policy.")
         val environment = arrayOf(
