@@ -263,7 +263,8 @@ internal object ToolRegistry {
      * the rest. Runtime dispatch remains authoritative; prompt selection never grants access.
      */
     private val alwaysDetailed = setOf(
-        "task_list", "task_add", "task_update", "ask_user", "remember", "recall",
+        "task_list", "task_add", "task_update", "ask_user", "remember", "update_memory", "recall",
+        "ask_agent", "queue_agent", "agent_jobs", "agent_cancel", "agent_reassign", "create_agent",
         "service_status", "skills_list", "extension_list", "capability_note",
         "proactive_check", "proactive_status", "followup_add", "followup_list", "followup_done", "quiet_period_set",
         "chronos_awareness", "soul_state", "calendar_events",
@@ -315,6 +316,14 @@ internal object ToolRegistry {
         "dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan"
     )
 
+    // Ultron is the coordinator, not a second executor. These capabilities stay beside
+    // action tools so the model can supervise workers and maintain objectives in one loop.
+    private val coordinatorNativeTools = listOf(
+        "chronos_awareness", "soul_state", "recall", "remember", "update_memory",
+        "ask_agent", "queue_agent", "agent_jobs", "agent_cancel", "agent_reassign",
+        "create_agent", "task_list", "task_add", "task_update", "capability_note"
+    )
+
     fun nativeToolsFor(
         request: String?,
         priorToolNames: Set<String> = emptySet(),
@@ -344,8 +353,9 @@ internal object ToolRegistry {
         fun add(names: Iterable<String>) {
             names.forEach { if (selected.size < limit && it in byName) selected += it }
         }
-        // Current intent owns the native-tool budget. Historical tools are continuity hints only.
+        // Ultron coordination and execution capabilities share one model-facing tool set.
         add(listOf("ask_user"))
+        add(coordinatorNativeTools)
         if (Regex("\\b(mcp|remote server|remote tool|api tools|anything tools)\\b").containsMatchIn(query)) add(mcpNativeTools)
         if (Regex("\\b(app|phone|screen|tap|click|swipe|open|launch|send|message|wifi|bluetooth|notification|battery|screenshot)\\b").containsMatchIn(query)) {
             add(phoneNativeTools)
