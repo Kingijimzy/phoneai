@@ -19,7 +19,7 @@ internal object OrionToolContractCodec {
                 .put("type", "function")
                 .put("function", JSONObject()
                     .put("name", tool.name)
-                    .put("description", tool.description.take(1000))
+                    .put("description", tool.promptLine.take(1600))
                     .put("parameters", schema)))
         }
     }
@@ -56,11 +56,31 @@ internal object OrionToolContractCodec {
     }
 
     private fun geminiParameters(tool: ToolDefinition): JSONObject {
-        val schema = parameters(tool)
-        return JSONObject()
-            .put("type", "OBJECT")
-            .put("properties", schema.optJSONObject("properties") ?: JSONObject())
-            .put("required", schema.optJSONArray("required") ?: JSONArray())
+        fun convert(source: JSONObject): JSONObject {
+            val type = when (source.optString("type").lowercase()) {
+                "object" -> "OBJECT"
+                "array" -> "ARRAY"
+                "integer" -> "INTEGER"
+                "number" -> "NUMBER"
+                "boolean" -> "BOOLEAN"
+                else -> "STRING"
+            }
+            val out = JSONObject().put("type", type)
+            source.optJSONObject("properties")?.let { props ->
+                val converted = JSONObject()
+                val keys = props.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    converted.put(key, convert(props.optJSONObject(key) ?: JSONObject()))
+                }
+                out.put("properties", converted)
+            }
+            source.optJSONObject("items")?.let { out.put("items", convert(it)) }
+            source.optJSONArray("required")?.let { out.put("required", it) }
+            source.optJSONArray("enum")?.let { out.put("enum", it) }
+            return out
+        }
+        return convert(parameters(tool))
     }
 
     internal fun parameters(tool: ToolDefinition): JSONObject {
