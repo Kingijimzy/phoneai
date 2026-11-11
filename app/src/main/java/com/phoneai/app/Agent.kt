@@ -50,7 +50,7 @@ internal object IrreversibleActionConfirmationPolicy {
     )
 
     private val computerAction = Regex(
-        """(?i)\\bcomputer_settings\\b.{0,180}\\b(?:restart|shutdown|wifi(?:[_ -]?toggle)?|toggle[_ -]?(?:wifi|wi[- ]?fi)|turn\\s+(?:wifi|wi[- ]?fi)\\s+(?:on|off))\\b"""
+        """(?i)\bcomputer_settings\b.{0,180}\b(?:restart|shutdown|wifi(?:[_ -]?toggle)?|toggle[_ -]?(?:wifi|wi[- ]?fi)|turn\s+(?:wifi|wi[- ]?fi)\s+(?:on|off))\b"""
     )
 
     fun requiresConfirmation(actionDescription: String): Boolean =
