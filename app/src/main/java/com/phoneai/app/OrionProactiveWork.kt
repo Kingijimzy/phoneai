@@ -25,13 +25,16 @@ internal class OrionProactiveWorker(
         val proactiveEnabled = runCatching { AgentPolicy.enabled(applicationContext, "proactive") }.getOrDefault(false)
         if (!OrionProactivePolicy.shouldRun(coreEnabled, proactiveEnabled)) return Result.success()
 
-        // Genuine lifecycle state: scheduled proactive work means the Soul is monitoring.
-        OrionSoulLifecycle.watcherTick(applicationContext)
-        // Self-reflection: notice repeatedly failing tools, learn, and queue a follow-up.
-        OrionLivingLoop.tick(applicationContext)
-        // Inner life: instincts, self-set goal, nightly reflection.
-        OrionInnerLife.tick(applicationContext)
+        // If the accessibility service is already connected, enqueue through its single
+        // durable runtime instead of racing a second direct watcher execution.
+        val liveService = PhoneAiService.instance
+        if (liveService != null) {
+            liveService.requestSoulWatch("workmanager_fallback")
+            return Result.success()
+        }
 
+        // After process death, perform only the bounded local watcher fallback. It records
+        // its own lifecycle, reflection and inner-life work under the same policy gates.
         return runCatching {
             SoulEngineWatcher.run(applicationContext)
             Result.success()
