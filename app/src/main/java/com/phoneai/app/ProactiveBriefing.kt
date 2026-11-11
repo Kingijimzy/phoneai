@@ -149,6 +149,7 @@ class ProactiveActivity : Activity() {
             isChecked = AgentPolicy.enabled(this@ProactiveActivity, "proactive")
             setOnCheckedChangeListener { _, checked ->
                 AgentPolicy.setEnabled(this@ProactiveActivity, "proactive", checked)
+                OrionProactiveWork.refresh(this@ProactiveActivity)
                 if (checked) ProactiveBriefing.schedule(this@ProactiveActivity) else ProactiveBriefing.cancel(this@ProactiveActivity)
                 AgentPolicy.log(this@ProactiveActivity, "proactive", "toggle-pack", true, if (checked) "proactive pack enabled" else "proactive pack disabled")
                 refreshStatus()
