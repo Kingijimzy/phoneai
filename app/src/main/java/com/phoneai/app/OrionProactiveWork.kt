@@ -25,15 +25,18 @@ internal class OrionProactiveWorker(
         val proactiveEnabled = runCatching { AgentPolicy.enabled(applicationContext, "proactive") }.getOrDefault(false)
         if (!OrionProactivePolicy.shouldRun(coreEnabled, proactiveEnabled)) return Result.success()
 
-        // Genuine lifecycle state: scheduled proactive work means the Soul is monitoring.
+        // Local health sensing still runs every heartbeat; unsolicited initiatives must pass the Proactive Gate.
         OrionSoulLifecycle.watcherTick(applicationContext)
-        // Self-reflection: notice repeatedly failing tools, learn, and queue a follow-up.
-        OrionLivingLoop.tick(applicationContext)
-        // Inner life: instincts, self-set goal, nightly reflection.
-        OrionInnerLife.tick(applicationContext)
+        val gate = runCatching { OrionProactiveGate.decide(OrionProactiveGate.gather(applicationContext)) }
+            .getOrElse { OrionProactiveGate.Decision(false, 0.0, "gate unavailable: ${it.javaClass.simpleName}") }
+        AgentPolicy.log(applicationContext, "soul_watch", "proactive_gate", null,
+            "open=${gate.open}; score=${"%.2f".format(gate.score)}; reason=${gate.reason}")
+        val living = if (gate.open) runCatching { OrionLivingLoop.tick(applicationContext) }.getOrDefault("") else ""
+        val inner = if (gate.open) runCatching { OrionInnerLife.tick(applicationContext) }.getOrDefault("") else ""
 
         return runCatching {
-            SoulEngineWatcher.run(applicationContext)
+            SoulEngineWatcher.run(applicationContext, allowUnpromptedInitiative = gate.open)
+            if (gate.open && (living.isNotBlank() || inner.isNotBlank())) OrionProactiveGate.recordAction(applicationContext)
             Result.success()
         }.getOrElse {
             AgentPolicy.log(
