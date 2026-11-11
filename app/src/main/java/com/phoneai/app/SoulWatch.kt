@@ -31,8 +31,20 @@ internal object SoulEngineWatcher {
 
     fun run(context: Context): TickResult {
         val c = context.applicationContext
-        // Genuine lifecycle state: the watcher tick means the Soul is monitoring.
-        OrionSoulLifecycle.watcherTick(c)
+        val coreEnabled = runCatching { AgentPolicy.enabled(c, "orion_core") }.getOrDefault(false)
+        val proactiveEnabled = runCatching { AgentPolicy.enabled(c, "proactive") }.getOrDefault(false)
+        // The standing purpose is durable and separate from any active user mission.
+        runCatching { SoulEngineState.ensurePurpose(c, OrionInnerLife.PRIME_DIRECTIVE) }
+        when {
+            !coreEnabled -> OrionSoulLifecycle.stopped(c)
+            !proactiveEnabled -> OrionSoulLifecycle.enter(c, OrionSoulLifecycle.State.PAUSED, "proactive_pack_disabled")
+            else -> OrionSoulLifecycle.watcherTick(c)
+        }
+        // Reflection and inner-life work belong to the same watcher tick, not a parallel heartbeat.
+        if (coreEnabled && proactiveEnabled) {
+            runCatching { OrionLivingLoop.tick(c) }
+            runCatching { OrionInnerLife.tick(c) }
+        }
         val service = PhoneAiService.instance
         // Force a fresh durable schedule read before reporting scheduler health; a stale
         // process-global storage-error flag is not evidence that disk is currently healthy.
@@ -91,8 +103,12 @@ internal object SoulEngineWatcher {
 
         // Stage 5: bounded local Propose–Probe–Compose pass. It performs registry-only dry runs,
         // is rate-limited to one automatic pass per six hours, and never executes candidate tools.
-        val p3 = runCatching { SoulP3Engine.run(c) }.getOrElse {
-            SoulP3Engine.RunResult(0, 0, "Stage 5 probe unavailable: " + it.javaClass.simpleName + "; no candidate adopted.")
+        val p3 = if (coreEnabled && proactiveEnabled) {
+            runCatching { SoulP3Engine.run(c) }.getOrElse {
+                SoulP3Engine.RunResult(0, 0, "Stage 5 probe unavailable: " + it.javaClass.simpleName + "; no candidate adopted.")
+            }
+        } else {
+            SoulP3Engine.RunResult(0, 0, "Stage 5 probe skipped because Orion Core or Proactive is disabled.")
         }
         if (p3.probesRun > 0 || p3.compositionsCreated > 0) {
             runCatching { SoulEngineState.recordLesson(c, "p3_probe", p3.summary, "review_only") }
@@ -100,12 +116,21 @@ internal object SoulEngineWatcher {
 
         // Stage 6: bounded local specialists run sequentially under a 30-minute cooldown.
         // They only inspect local state and report findings; they never dispatch tools or mutate policy.
-        val subagents = runCatching { SoulSubagentCoordinator.run(c) }.getOrElse {
+        val subagents = if (coreEnabled && proactiveEnabled) {
+            runCatching { SoulSubagentCoordinator.run(c) }.getOrElse {
+                SoulSubagentCoordinator.RunReport(
+                    id = "unavailable",
+                    at = System.currentTimeMillis(),
+                    findings = emptyList(),
+                    summary = "Subagent coordination unavailable: " + it.javaClass.simpleName + "; no actions taken."
+                )
+            }
+        } else {
             SoulSubagentCoordinator.RunReport(
-                id = "unavailable",
+                id = "disabled",
                 at = System.currentTimeMillis(),
                 findings = emptyList(),
-                summary = "Subagent coordination unavailable: " + it.javaClass.simpleName + "; no actions taken."
+                summary = "Local specialists skipped because Orion Core or Proactive is disabled."
             )
         }
 
