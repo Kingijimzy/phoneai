@@ -114,6 +114,34 @@ class OrionAgentDelegationTest {
         assertTrue(manifest.allowedTools.isEmpty())
     }
 
+    @Test fun registeredCustomSpecialistManifestRestoresAsAnalysisOnly() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        OrionAgentDelegation.clearForTest(context)
+        AgentProfiles.deleteCustom(context, "orion_audit")
+        val created = AgentProfiles.createCustom(
+            context, "orion_audit", "Audit Specialist", "Checks evidence quality",
+            "Review evidence quality, identify gaps, and return a concise audit."
+        )
+        assertTrue(created.startsWith("created agent"))
+        try {
+            val profile = AgentProfiles.resolveFor(context, "orion_audit")
+            assertNotNull(profile)
+            val manifest = OrionAgentDelegation.create(
+                profile!!, "parent-custom-audit", "Audit the research evidence"
+            )
+            assertEquals(OrionAgentDelegation.Access.ANALYSIS_ONLY, manifest.access)
+            assertTrue(manifest.allowedTools.isEmpty())
+            assertTrue(OrionAgentDelegation.begin(context, manifest))
+            val restored = OrionAgentDelegation.restore(context, manifest.id)
+            assertNotNull(restored)
+            assertEquals("orion_audit", restored!!.agentId)
+            assertEquals(OrionAgentDelegation.Access.ANALYSIS_ONLY, restored.access)
+            assertTrue(restored.allowedTools.isEmpty())
+        } finally {
+            AgentProfiles.deleteCustom(context, "orion_audit")
+        }
+    }
+
     @Test fun tradingCoachCannotPlaceOrdersFromItsDelegatedScope() {
         val manifest = OrionAgentDelegation.create(
             AgentProfiles.find("coach")!!, "parent-trading-task", "Review the BTC chart and identify possible setups"
