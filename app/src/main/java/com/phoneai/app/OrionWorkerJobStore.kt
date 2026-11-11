@@ -177,10 +177,15 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         val before = jobs.toList()
         var changed = 0
         jobs = jobs.map { job ->
-            if (job.parentTaskId == parent && job.status in setOf(Status.QUEUED, Status.RUNNING, Status.RESULT_PENDING, Status.PAUSED)) {
+            if (job.parentTaskId == parent && job.status in setOf(
+                    Status.QUEUED, Status.RUNNING, Status.RESULT_PENDING, Status.PAUSED, Status.CANCEL_REQUESTED
+                )) {
                 changed++
                 job.copy(
-                    status = if (job.status == Status.RUNNING) Status.CANCEL_REQUESTED else Status.CANCELLED,
+                    status = when (job.status) {
+                        Status.RUNNING, Status.CANCEL_REQUESTED -> Status.CANCEL_REQUESTED
+                        else -> Status.CANCELLED
+                    },
                     updatedAt = clock(), lastError = safeReason
                 )
             } else job
