@@ -216,6 +216,13 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         }
     }
 
+    /** Finalize a cancellation only after the worker has observed the parent stop. */
+    fun confirmCancellation(jobId: String, reason: String = "worker_acknowledged_cancellation"): Boolean =
+        transition(jobId, setOf(Status.CANCEL_REQUESTED)) {
+            it.copy(status = Status.CANCELLED, updatedAt = clock(),
+                lastError = AgentPrivacyFilter.safeCommand(reason).replace(Regex("\\s+"), " ").take(240))
+        }
+
     /** An interrupted/ambiguous provider outcome is terminal for automatic scheduling. */
     fun needsReview(jobId: String, reason: String): Boolean = transition(jobId, setOf(Status.RUNNING, Status.RESULT_PENDING, Status.CANCEL_REQUESTED)) {
         it.copy(status = Status.NEEDS_REVIEW, updatedAt = clock(),
