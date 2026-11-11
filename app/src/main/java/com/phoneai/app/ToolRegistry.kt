@@ -319,14 +319,15 @@ internal object ToolRegistry {
         val ranked = all.mapIndexed { index, tool ->
             val name = tool.name.lowercase()
             val contract = tool.promptLine.lowercase()
-            val score = queryTokens.sumOf { token ->
-                when {
+            var score = 0
+            for (token in queryTokens) {
+                score += when {
                     name == token || name.split('_').contains(token) -> 8
                     Regex("(^|[^a-z0-9_])" + Regex.escape(token) + "([^a-z0-9_]|$)").containsMatchIn(contract) -> 1
                     else -> 0
                 }
             }
-            Triple(tool, score, index)
+            Triple<ToolDefinition, Int, Int>(tool, score, index)
         }.sortedWith(compareByDescending<Triple<ToolDefinition, Int, Int>> { it.second }.thenBy { it.third })
         val selected = LinkedHashSet<String>()
         priorToolNames.filter { it in byName }.forEach { if (selected.size < limit) selected += it }
