@@ -128,6 +128,18 @@ class OrionProactiveEngineTest {
         assertTrue(actual.body.contains("plumber"))
     }
 
+    @Test fun throttleAndReminderDeduplicationAreRecordedOnlyAfterDelivery() {
+        val now = midnight(context) + 12 * 60 * 60 * 1000L
+        OrionFollowUpStore.add(context, "review the Orion watcher", dueAt = now + 30 * 60_000L)
+        val candidate = OrionProactiveEngine.evaluate(context, now)
+        assertNotNull(candidate)
+        assertEquals("Selection alone must not claim a reminder was spoken or delivered", 0L, Prefs.lastProactiveSpokenAt(context))
+
+        OrionProactiveEngine.markDelivered(context, candidate!!, now)
+        assertEquals(now, Prefs.lastProactiveSpokenAt(context))
+        assertNull("The global delivery throttle suppresses an immediate repeat", OrionProactiveEngine.evaluate(context, now + 5 * 60_000L))
+    }
+
     @Test fun overdueTaskCreatesHighUrgencyCandidate() {
         val now = midnight(context) + 12 * 60 * 60 * 1000L
         // Add an overdue task
@@ -151,7 +163,10 @@ class OrionProactiveEngineTest {
 
     private fun clearSpokenHistory(context: Context) {
         context.getSharedPreferences("orion_proactive_spoken_v1", Context.MODE_PRIVATE).edit()
-            .putString("spoken_at", "[]").apply()
+            .putString("spoken_at", "[]")
+            .remove("last_item_key")
+            .remove("last_item_at")
+            .apply()
     }
 
     private fun recordSpokenNow(context: Context, at: Long) {
