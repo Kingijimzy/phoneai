@@ -1,28 +1,30 @@
 package com.phoneai.app
 
-/** Argument-vector policy for non-root Android utility commands. No shell parser or shell process. */
+/**
+ * Parses explicit argv arrays for Android-host commands.
+ * Shell expansion is opt-in: callers may invoke /system/bin/sh -c themselves.
+ * Processes remain under the Android app UID and platform sandbox.
+ */
 internal object OrionPythonShellPolicy {
     data class Command(val executable: String, val args: List<String>, val workingDirectory: String)
-    private val commands = setOf("ls", "cat", "head", "tail", "grep", "wc", "date", "uname", "df", "pwd")
-    private val token = Regex("^[A-Za-z0-9_./:=,+@%-]{1,180}$")
+
     fun parse(json: String, workspacePath: String): Command? {
-        if (json.length > 1200 || json.contains('\u0000')) return null
+        if (json.length > 128_000 || json.contains('\u0000')) return null
         val values = runCatching {
             val array = org.json.JSONArray(json)
-            if (array.length() !in 1..12) return null
-            (0 until array.length()).map { array.getString(it) }
+            if (array.length() !in 1..256) return null
+            (0 until array.length()).map { index ->
+                if (array.isNull(index)) return null
+                array.getString(index)
+            }
         }.getOrNull() ?: return null
-        val name = values.first()
-        if (name !in commands) return null
-        val args = values.drop(1)
-        if (args.any { !token.matches(it) || (it.startsWith("-") && it.length > 40) }) return null
-        val fileCommands = setOf("cat", "head", "tail", "grep", "wc")
-        if (name in fileCommands) {
-            val fileArgs = if (name == "grep") args.drop(1) else args
-            if (fileArgs.isEmpty() || fileArgs.any { it.startsWith("/") || it.split('/').any { p -> p == ".." } }) return null
+        val name = values.firstOrNull()?.trim().orEmpty()
+        if (name.isBlank() || name.contains('\u0000') || values.any { it.contains('\u0000') }) return null
+        val executable = when {
+            name.startsWith("/") -> name
+            name.contains("/") -> java.io.File(workspacePath, name).path
+            else -> "/system/bin/$name"
         }
-        if (name == "ls" && args.any { it.startsWith("/") || it.split('/').any { p -> p == ".." } }) return null
-        if (name == "pwd") return Command("pwd", emptyList(), workspacePath)
-        return Command("/system/bin/$name", args, workspacePath)
+        return Command(executable, values.drop(1), workspacePath)
     }
 }
