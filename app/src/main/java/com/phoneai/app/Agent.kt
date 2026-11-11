@@ -1136,7 +1136,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         }
         val answer = try {
             var turn = talkNim.chatTurn(
-                messages, false, 8192, 0.7, tools = nativeTools
+                messages, false, 32768, 0.7, tools = nativeTools
             )
             while (turn.toolCalls.isNotEmpty() && !stopped && toolRounds < OrionNativeToolDispatcher.MAX_ROUNDS_PER_COMMAND) {
                 toolRounds++
@@ -1169,7 +1169,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 }
                 if (!stopped) {
                     turn = talkNim.chatTurn(
-                        messages, false, 8192, 0.7, tools = nativeTools
+                        messages, false, 32768, 0.7, tools = nativeTools
                     )
                 }
             }
