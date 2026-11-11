@@ -283,7 +283,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             if (instance !== this ||
                 !AgentPolicy.enabled(this, "orion_core") ||
                 !AgentPolicy.enabled(this, "proactive")) return@execute
-            runCatching { SoulEngineWatcher.run(this) }.onFailure {
+            val gate = runCatching { OrionProactiveGate.decide(OrionProactiveGate.gather(this)) }
+                .getOrElse { OrionProactiveGate.Decision(false, 0.0, "gate unavailable: ${it.javaClass.simpleName}") }
+            AgentPolicy.log(this, "soul_watcher", "continuous_gate", null,
+                "event=$reason; open=${gate.open}; score=${"%.2f".format(gate.score)}; reason=${gate.reason}")
+            runCatching {
+                val result = SoulEngineWatcher.run(this, allowUnpromptedInitiative = gate.open)
+                if (gate.open && result.action == "chronos_review_suggestion") OrionProactiveGate.recordAction(this)
+            }.onFailure {
                 AgentPolicy.log(
                     this, "soul_watcher", "continuous_observation", null,
                     "event=$reason; failure=" + it.javaClass.simpleName
