@@ -196,17 +196,25 @@ object MemoryStore {
         val list = load(c)
         val memory = list.firstOrNull { it.id == id } ?: return@synchronized false
         val oldStatus = memory.reviewStatus
-        val superseded = if (status == "approved") {
-            MemoryRanking.findSuperseded(
-                list.filter { it.id != id && it.reviewStatus == "approved" },
-                memory.category,
-                memory.text
-            )
-        } else null
+        val oldMemoryText = memory.text
+        val approvedOthers = if (status == "approved") list.filter {
+            it.id != id && it.reviewStatus == "approved"
+        } else emptyList()
+        // Subject-slot conflicts (for example, a new home city) must be arbitrated
+        // even when the proposal was filed under a different category.
+        val slotConflict = if (status == "approved")
+            OrionMemoryConsolidation.conflicting(approvedOthers, memory.text, "approved")
+        else null
+        val superseded = slotConflict ?: if (status == "approved")
+            MemoryRanking.findSuperseded(approvedOthers, memory.category, memory.text)
+        else null
         val oldSuperseded = superseded?.let { copyOf(it) }
         val oldSupersededUpdated = superseded?.updated
         val oldSupersededEvidence = superseded?.evidence
         memory.reviewStatus = status
+        if (slotConflict != null && superseded != null) {
+            memory.text = OrionMemoryConsolidation.withHistory(superseded.text, memory.text, System.currentTimeMillis())
+        }
         if (superseded != null) {
             superseded.reviewStatus = "superseded"
             superseded.updated = System.currentTimeMillis()
@@ -214,6 +222,7 @@ object MemoryStore {
         }
         if (!save(c)) {
             memory.reviewStatus = oldStatus
+            memory.text = oldMemoryText
             if (superseded != null && oldSuperseded != null) {
                 superseded.reviewStatus = oldSuperseded.reviewStatus
                 superseded.updated = oldSupersededUpdated ?: oldSuperseded.updated
@@ -224,6 +233,7 @@ object MemoryStore {
         if (superseded != null && oldSuperseded != null &&
             !OrionMemoryLifecycle.archiveBeforeChange(c, oldSuperseded, "superseded by owner-approved memory #$id")) {
             memory.reviewStatus = oldStatus
+            memory.text = oldMemoryText
             superseded.reviewStatus = oldSuperseded.reviewStatus
             superseded.updated = oldSuperseded.updated
             superseded.evidence = oldSuperseded.evidence

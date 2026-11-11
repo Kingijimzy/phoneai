@@ -14,7 +14,11 @@ internal object ContextWindowBudget {
     fun priority(section: String): Int {
         val s = section.lowercase()
         return when {
+            "orion grasp executive cycle" in s -> 108
             "task resume instructions" in s || "active objective" in s -> 110
+            "durable execution checkpoint" in s -> 109
+            "durable objective graph" in s || "objective graph" in s -> 108
+            "memory layers" in s -> 98
             "orion central brain" in s || "shared executive contract" in s -> 105
             "relevant persistent memory" in s || "long-term memory" in s || "things you have learned about how this user" in s -> 100
             "multimodal evidence index" in s -> 82
@@ -26,7 +30,7 @@ internal object ContextWindowBudget {
             "orion local self-diagnostic" in s || "self-diagnostic" in s -> 90
             "relevant execution lessons" in s || "lessons from your own past runs" in s -> 85
             "capability gap" in s || "extension" in s -> 75
-            "objective graph" in s || "persisted task centre" in s -> 75
+            "persisted task centre" in s -> 75
             "soul engine" in s || "live inventory" in s -> 65
             else -> 50
         }

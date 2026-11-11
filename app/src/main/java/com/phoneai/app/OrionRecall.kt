@@ -7,7 +7,8 @@ import java.util.Locale
 
 /**
  * Automatic recall for every turn: before a message is answered, the few memories most relevant to it are
- * ranked by meaning (on-device embedding), keywords and entity links (people, places, projects, dates), and
+ * ranked by the best available embedding tier (optional local TFLite / owner-enabled Ollama, otherwise a
+ * deterministic local feature-hash fallback), keywords and entity links (people, places, projects, dates), and
  * injected as labelled reference data together with matching past experience. The existing per-task memory
  * block stays in the prompt as the fallback.
  */
@@ -26,15 +27,21 @@ internal object OrionRecall {
         if (q.length < 3 || memories.isEmpty()) return emptyList()
         val queryVector = OrionEmbeddingProvider.embed(context, q)
         val links = OrionEntityIndex.linked(memories, q)
+        // Cerebro graph retrieval is an independent recall signal, not merely a write-side index.
+        // Only IDs returned by the provenance graph are eligible; caller has already applied governance.
+        val graphIds = runCatching { OrionKnowledgeGraph.relatedMemoryIds(context, q, k * 3) }.getOrDefault(emptySet())
         return memories.mapNotNull { m ->
             val meaning = OrionEmbeddingProvider.cosine(queryVector, OrionEmbeddingProvider.embed(context, m.text)).coerceAtLeast(0.0)
             val keyword = (MemoryRanking.score(m, q) / 40.0).coerceIn(0.0, 1.0)
             val link = links[m.id] ?: 0.0
-            val score = MEANING * meaning + KEYWORD * keyword + LINKED * link + (if (m.pinned) PINNED else 0.0)
+            val graphLinked = m.id in graphIds
+            val linkScore = maxOf(link, if (graphLinked) 1.0 else 0.0)
+            val score = MEANING * meaning + KEYWORD * keyword + LINKED * linkScore + (if (m.pinned) PINNED else 0.0)
             val why = buildList {
                 if (meaning >= 0.2) add("meaning")
                 if (keyword > 0.0) add("keyword")
                 if (link > 0.0) add(if (link >= 1.0) "linked" else "linked-2")
+                if (graphLinked) add("knowledge-graph")
             }
             if (why.isEmpty() || score < MIN_SCORE) null else Hit(m, score, why)
         }.sortedByDescending { it.score }.take(k)

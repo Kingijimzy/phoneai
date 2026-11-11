@@ -29,10 +29,19 @@ internal object SoulEngineWatcher {
         val nextStep: String
     )
 
-    fun run(context: Context): TickResult {
+    fun run(context: Context, allowUnpromptedInitiative: Boolean = true): TickResult {
         val c = context.applicationContext
         // Genuine lifecycle state: the watcher tick means the Soul is monitoring.
         OrionSoulLifecycle.watcherTick(c)
+        // Persist the capability baseline so later watcher ticks can identify additions/removals.
+        // A read-only state() call alone cannot discover deltas unless scan() advances this baseline.
+        val capabilityAwareness = runCatching { OrionCapabilityAwareness.scan(c) }
+            .getOrElse { OrionCapabilityAwareness.State(emptyList(), emptyList(), emptyList(), emptyList()) }
+        val awarenessSummary = buildList {
+            if (capabilityAwareness.added.isNotEmpty()) add("new capabilities: ${capabilityAwareness.added.take(8).joinToString()}")
+            if (capabilityAwareness.removed.isNotEmpty()) add("missing capabilities: ${capabilityAwareness.removed.take(8).joinToString()}")
+            if (capabilityAwareness.failing.isNotEmpty()) add("degraded tools: ${capabilityAwareness.failing.take(5).joinToString()}")
+        }.joinToString("; ")
         val service = PhoneAiService.instance
         // Force a fresh durable schedule read before reporting scheduler health; a stale
         // process-global storage-error flag is not evidence that disk is currently healthy.
@@ -89,6 +98,15 @@ internal object SoulEngineWatcher {
             }
         }
 
+        // Cerebro watcher: repair the local graph index from currently approved, active memories.
+        // It is throttled, device-local and read-only with respect to the source memories.
+        val graphWatch = runCatching { OrionKnowledgeGraphWatcher.run(c) }.getOrElse {
+            OrionKnowledgeGraphWatcher.Report(0, 0, 1, "knowledge_graph_reconcile_failed:" + it.javaClass.simpleName)
+        }
+        if (graphWatch.indexedMemories > 0 || graphWatch.failures > 0) {
+            runCatching { SoulEngineState.recordLesson(c, "knowledge_graph_watch", graphWatch.summary, if (graphWatch.failures == 0) "observed" else "limited") }
+        }
+
         // Stage 5: bounded local Propose–Probe–Compose pass. It performs registry-only dry runs,
         // is rate-limited to one automatic pass per six hours, and never executes candidate tools.
         val p3 = runCatching { SoulP3Engine.run(c) }.getOrElse {
@@ -111,11 +129,12 @@ internal object SoulEngineWatcher {
 
         // Start with the local work already completed; Chronos may refine this action label below.
         var action = if (p3.probesRun > 0) "local_capability_audit+p3_probe" else "local_capability_audit"
+        if (graphWatch.indexedMemories > 0 || graphWatch.failures > 0) action += "+knowledge_graph_watch"
         if (subagents.findings.isNotEmpty()) action += "+subagents"
 
         // Chronos may create one low-pressure, review-only suggestion from coarse focus duration.
         // It never dispatches an action and is gated by both owner switches and ambient-context consent.
-        val chronosSuggestion = runCatching { OrionChronosAwareness.proactiveSuggestion(c) }.getOrNull()
+        val chronosSuggestion = if (allowUnpromptedInitiative) runCatching { OrionChronosAwareness.proactiveSuggestion(c) }.getOrNull() else null
         if (!chronosSuggestion.isNullOrBlank()) {
             val category = OrionChronosAwareness.summary(c).substringAfter("category=").substringBefore(";")
             val proposed = runCatching {
@@ -145,6 +164,6 @@ internal object SoulEngineWatcher {
         runCatching { SoulEngineState.recordLesson(c, "watcher_tick", "Watcher action: $action; status=$status.", "observed") }
         runCatching { SoulEngineState.recordWatcherStatus(c, status, action) }
         AgentPolicy.log(c, "soul_watcher", action, null, "status=$status; limitations=${limitations.joinToString(",").ifBlank { "none" }}")
-        return TickResult(status, action, limitations, next + " " + p3.summary + " " + subagents.summary)
+        return TickResult(status, action, limitations, next + " " + awarenessSummary + " " + p3.summary + " " + subagents.summary)
     }
 }

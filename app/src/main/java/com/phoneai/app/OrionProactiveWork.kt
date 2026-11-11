@@ -21,19 +21,28 @@ internal class OrionProactiveWorker(
     params: WorkerParameters
 ) : Worker(appContext, params) {
     override fun doWork(): Result {
+        if (!OrionMasterControl.isEnabled(applicationContext)) return Result.success()
         val coreEnabled = runCatching { AgentPolicy.enabled(applicationContext, "orion_core") }.getOrDefault(false)
         val proactiveEnabled = runCatching { AgentPolicy.enabled(applicationContext, "proactive") }.getOrDefault(false)
         if (!OrionProactivePolicy.shouldRun(coreEnabled, proactiveEnabled)) return Result.success()
 
-        // Genuine lifecycle state: scheduled proactive work means the Soul is monitoring.
+        // Local health sensing still runs every heartbeat; unsolicited initiatives must pass the Proactive Gate.
+        if (!OrionMasterControl.isEnabled(applicationContext)) return Result.success()
         OrionSoulLifecycle.watcherTick(applicationContext)
-        // Self-reflection: notice repeatedly failing tools, learn, and queue a follow-up.
-        OrionLivingLoop.tick(applicationContext)
-        // Inner life: instincts, self-set goal, nightly reflection.
-        OrionInnerLife.tick(applicationContext)
+        if (!OrionMasterControl.isEnabled(applicationContext)) return Result.success()
+        val gate = runCatching { OrionProactiveGate.decide(OrionProactiveGate.gather(applicationContext)) }
+            .getOrElse { OrionProactiveGate.Decision(false, 0.0, "gate unavailable: ${it.javaClass.simpleName}") }
+        AgentPolicy.log(applicationContext, "soul_watch", "proactive_gate", null,
+            "open=${gate.open}; score=${"%.2f".format(gate.score)}; reason=${gate.reason}")
+        if (!OrionMasterControl.isEnabled(applicationContext)) return Result.success()
+        val living = if (gate.open) runCatching { OrionLivingLoop.tick(applicationContext) }.getOrDefault("") else ""
+        val inner = if (gate.open) runCatching { OrionInnerLife.tick(applicationContext) }.getOrDefault("") else ""
 
         return runCatching {
-            SoulEngineWatcher.run(applicationContext)
+            if (!OrionMasterControl.isEnabled(applicationContext)) return@runCatching Result.success()
+            val watcher = SoulEngineWatcher.run(applicationContext, allowUnpromptedInitiative = gate.open)
+            val initiativeOccurred = living.isNotBlank() || inner.isNotBlank() || watcher.action == "chronos_review_suggestion"
+            if (gate.open && initiativeOccurred) OrionProactiveGate.recordAction(applicationContext)
             Result.success()
         }.getOrElse {
             AgentPolicy.log(
@@ -68,6 +77,10 @@ internal object OrionProactiveWork {
     fun refresh(context: Context) {
         runCatching {
             val app = context.applicationContext
+            if (!OrionMasterControl.isEnabled(app)) {
+                WorkManager.getInstance(app).cancelUniqueWork(UNIQUE_NAME)
+                return@runCatching
+            }
             if (!AgentPolicy.enabled(app, "orion_core") || !AgentPolicy.enabled(app, "proactive")) {
                 WorkManager.getInstance(app).cancelUniqueWork(UNIQUE_NAME)
                 return@runCatching

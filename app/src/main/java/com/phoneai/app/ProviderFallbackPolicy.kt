@@ -7,16 +7,17 @@ package com.phoneai.app
  * when the primary is rate-limited, times out, returns an empty reply, rejects a model, or
  * reports a transient/server/payload-size failure. Same-provider model recovery runs first.
  *
- * Never rotate for cancellation, exhausted request budgets, authentication, billing, explicit
- * safety blocks, or a general network-unavailable condition. The caller filters provider
- * eligibility and the shared command request budget bounds all attempts.
+ * Never rotate for cancellation, exhausted request budgets, authentication, explicit safety
+ * blocks, or a general network-unavailable condition. A billing/credit failure may rotate only
+ * to another provider already configured and approved by ProviderBillingPolicy; the caller
+ * filters eligibility before this policy is consulted.
  */
 internal object ProviderFallbackPolicy {
     /** Maximum backup providers considered after the selected primary. */
     const val MAX_BACKUP_PROVIDERS = 2
 
     private val recoverableHttpStatuses = setOf(
-        404, 408, 410, 413, 422, 425, 429, 500, 502, 503, 504
+        402, 404, 408, 410, 413, 422, 425, 429, 500, 502, 503, 504
     )
 
     fun shouldTryBackup(error: Throwable, autoSwitchEnabled: Boolean = true): Boolean {

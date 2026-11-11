@@ -94,6 +94,8 @@ internal fun SoulEngineComposeScreen(
     onOpenSettings: () -> Unit,
     onOpenCapabilityReport: () -> Unit,
     onOpenTeach: () -> Unit,
+    masterPowerEnabled: Boolean,
+    onMasterPowerChange: (Boolean) -> Unit,
     coreEnabled: Boolean,
     onCoreEnabledChange: (Boolean) -> Unit,
     onOpenExtensions: () -> Unit,
@@ -140,6 +142,27 @@ internal fun SoulEngineComposeScreen(
                 }
 
                 EngineCoreToggle(coreEnabled, onCoreEnabledChange)
+
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                        .background(EnginePanel).border(1.dp, EngineLine, RoundedCornerShape(16.dp))
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SectionTitle("ORION MASTER POWER", if (masterPowerEnabled) "Brain enabled · owner-controlled shutdown" else "Brain shut down · no background execution")
+                    EngineButton(
+                        if (masterPowerEnabled) "SHUT DOWN ORION" else "START ORION",
+                        if (masterPowerEnabled) Icons.Rounded.Shield else Icons.Rounded.Bolt,
+                        Modifier.fillMaxWidth()
+                    ) { onMasterPowerChange(!masterPowerEnabled) }
+                    Text(
+                        if (masterPowerEnabled)
+                            "Stops the central runtime, watcher, wake listening and queued background recovery. Your Android accessibility permission remains installed; Orion will not execute tools while power is off."
+                        else
+                            "Starts the central runtime again. A deliberate shutdown stays off across app relaunches until you press Start.",
+                        color = EngineMuted, fontSize = 10.sp, lineHeight = 15.sp
+                    )
+                }
 
                 Column(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(EnginePanel)

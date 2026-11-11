@@ -65,11 +65,36 @@ class OrionConversationRepository private constructor(context: Context) :
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) createEventsTable(db)
         if (oldVersion < 3) { createObjectiveEvidenceTable(db); createSearchIndex(db, true) }
-        if (oldVersion in 2..3) db.execSQL("ALTER TABLE chat_events ADD COLUMN trace_id TEXT")
-        if (oldVersion < 5) {
-            db.execSQL("ALTER TABLE chat_events ADD COLUMN correlation_id TEXT")
-            db.execSQL("ALTER TABLE chat_events ADD COLUMN evidence_json TEXT")
+
+        // Migrations must be idempotent: installs may have received a partially applied
+        // schema before a process was killed, and version 5 databases predate these fields.
+        ensureColumn(db, "chat_events", "trace_id", "TEXT")
+        ensureColumn(db, "chat_events", "correlation_id", "TEXT")
+        ensureColumn(db, "chat_events", "evidence_json", "TEXT")
+    }
+
+    /**
+     * Keep a newer on-disk schema when an older app build is installed temporarily.
+     * SQLite columns are additive here; older code safely ignores columns it does not know.
+     * Deleting/recreating this database would destroy conversation history and execution evidence.
+     * A later upgrade re-runs the idempotent column checks above.
+     */
+    override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        // Intentionally preserve the superset schema; never drop user data on app downgrade.
+    }
+
+    private fun ensureColumn(db: SQLiteDatabase, table: String, column: String, definition: String) {
+        val exists = db.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
+            var found = false
+            while (cursor.moveToNext()) {
+                if (cursor.getString(1).equals(column, ignoreCase = true)) {
+                    found = true
+                    break
+                }
+            }
+            found
         }
+        if (!exists) db.execSQL("ALTER TABLE $table ADD COLUMN $column $definition")
     }
 
     private fun createEventsTable(db: SQLiteDatabase) {

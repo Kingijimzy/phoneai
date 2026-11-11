@@ -18,6 +18,7 @@ class SoulEngineActivity : ComponentActivity() {
     private val metricsState = mutableStateOf("")
     private val selfTestState = mutableStateOf("")
     private val coreEnabledState = mutableStateOf(false)
+    private val masterPowerState = mutableStateOf(true)
     private val proposalsState = mutableStateOf<List<SoulEngineState.Proposal>>(emptyList())
     private val goalState = mutableStateOf("")
     private val modeState = mutableStateOf(SoulEngineState.Mode.TALK)
@@ -27,6 +28,7 @@ class SoulEngineActivity : ComponentActivity() {
         window.statusBarColor = Theme.BG
         window.navigationBarColor = Theme.BG
         coreEnabledState.value = AgentPolicy.enabled(this, "orion_core")
+        masterPowerState.value = OrionMasterControl.isEnabled(this)
         try {
             setContent {
                     SoulEngineComposeScreen(
@@ -65,6 +67,18 @@ class SoulEngineActivity : ComponentActivity() {
                                     startActivity(intent)
                                 }
                             }
+                        },
+                        masterPowerEnabled = masterPowerState.value,
+                        onMasterPowerChange = { enabled ->
+                            val changed = if (enabled) OrionMasterControl.start(this@SoulEngineActivity) else OrionMasterControl.shutdown(this@SoulEngineActivity)
+                            if (changed) {
+                                masterPowerState.value = enabled
+                                Toast.makeText(this@SoulEngineActivity, if (enabled) "Orion brain started" else "Orion brain shut down; background execution stopped", Toast.LENGTH_LONG).show()
+                            } else {
+                                masterPowerState.value = OrionMasterControl.isEnabled(this@SoulEngineActivity)
+                                Toast.makeText(this@SoulEngineActivity, "Could not save Orion master power state", Toast.LENGTH_LONG).show()
+                            }
+                            refreshSnapshot()
                         },
                         coreEnabled = coreEnabledState.value,
                         onCoreEnabledChange = { enabled ->
@@ -126,6 +140,7 @@ class SoulEngineActivity : ComponentActivity() {
     private fun refreshSnapshot() {
         try {
             coreEnabledState.value = AgentPolicy.enabled(this, "orion_core")
+            masterPowerState.value = OrionMasterControl.isEnabled(this)
             val tools = runCatching { ToolRegistry.all.size }.getOrDefault(0)
             val packs = runCatching { AgentPolicy.packs.count { it.implemented } }.getOrDefault(0)
             val enabled = runCatching { AgentPolicy.packs.count { it.implemented && AgentPolicy.enabled(this, it.id) } }.getOrDefault(0)

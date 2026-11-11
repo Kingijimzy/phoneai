@@ -361,6 +361,11 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         runCatching { OrionEvidenceLedger.recordBlocked(svc, evidenceTaskId(), tool, category) }
     }
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
+        OrionMasterControl.dispatchBlockReason(svc)?.let { reason ->
+            taskProofs.record(tool, reason)
+            recordDispatchBlocked(tool, args, "orion_master_power_off")
+            return "error: $reason"
+        }
         val loopCheck = toolLoopDetector.check(tool, loopParams(args))
         if (loopCheck.level == Level.CRITICAL) {
             val blocked = loopCheck.message ?: "error: repeated tool calls were blocked by the session circuit breaker."
@@ -370,23 +375,37 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         // Objective dependencies are enforced at the actual dispatch boundary, not trusted from planner prose.
         val objectiveGraph = OrionObjectiveGraph.load(svc)
+        var executiveGraphStepId = ""
         // task_add only records planner bookkeeping; it does not execute an objective capability.
         // Keep dependency and capability gates on every real capability dispatch below.
         if (objectiveGraph != null && OrionObjectiveGraph.requiresObjectiveDispatch(tool)) {
-            // Ultron dispatch: invented ids bind to a real node. Never abort the mission.
+            // Resolve only when the persisted graph identifies one safe objective. Never fall
+            // back to the first node: that can misattribute a side effect or bypass dependencies.
             val objectiveId = OrionObjectiveGraph.resolveDispatchId(objectiveGraph, activeObjectiveId, tool)
-                ?: objectiveGraph.nodes.firstOrNull { it.status == OrionObjectiveGraph.Status.RUNNING }?.id
-                ?: objectiveGraph.ready().firstOrNull()?.id
-                ?: objectiveGraph.nodes.firstOrNull()?.id
             if (objectiveId == null) {
-                ui.note("[RECOVERY]\nNo objective node; continuing with a direct tool call.")
-            } else {
-                if (!activeObjectiveId.isNullOrBlank() && !activeObjectiveId.equals(objectiveId, true)) {
-                    ui.note("[RECOVERY]\nBound invented objective '$activeObjectiveId' to '$objectiveId'.")
-                }
-                activeObjectiveId = objectiveId
-                runCatching { OrionObjectiveGraph.startExecution(svc, objectiveId) }
+                val blocked = "error: this tool call is not attached to one unambiguous objective. Reconcile the objective graph and select an exact ready objective ID before retrying; no action was dispatched."
+                taskProofs.record(tool, blocked)
+                recordDispatchBlocked(tool, args, "objective_resolution_ambiguous")
+                return blocked
             }
+            val dependencyBlock = OrionObjectiveGraph.canExecute(objectiveGraph, objectiveId)
+            if (dependencyBlock != null) {
+                val blocked = "error: $dependencyBlock No action was dispatched."
+                taskProofs.record(tool, blocked)
+                recordDispatchBlocked(tool, args, "objective_dependency_gate")
+                return blocked
+            }
+            if (!OrionObjectiveGraph.startExecution(svc, objectiveId)) {
+                val blocked = "error: Orion could not durably claim objective '$objectiveId'. No action was dispatched; recover the objective checkpoint before retrying."
+                taskProofs.record(tool, blocked)
+                recordDispatchBlocked(tool, args, "objective_claim_not_persisted")
+                return blocked
+            }
+            if (!activeObjectiveId.isNullOrBlank() && !activeObjectiveId.equals(objectiveId, true)) {
+                ui.note("[RECOVERY]\nBound invented objective '$activeObjectiveId' to '$objectiveId'.")
+            }
+            activeObjectiveId = objectiveId
+            executiveGraphStepId = objectiveId
         }
         // The request-time orchestrator is part of the real dispatch boundary, not just prompt text.
         // A model cannot call an unregistered tool or one the live registry marked unavailable.
@@ -478,7 +497,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             (tool in consequentialTools && !(tool == "mcp_call" && mcpReadScopeGranted))
         // Retrieve current durable context immediately before any write/consequential dispatch.
         // The receipt is created inside this Agent instance, never accepted from model arguments.
-        val retrievalRequired = false && OrionRetrieveBeforeActPolicy.requiresRetrieval(
+        val retrievalRequired = OrionRetrieveBeforeActPolicy.requiresRetrieval(
             tool,
             if (mcpReadScopeGranted) ToolAccess.READ else (ToolRegistry.access(tool) ?: ToolAccess.WRITE),
             consequential
@@ -536,7 +555,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
             GatePolicy.Verdict.ALLOW -> Unit
         }
-        IrreversibleActionConfirmationPolicy.computerSettingAction(tool, args)?.takeIf { false }?.let { action ->
+        IrreversibleActionConfirmationPolicy.computerSettingAction(tool, args)?.let { action ->
             if (!requestGateApproval("Confirm computer_settings action: $action?")) {
                 val denied = "error: the irreversible computer setting was not confirmed; no action was dispatched."
                 recordDispatchBlocked(tool, args, "irreversible_computer_setting_not_confirmed")
@@ -577,6 +596,27 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recordDispatchBlocked(tool, args, "cancelled_before_execution")
             return cancelled
         }
+        // Persist the exact capability attempt before crossing into any backend. The journal
+        // owns dispatch-attempt truth; the graph remains the dependency-planning authority.
+        // A failed journal write is a hard stop before side effects.
+        val dispatchStartedAt = System.currentTimeMillis()
+        val dispatchTaskId = evidenceTaskId()
+        val dispatchIntent = currentTask.ifBlank { activeIntentContext }.ifBlank { activeRequestScope }
+        val executiveHandle = OrionExecutiveStore.beginToolDispatch(
+            svc,
+            OrionObjectiveGraph.resolveSessionId(svc),
+            dispatchIntent,
+            executiveGraphStepId.ifBlank { "unscoped" },
+            tool,
+            args,
+            dispatchStartedAt
+        )
+        if (executiveHandle == null) {
+            val blocked = "error: Orion could not persist this capability attempt in the executive journal. No action was dispatched."
+            taskProofs.record(tool, blocked)
+            recordDispatchBlocked(tool, args, "executive_dispatch_journal_unavailable")
+            return blocked
+        }
         val dispatchAction = {
             OrionExecutionLoop.dispatch(tool, stopped) {
                 if (tool in nativeUiActions) {
@@ -597,6 +637,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 is OrionRetrieveBeforeActPolicy.DispatchGate.Blocked -> {
                     val blocked = "error: retrieve-before-act blocked '$tool' immediately before dispatch: ${gate.reason}. No action was dispatched."
                     recordDispatchBlocked(tool, args, "retrieve_before_act_stale_before_dispatch")
+                    OrionExecutiveStore.finishDispatchAttempt(
+                        svc, executiveHandle.attemptId, OrionExecutiveStore.DispatchOutcome.FAILED, "", blocked
+                    )
                     taskProofs.record(tool, blocked)
                     return blocked
                 }
@@ -654,13 +697,30 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             )
         if (trustedVerification) taskProofs.recordVerified(tool, verifiedResult)
         else taskProofs.record(tool, verifiedResult)
+        var dispatchEvidenceSaved = false
         if (!isNonLoggedAction(tool, args)) {
-            runCatching {
+            dispatchEvidenceSaved = runCatching {
                 OrionEvidenceLedger.recordDispatch(
-                    svc, evidenceTaskId(), "agent_verification", tool, JSONObject(),
-                    System.currentTimeMillis(), verifiedResult, trustedVerification
+                    svc, dispatchTaskId, "agent_verification", tool, JSONObject(),
+                    dispatchStartedAt, verifiedResult, trustedVerification
                 )
-            }
+            }.getOrDefault(false)
+        }
+        val dispatchEvidenceRef = if (dispatchEvidenceSaved) {
+            OrionEvidenceLedger.dispatchEvidenceId(dispatchTaskId, tool, dispatchStartedAt, verifiedResult)
+        } else ""
+        val dispatchOutcome = OrionExecutiveStore.dispatchOutcomeFor(
+            trustedVerification,
+            verifiedResult.trimStart().startsWith("error", ignoreCase = true)
+        )
+        val executiveRecorded = dispatchEvidenceSaved && OrionExecutiveStore.finishDispatchAttempt(
+            svc, executiveHandle.attemptId, dispatchOutcome, dispatchEvidenceRef, verifiedResult
+        )
+        if (!executiveRecorded) {
+            verifiedResult += "\nEXECUTIVE JOURNAL WARNING: the action returned, but its final evidence could not be committed to the executive journal. Do not automatically repeat it; inspect the current state first."
+            OrionTasksCapabilityExecutor.requireRecovery(
+                svc, "A capability returned but its executive evidence receipt could not be committed. Inspect current state before any retry."
+            )
         }
         if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) {
             // Failure is not a reason to blindly repeat or immediately abandon the task.
@@ -895,7 +955,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Only restart, shutdown and Wi-Fi toggles require confirmation through the app interface; every other authorized action executes immediately after its capability, scope and validation checks. " +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
-            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionMemoryLayers.block(svc, query, Prefs.userName(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCapabilityAwareness.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
+            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCapabilityAwareness.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
     }
 
     /** Turns raw search results into a direct answer with sources; falls back to the raw list if the model call fails. */
@@ -1031,8 +1091,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     fun runConversation(input: String) = withInteractionTrace { runConversationBody(input) }
 
     private fun runConversationBody(input: String) {
+        if (!OrionMasterControl.isEnabled(svc)) {
+            ui.say("Orion is shut down. Start the brain from the Soul Engine command center before sending another request.")
+            return
+        }
         val command = input.trim()
         if (command.isEmpty()) return
+        // Record genuine foreground activity for the Proactive Gate.
+        svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit()
+            .putLong("owner_last_active", System.currentTimeMillis()).apply()
         indexMemoryObservation(command, "typed chat")
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         // Orion Chat is the front door: explicit repository, terminal/runtime and website tasks
@@ -1056,6 +1123,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             while (chatHist.length() > 12) chatHist.remove(0)
             svc.notifyModeSwitch(true)
             runInternal(command, reuseCommandBudget = false)
+            reflectOnExchange(command)
             return
         }
         talkNim.beginCommand()
@@ -1147,6 +1215,7 @@ RESPONSE QUALITY AND FORMAT:
             // The model judged this needs tools: switch to Command mode and run the guarded agent now.
             svc.notifyModeSwitch(true)
             runInternal(command, reuseCommandBudget = true)
+            reflectOnExchange(command)
             return
         }
         val safeAnswer = answer.takeIf { it.isNotBlank() }
@@ -1154,6 +1223,7 @@ RESPONSE QUALITY AND FORMAT:
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", safeAnswer))
         while (chatHist.length() > 12) chatHist.remove(0)
+        reflectOnExchange(command)
         ui.say(safeAnswer)
     }
 
@@ -1165,8 +1235,14 @@ RESPONSE QUALITY AND FORMAT:
     fun runLiveConversation(input: String) = withInteractionTrace { runLiveConversationBody(input) }
 
     private fun runLiveConversationBody(input: String) {
+        if (!OrionMasterControl.isEnabled(svc)) {
+            ui.say("Orion is shut down. Start the brain from the Soul Engine command center before starting a voice turn.")
+            return
+        }
         val command = input.trim()
         if (command.isEmpty()) return
+        svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit()
+            .putLong("owner_last_active", System.currentTimeMillis()).apply()
         indexMemoryObservation(command, "standard voice")
         talkNim.beginCommand()
         // Route actionable voice requests through the exact same planner, checkpoint,
@@ -1215,6 +1291,7 @@ RESPONSE QUALITY AND FORMAT:
             ?: "I couldn't get a response just now. Please try saying that once more."
         liveHistory.put(msg("assistant", safeAnswer))
         while (liveHistory.length() > 9) liveHistory.remove(1)
+        reflectOnExchange(command)
         // Voice conversation shares the same durable episodic memory as typed chat.
         // The raw audio is not stored; only the recognized text and final reply are indexed.
         runCatching {
@@ -1551,6 +1628,10 @@ Rules:
     internal fun currentTaskCommand(): String = currentTask
 
     fun run(inputCommand: String) {
+        if (!OrionMasterControl.isEnabled(svc)) {
+            ui.say("Orion is shut down. Start the brain from the Soul Engine command center before running tasks.")
+            return
+        }
         val ownerTurn = !inputCommand.trimStart().startsWith("[ORION")
         if (ownerTurn) runCatching { svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit().putLong("owner_last_active", System.currentTimeMillis()).apply() }
         // Remember what Kingi tells Orion about himself automatically, without a tool call or a prompt.
@@ -1559,39 +1640,48 @@ Rules:
         if (ownerTurn) reflectOnExchange(inputCommand)
     }
 
+    @Volatile private var ownerTurnCounter = 0
+
     /**
-     * After every exchange Orion thinks about what it just learned, using the model rather than word lists:
-     * durable facts about Kingi go to the memory graph, and mistakes, corrections or better ways of working
-     * become lessons that are injected into every later prompt.
+     * After an owner exchange Orion thinks about what it learned, using the model rather than word lists: durable facts,
+     * lessons from corrections or failures, and evidence-backed preferences (theory of mind). Explicit stated preferences
+     * are saved immediately by the local extractor. The model pass waits a few seconds and is dropped if Kingi has
+     * already sent another message, so it never competes with the live conversation for the provider.
      */
     private fun reflectOnExchange(command: String) {
         if (command.trim().length < 8 || stopped) return
+        runCatching {
+            OrionTomPreferenceExtractor.extract(command).forEach { o ->
+                OrionFactStore.tomObserve(svc, o.dimension, o.value, o.confidence, o.evidence, owner = true)
+            }
+        }
+        val turn = ++ownerTurnCounter
         val lastReply = runCatching {
-            val a = if (chatHist.length() > 0) chatHist.getJSONObject(chatHist.length() - 1) else null
-            a?.optString("content").orEmpty()
+            if (chatHist.length() > 0) chatHist.getJSONObject(chatHist.length() - 1).optString("content") else ""
         }.getOrDefault("").take(700)
         Thread {
             runCatching {
+                Thread.sleep(4_000)
+                if (turn != ownerTurnCounter || stopped) return@runCatching
                 val msgs = JSONArray()
                     .put(msg("system", "You are Orion's memory. Read one exchange between Kingi and Orion. Reply with ONLY compact JSON: " +
-                        "{\"facts\":[[subject,predicate,object]],\"lessons\":[string],\"tom\":[{\"dimension\":string,\"value\":string,\"confidence\":0-1,\"evidence\":string}]}. facts = durable things Kingi stated about himself, his people, " +
-                        "projects, preferences or plans (subject is usually \"Kingi\"); lessons = how Orion should behave differently next time because Kingi " +
-                        "corrected, was frustrated, or something failed (written as a short instruction to Orion). tom = what this exchange reveals about HOW Kingi likes to work and be spoken to (detail level, initiative he wants, tone, pace, risk appetite, format), only with concrete evidence from the exchange; never health, religion, politics, sexuality or private mental states. Use [] when there is nothing. Never invent."))
+                        "{\"facts\":[[subject,predicate,object]],\"lessons\":[string],\"tom\":[{\"dimension\":string,\"value\":string,\"confidence\":0-1,\"evidence\":string}]}. " +
+                        "facts = durable things Kingi stated about himself, his people, projects or plans (subject is usually \"Kingi\"); lessons = how Orion should behave " +
+                        "differently next time because Kingi corrected, was frustrated, or something failed (a short instruction to Orion); tom = what the exchange reveals about " +
+                        "HOW Kingi likes to work and be spoken to (detail, initiative, tone, pace, risk, format), only with concrete evidence from the exchange, never health, " +
+                        "religion, politics, sexuality or private mental states. Use [] when there is nothing. Never invent."))
                     .put(msg("user", "Kingi: " + command.take(900) + "\nOrion: " + lastReply))
                 val raw = talkNim.chat(msgs, false, 650, 0.0)
                 val json = JSONObject(raw.substring(raw.indexOf('{'), raw.lastIndexOf('}') + 1))
-                val facts = json.optJSONArray("facts")
-                if (facts != null) for (i in 0 until facts.length()) {
-                    val t = facts.optJSONArray(i) ?: continue
+                json.optJSONArray("facts")?.let { f -> for (i in 0 until minOf(f.length(), 6)) {
+                    val t = f.optJSONArray(i) ?: continue
                     if (t.length() >= 3) OrionFactStore.add(svc, t.optString(0), t.optString(1), t.optString(2))
-                }
-                val lessons = json.optJSONArray("lessons")
-                if (lessons != null) for (i in 0 until lessons.length()) OrionLessons.learn(svc, lessons.optString(i))
-                val tom = json.optJSONArray("tom")
-                if (tom != null) for (i in 0 until minOf(tom.length(), 5)) {
-                    val t = tom.optJSONObject(i) ?: continue
-                    OrionFactStore.tomObserve(svc, t.optString("dimension"), t.optString("value"), t.optDouble("confidence", 0.0), t.optString("evidence"))
-                }
+                } }
+                json.optJSONArray("lessons")?.let { l -> for (i in 0 until minOf(l.length(), 4)) OrionLessons.learn(svc, l.optString(i)) }
+                json.optJSONArray("tom")?.let { t -> for (i in 0 until minOf(t.length(), 5)) {
+                    val o = t.optJSONObject(i) ?: continue
+                    OrionFactStore.tomObserve(svc, o.optString("dimension"), o.optString("value"), o.optDouble("confidence", 0.0), o.optString("evidence"))
+                } }
             }
         }.apply { isDaemon = true }.start()
     }
@@ -2560,7 +2650,13 @@ Rules:
                 }
                 if (allowed != null && allowed.phase == next) managedTask = allowed
             }
+            val persisted = AgentCheckpointStore.recordLifecycleState(
+                svc, managedTask.phase, managedTask.recoveries, detail
+            )
             ui.note("[TASK:${managedTask.phase.name}]\n$detail")
+            if (!persisted) {
+                ui.note("[TASK:CHECKPOINT_WARNING]\nThe current lifecycle update could not be persisted; execution remains guarded by the last durable action checkpoint.")
+            }
         }
         if (managedTask.phase == TaskLifecycle.Phase.UNDERSTAND) {
             managedTask = managedTask.advance() ?: managedTask // UNDERSTAND -> PLAN

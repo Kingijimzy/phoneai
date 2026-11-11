@@ -168,4 +168,30 @@ class OrionObjectiveGraphTest {
         assertNull(OrionObjectiveGraph.resolveDispatchId(graph, "wrong_id"))
     }
 
+
+    @Test fun objectiveClaimRejectsASecondConcurrentOwner() {
+        val graph = OrionObjectiveGraph.Graph(
+            objective = "Two independent objectives",
+            nodes = listOf(
+                OrionObjectiveGraph.Objective("research", "Research", status = OrionObjectiveGraph.Status.RUNNING),
+                OrionObjectiveGraph.Objective("write", "Write report")
+            )
+        )
+        assertFalse(OrionObjectiveGraph.canClaimExecution(graph, "write"))
+        assertTrue(OrionObjectiveGraph.canClaimExecution(graph, "research"))
+    }
+
+    @Test fun objectiveClaimAllowsOnlyOneRunningObjective() {
+        val graph = OrionObjectiveGraph.Graph(
+            objective = "Parallel plan",
+            nodes = listOf(
+                OrionObjectiveGraph.Objective("research", "Research"),
+                OrionObjectiveGraph.Objective("memory", "Save memory")
+            )
+        )
+        val claimed = OrionObjectiveGraph.updateStatus(graph, "research", OrionObjectiveGraph.Status.RUNNING)
+        assertTrue(OrionObjectiveGraph.canClaimExecution(claimed, "research"))
+        assertFalse(OrionObjectiveGraph.canClaimExecution(claimed, "memory"))
+    }
+
 }

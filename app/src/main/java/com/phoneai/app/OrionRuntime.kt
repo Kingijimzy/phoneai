@@ -30,7 +30,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
 
     init {
         synchronized(lock) { loadLocked() }
-        if (pendingItems().isNotEmpty()) OrionRecoveryWork.schedule(appContext)
+        if (OrionMasterControl.isEnabled(appContext) && pendingItems().isNotEmpty()) OrionRecoveryWork.schedule(appContext)
     }
 
     fun start() = synchronized(lock) { state = State.ACTIVE; eventLocked("service_connected"); persistLocked() }
@@ -52,7 +52,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
         state = OrionRuntimePolicy.stateAfterEnqueue(state, queue.isNotEmpty())
         eventLocked("work_queued:" + type.name.lowercase())
         persistLocked()
-        OrionRecoveryWork.schedule(appContext)
+        if (OrionMasterControl.isEnabled(appContext)) OrionRecoveryWork.schedule(appContext)
         true
     }
 

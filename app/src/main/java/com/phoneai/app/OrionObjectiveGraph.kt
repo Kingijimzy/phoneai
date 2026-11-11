@@ -151,16 +151,28 @@ internal object OrionObjectiveGraph {
             ?: graph.nodes.singleOrNull()?.id
     }
 
+    /**
+     * Claims an objective for the current app process. The synchronized read/check/commit
+     * prevents two in-process agents or workers from claiming different objectives at once.
+     * A persisted RUNNING node is resumable only by its exact objective ID.
+     */
+    @Synchronized
     fun startExecution(context: Context, id: String): Boolean {
         val graph = load(context) ?: return false
         val resolved = resolveDispatchId(graph, id) ?: return false
-        if (canExecute(graph, resolved) != null) return false
+        if (!canClaimExecution(graph, resolved)) return false
         return save(context, updateStatusSoft(graph, resolved, Status.RUNNING))
+    }
+
+    internal fun canClaimExecution(graph: Graph, id: String): Boolean {
+        if (canExecute(graph, id) != null) return false
+        val running = graph.nodes.filter { it.status == Status.RUNNING }
+        return running.isEmpty() || running.size == 1 && running.single().id == id
     }
 
     fun recordExecution(context: Context, id: String, tool: String, result: String): String? {
         val graph = load(context) ?: return null
-        val resolved = resolveDispatchId(graph, id, tool) ?: graph.nodes.singleOrNull { it.status == Status.RUNNING }?.id ?: return null
+        val resolved = resolveDispatchId(graph, id, tool) ?: return null
         val outcome = if (result.startsWith("error:", ignoreCase = true) || result.startsWith("blocked", ignoreCase = true)) "failure" else "success"
         val summary = result.take(400)
         val receipt = ChatHistoryStore.recordObjectiveEvidence(context, resolved, tool, outcome, summary) ?: return null

@@ -64,6 +64,10 @@ internal object OrionEvidenceLedger {
         else -> Outcome.EXECUTED_UNVERIFIED
     }
 
+    /** Stable reference to the exact evidence event written by recordDispatch. */
+    fun dispatchEvidenceId(taskId: String, tool: String, startedAt: Long, result: String): String =
+        digest("$startedAt|$tool|$taskId|$result").take(24)
+
     /** One durable event per dispatch, with no raw arguments or private tool output persisted. */
     fun recordDispatch(
         context: Context,
@@ -75,7 +79,7 @@ internal object OrionEvidenceLedger {
         result: String,
         trustedVerification: Boolean = false
     ): Boolean = append(context, JSONObject()
-        .put("id", digest("$startedAt|$tool|$taskId|$result").take(24))
+        .put("id", dispatchEvidenceId(taskId, tool, startedAt, result))
         .put("taskId", safeTaskId(taskId))
         .put("backend", backend.take(32))
         .put("tool", tool.take(80))

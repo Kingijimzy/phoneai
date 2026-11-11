@@ -8,6 +8,6 @@ class OrionApp : Application() {
         super.onCreate()
         runCatching { Prefs.loadCustomProviders(this) }
         // Start the background heartbeat whenever the app process starts, not only after the accessibility service connects.
-        runCatching { OrionProactiveWork.ensureScheduled(this) }
+        if (OrionMasterControl.isEnabled(this)) runCatching { OrionProactiveWork.ensureScheduled(this) }
     }
 }

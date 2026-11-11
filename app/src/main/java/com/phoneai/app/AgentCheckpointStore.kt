@@ -170,6 +170,23 @@ object AgentCheckpointStore {
         saved
     }
 
+    /**
+     * Persist the executive's observed lifecycle for diagnostics and post-crash explanation.
+     * This is deliberately not an execution authority: resume still reconciles the checkpoint
+     * and replans instead of trusting a stale in-memory phase.
+     */
+    internal fun recordLifecycleState(
+        c: Context,
+        phase: TaskLifecycle.Phase,
+        recoveries: Int,
+        detail: String
+    ): Boolean = update(c) { checkpoint ->
+        checkpoint.put("lifecyclePhase", phase.name)
+            .put("lifecycleRecoveries", recoveries.coerceIn(0, TaskLifecycle.MAX_RECOVERIES))
+            .put("lifecycleDetail", detail.filter { it.isLetterOrDigit() || it in " _-.,:;()'" }.take(240))
+            .put("lifecycleUpdatedAt", System.currentTimeMillis())
+    }
+
     fun markRunning(c: Context): Boolean = synchronized(lock) {
         val checkpoint = readCheckpoint(c) ?: return@synchronized false
         if (checkpoint.optBoolean("stopRequested")) return@synchronized false

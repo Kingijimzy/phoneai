@@ -27,6 +27,25 @@ class AgentCheckpointStoreTest {
         ExperienceStore.clear(context)
     }
 
+    @Test fun executiveLifecyclePhaseAndRecoveryCountSurviveCheckpointReload() {
+        assertTrue(AgentCheckpointStore.begin(context, "Complete a multi-step objective"))
+        assertTrue(AgentCheckpointStore.recordLifecycleState(
+            context, TaskLifecycle.Phase.RECOVER, 2, "Replanning after an observed tool failure"
+        ))
+
+        // Reload from the durable checkpoint rather than retaining the caller's in-memory state.
+        val persisted = AgentCheckpointStore.pending(context)!!
+        assertEquals("RECOVER", persisted.optString("lifecyclePhase"))
+        assertEquals(2, persisted.optInt("lifecycleRecoveries"))
+        assertTrue(persisted.optString("lifecycleDetail").contains("Replanning"))
+        assertTrue(persisted.optLong("lifecycleUpdatedAt") > 0L)
+
+        // Resume still must not trust this old phase as permission to replay an action.
+        assertTrue(AgentCheckpointStore.pause(context))
+        assertNotNull(AgentCheckpointStore.resumeInstruction(context))
+        assertEquals("RECOVER", AgentCheckpointStore.pending(context)!!.optString("lifecyclePhase"))
+    }
+
     @Test fun interruptedInFlightActionRequiresInspectionAndIsNotAutomaticallyReplayed() {
         assertTrue(AgentCheckpointStore.begin(context, "Open an app and inspect its state"))
         assertTrue(AgentCheckpointStore.beginStep(context, "open_app", JSONObject().put("name", "Settings")))
