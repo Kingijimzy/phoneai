@@ -233,7 +233,7 @@ class ToolRegistryPromptAvailabilityTest {
     }
 
     @Test fun mcpDiscoveryGuidanceUsesOnlyRegisteredReadTools() {
-        val prompt = ToolRegistry.promptSection("Check my MCP servers and discover API Anything tools")
+        val prompt = ToolRegistry.promptSection("Check my MCP servers and discover API Anything tools").lowercase()
         assertTrue(prompt.contains("mcp_status"))
         assertTrue(prompt.contains("mcp_list_tools"))
         assertTrue(prompt.contains("do not invent mcp_servers_list"))
