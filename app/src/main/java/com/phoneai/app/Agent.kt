@@ -1505,36 +1505,6 @@ Rules:
         )
     }
 
-    @Volatile private var routeCache: Pair<String, OrionRouter.Decision>? = null
-
-    /** One model judgment per message (cached for the turn); structural fallback only if the provider cannot answer. */
-    private fun routeFor(command: String): OrionRouter.Decision {
-        routeCache?.let { if (it.first == command) return it.second }
-        OrionRouter.explicitAction(command)?.let { explicit ->
-            routeCache = command to explicit
-            runCatching { AgentPolicy.log(svc, "router", explicit.kind.name.lowercase(), null, "source=explicit-action; plan=" + explicit.plan) }
-            return explicit
-        }
-        val modelDecision = runCatching {
-            val environment = buildString {
-                appendLine(OrionCapabilityAwareness.availability(svc))
-                appendLine(OrionCentralBrain.contextFor(svc, command))
-                appendLine(ToolRegistry.promptSection())
-            }
-            val user = OrionRouter.userMessage(
-                command, recentConversationTurns(), contextualActiveObjective(), environment
-            )
-            val raw = talkNim.chat(OrionRouter.toMessages(OrionRouter.SYSTEM, user), false, 180, 0.0)
-            OrionRouter.parse(raw)
-        }.getOrNull() ?: OrionRouter.fallback(command)
-        // The model owns intent interpretation. Structural fallback is used only when
-        // the model/provider cannot return a valid decision; no phrase-specific health route.
-        val decision = modelDecision
-        routeCache = command to decision
-        runCatching { AgentPolicy.log(svc, "router", decision.kind.name.lowercase(), null, "source=${decision.source}; plan=${decision.plan}") }
-        return decision
-    }
-
     private fun contextualActiveObjective(): String = currentTask.ifBlank {
         runCatching { OrionTasksCapabilityExecutor.pendingCheckpoint(svc)?.optString("command").orEmpty() }
             .getOrDefault("")
