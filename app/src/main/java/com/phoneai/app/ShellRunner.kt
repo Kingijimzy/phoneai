@@ -64,6 +64,12 @@ object ShellRunner {
 
     fun termuxInstalled(c: Context): Boolean = try { c.packageManager.getPackageInfo(TERMUX_PKG, 0); true } catch (_: Exception) { false }
 
+    private fun hasNativeAndroidCommand(name: String): Boolean {
+        if (name.isBlank() || name.any { !it.isLetterOrDigit() && it != '_' && it != '-' }) return false
+        return listOf("/system/bin/$name", "/system/xbin/$name", "/vendor/bin/$name")
+            .any { path -> File(path).let { it.isFile && it.canExecute() } }
+    }
+
     fun runBuiltin(c: Context, command: String, timeoutSec: Long = 20, onOutput: (String) -> Unit = {}): String {
         val normalized = command.trim()
         if (normalized.isEmpty()) return "error: command is required"
@@ -74,7 +80,13 @@ object ShellRunner {
         if (normalized == "pwd") {
             return currentDirectory(c).absolutePath
         }
-        BuiltinCommands.run(c, normalized)?.let { return ShellPolicy.clip(it) }
+        // Prefer the real Android executable whenever it exists. The JVM convenience
+        // implementation is only a fallback for utilities Android does not ship.
+        val builtinArgs = BuiltinCommands.parse(normalized)
+        val nativeCommand = builtinArgs?.firstOrNull()?.let(::hasNativeAndroidCommand) == true
+        if (builtinArgs != null && !nativeCommand) {
+            BuiltinCommands.run(c, normalized)?.let { return ShellPolicy.clip(it) }
+        }
         return try {
             val p = ProcessBuilder("/system/bin/sh", "-c", normalized).directory(currentDirectory(c)).redirectErrorStream(true).start()
             val out = StringBuffer()
