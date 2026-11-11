@@ -127,7 +127,10 @@ internal class LinuxRuntimeInstaller(
 
     fun execute(manifest: LinuxRuntimePolicy.Manifest, command: String, timeoutMs: Long = 60_000L, onOutput: (String) -> Unit = {}, workspaceHostPath: String? = null, shouldStop: () -> Boolean = { false }, extraEnvironment: Map<String, String> = emptyMap()): String {
         if (!isReady(manifest)) return "error: Alpine runtime is not installed or failed readiness checks. Install/repair the pinned Linux runtime first."
-        if (timeoutMs !in 250L..180_000L) return "error: Linux timeout must be between 250 and 180000 ms."
+        // Never leak provider/model timeout values into the process supervisor unchecked.
+        // The old rejection caused otherwise valid Python work to fail before launch when a
+        // caller supplied a sub-250 ms timeout or requested the FULL profile's 300 seconds.
+        val boundedTimeoutMs = LinuxRuntimePolicy.normalizeProcessTimeout(timeoutMs)
         if (command == "__orion_install__") return "error: internal command is not executable"
         val workspace = workspaceHostPath?.let { candidate ->
             // The guest may see exactly one host directory: Orion's dedicated Python workspace.
@@ -166,7 +169,7 @@ internal class LinuxRuntimeInstaller(
             }
         }
         val result = try {
-            runProcess(args, rootfs, timeoutMs, onOutput, shouldStop, extraEnvironment)
+            runProcess(args, rootfs, boundedTimeoutMs, onOutput, shouldStop, extraEnvironment)
         } catch (failure: IOException) {
             // Keep the marker after interrupted package operations so the next call repairs the rootfs.
             return "error: Linux process I/O failed safely: ${(failure.message ?: failure.javaClass.simpleName).take(240)}"
@@ -179,7 +182,7 @@ internal class LinuxRuntimeInstaller(
             (result.cancelled || result.timedOut || result.exitCode in setOf(9, 137, 143))
         if (packageMutation && !packageRecoveryRequired) packageOperationMarker.delete()
         return if (result.cancelled) "error: Linux command cancelled; the guest process was terminated."
-        else if (result.timedOut) "error: Linux command timed out after ${timeoutMs} ms" +
+        else if (result.timedOut) "error: Linux command timed out after ${boundedTimeoutMs} ms" +
             if (packageMutation) ". The next Linux command will restore the pinned base rootfs before continuing." else ""
         else "exit=${result.exitCode}\n${result.output}" +
             if (packageRecoveryRequired) "\nPackage operation was interrupted; the next Linux command will restore the pinned base rootfs before continuing." else ""
