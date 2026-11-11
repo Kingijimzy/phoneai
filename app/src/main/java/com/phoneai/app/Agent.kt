@@ -1926,34 +1926,11 @@ Rules:
         refreshSystem(command)
         history.put(msg("user", command))
         compact()
-        val taskContext = activeOrchestrationContext
-        if (!resumeRequest && taskContext?.goal?.needsClarification == true) {
-            val question = if (taskContext.goal.kind == OrionGoalUnderstanding.Kind.AMBIGUOUS) "Which account or service do you want me to connect?" else "What exact outcome should I complete?"
-            ui.note("[TASK:CLARIFY]\nWaiting for the missing task detail; no tool was dispatched")
-            ui.say(question)
-            return
-        }
+        // Clarification is selected by the semantic model using full dialogue and live capability context.
         // Ground every run in live capability/graph context before acting.
         if (!resumeRequest) {
             // Context is assessed for the planner only; internal bookkeeping is not shown in the chat.
             OrionPreActionContext.assess(svc, command)
-        }
-        // Chart analysis is a deliberate vision fallback: send a screenshot only when the user
-        // explicitly asks Orion to inspect a chart, rather than sending screenshots on every turn.
-        val chartCommand = command.lowercase()
-        if (!resumeRequest && !browserActionTask && !structuredTask &&
-            Regex("\\bchart\\b").containsMatchIn(chartCommand) &&
-            Regex("analy|study|read|look|see|opportunit|trade|setup|learn").containsMatchIn(chartCommand)) {
-            ui.phase("thinking")
-            val chartAnswer = try {
-                executeWithRecoveryGuard("look", JSONObject().put("question", "This is a trading chart. Name the symbol and timeframe if visible, then the trend, key support and resistance levels, any trade setup with entry, stop and target, and the main risk. Use four short spoken sentences and no markdown."))
-            } catch (e: Exception) {
-                "I could not read the chart. ${e.message ?: e.javaClass.simpleName}"
-            }
-            history.put(msg("assistant", JSONObject().put("say", chartAnswer).put("tool", "done").toString()))
-            compact()
-            ui.say(chartAnswer)
-            return
         }
         // Live weather is a deterministic data lookup, not an LLM task. Preserve the last
         // explicit place so a follow-up like "weather" does not lose the user's context.
