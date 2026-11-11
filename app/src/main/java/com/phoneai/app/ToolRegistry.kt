@@ -294,6 +294,36 @@ internal object ToolRegistry {
         else tool.promptLine.substringBefore(":")
     }
 
+    /**
+     * Native provider tool lists have practical per-request limits (OpenAI Chat Completions
+     * currently documents at most 128 function definitions). Keep the native set relevant while
+     * the full registry remains discoverable in the system prompt and planner.
+     */
+    fun nativeToolsFor(request: String?, maxTools: Int = 120): List<ToolDefinition> {
+        val limit = maxTools.coerceIn(1, 128)
+        val queryTokens = Regex("[a-zA-Z0-9_]{3,}")
+            .findAll(request.orEmpty().lowercase())
+            .map { it.value }
+            .toSet()
+        val ranked = all.mapIndexed { index, tool ->
+            val name = tool.name.lowercase()
+            val contract = tool.promptLine.lowercase()
+            val score = queryTokens.sumOf { token ->
+                when {
+                    name == token || name.split('_').contains(token) -> 8
+                    Regex("(^|[^a-z0-9_])" + Regex.escape(token) + "([^a-z0-9_]|$)").containsMatchIn(contract) -> 1
+                    else -> 0
+                }
+            }
+            Triple(tool, score, index)
+        }.sortedWith(compareByDescending<Triple<ToolDefinition, Int, Int>> { it.second }.thenBy { it.third })
+        val selected = LinkedHashSet<String>()
+        all.filter { it.name in alwaysDetailed }.forEach { if (selected.size < limit) selected += it.name }
+        ranked.filter { it.second > 0 }.forEach { if (selected.size < limit) selected += it.first.name }
+        all.forEach { if (selected.size < limit) selected += it.name }
+        return all.filter { it.name in selected }
+    }
+
     fun promptSection(request: String?, status: String = ""): String {
         val detailedNames = detailedToolNames(request)
         val detailed = all.filter { it.name in detailedNames }
