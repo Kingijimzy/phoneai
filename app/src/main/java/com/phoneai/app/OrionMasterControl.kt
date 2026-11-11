@@ -41,12 +41,20 @@ internal object OrionMasterControl {
             .putLong(KEY_CHANGED_AT, System.currentTimeMillis())
             .commit()
         if (!saved) return false
+
+        // Stop the central brain and every independently running Orion automation.
         OrionRuntime(app).stop()
         runCatching {
-            WorkManager.getInstance(app).cancelUniqueWork("orion_stage6_proactive_heartbeat")
-            WorkManager.getInstance(app).cancelUniqueWork("orion_durable_runtime_recovery")
+            val work = WorkManager.getInstance(app)
+            work.cancelUniqueWork("orion_stage6_proactive_heartbeat")
+            work.cancelUniqueWork("orion_durable_runtime_recovery")
         }
         runCatching { PhoneAiService.instance?.stopOrionForMasterShutdown() }
+        runCatching { TelegramListenerService.stop(app) }
+        runCatching { WatchService.stop(app) }
+        runCatching { OrionSocketForegroundService.stop(app) }
+        // Finish an active screen recording cleanly so shutdown does not corrupt its file.
+        runCatching { RecordService.instance?.stopRecording() }
         return true
     }
 
