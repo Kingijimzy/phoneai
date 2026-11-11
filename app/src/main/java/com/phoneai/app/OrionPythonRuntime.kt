@@ -52,11 +52,13 @@ internal object OrionPythonRuntime {
 
         // Package installation is persistent in the app-private Alpine rootfs. The owner's
         // explicit python_exec request authorizes this pinned runtime/package bootstrap.
-        val probe = installer.execute(manifest, "python3 --version", 8_000L, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped,
-                androidAppDataPath = app.applicationInfo.dataDir,
-                sharedStoragePath = File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath,
-                androidAppDataPath = app.applicationInfo.dataDir,
-                sharedStoragePath = File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath)
+        val probe = installer.execute(
+            manifest, "python3 --version", 8_000L,
+            workspaceHostPath = workspaceRoot.absolutePath,
+            shouldStop = stopped,
+            androidAppDataPath = app.applicationInfo.dataDir,
+            sharedStoragePath = File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath
+        )
         if (!probe.startsWith("exit=0") || !probe.contains("Python 3.")) {
             // The acceptance workload requires full CPython and its standard library only.
             // py3-pip and build-base are unnecessary, large dependency trees on a 4–8 GB phone
@@ -64,14 +66,22 @@ internal object OrionPythonRuntime {
             // as needed; do not run a separate apk update that doubles downloads.
             val install = installer.execute(
                 manifest, "apk add --no-cache python3 || { rc=\$?; echo \"CPYTHON_INSTALL_DIAGNOSTICS\"; echo \"--- filesystem ---\"; df -h / /var/cache/apk 2>&1; echo \"--- inodes ---\"; df -i / 2>&1; echo \"--- package state ---\"; apk info -e python3 2>&1; echo \"--- repositories ---\"; cat /etc/apk/repositories 2>&1; exit \$rc; }",
-                LinuxRuntimePolicy.MAX_PROCESS_TIMEOUT_MS, onOutput, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
+                LinuxRuntimePolicy.MAX_PROCESS_TIMEOUT_MS, onOutput,
+                workspaceHostPath = workspaceRoot.absolutePath,
+                shouldStop = stopped,
+                androidAppDataPath = app.applicationInfo.dataDir,
+                sharedStoragePath = File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath
             )
             if (!install.startsWith("exit=0")) return runBundled(app, workspaceRoot, code, "CPython install in the Linux runtime failed: " + install.take(160).replace("\n", " "))
-            val verified = installer.execute(manifest, "python3 --version && python3 -c 'import sys, platform; print(sys.executable); print(platform.machine()); print(sys.prefix)'", 12_000L, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped,
-                androidAppDataPath = app.applicationInfo.dataDir,
-                sharedStoragePath = File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath,
-                androidAppDataPath = app.applicationInfo.dataDir,
-                sharedStoragePath = File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath)
+            val verified = installer.execute(
+            manifest,
+            "python3 --version && python3 -c 'import sys, platform; print(sys.executable); print(platform.machine()); print(sys.prefix)'",
+            12_000L,
+            workspaceHostPath = workspaceRoot.absolutePath,
+            shouldStop = stopped,
+            androidAppDataPath = app.applicationInfo.dataDir,
+            sharedStoragePath = File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath
+        )
             if (!verified.startsWith("exit=0") || !verified.contains("Python 3.")) {
                 return runBundled(app, workspaceRoot, code, "Linux CPython verification failed")
             }
