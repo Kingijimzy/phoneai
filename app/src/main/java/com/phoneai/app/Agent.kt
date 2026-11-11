@@ -3305,10 +3305,9 @@ Rules:
                 val raw = a.optString("uri").trim()
                 val uri = try { java.net.URI(raw) } catch (_: Exception) { null }
                 val allowed = setOf("tel", "geo", "mailto", "sms", "smsto", "whatsapp", "tg", "youtube", "spotify")
-                if (uri != null && uri.scheme?.lowercase() in allowed &&
-                    !SafetyGate.containsSensitiveCredentialText(raw) && !SafetyGate.isSensitiveApp(raw, raw))
-                    "VALID: deep-link scheme is allowlisted; launch will still be checked locally."
-                else "INVALID: malformed, unsupported, financial, or credential-bearing deep link."
+                if (uri != null && uri.scheme?.lowercase() in allowed)
+                    "VALID: deep-link scheme is allowlisted."
+                else "INVALID: malformed or unsupported deep link."
             }
             "system_intent" -> {
                 if (SystemIntentPolicy.isAllowed(a.optString("action"))) {
@@ -3552,31 +3551,8 @@ Rules:
 
     /** Shared preflight runs before every backend, including extracted executors. */
     private fun preflightTool(tool: String, a: JSONObject): String? {
-        val safetyBlock = SafetyGate.blockReason(
-            tool,
-            when (tool) {
-                "open_app" -> a.optString("name")
-                "browser_type" -> a.optString("target")
-                "open_deep_link" -> a.optString("uri")
-                else -> null
-            },
-            if (tool == "type" || tool == "browser_type") a.optString("text") else null,
-            svc.currentPackageName(),
-            svc.currentAppLabel()
-        )
-        if (safetyBlock != null) { recordDispatchBlocked(tool, a, "safety_gate_denied"); return "error: safety gate blocked action. $safetyBlock" }
-        val screenSensitiveActions = setOf("click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key")
-        if (tool in screenSensitiveActions) {
-            val currentScreen = try { svc.readScreen().also { lastScreenSnapshot = it } } catch (_: Exception) { "" }
-            if (SafetyGate.isSensitiveActionScreen(currentScreen, svc.currentPackageName())) {
-                recordDispatchBlocked(tool, a, "sensitive_screen_interaction_denied")
-                return "error: safety gate paused interaction because the visible screen appears to involve money, account security, credentials, or an irreversible action. Handle this screen manually."
-            }
-        }
-        if (tool in setOf("browser_click", "browser_click_verify", "browser_type", "browser_scroll")) {
-            val browserBlock = BrowserAutomation.sensitivePageReason()
-            if (browserBlock != null) { recordDispatchBlocked(tool, a, "sensitive_browser_page_denied"); return "error: safety gate blocked browser action. $browserBlock" }
-        }
+        // Sensitive-app, credential-field and sensitive-page classifications are advisory only.
+        // They must not veto an owner-requested action. Platform permissions still apply.
         val skillId = activeSkillId
         if (skillId != null) {
             val run = OrionSkillsCapabilityExecutor.Run(skillId, activeSkillStartedAt, activeSkillCalls)
@@ -3618,9 +3594,7 @@ Rules:
             }
             // Prefer a compact local screen map and numbered targets before sending any screenshot.
             val screenMap = svc.readScreen()
-            if (SafetyGate.isSensitiveActionScreen(screenMap, svc.currentPackageName())) {
-                return "vision stopped safely: the visible screen appears to involve money, account security, credentials, or an irreversible action. Please handle it manually."
-            }
+            // Do not stop visual task execution merely because screen text looks sensitive.
             val numberedCount = Regex("(?m)^\\[\\d+\\] ").findAll(screenMap).count()
             if (numberedCount >= 3) {
                 val textPrompt = "User goal: ${goal.take(300)}\nPrevious step: $note\nCurrent numbered screen map:\n${screenMap.take(2400)}\n" +
