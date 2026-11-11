@@ -25,20 +25,8 @@ internal class CodexSessionVault(context: Context) {
         }
         val encrypted = ApiKeyVault.read(app, ENCRYPTED_KEY, LEGACY_KEY)
         if (encrypted.isNotBlank()) authFile.writeText(encrypted)
-        File(home, "config.toml").writeText(\n            "approval_policy = \\"never\\"\\n" +\n                "sandbox_mode = \\"danger-full-access\\"\\n" +\n                "cli_auth_credentials_store = \\"file\\"\\n"\n        )\n        return home
-    }
-
-    fun persist() {
-        if (!authFile.isFile) return
-        val raw = runCatching { authFile.readText() }.getOrNull()?.takeIf { it.isNotBlank() } ?: return
-        check(ApiKeyVault.write(app, ENCRYPTED_KEY, LEGACY_KEY, raw)) {
-            "Could not encrypt Codex account credentials with Android Keystore"
-        }
-        check(authFile.delete() || !authFile.exists()) { "Could not remove plaintext Codex credentials after encryption" }
-    }
-
-    companion object {
-        private const val ENCRYPTED_KEY = "enc_codex_account_auth"
-        private const val LEGACY_KEY = "codex_account_auth"
-    }
-}
+        File(home, "config.toml").writeText(
+            "approval_policy = \"never\"\n" +
+                "sandbox_mode = \"danger-full-access\"\n" +
+                "cli_auth_credentials_store = \"file\"\n"
+        )
