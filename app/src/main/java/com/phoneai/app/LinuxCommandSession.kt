@@ -65,7 +65,7 @@ internal class LinuxCommandSession private constructor(
     }
 
     companion object {
-        fun start(config: LinuxTerminalLaunchConfig, argv: List<String>): LinuxCommandSession {
+        fun start(config: LinuxTerminalLaunchConfig, argv: List<String>, extraEnvironment: Map<String, String> = emptyMap()): LinuxCommandSession {
             require(argv.isNotEmpty() && argv.size <= 64) { "Invalid guest command arguments" }
             require(argv.all { it.isNotEmpty() && it.length <= 16_384 && !it.contains('\u0000') }) {
                 "Invalid guest command argument"
@@ -76,6 +76,10 @@ internal class LinuxCommandSession private constructor(
             config.environment.forEach { entry ->
                 val split = entry.indexOf('=')
                 if (split > 0) builder.environment()[entry.substring(0, split)] = entry.substring(split + 1)
+            }
+            extraEnvironment.forEach { (key, value) ->
+                require(key.matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) && !value.contains('\u0000'))
+                builder.environment()[key] = value
             }
             val process = builder.start()
             val stdin = BufferedWriter(OutputStreamWriter(process.outputStream, Charsets.UTF_8))
