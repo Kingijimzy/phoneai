@@ -14,13 +14,14 @@ internal object ShellPolicy {
     private fun isCatastrophicDelete(command: String): Boolean {
         val c = normalized(command)
         val rootDelete = Regex("""\brm\b[^;&|]*\s/(?:\s|$|\*|system(?:/|$)|vendor(?:/|$)|product(?:/|$)|boot(?:/|$)|recovery(?:/|$)|data(?:/|$)|metadata(?:/|$)|dev(?:/|$))""")
-        val explicitWipe = Regex("""\bfactory\s+reset\b|\bfactory_reset\b|\bwipe[ ._-]*(?:data|cache|all|system)\b|\bformat[ ._-]*(?:userdata|data|system)\b|\berase[ ._-]*all\b""")
+        val rootFindDelete = Regex("""\bfind\b\s+/(?:\s|$|\*|system(?:/|$)|data(?:/|$)|vendor(?:/|$))[^;&|]*\s-delete\b""")
+        val explicitWipe = Regex("""\bfactory\s+reset\b|\bfactory_reset\b|\bwipe[ ._-]*(?:data|cache|all|system)\b|\bformat[ ._-]*(?:userdata|data|system)\b|\bformat\s+/(?:data|system|userdata|metadata)\b|\berase[ ._-]*all\b""")
         val recoveryFastboot = Regex("""\brecovery\s+--wipe\b|\bfastboot\s+(?:erase|format|wipe)\b""")
         val resetSettings = c.contains("settings put global device_provisioned 0") ||
             c.contains("settings put secure setup_wizard_finished 0")
         val forkBomb = Regex(""":\s*\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:""").containsMatchIn(c)
         val rawDeviceFormat = Regex("""\b(?:mkfs\.[a-z0-9]+|wipefs|blkdiscard)\b[^;&|]*\b/dev/(?:block/|mmcblk|sd[a-z])""")
-        return rootDelete.containsMatchIn(c) || explicitWipe.containsMatchIn(c) ||
+        return rootDelete.containsMatchIn(c) || rootFindDelete.containsMatchIn(c) || explicitWipe.containsMatchIn(c) ||
             recoveryFastboot.containsMatchIn(c) || resetSettings || forkBomb ||
             rawDeviceFormat.containsMatchIn(c)
     }
@@ -28,8 +29,8 @@ internal object ShellPolicy {
     private fun writesRawDevice(command: String): Boolean {
         val c = normalized(command)
         val device = Regex("""/dev/(?:block/|mmcblk\d+|sd[a-z]|nvme\d+n\d+|sda\b)""")
-        val ddWrite = Regex("""\bdd\b""").containsMatchIn(c) &&
-            Regex("""\bof\s*=""").containsMatchIn(c) && device.containsMatchIn(c)
+        // Only the dd output target is a write; reading a block device into a workspace backup is allowed.
+        val ddWrite = Regex("""\bdd\b[^;&|]*\bof\s*=\s*/dev/(?:block/|mmcblk\d+|sd[a-z]|nvme\d+n\d+|sda\b)""").containsMatchIn(c)
         val redirectedWrite = Regex("""(?:>{1,2}\s*|\btee\s+)""").containsMatchIn(c) &&
             device.containsMatchIn(c)
         val copyWrite = Regex("""\b(?:cp|mv|truncate)\b[^;&|]*\s""").containsMatchIn(c) &&
