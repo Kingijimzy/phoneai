@@ -8,7 +8,7 @@ internal object OrionCommandIntentPolicy {
     // Python scraper/crawler creation plus a test/run request must route to Python first.
     // Otherwise a URL in the same sentence can pull the model router into browser navigation.
     private val pythonCodeMention = Regex(
-        "(?i)\\bpython\\b.{0,120}\\b(?:code|script|program|calculator|scraper|scraping|crawler|automation)\\b|\\b(?:code|script|program|calculator|scraper|scraping|crawler|automation)\\b.{0,120}\\bpython\\b"
+        "(?i)\\bpython\\b.{0,120}\\b(?:code|script|program|calculator|scraper|scrapper|scraping|crawler|automation)\\b|\\b(?:code|script|program|calculator|scraper|scrapper|scraping|crawler|automation)\\b.{0,120}\\bpython\\b"
     )
     private val executionVerb = Regex("(?i)\\b(?:run|execute|test|verify|try|validate)\\b")
     private val negativeExecution = Regex(
@@ -28,7 +28,7 @@ internal object OrionCommandIntentPolicy {
 
     fun isPythonScraperBuildAndTest(command: String): Boolean =
         Regex("(?i)\\bpython\\b").containsMatchIn(command) &&
-            Regex("(?i)\\b(?:scraper|scraping|crawler)\\b").containsMatchIn(command) &&
+            Regex("(?i)\\b(?:scraper|scrapper|scraping|crawler)\\b").containsMatchIn(command) &&
             Regex("(?i)\\b(?:code|build|create|write|make|develop)\\b").containsMatchIn(command) &&
             executionVerb.containsMatchIn(command) &&
             !negativeExecution.containsMatchIn(command)
