@@ -103,9 +103,9 @@ internal object OrionCommandIntentPolicy {
 internal object OrionProgressCuePolicy {
     private val potentiallySlowTools = setOf(
         "browser_open", "browser_search", "browser_click", "browser_type",
-        "python", "python_exec", "shell", "terminal", "read_screen",
+        "python", "python_exec", "dev_python", "dev_shell", "shell", "terminal", "read_screen",
         "routine_run", "routine_resume", "image_generate", "web_search",
-        "github_search", "github_clone", "file_download"
+        "github_search", "github_clone", "file_download", "play_media"
     )
 
     fun shouldAnnounce(toolNames: List<String>): Boolean =
