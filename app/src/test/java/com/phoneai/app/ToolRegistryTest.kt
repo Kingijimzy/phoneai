@@ -236,6 +236,8 @@ class ToolRegistryPromptAvailabilityTest {
         val prompt = ToolRegistry.promptSection("Check my MCP servers and discover API Anything tools").lowercase()
         assertTrue(prompt.contains("mcp_status"))
         assertTrue(prompt.contains("mcp_list_tools"))
+        assertTrue(prompt.contains("show configured mcp endpoint"))
+        assertTrue(prompt.contains("discover names/descriptions from configured mcp"))
         assertTrue(prompt.contains("do not invent mcp_servers_list"))
         assertTrue(prompt.contains("Listing tools is read-only"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("mcp_status"))
