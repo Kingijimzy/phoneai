@@ -173,7 +173,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
                     nim.cancel()
                     providerThread.join(5000)
                     if (parentCancelled()) {
-                        store.cancel(jobId, "parent_cancelled_during_provider_request")
+                        store.confirmCancellation(jobId, "parent_cancelled_during_provider_request")
                         OrionAgentDelegation.finish(applicationContext, manifest,
                             "cancelled: parent stopped; late output discarded", cancelled = true)
                         return Result.success()
@@ -189,7 +189,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             providerThread.interrupt()
             providerThread.join(5000)
             if (parentCancelled()) {
-                store.cancel(jobId, "parent_cancelled_during_interrupted_request")
+                store.confirmCancellation(jobId, "parent_cancelled_during_interrupted_request")
                 OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: parent stopped", cancelled = true)
                 return Result.success()
             }
@@ -201,7 +201,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
 
         if (parentCancelled()) {
             nim.cancel()
-            store.cancel(jobId, "parent_cancelled_before_result_commit")
+            store.confirmCancellation(jobId, "parent_cancelled_before_result_commit")
             OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: late result discarded", cancelled = true)
             return Result.success()
         }
@@ -225,7 +225,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             return Result.failure()
         }
         if (parentCancelled()) {
-            store.cancel(jobId, "parent_cancelled_after_provider_return")
+            store.confirmCancellation(jobId, "parent_cancelled_after_provider_return")
             OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: late result discarded", cancelled = true)
             return Result.success()
         }
@@ -238,7 +238,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             return Result.failure()
         }
         if (parentCancelled()) {
-            store.cancel(jobId, "parent_cancelled_after_result_staging")
+            store.confirmCancellation(jobId, "parent_cancelled_after_result_staging")
             OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: staged result discarded after parent stop", cancelled = true)
             return Result.success()
         }
