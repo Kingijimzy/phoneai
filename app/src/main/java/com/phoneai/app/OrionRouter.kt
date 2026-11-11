@@ -44,13 +44,13 @@ internal object OrionRouter {
     }
 
     fun userMessage(command: String, recent: List<Pair<String, String>>, objective: String, capabilities: String): String = buildString {
-        if (capabilities.isNotBlank()) appendLine("CAPABILITY STATE: " + capabilities.take(600))
-        if (objective.isNotBlank()) appendLine("UNFINISHED OBJECTIVE: " + objective.take(240))
+        if (capabilities.isNotBlank()) appendLine("LIVE ENVIRONMENT AND CAPABILITY CONTEXT:\n" + capabilities)
+        if (objective.isNotBlank()) appendLine("ACTIVE / UNFINISHED OBJECTIVE:\n" + objective)
         if (recent.isNotEmpty()) {
             appendLine("RECENT TURNS:")
-            recent.takeLast(4).forEach { (r, t) -> appendLine("$r: ${t.replace(Regex("\\s+"), " ").take(200)}") }
+            recent.forEach { (r, t) -> appendLine("$r: $t") }
         }
-        append("LATEST MESSAGE: ").append(command.take(900))
+        append("LATEST MESSAGE: ").append(command)
     }
 
     fun toMessages(system: String, user: String): JSONArray =
