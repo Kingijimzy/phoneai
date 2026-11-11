@@ -7,7 +7,8 @@ import java.util.Locale
 
 /**
  * Automatic recall for every turn: before a message is answered, the few memories most relevant to it are
- * ranked by meaning (on-device embedding), keywords and entity links (people, places, projects, dates), and
+ * ranked by the best available embedding tier (optional local TFLite / owner-enabled Ollama, otherwise a
+ * deterministic local feature-hash fallback), keywords and entity links (people, places, projects, dates), and
  * injected as labelled reference data together with matching past experience. The existing per-task memory
  * block stays in the prompt as the fallback.
  */
