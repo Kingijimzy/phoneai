@@ -5,7 +5,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ToolRegistryTest {
-        @Test fun workspaceListIsRegisteredAndReadOnly() {
+        @Test fun ultronCoordinationToolsAreAvailableBesideNativeExecutionTools() {
+        val requestTools = ToolRegistry.nativeToolsFor("create a multi-step task and build a Python project")
+            .map { it.name }.toSet()
+        assertTrue(requestTools.containsAll(setOf(
+            "chronos_awareness", "soul_state", "recall", "remember",
+            "ask_agent", "queue_agent", "agent_jobs", "create_agent",
+            "task_list", "task_add", "task_update",
+            "python_exec", "workspace_write", "workspace_read", "save_file"
+        )))
+        assertTrue("The combined tool window must remain under provider limits",
+            requestTools.size <= 64)
+    }
+
+    @Test fun workspaceListIsRegisteredAndReadOnly() {
         val tool = ToolRegistry.all.single { it.name == "workspace_list" }
         assertEquals(ToolAccess.READ, tool.access)
         assertEquals("workspace_shell", AgentPolicy.packForTool("workspace_list"))
