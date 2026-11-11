@@ -54,6 +54,7 @@ internal object OrionCentralBrain {
         val sections = mutableListOf<String>()
         sections += OrionGraspProtocol.contextBlock()
         sections += OrionAmbientAwareness.systemContext()
+        sections += OrionPlatformSelfKnowledge.promptBlock(app)
         // Canonical identity is injected into every executive context, independent of provider or UI surface.
         sections += OrionPrimeDirective.contextBlock()
         sections += OrionEntityPhilosophy.doctrineBlock()
