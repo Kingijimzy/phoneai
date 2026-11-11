@@ -158,7 +158,7 @@ class OrionWorkerJobStoreTest {
     @Test fun acknowledgedRunningCancellationBecomesTerminalAndReleasesActiveSlot() {
         val store = OrionWorkerJobStore(context)
         val running = store.enqueue("parent-1", "Cancel this running analysis")!!
-        val waiting = store.enqueue("parent-1", "Run after cancellation")!!
+        val waiting = store.enqueue("parent-2", "Run after cancellation")!!
         assertNotNull(store.claim(running.id) { true })
 
         assertEquals(1, store.cancelParent("parent-1", "parent_stopped"))
