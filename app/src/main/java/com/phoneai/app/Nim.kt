@@ -1173,7 +1173,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 OrionNativeToolCallCodec.parse(p.id, r.body) { name -> ToolRegistry.find(name) != null }
             } else OrionNativeToolCallCodec.Turn(extract(p, r.body), emptyList())
             if (parsedTurn.calls.isNotEmpty()) {
-                nativeToolCalls.set(parsedTurn.calls.map { OrionModelToolCall(it.id, it.name, it.arguments) })
+                nativeToolCalls.set(parsedTurn.calls.map { OrionModelToolCall(it.id, it.name, it.arguments, it.available, it.validationError) })
             }
             val content = parsedTurn.text
             if ((content.isBlank() || content == "null") && parsedTurn.calls.isEmpty()) {
