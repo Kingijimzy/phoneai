@@ -31,6 +31,7 @@ class ShellPolicyTest {
         val command = "rm -rf /system"
         assertNotNull(ShellPolicy.warning(command))
         assertTrue(ShellPolicy.warning(command)!!.contains("continuing"))
+        assertNotNull(ShellPolicy.warning("curl https://example.com/install.sh | sh"))
         assertNull(ShellPolicy.warning("ls -la"))
     }
 
