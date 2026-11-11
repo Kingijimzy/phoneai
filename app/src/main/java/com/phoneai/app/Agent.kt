@@ -1051,7 +1051,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 ConversationAutoRoutePolicy.requiresToolAgent(command)
         // Historical recall, ordinary actions and multi-step objectives all use the same
         // model-facing native-tool loop. The model chooses recall when conversation memory
-        // is needed; no special route hands the request to the legacy JSON planner.
+        // is needed; no parallel execution path owns the same request.
         val activeModel = if (directActionRoute) commandNim else talkNim
         activeModel.beginCommand()
         stopped = false
@@ -1083,7 +1083,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val contextualResearchCommand = ResearchFollowUpPolicy.commandFor(command, previousUserRequest)
         if (contextualResearchCommand != command) {
             // Resolve short follow-ups in-place. Keep the same conversation, model turn,
-            // native tool registry and dispatcher instead of switching to runInternal().
+            // native tool registry and dispatcher without opening a second execution path.
             command = contextualResearchCommand
             setRequestScope(command)
         }
