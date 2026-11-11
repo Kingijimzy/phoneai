@@ -16,41 +16,29 @@ internal object OrionAgencyBootstrap {
     )
 
     fun begin(context: Context, userMessage: String, recentTurns: List<Pair<String, String>>): Turn {
+        // The upstream semantic router supplies a complete objective. This layer owns continuity,
+        // not natural-language classification: it reconciles the objective with the durable mission.
         val raw = userMessage.trim()
         val locked = OrionMissionLock.activeGoal(context)
-        val intent = OrionContextualIntentInterpreter.resolve(raw, recentTurns, locked)
+        val sameMission = locked.isNotBlank() &&
+            (locked.equals(raw, ignoreCase = true) || MemoryRanking.similarity(locked, raw) >= 0.72)
+        val goal = raw
+        if (goal.isNotBlank()) OrionMissionLock.setActive(context, goal)
 
-        val isContinue = intent.kind == OrionContextualIntentInterpreter.Kind.CONTINUE_OBJECTIVE ||
-            intent.kind == OrionContextualIntentInterpreter.Kind.COMPLETE_REMAINING ||
-            intent.kind == OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS
-
-        val goal = when {
-            isContinue -> OrionMissionLock.resumeObjective(context, intent.resolvedObjective ?: locked)
-            intent.kind == OrionContextualIntentInterpreter.Kind.AMBIGUOUS_REFERENCE -> ""
-            OrionMissionLock.isBackgroundNoise(raw) && locked.isNotBlank() -> locked
-            else -> raw
-        }
-
-        if (goal.isNotBlank() && !OrionMissionLock.isBackgroundNoise(goal)) {
-            OrionMissionLock.setActive(context, goal)
-        }
-
-        val recoveryHint = OrionForcedRecovery.afterFailure(goal.ifBlank { raw }, "prior", "", 0)
+        val recoveryHint = OrionForcedRecovery.afterFailure(goal.ifBlank { locked }, "prior", "", 0)
         val extra = buildString {
-            appendLine("AGENCY (Ultron-style):")
-            appendLine("- Active mission: ${OrionMissionLock.activeGoal(context).ifBlank { "(none)" }}")
-            appendLine("- Own this goal until done or the user cancels. Do not switch to trading/soul-watch.")
-            appendLine("- On tool failure: change tool/method (e.g. ${recoveryHint.nextToolHint}). Do not only apologize.")
+            appendLine("AGENCY (GRASP mission continuity):")
+            appendLine("- Model-resolved objective: ${goal.ifBlank { "(none)" }}")
+            appendLine("- Previously active mission: ${locked.ifBlank { "(none)" }}")
+            appendLine("- Own the current objective until verified complete, genuinely blocked, cancelled, or an owner decision is required.")
+            appendLine("- On tool failure, inspect the result and choose a materially different supported route (e.g. ${recoveryHint.nextToolHint}).")
             appendLine("- Never invent objective ids. Unknown ids bind to the RUNNING/READY node.")
-            appendLine("- Success requires a tool receipt that matches the user goal.")
-            appendLine("- ACT, do not narrate. If a tool can do it, call the tool before explaining.")
-            appendLine("- After every tool result, continue the same mission. Feed the result into the next decision.")
-            appendLine("- On failure, switch method (web search, browser, different app). Do not stop after the first miss.")
-            appendLine("- Do not replace the user mission with soul-watch, startup recovery, or trading context.")
-            if (intent.contextBlock.isNotBlank()) appendLine(intent.contextBlock)
+            appendLine("- Success requires observable evidence that matches the intended outcome.")
+            appendLine("- After every tool result, update the belief state and continue the same objective where appropriate.")
+            appendLine("- Do not replace the current mission with background Soul Watch or unrelated trading context.")
         }.trim()
 
-        return Turn(effectiveGoal = goal.ifBlank { raw }, systemExtra = extra, isContinue = isContinue)
+        return Turn(effectiveGoal = goal.ifBlank { locked }, systemExtra = extra, isContinue = sameMission)
     }
 
     fun afterTool(
