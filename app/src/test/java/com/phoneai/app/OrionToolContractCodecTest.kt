@@ -59,7 +59,12 @@ class OrionToolContractCodecTest {
         assertTrue(selected.size <= 128)
         assertTrue(selected.any { it.name == "mcp_status" })
         assertTrue(selected.any { it.name == "mcp_list_tools" })
+        assertTrue(selected.any { it.name == "mcp_call" })
+        assertTrue(selected.any { it.name == "lookup_app" })
+        assertTrue(selected.any { it.name == "open_app" })
         assertTrue(selected.all { ToolRegistry.find(it.name) != null })
+        val resumed = ToolRegistry.nativeToolsFor("continue", setOf("browser_click_verify"))
+        assertTrue(resumed.any { it.name == "browser_click_verify" })
     }
 
     @Test fun parsesActualRegistryContractsWithoutLosingNames() {
