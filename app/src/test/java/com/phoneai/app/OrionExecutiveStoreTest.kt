@@ -42,4 +42,27 @@ class OrionExecutiveStoreTest {
         assertFalse(OrionExecutiveStore.isValidPlan((0..32).map { step("step-$it") }))
     }
 
+    @Test fun plansRejectDuplicateDependenciesAndCrossObjectiveSteps() {
+        assertFalse(OrionExecutiveStore.isValidPlan(listOf(step("a"), step("b", listOf("a", "a")))))
+        val foreign = step("b").copy(objectiveId = "another-objective")
+        assertFalse(OrionExecutiveStore.isValidPlan(listOf(step("a"), foreign)))
+    }
+
+    @Test fun replanningPreservesEvidenceOnlyWhenStepMeaningIsIdentical() {
+        val original = step("run-tests").copy(
+            title = "Run unit tests",
+            capability = "gradle_test",
+            argumentsDigest = "digest-1",
+            status = OrionExecutiveStore.StepStatus.VERIFIED,
+            attempts = 1,
+            resultSummary = "All tests passed",
+            evidenceRef = "evidence-123"
+        )
+        assertTrue(OrionExecutiveStore.canPreserveStepState(original, original.copy(ordinal = 4)))
+        assertFalse(OrionExecutiveStore.canPreserveStepState(original, original.copy(title = "Run different tests")))
+        assertFalse(OrionExecutiveStore.canPreserveStepState(original, original.copy(dependencies = listOf("prepare"))))
+        assertFalse(OrionExecutiveStore.canPreserveStepState(original, original.copy(capability = "shell")))
+        assertFalse(OrionExecutiveStore.canPreserveStepState(original, original.copy(argumentsDigest = "digest-2")))
+    }
+
 }
