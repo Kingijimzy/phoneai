@@ -1,0 +1,44 @@
+package com.phoneai.app
+
+import org.junit.Assert.*
+import org.junit.Test
+
+class OrionNativeToolCallCodecTest {
+    private val known: (String) -> Boolean = { it == "python_exec" || it == "device_info" }
+
+    @Test fun parsesOpenAiCompatibleFunctionCall() {
+        val body = """{"choices":[{"message":{"content":"I will inspect this.","tool_calls":[{"id":"call-1","type":"function","function":{"name":"python_exec","arguments":"{\"code\":\"print(2+2)\"}"}}]}}]}"""
+        val turn = OrionNativeToolCallCodec.parse("openai", body, known)
+        assertEquals("I will inspect this.", turn.text)
+        assertEquals(1, turn.calls.size)
+        assertEquals("python_exec", turn.calls[0].name)
+        assertEquals("print(2+2)", turn.calls[0].arguments.getString("code"))
+    }
+
+    @Test fun parsesAnthropicToolUseBlock() {
+        val body = """{"stop_reason":"tool_use","content":[{"type":"text","text":"Checking."},{"type":"tool_use","id":"toolu_1","name":"device_info","input":{"detail":"hardware"}}]}"""
+        val turn = OrionNativeToolCallCodec.parse("anthropic", body, known)
+        assertEquals("Checking.", turn.text)
+        assertEquals("device_info", turn.calls.single().name)
+        assertEquals("hardware", turn.calls.single().arguments.getString("detail"))
+    }
+
+    @Test fun parsesResponsesApiFunctionCall() {
+        val body = """{"output":[{"type":"function_call","call_id":"fc_1","name":"python_exec","arguments":"{\"code\":\"print(7)\"}"},{"type":"message","content":[{"type":"output_text","text":"Done planning."}]}]}"""
+        val turn = OrionNativeToolCallCodec.parse("opencode-zen", body, known)
+        assertEquals("Done planning.", turn.text)
+        assertEquals("fc_1", turn.calls.single().id)
+        assertEquals("print(7)", turn.calls.single().arguments.getString("code"))
+    }
+
+    @Test fun ignoresUnknownMalformedAndOversizedCalls() {
+        val body = """{"choices":[{"message":{"tool_calls":[{"id":"x","function":{"name":"shell_root","arguments":"{}"}},{"id":"y","function":{"name":"python_exec","arguments":"not-json"}}]}}]}"""
+        assertTrue(OrionNativeToolCallCodec.parse("openai", body, known).calls.isEmpty())
+    }
+
+    @Test fun nonJsonResponseIsAnEmptyTurn() {
+        val turn = OrionNativeToolCallCodec.parse("openai", "plain text", known)
+        assertEquals("", turn.text)
+        assertTrue(turn.calls.isEmpty())
+    }
+}
