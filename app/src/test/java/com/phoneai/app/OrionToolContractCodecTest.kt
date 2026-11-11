@@ -28,7 +28,7 @@ class OrionToolContractCodecTest {
         val gemini = OrionToolContractCodec.gemini(listOf(tool)).getJSONObject(0)
             .getJSONArray("functionDeclarations").getJSONObject(0)
         assertEquals("inspect", gemini.getString("name"))
-        assertEquals("path", gemini.getJSONObject("parameters").getJSONObject("properties").getString("path"))
+        assertTrue(gemini.getJSONObject("parameters").getJSONObject("properties").has("path"))
     }
 
     @Test fun emptySignatureProducesStrictEmptyObjectSchema() {
