@@ -16,8 +16,8 @@ import java.io.File
 internal object OrionPythonRuntime {
     private const val SCRIPT_NAME = "orion_main.py"
     private const val MAX_OUTPUT_CHARS = 24_000
-    private const val EXECUTION_TIMEOUT_MS = 100_000L
-    private const val FULL_EXECUTION_TIMEOUT_MS = 300_000L
+    private const val EXECUTION_TIMEOUT_MS = LinuxRuntimePolicy.MAX_PROCESS_TIMEOUT_MS
+    private const val FULL_EXECUTION_TIMEOUT_MS = LinuxRuntimePolicy.MAX_PROCESS_TIMEOUT_MS
 
     @Synchronized
     fun execute(context: Context, code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }, onOutput: (String) -> Unit = {}, toolInvoker: ((String, org.json.JSONObject) -> String)? = null): String {
