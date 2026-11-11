@@ -252,7 +252,7 @@ internal class OrionPythonPhoneApi(
 
     fun ws_close(sessionId: String): String = OrionPythonWebSocketTransport.close(sessionId)
 
-    /** GET and POST run immediately for explicitly owner-granted hosts; POST requires a saved host write grant. */
+    /** Public HTTPS GET needs global NETWORK consent; LAN/local access and POST still require exact host grants. */
     fun http_get(url: String): String = request(url, "GET", "")
 
     fun http_post(url: String, body: String): String {
@@ -270,17 +270,17 @@ internal class OrionPythonPhoneApi(
             .proxy(Proxy.NO_PROXY)
             .dns(object : Dns {
                 override fun lookup(hostname: String): List<InetAddress> {
-                    if (!hostname.equals(endpoint.host, ignoreCase = true)) {
-                        throw UnknownHostException("redirect or secondary network host is blocked")
-                    }
-                    return endpoint.addresses
+                    if (hostname.equals(endpoint.host, ignoreCase = true)) return endpoint.addresses
+                    if (method != "GET") throw UnknownHostException("secondary network host is blocked for writes")
+                    return OrionPythonNetworkPolicy.resolvePublicOrGrantedHost(hostname)
+                        ?: throw UnknownHostException("redirect target is not a public internet host")
                 }
             })
-            .connectTimeout(5, TimeUnit.SECONDS)
-            .readTimeout(8, TimeUnit.SECONDS)
-            .writeTimeout(5, TimeUnit.SECONDS)
-            .callTimeout(10, TimeUnit.SECONDS)
-            .followRedirects(false)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(90, TimeUnit.SECONDS)
+            .followRedirects(method == "GET")
             .followSslRedirects(false)
             .build()
         return try {
@@ -293,9 +293,9 @@ internal class OrionPythonPhoneApi(
                 }.build()
             client.newCall(request).execute().use { response ->
                 val responseBody = response.body
-                val bytes = responseBody?.byteStream()?.use { it.readNBytes(64 * 1024) } ?: ByteArray(0)
+                val bytes = responseBody?.byteStream()?.use { it.readNBytes(2 * 1024 * 1024) } ?: ByteArray(0)
                 val truncated = (responseBody?.contentLength() ?: -1L) > bytes.size ||
-                    bytes.size == 64 * 1024
+                    bytes.size == 2 * 1024 * 1024
                 JSONObject().put("status", response.code)
                     .put("body", bytes.toString(Charsets.UTF_8))
                     .put("truncated", truncated).toString()
