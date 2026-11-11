@@ -1059,6 +1059,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             while (chatHist.length() > 12) chatHist.remove(0)
             svc.notifyModeSwitch(true)
             runInternal(command, reuseCommandBudget = false)
+            reflectOnExchange(command)
             return
         }
         talkNim.beginCommand()
