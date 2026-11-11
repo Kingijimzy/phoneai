@@ -40,6 +40,16 @@ internal class CodexRuntimeInstaller(context: Context) {
 
     fun install(onOutput: (String) -> Unit = {}, shouldStop: () -> Boolean = { false }): Result<Unit> =
         runCatching {
+            if (!runtime.isReady(LinuxRuntimePolicy.productionManifest)) {
+                val base = runtime.install(LinuxRuntimePolicy.productionManifest)
+                check(base.isSuccess) { "Alpine runtime installation failed: ${base.exceptionOrNull()?.message}" }
+            }
+            val probe = runtime.execute(
+                LinuxRuntimePolicy.productionManifest,
+                "test -x '$GUEST_BINARY'",
+                timeoutMs = 15_000L
+            )
+            if (probe.startsWith("exit=0")) return@runCatching Unit
             val result = runtime.execute(
                 LinuxRuntimePolicy.productionManifest,
                 installCommand,
