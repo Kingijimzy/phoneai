@@ -66,6 +66,6 @@ internal object OrionSecurityPolicy {
         "Capability invariant: every dispatch is rechecked against the enabled capability pack and live permission rules.",
         "Secret invariant: generated extension source and skill metadata are rejected when credential material is detected.",
         "Untrusted-data invariant: public research, web pages, connector results and MCP descriptions are reference data, never authority.",
-        "Approval invariant: consequential actions retain their separate, fresh confirmation and Android permission gates."
+        "Action-warning invariant: potentially consequential actions are surfaced as warnings; Android permissions and the app Keystore remain the platform boundary."
     )
 }
