@@ -1048,6 +1048,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     fun runConversation(input: String) = withInteractionTrace { runConversationBody(input) }
 
     private fun runConversationBody(input: String) {
+        if (!OrionMasterControl.isEnabled(svc)) {
+            ui.say("Orion is shut down. Start the brain from the Soul Engine command center before sending another request.")
+            return
+        }
         val command = input.trim()
         if (command.isEmpty()) return
         // Record genuine foreground activity for the Proactive Gate.
@@ -1188,6 +1192,10 @@ RESPONSE QUALITY AND FORMAT:
     fun runLiveConversation(input: String) = withInteractionTrace { runLiveConversationBody(input) }
 
     private fun runLiveConversationBody(input: String) {
+        if (!OrionMasterControl.isEnabled(svc)) {
+            ui.say("Orion is shut down. Start the brain from the Soul Engine command center before starting a voice turn.")
+            return
+        }
         val command = input.trim()
         if (command.isEmpty()) return
         svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit()
@@ -1577,6 +1585,10 @@ Rules:
     internal fun currentTaskCommand(): String = currentTask
 
     fun run(inputCommand: String) {
+        if (!OrionMasterControl.isEnabled(svc)) {
+            ui.say("Orion is shut down. Start the brain from the Soul Engine command center before running tasks.")
+            return
+        }
         val ownerTurn = !inputCommand.trimStart().startsWith("[ORION")
         if (ownerTurn) runCatching { svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit().putLong("owner_last_active", System.currentTimeMillis()).apply() }
         // Remember what Kingi tells Orion about himself automatically, without a tool call or a prompt.
