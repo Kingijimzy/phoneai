@@ -144,31 +144,19 @@ internal object ConversationContextPolicy {
     }
 }
 
-/** Shared policy for the only owner confirmations retained by Orion. */
+/** Confirmation is reserved for destructive deletion/wiping and Trading Desk writes. */
 internal object IrreversibleActionConfirmationPolicy {
-    private val computerSettings = Regex("(?i)\\bcomputer(?:_|\\s+)settings?\\b")
-    private val action = Regex(
-        "(?i)\\b(?:restart|reboot|shutdown|poweroff|wifi|toggle(?:\\s+(?:the\\s+)?)?wi-?fi|turn(?:ing)?\\s+wi-?fi\\s+(?:on|off))\\b"
+    private val destructiveAction = Regex(
+        "(?i)\\b(?:delete|deleting|remove|removing|wipe|wiping|erase|erasing|truncate|format|factory\\s*reset|empty\\s+trash|clear\\s+all)\\b"
+    )
+    private val tradingWrite = Regex(
+        "(?i)\\b(?:trading\\s+desk|place\\s+(?:an?\\s+)?order|open\\s+(?:a\\s+)?position|close\\s+(?:a\\s+)?position|modify\\s+(?:an?\\s+)?order|cancel\\s+(?:an?\\s+)?order)\\b"
     )
 
     fun requiresConfirmation(actionDescription: String): Boolean =
-        computerSettings.containsMatchIn(actionDescription) && action.containsMatchIn(actionDescription)
+        destructiveAction.containsMatchIn(actionDescription) || tradingWrite.containsMatchIn(actionDescription)
 
-    fun computerSettingAction(tool: String, args: JSONObject): String? {
-        val targetTool = if (tool == "mcp_call") args.optString("name") else tool
-        if (!targetTool.equals("computer_settings", ignoreCase = true)) return null
-        val payload = args.optJSONObject("arguments") ?: args
-        val requested = payload.optString("action").ifBlank { payload.optString("setting") }
-            .ifBlank { payload.optString("operation") }
-            .lowercase().replace('-', '_').replace(' ', '_')
-        return when (requested) {
-            "restart", "reboot" -> "restart"
-            "shutdown", "poweroff", "power_off" -> "shutdown"
-            "wifi", "toggle_wifi", "wifi_toggle", "turn_wifi_on", "turn_wifi_off",
-            "enable_wifi", "disable_wifi", "wifi_on", "wifi_off" -> "toggle Wi-Fi"
-            else -> null
-        }
-    }
+    fun computerSettingAction(tool: String, args: JSONObject): String? = null
 }
 /** The brain: asks the AI what to do, runs the tool it picks, repeats. */
 class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
