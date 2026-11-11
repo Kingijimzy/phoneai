@@ -86,6 +86,20 @@ class OrionCommandIntentPolicyTest {
         ))
     }
 
+    @Test fun pythonAuthoringRoutesDirectlyEvenWithoutRunOrExecuteVerb() {
+        val request = "Code a site scraper using Python"
+        assertTrue(OrionCommandIntentPolicy.requiresPythonAuthoring(request))
+        assertFalse(OrionCommandIntentPolicy.requiresPythonExecution(request))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+    }
+
+    @Test fun writeOnlyPythonRequestRoutesToWorkspaceWithoutExecuting() {
+        val request = "Write a Python calculator but do not execute it"
+        assertTrue(OrionCommandIntentPolicy.requiresPythonAuthoring(request))
+        assertFalse(OrionCommandIntentPolicy.requiresPythonExecution(request))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+    }
+
     @Test fun codeOnlyAndNegatedExecutionRequestsStayNonExecuting() {
         assertFalse(OrionCommandIntentPolicy.requiresPythonExecution(
             "Write a Python calculator but do not execute it"
