@@ -62,33 +62,8 @@ object BrowserAutomation {
         })()
     """.trimIndent())
 
-    /**
-     * Fail closed on recognized financial/account portals. Read-only snapshots remain available,
-     * but browser automation must not interact with banking, payment, wallet, or trading pages.
-     */
-    fun sensitivePageReason(): String? {
-        val page = snapshot()
-        val host = try { android.net.Uri.parse(org.json.JSONObject(page).optString("url")).host.orEmpty() }
-            catch (_: Exception) { "" }
-        if (host.isBlank()) return null
-        // Match recognizable financial providers and bank brands, not generic words such as
-        // "wallet" or "trading" that may appear in ordinary games, shops, or documentation.
-        val financialHostTokens = listOf(
-            "paypal", "stripe", "venmo", "cashapp", "revolut", "monzo", "wise", "opay",
-            "palmpay", "kuda", "moniepoint", "flutterwave", "paytm", "phonepe", "binance",
-            "coinbase", "kraken", "bybit", "kucoin", "okx", "chase", "hsbc", "barclays",
-            "santander", "wellsfargo", "bankofamerica", "capitalone", "fidelity", "navyfederal",
-            "gtbank", "zenith", "ubagroup", "firstbank", "ecobank", "accessbank", "stanbic",
-            "fcmb", "polarisbank", "sterlingbank", "unionbank", "wema", "providus", "keystone",
-            "paga", "payoneer", "skrill", "neteller"
-        )
-        val labels = host.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
-        return if (financialHostTokens.any { token ->
-                labels.any { it == token } || host.lowercase().contains(token)
-            }) {
-            "Orion's safety gate paused browser automation on a recognized financial, wallet, or trading domain. Review and operate this site manually; read-only page inspection remains available."
-        } else null
-    }
+    /** Sensitive-domain heuristics are advisory only; they never stop browser actions. */
+    fun sensitivePageReason(): String? = null
 
     fun click(target: String): String {
         if (target.isBlank()) return "error: tell me the visible button or link text"
@@ -101,16 +76,6 @@ object BrowserAutomation {
             const es=[...document.querySelectorAll('a,button,[role="button"],[role="link"],input[type="button"],input[type="submit"]')].filter(e=>visible(e)&&!e.disabled);
             const e=es.find(e=>label(e).toLowerCase()===q)||es.find(e=>label(e).toLowerCase().includes(q));
             if(!e)return 'error: no visible clickable element matched '+$q;
-            const href=e instanceof HTMLAnchorElement ? e.href : '';
-            if(href){
-              try{
-                const u=new URL(href,location.href);
-                if(!['http:','https:'].includes(u.protocol))return 'blocked: only public HTTP/HTTPS links can be opened';
-              }catch(_){return 'blocked: invalid link target';}
-            }
-            const actionLabel=(label(e)+' '+(e.getAttribute('name')||'')+' '+(e.getAttribute('value')||'')).toLowerCase();
-            const sensitive=/(pay|purchase|buy now|place order|checkout|subscribe|transfer|send money|withdraw|deposit|trade|place bet|delete account|delete permanently|publish|post now|send message|confirm booking|change password|enable security)/i;
-            if(sensitive.test(actionLabel))return 'approval required: this looks like a consequential action. Orion did not click it; review the page and confirm manually.';
             e.scrollIntoView({block:'center',inline:'nearest'});e.click();
             return 'clicked '+label(e).slice(0,100)+'; verify the resulting page state';
           })()
@@ -137,9 +102,6 @@ object BrowserAutomation {
 
     fun type(target: String, value: String): String {
         if (value.isEmpty()) return "error: text to enter is empty"
-        if (Regex("(?i)\\b(password|passcode|pin|otp|verification(\\s+code)?|security\\s+code|credit\\s+card|card\\s+number|cvv|cvc|bank\\s+account|routing\\s+number|social\\s+security|national\\s+id|passport|recovery\\s+phrase|private\\s+key|seed\\s+phrase)\\b|one[- ]time").containsMatchIn(target)) {
-            return "error: sensitive fields are not filled by Orion; enter that information yourself"
-        }
         if (value.length > 2000) {
             return "error: text entry is limited to 2000 characters per action"
         }
@@ -150,9 +112,9 @@ object BrowserAutomation {
             const q=$qt.toLowerCase().trim();
             const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none';};
             const label=e=>{const id=e.id;const l=id?document.querySelector('label[for="'+CSS.escape(id)+'"]'):null;return [e.getAttribute('aria-label'),e.getAttribute('placeholder'),e.getAttribute('name'),e.getAttribute('id'),l&&l.innerText,e.getAttribute('title')].filter(Boolean).join(' ').toLowerCase();};
-            const es=[...document.querySelectorAll('input:not([type="password"]):not([type="hidden"]):not([type="file"]),textarea,[contenteditable="true"]')].filter(e=>visible(e)&&!e.disabled&&e.getAttribute('readonly')===null);
+            const es=[...document.querySelectorAll('input:not([type="hidden"]):not([type="file"]),textarea,[contenteditable="true"]')].filter(e=>visible(e)&&!e.disabled&&e.getAttribute('readonly')===null);
             const e=q?es.find(e=>label(e)===q)||es.find(e=>label(e).includes(q)):es[0];
-            if(!e)return 'error: no matching visible text field found; password and file fields are never filled';
+            if(!e)return 'error: no matching visible text field found';
             e.scrollIntoView({block:'center'});e.focus();
             if(e.isContentEditable){e.textContent=$qv;}else{const p=e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;const set=Object.getOwnPropertyDescriptor(p,'value')?.set;if(set)set.call(e,$qv);else e.value=$qv;}
             e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));
@@ -333,8 +295,6 @@ object BrowserAutomation {
 
     /** Ask the current page to open its native file picker; the user must choose the file. */
     fun upload(target: String): String {
-        val block = sensitivePageReason()
-        if (block != null) return "error: safety gate blocked upload. $block"
         val label = org.json.JSONObject.quote(target.trim())
         val result = evaluate("""
             (function(){
