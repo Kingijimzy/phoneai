@@ -75,7 +75,7 @@ class OrionPythonWorkspaceRepairTest {
         val listing = workspace.list()
         assertTrue(listing.contains("projects/webapp/src/index.js"))
         assertFalse(listing.contains("node_modules"))
-        assertEquals(256L * 1024 * 1024, OrionPythonWorkspace.MAX_TOTAL_BYTES)
+        assertEquals(1024L * 1024 * 1024, OrionPythonWorkspace.MAX_TOTAL_BYTES)
     }
 
     @Test fun diagnosticsReportMissingWorkspaceRootWithEvidence() {
