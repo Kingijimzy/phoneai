@@ -22,7 +22,7 @@ class OrionTomPreferenceExtractorTest {
     }
 
     @Test fun capturesTheIntentInferencePreference() {
-        val found = OrionTomPreferenceExtractor.extract("Stop making me use commands; understand what I mean from context.")
+        val found = OrionTomPreferenceExtractor.extract("Stop making Orion read commands or using prompts; teach it to infer intent.")
         assertTrue(found.any { it.dimension == "interaction_style" })
     }
 }
