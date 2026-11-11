@@ -127,7 +127,7 @@ class OrionConversationRepository private constructor(context: Context) :
         val existing = tomPreference(context, key)
         if (existing?.ownerLocked == true) return false
         val bounded = confidence.coerceIn(0.0, 0.95)
-        if (existing != null && bounded + 0.08 < existing.confidence) return false
+        // A newer evidence-backed model update may revise an inferred preference; owner locks still win.
         val values = ContentValues().apply {
             put("dimension", key); put("value", cleanValue); put("confidence", bounded)
             put("source", "inferred"); put("evidence", cleanEvidence); put("updated_at", System.currentTimeMillis())
