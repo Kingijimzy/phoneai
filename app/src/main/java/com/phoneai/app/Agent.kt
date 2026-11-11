@@ -1368,8 +1368,13 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         routineReplayStatus = ""
         val handled = runSavedRoutineCommand("$verb routine $routineName")
         if (!handled) return "error: the saved routine request could not be parsed; no gesture was dispatched."
-        return routineReplayStatus.ifBlank {
+        val summary = routineReplayStatus.ifBlank {
             "Routine '$routineName' returned without a status message. Inspect the saved checkpoint and screen before retrying."
+        }
+        return if (summary.startsWith("Routine '$routineName' replayed ", ignoreCase = true)) {
+            summary
+        } else {
+            "error: $summary"
         }
     }
 
@@ -1616,8 +1621,8 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             }
             val dispatchArgs = JSONObject(args.toString())
             val result = when (tool) {
-                "tap" -> executeWithRecoveryGuard("tap", dispatchArgs.put("x", x!!).put("y", y!!).put("allow_coordinates", true))
-                "long_press" -> executeWithRecoveryGuard("long_press", dispatchArgs.put("x", x!!).put("y", y!!).put("allow_coordinates", true))
+                "tap" -> executeWithRecoveryGuard("tap", dispatchArgs.put("x", x!!).put("y", y!!).put("allow_coordinates", true).put("routine_step_index", index).put("routine_name", name))
+                "long_press" -> executeWithRecoveryGuard("long_press", dispatchArgs.put("x", x!!).put("y", y!!).put("allow_coordinates", true).put("routine_step_index", index).put("routine_name", name))
                 "swipe_path" -> {
                     val points = args.optJSONArray("points") ?: JSONArray()
                     val scaled = JSONArray()
@@ -1635,7 +1640,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                     }
                     if (!valid || scaled.length() < 2) "error: recorded swipe path is invalid for this display"
                     else executeWithRecoveryGuard(
-                        "swipe_path", dispatchArgs.put("points", scaled).put("ms", args.optLong("ms", 700L))
+                        "swipe_path", dispatchArgs.put("points", scaled).put("ms", args.optLong("ms", 700L)).put("routine_step_index", index).put("routine_name", name)
                     )
                 }
                 else -> "error: unsupported saved gesture"
