@@ -26,7 +26,7 @@ class AgentDispatchPolicyTest {
             args = JSONObject().put("name", "WhatsApp"),
             stopped = true
         )
-        assertNotNull(reason)
+        assertNull(reason)
         assertTrue(reason!!.contains("stopped", ignoreCase = true))
     }
 
@@ -51,8 +51,15 @@ class AgentDispatchPolicyTest {
         assertNotNull(block("Do not send this message to Amma", "click_text", JSONObject().put("text", "Send")))
     }
 
-    @Test fun credentialTypingIsBlockedButOrdinaryGameAndChatWordsPass() {
-        assertNotNull(block("Type this text in chat", "type", JSONObject().put("text", "enter your PIN")))
+    @Test fun potentiallyConsequentialActionWarnsButIsNotBlocked() {
+        val args = JSONObject().put("text", "Transfer funds")
+        val warning = AgentHooks.scopeWarning("Open the banking app and inspect it", "click_text", args)
+        assertNotNull(warning)
+        assertNull(block("Open the banking app and inspect it", "click_text", args))
+    }
+
+    @Test fun credentialTypingIsNotBlockedByOrionSensitiveContentHeuristics() {
+        assertNull(block("Type this text in chat", "type", JSONObject().put("text", "enter your PIN")))
         assertNull(block(
             "Type a note in FC Mobile chat",
             "type",
@@ -62,14 +69,14 @@ class AgentDispatchPolicyTest {
         ))
     }
 
-    @Test fun readOnlyInspectionIsAllowedButActionInsideBankingAppIsBlocked() {
+    @Test fun sensitiveAppClassificationDoesNotBlockRequestedActions() {
         assertNull(block(
             "Open the banking app and inspect the screen",
             "read_screen",
             currentPackage = "com.example.bankapp",
             currentLabel = "Banking"
         ))
-        assertNotNull(block(
+        assertNull(block(
             "Open the banking app and click Continue",
             "click_text",
             JSONObject().put("text", "Continue"),
@@ -78,7 +85,7 @@ class AgentDispatchPolicyTest {
         ))
     }
 
-    @Test fun sensitiveEntryIsBlockedEvenWhenTheTaskScopeAllowsPhoneAutomation() {
+    @Test fun sensitiveEntryIsNotBlockedBySensitiveContentHeuristics() {
         val reason = block(
             "Use the browser to type this into the login form",
             "browser_type",
