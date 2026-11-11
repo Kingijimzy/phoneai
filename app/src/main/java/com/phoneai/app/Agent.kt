@@ -2745,16 +2745,17 @@ Rules:
             }
             val parsedStep = AgentJson.parse(raw)
             if (parsedStep.damaged) {
-                // Truncated or invalid JSON must never be shown as the answer or half-executed.
-                // Ask for one complete object again; give up politely after two bad replies.
+                // Provider finish-reason metadata is handled in Nim.chatOne. This branch means
+                // the planner payload is still structurally invalid; never dispatch a partial plan.
+                // Ask for one schema repair, preserving any valid fields, and keep the retry bounded.
                 damagedReplies++
                 if (damagedReplies > 2) {
                     OrionTasksCapabilityExecutor.pauseRun(svc)
-                    ui.say("The AI model keeps returning incomplete replies, so I stopped before acting. Try again, or pick a different chat model in Settings.")
+                    ui.say("The planner returned malformed JSON after two repair attempts. I stopped before dispatching any action and preserved the checkpoint. This does not prove a missing capability; the provider response format was invalid.")
                     return
                 }
                 history.put(msg("assistant", AgentJson.sayFromDamaged(raw).ifBlank { "(incomplete reply)" }))
-                history.put(msg("user", "Your last reply was cut off or was not valid JSON. Reply again with ONE complete, valid JSON object only, no extra text."))
+                history.put(msg("user", "Your previous planner payload was not valid JSON. Repair the payload instead of restarting the task. Return exactly one complete JSON object matching the planner schema, preserve valid plan/objective fields, use only registered tool names and their exact argument contracts, and do not dispatch or claim any action in this repair turn. Do not add markdown or prose outside the JSON object."))
                 continue
             }
             history.put(msg("assistant", raw))
