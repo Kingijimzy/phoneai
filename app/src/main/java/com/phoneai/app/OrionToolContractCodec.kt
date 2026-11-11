@@ -83,9 +83,10 @@ internal object OrionToolContractCodec {
         return convert(parameters(tool))
     }
 
-    internal fun parameters(tool: ToolDefinition): JSONObject {
-        val signature = signature(tool.promptLine)
-        val fields = parseFields(signature)
+    internal fun parameters(tool: ToolDefinition): JSONObject =
+        objectSchema(parseFields(signature(tool.promptLine)))
+
+    private fun objectSchema(fields: List<Field>): JSONObject {
         val properties = JSONObject()
         val required = JSONArray()
         fields.forEach { field ->
@@ -145,10 +146,26 @@ internal object OrionToolContractCodec {
                 JSONObject().put("type", "integer")
             lower.startsWith("number") || value.matches(Regex("-?\\d+\\.\\d+")) ->
                 JSONObject().put("type", "number")
-            lower.startsWith("array") || hint.startsWith("[") ->
-                JSONObject().put("type", "array").put("items", JSONObject())
-            lower.startsWith("object") || hint.startsWith("{") ->
-                JSONObject().put("type", "object")
+            lower.startsWith("array") || hint.startsWith("[") || hint.endsWith("[]") -> {
+                val itemHint = when {
+                    hint.startsWith("[") -> hint.substring(1).substringBeforeLast("]").trim()
+                    hint.endsWith("[]") -> hint.removeSuffix("[]").trim()
+                    else -> hint.substringAfter("array", "").trim().removePrefix("of").trim()
+                }
+                val itemSchema = when {
+                    itemHint.startsWith("{") -> objectSchema(parseFields(
+                        itemHint.substring(1).substringBeforeLast("}")
+                    )).put("additionalProperties", false)
+                    itemHint.isBlank() -> JSONObject().put("type", "string")
+                    else -> inferSchema(itemHint)
+                }
+                JSONObject().put("type", "array").put("items", itemSchema)
+            }
+            lower.startsWith("object") || hint.startsWith("{") -> {
+                val inner = if (hint.startsWith("{")) hint.substring(1).substringBeforeLast("}")
+                    else hint.substringAfter("object", "").trim().removePrefix("of").trim()
+                objectSchema(parseFields(inner))
+            }
             else -> JSONObject().put("type", "string")
         }
         val enumMatch = Regex("(?:enum|one of)\\s*\\[([^]]+)]", RegexOption.IGNORE_CASE).find(hint)
