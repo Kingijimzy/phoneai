@@ -1548,9 +1548,13 @@ Rules:
         // This is an explicit code-build-and-execute objective. Do not let a model-selected
         // RESEARCH/BROWSER route override it: the URL is input data for Python, not a browsing request.
         // Keep the policy at the route boundary so every provider receives the same deterministic route.
-        val decision = if (OrionCommandIntentPolicy.isPythonScraperBuildAndTest(command)) {
-            OrionRouter.Decision(OrionRouter.Kind.ACT, plan = false, sequential = false, source = "python_scraper_policy")
-        } else modelDecision
+        val decision = when {
+            OrionCommandIntentPolicy.isPythonScraperBuildAndTest(command) ->
+                OrionRouter.Decision(OrionRouter.Kind.ACT, plan = false, sequential = false, source = "python_scraper_policy")
+            OrionSelfDiagnostics.isExplicitRequest(command) ->
+                OrionRouter.Decision(OrionRouter.Kind.ACT, plan = true, sequential = true, source = "health_check_policy")
+            else -> modelDecision
+        }
         routeCache = command to decision
         runCatching { AgentPolicy.log(svc, "router", decision.kind.name.lowercase(), null, "source=${decision.source}; plan=${decision.plan}") }
         return decision
