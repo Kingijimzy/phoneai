@@ -20,7 +20,7 @@ internal class CodexSessionVault(context: Context) {
                 check(ApiKeyVault.write(app, ENCRYPTED_KEY, LEGACY_KEY, recovered)) {
                     "Could not protect recovered Codex account credentials"
                 }
-                authFile.delete()
+                check(authFile.delete() || !authFile.exists()) { "Could not remove recovered plaintext Codex credentials" }
             }
         }
         val encrypted = ApiKeyVault.read(app, ENCRYPTED_KEY, LEGACY_KEY)
@@ -34,7 +34,7 @@ internal class CodexSessionVault(context: Context) {
         check(ApiKeyVault.write(app, ENCRYPTED_KEY, LEGACY_KEY, raw)) {
             "Could not encrypt Codex account credentials with Android Keystore"
         }
-        authFile.delete()
+        check(authFile.delete() || !authFile.exists()) { "Could not remove plaintext Codex credentials after encryption" }
     }
 
     companion object {
