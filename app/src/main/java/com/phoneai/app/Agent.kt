@@ -1137,8 +1137,15 @@ RESPONSE QUALITY AND FORMAT:
                     .put("content", turn.text)
                     .put("tool_calls", callEnvelope))
                 for (call in turn.toolCalls) {
-                    if (stopped) break
                     val args = JSONObject(call.arguments.toString())
+                    if (stopped) {
+                        messages.put(JSONObject()
+                            .put("role", "tool")
+                            .put("tool_call_id", call.id)
+                            .put("name", call.name)
+                            .put("content", "error: cancelled before dispatch; no action was started."))
+                        continue
+                    }
                     val result = when {
                         call.validationError != null ->
                             "error: malformed arguments for '${call.name}': ${call.validationError}. No action was dispatched."
