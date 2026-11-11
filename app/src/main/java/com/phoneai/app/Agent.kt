@@ -536,7 +536,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
             GatePolicy.Verdict.ALLOW -> Unit
         }
-        IrreversibleActionConfirmationPolicy.computerSettingAction(tool, args)?.takeIf { false }?.let { action ->
+        IrreversibleActionConfirmationPolicy.computerSettingAction(tool, args)?.let { action ->
             if (!requestGateApproval("Confirm computer_settings action: $action?")) {
                 val denied = "error: the irreversible computer setting was not confirmed; no action was dispatched."
                 recordDispatchBlocked(tool, args, "irreversible_computer_setting_not_confirmed")
