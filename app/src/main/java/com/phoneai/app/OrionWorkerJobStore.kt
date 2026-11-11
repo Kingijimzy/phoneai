@@ -158,8 +158,8 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         loadLocked()
         val current = jobs.firstOrNull { it.id == jobId } ?: return@synchronized false
         val nextStatus = when (current.status) {
-            Status.RUNNING -> Status.CANCEL_REQUESTED
-            Status.QUEUED, Status.RESULT_PENDING, Status.PAUSED, Status.CANCEL_REQUESTED -> Status.CANCELLED
+            Status.RUNNING, Status.CANCEL_REQUESTED -> Status.CANCEL_REQUESTED
+            Status.QUEUED, Status.RESULT_PENDING, Status.PAUSED -> Status.CANCELLED
             else -> return@synchronized false
         }
         val updated = current.copy(status = nextStatus, updatedAt = clock(),
