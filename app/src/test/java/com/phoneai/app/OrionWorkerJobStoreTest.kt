@@ -131,9 +131,40 @@ class OrionWorkerJobStoreTest {
         val queued = store.enqueue("parent-1", "Research queued")!!
         assertNotNull(store.claimNext { true })
         assertEquals(2, store.cancelParent("parent-1"))
-        assertTrue(store.all().all { it.status == OrionWorkerJobStore.Status.CANCELLED })
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED,
+            store.all().first { it.id == running.id }.status)
+        assertEquals(OrionWorkerJobStore.Status.CANCELLED,
+            store.all().first { it.id == queued.id }.status)
         assertFalse(store.complete(running.id, "late result"))
+        assertTrue(store.needsReview(running.id, "provider outcome uncertain after cancellation"))
+        assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW,
+            store.all().first { it.id == running.id }.status)
         assertFalse(store.cancel(queued.id))
+    }
+
+    @Test fun directCancellationRequestsStopWithoutErasingRunningProviderOwnership() {
+        val store = OrionWorkerJobStore(context)
+        val job = store.enqueue("parent-1", "Long analysis")!!
+        assertNotNull(store.claim(job.id) { true })
+
+        assertTrue(store.cancel(job.id, "owner_requested"))
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED,
+            store.all().single().status)
+        assertFalse(store.stageResult(job.id, "late provider result"))
+        assertTrue(store.needsReview(job.id, "worker stopped with uncertain provider outcome"))
+        assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW, store.all().single().status)
+    }
+
+    @Test fun processDeathAfterCancellationRequestRequiresReview() {
+        val store = OrionWorkerJobStore(context)
+        val job = store.enqueue("parent-1", "Cancelled analysis")!!
+        assertNotNull(store.claim(job.id) { true })
+        assertTrue(store.cancel(job.id, "owner_requested"))
+
+        OrionWorkerJobStore.simulateProcessRestartForTest(context)
+        val restored = OrionWorkerJobStore(context).all().single { it.id == job.id }
+        assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW, restored.status)
+        assertTrue(restored.lastError.contains("must_be_reviewed"))
     }
 
     @Test fun processDeathMovesRunningJobToNeedsReviewInsteadOfReplayingProviderCall() {
