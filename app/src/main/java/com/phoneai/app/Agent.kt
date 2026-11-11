@@ -182,7 +182,7 @@ internal object IrreversibleActionConfirmationPolicy {
 /** The brain: asks the AI what to do, runs the tool it picks, repeats. */
 class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     /** Talk uses the ordinary selected chat provider; command planning may use a separate override. */
-    private val sharedRequestBudget = CommandRequestBudget(maxRequests = 15, maxRequestsProvider = { OrionAutonomySettings.read(svc).maxAiRequests })
+    private val sharedRequestBudget = CommandRequestBudget(maxRequests = 100_000, maxRequestsProvider = { OrionAutonomySettings.read(svc).maxAiRequests })
     private val talkNim = Nim(svc, sharedBudget = sharedRequestBudget).also { n -> n.onStatus = { s -> ui.status(s) } }
     private val commandNim = Nim(svc, commandMode = true, sharedBudget = sharedRequestBudget).also { n -> n.onStatus = { s -> ui.status(s) } }
     private val lastPythonOutputAt = java.util.concurrent.atomic.AtomicLong(0L)
@@ -291,10 +291,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun effectiveRecoveryMaxAttempts(): Int {
         val autonomy = OrionAutonomySettings.read(svc).maxRetries
         val owner = OrionOwnerDialSettings.read(svc).recoveryMaxAttempts
-        return minOf(autonomy, owner).coerceIn(0, 1)
+        return minOf(autonomy, owner).coerceIn(0, 4)
     }
     private fun ownerRecoveryBackoffSeconds(): Int =
-        OrionOwnerDialSettings.read(svc).recoveryBackoffSeconds.coerceIn(15, 300)
+        OrionOwnerDialSettings.read(svc).recoveryBackoffSeconds.coerceIn(1, 60)
     @Volatile private var runStartedAt = 0L
     @Volatile private var runTools = 0
     @Volatile private var runFailed = 0
