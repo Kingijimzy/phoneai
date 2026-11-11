@@ -35,4 +35,13 @@ class OrionVoiceExecutionPolicyTest {
         assertTrue(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "shutdown")))
         assertTrue(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "wifi_toggle")))
     }
+    @Test fun progressCueOnlyTriggersForPotentiallySlowRegisteredToolNames() {
+        assertTrue(OrionProgressCuePolicy.shouldAnnounce(listOf("python_exec")))
+        assertTrue(OrionProgressCuePolicy.shouldAnnounce(listOf("read_screen")))
+        assertTrue(OrionProgressCuePolicy.shouldAnnounce(listOf("browser_open")))
+        assertFalse(OrionProgressCuePolicy.shouldAnnounce(listOf("click_text")))
+        assertFalse(OrionProgressCuePolicy.shouldAnnounce(listOf("routine_unknown")))
+        assertFalse(OrionProgressCuePolicy.shouldAnnounce(emptyList()))
+    }
+
 }
