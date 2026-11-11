@@ -48,7 +48,7 @@ internal object AntigravityCliProtocol {
         if (type.isBlank()) return null
         val text = value.optString("text")
             .ifBlank { value.optString("content") }
-            .ifBlank { value.optJSONObject("message")?.optString("content").orEmpty() }
+            .ifBlank { value.optString("response") }\n            .ifBlank { value.optString("result") }\n            .ifBlank { value.optJSONObject("message")?.optString("content").orEmpty() }
         val error = value.optString("error")
             .ifBlank { value.optJSONObject("error")?.optString("message").orEmpty() }
         return Event(type, text, error)
