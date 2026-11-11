@@ -165,6 +165,7 @@ android {
 dependencies {
     // Resolve after download task; prefer app/libs pre-placement from CI.
     implementation(files(provider { resolveSherpaAar() }).builtBy(downloadSherpaTtsAar))
+    implementation("com.termux.termux-app:terminal-view:0.118.0")
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
