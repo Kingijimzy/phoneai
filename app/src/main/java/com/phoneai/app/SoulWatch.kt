@@ -185,12 +185,22 @@ internal object SoulEngineWatcher {
             }
         }
 
-        // External reads/notifications only happen for explicitly configured standing orders
-        // and only while the Proactive pack remains enabled. Process one order per watcher tick.
+        // Scheduled external reads are also subject to the background Proactive Gate.
+        // A due order is deferred, not silently dropped, when quiet hours or device state say wait.
         if (AgentPolicy.enabled(c, "orion_core") && AgentPolicy.enabled(c, "proactive")) {
-            if (StandingOrders.storageError() == null && schedulerOrders.any { StandingOrderPolicy.due(it, System.currentTimeMillis()) }) {
+            val hasDueOrder = StandingOrders.storageError() == null &&
+                schedulerOrders.any { StandingOrderPolicy.due(it, System.currentTimeMillis()) }
+            if (hasDueOrder && gate.allowStandingOrders) {
                 val dispatched = runCatching { LifeLoop.tickOne(c) }.getOrDefault(0)
                 action = if (dispatched > 0) "one_standing_order_checked_and_notified" else "one_standing_order_checked"
+            } else if (hasDueOrder) {
+                runCatching {
+                    SoulEngineState.proposeWatchIssue(
+                        c, "standing_order_deferred", "A scheduled Orion check is waiting.",
+                        "The Proactive Gate deferred this check: " + gate.reason + ". It will be reconsidered on a later watcher tick."
+                    )
+                }
+                action += "+standing_order_deferred"
             }
         }
 
