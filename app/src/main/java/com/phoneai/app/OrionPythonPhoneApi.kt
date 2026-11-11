@@ -262,8 +262,8 @@ internal class OrionPythonPhoneApi(
     }
 
     private fun request(url: String, method: String, body: String): String {
-        val endpoint = OrionPythonNetworkPolicy.validate(context, url)
-            ?: return error("network request blocked: enable the owner's NETWORK consent; public HTTPS GET does not need a separate host grant")
+        val endpoint = OrionPythonNetworkPolicy.validate(context, url, requireNetworkConsent = method != "GET")
+            ?: return error("network request blocked: public HTTPS GET was blocked by the network policy; check that the URL is HTTPS and resolves to public addresses")
         if (method == "POST" && !endpoint.allowWrites)
             return error("HTTP write access is not granted for ${endpoint.host}; enable this host's write permission in Python network settings")
         val client = OkHttpClient.Builder()
