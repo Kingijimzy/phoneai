@@ -44,6 +44,12 @@ internal object OrionExecutiveStore {
     )
 
     private class Db(context: Context) : SQLiteOpenHelper(context, "orion_executive.db", null, 1) {
+        override fun onConfigure(db: SQLiteDatabase) {
+            super.onConfigure(db)
+            // SQLite foreign-key declarations are inert unless every connection enables them.
+            db.setForeignKeyConstraintsEnabled(true)
+        }
+
         override fun onCreate(db: SQLiteDatabase) {
             db.execSQL("""CREATE TABLE objectives(
                 id TEXT PRIMARY KEY NOT NULL, intent TEXT NOT NULL, phase TEXT NOT NULL,
@@ -86,11 +92,18 @@ internal object OrionExecutiveStore {
         val now = System.currentTimeMillis()
         return runCatching {
             val db = Db(context.applicationContext).writableDatabase
-            db.execSQL(
-                "INSERT OR IGNORE INTO objectives(id,intent,phase,revision,plan_revision,recovery_cursor,blocker,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
-                arrayOf(cleanId, cleanIntent, Phase.GROUND.name, 0, 0, "", "", now, now)
-            )
-            get(db, cleanId)
+            db.beginTransaction()
+            try {
+                db.execSQL(
+                    "INSERT OR IGNORE INTO objectives(id,intent,phase,revision,plan_revision,recovery_cursor,blocker,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                    arrayOf(cleanId, cleanIntent, Phase.GROUND.name, 0, 0, "", "", now, now)
+                )
+                val existing = get(db, cleanId)
+                // An ID collision must never silently attach a new request to another objective.
+                if (existing?.intent != cleanIntent) return null
+                db.setTransactionSuccessful()
+                existing
+            } finally { db.endTransaction() }
         }.getOrNull()
     }
 
@@ -137,9 +150,31 @@ internal object OrionExecutiveStore {
         } finally { db.endTransaction() }
     }.getOrNull()
 
+    /** Validate a bounded dependency graph before it can become the persisted execution plan. */
+    internal fun isValidPlan(steps: List<Step>): Boolean {
+        if (steps.isEmpty() || steps.size > 32 ||
+            steps.any { it.id.isBlank() || it.id.length > 120 || it.title.isBlank() || it.title.length > 240 }) return false
+        val byId = steps.associateBy { it.id }
+        if (byId.size != steps.size) return false
+        if (steps.any { step -> step.dependencies.any { it == step.id || it !in byId } }) return false
+        val visiting = HashSet<String>()
+        val visited = HashSet<String>()
+        fun visit(id: String): Boolean {
+            if (id in visiting) return false
+            if (id in visited) return true
+            visiting.add(id)
+            val node = byId[id] ?: return false
+            for (dependency in node.dependencies) if (!visit(dependency)) return false
+            visiting.remove(id)
+            visited.add(id)
+            return true
+        }
+        return byId.keys.all(::visit)
+    }
+
     /** Replace a proposed plan atomically. Existing evidence is preserved only when step IDs match. */
     fun replacePlan(context: Context, objectiveId: String, steps: List<Step>): Boolean {
-        if (steps.isEmpty() || steps.size > 32 || steps.any { it.id.isBlank() || it.title.isBlank() }) return false
+        if (!isValidPlan(steps)) return false
         val db = Db(context.applicationContext).writableDatabase
         db.beginTransaction()
         return try {
