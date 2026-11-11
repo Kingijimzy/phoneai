@@ -133,6 +133,20 @@ object ShellRunner {
         finally { pending.remove(id) }
     }
 
+    /** Installs/validates Alpine and prepares a persistent interactive terminal launch. */
+    internal fun prepareLinuxTerminalConfig(c: Context): LinuxTerminalLaunchConfig {
+        val runtime = LinuxRuntimeInstaller(c.applicationContext)
+        val manifest = LinuxRuntimePolicy.productionManifest
+        if (!runtime.isReady(manifest)) {
+            val installed = runtime.install(manifest)
+            check(installed.isSuccess) {
+                "Alpine runtime installation failed: ${installed.exceptionOrNull()?.message ?: "unknown error"}"
+            }
+            check(runtime.isReady(manifest)) { "Alpine runtime did not pass readiness checks after installation." }
+        }
+        return runtime.interactiveLaunchConfig(workspace(c).absolutePath)
+    }
+
     fun run(c: Context, command: String, where: String): String =
         runStreaming(c, command, where) { }
 
