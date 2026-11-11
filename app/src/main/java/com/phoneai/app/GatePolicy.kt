@@ -33,11 +33,3 @@ internal object GatePolicy {
         return Result(Verdict.ALLOW, "Default ALLOW: execute without per-tool or generic approval.")
     }
 }
-
-
-/** A narrow confirmation warning for only the three irreversible computer settings actions. */
-internal object IrreversibleActionConfirmationPolicy {
-    private val computerAction = Regex("""(?i)computer_settings[^}]{0,180}(restart|shutdown|(?:wifi|wi[- ]?fi)(?:[_ -]?toggle)?|toggle[_ -]?(?:wifi|wi[- ]?fi)|turn\s+(?:wifi|wi[- ]?fi)\s+(?:on|off))""")
-    fun requiresConfirmation(description: String): Boolean =
-        computerAction.containsMatchIn(description)
-}
