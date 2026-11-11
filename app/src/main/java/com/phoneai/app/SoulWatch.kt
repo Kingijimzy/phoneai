@@ -158,6 +158,32 @@ internal object SoulEngineWatcher {
             if (proposed && OrionChronosAwareness.markSuggestionShown(c)) action = "chronos_review_suggestion"
         }
 
+        // The proactive engine is now part of the real watcher path. Candidate selection is
+        // side-effect free; delivery receipts are written only after NotificationManager accepts it.
+        var proactiveDetail = ""
+        val proactiveItem = if (coreEnabled && proactiveEnabled) {
+            runCatching { OrionProactiveEngine.evaluate(c) }.getOrNull()
+        } else null
+        if (proactiveItem != null) {
+            val delivered = runCatching { OrionRuntimeNotifier.postProactiveItem(c, proactiveItem) }.getOrDefault(false)
+            if (delivered) {
+                OrionProactiveEngine.markDelivered(c, proactiveItem)
+                action += "+proactive_notification"
+                proactiveDetail = "Delivered one ${proactiveItem.kind} reminder."
+            } else {
+                runCatching {
+                    SoulEngineState.proposeWatchIssue(
+                        c,
+                        "proactive_delivery",
+                        "Proactive reminder ready: ${proactiveItem.title}",
+                        proactiveItem.body + " Notification delivery was unavailable; review this reminder in Orion."
+                    )
+                }
+                action += "+proactive_pending"
+                proactiveDetail = "A ${proactiveItem.kind} reminder is saved for review because notification delivery was unavailable."
+            }
+        }
+
         // External reads/notifications only happen for explicitly configured standing orders
         // and only while the Proactive pack remains enabled. Process one order per watcher tick.
         if (AgentPolicy.enabled(c, "orion_core") && AgentPolicy.enabled(c, "proactive")) {
@@ -177,6 +203,6 @@ internal object SoulEngineWatcher {
         runCatching { SoulEngineState.recordWatcherStatus(c, status, action) }
         AgentPolicy.log(c, "soul_watcher", action, null, "status=$status; limitations=${limitations.joinToString(",").ifBlank { "none" }}")
         val internalWork = listOf(reflectionResult, innerLifeResult).filter { it.isNotBlank() }.joinToString("; ")
-        return TickResult(status, action, limitations, listOf(next, p3.summary, subagents.summary, internalWork).filter { it.isNotBlank() }.joinToString(" "))
+        return TickResult(status, action, limitations, listOf(next, p3.summary, subagents.summary, internalWork, proactiveDetail).filter { it.isNotBlank() }.joinToString(" "))
     }
 }
