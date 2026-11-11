@@ -34,10 +34,6 @@ internal data class OrionDiagnosticReport(
 }
 
 internal object OrionSelfDiagnostics {
-    fun isExplicitRequest(request: String?): Boolean = !request.isNullOrBlank() && Regex(
-        "(?i)\\b(?:self[- ]?(?:diagnos(?:e|is|tic|ing)?|heal(?:ing)?)|(?:full |complete |quick )?(?:system |orion )?health check|system audit|check (?:whether |if )?(?:everything|all (?:the )?(?:systems|tools|capabilities)) (?:is |are )?(?:working|operational|healthy|okay|ok|perfectly)|check (?:all|every) (?:the )?(?:tools|systems|capabilities)|check your own (?:health|tools|capabilities)|what is broken in you)\\b"
-    ).containsMatchIn(request)
-
     fun inspect(context: Context, now: Long = System.currentTimeMillis(), recordActivity: Boolean = false): OrionDiagnosticReport {
         val app = context.applicationContext
         val findings = mutableListOf<OrionDiagnosticFinding>()
