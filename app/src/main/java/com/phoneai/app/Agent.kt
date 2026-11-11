@@ -868,61 +868,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         return out
     }
 
-    private fun capabilityQuestionSummary(): String = runCatching {
-        fun permission(name: String): OrionCapabilityDiscovery.PermissionState = runCatching {
-            if (androidx.core.content.ContextCompat.checkSelfPermission(svc, name) ==
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) OrionCapabilityDiscovery.PermissionState.GRANTED
-            else OrionCapabilityDiscovery.PermissionState.MISSING
-        }.getOrDefault(OrionCapabilityDiscovery.PermissionState.UNKNOWN)
-
-        val accessibilityReady = runCatching { svc.serviceInfo != null }.getOrDefault(false)
-        val accessibilityState = if (accessibilityReady && Prefs.accessibilityDisclosureAccepted(svc))
-            OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
-        val notificationState = runCatching {
-            if (android.provider.Settings.Secure.getString(
-                    svc.contentResolver, "enabled_notification_listeners"
-                )?.contains(svc.packageName) == true
-            ) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
-        }.getOrDefault(OrionCapabilityDiscovery.PermissionState.UNKNOWN)
-        val enabledPacks = AgentPolicy.packs.filter { it.implemented && AgentPolicy.enabled(svc, it.id) }
-            .map { it.id }.toSet()
-        val denied = ToolRegistry.all.filter { ToolPermissions.mode(svc, it.name) == ToolMode.DENY }
-            .map { it.name }.toSet()
-        val fineLocation = permission(android.Manifest.permission.ACCESS_FINE_LOCATION)
-        val location = if (fineLocation == OrionCapabilityDiscovery.PermissionState.GRANTED) fineLocation
-            else permission(android.Manifest.permission.ACCESS_COARSE_LOCATION)
-        val inventory = OrionCapabilityDiscovery.discover(
-            ToolRegistry.all,
-            enabledPacks,
-            termuxReady = runCatching { TermuxBridgeRunner.readiness(svc) == null }.getOrDefault(false),
-            permissionStates = mapOf(
-                "contacts" to permission(android.Manifest.permission.READ_CONTACTS),
-                "location" to location,
-                "camera" to permission(android.Manifest.permission.CAMERA),
-                "notification_access" to notificationState,
-                "accessibility" to accessibilityState
-            ),
-            integrationStates = mapOf(
-                "mcp_endpoint" to if (McpConnector.configured(svc)) "configured" else "not-configured",
-                "mcp_pairing" to if (McpConnector.isPaired(svc)) "paired" else "not-paired"
-            ),
-            deniedTools = denied,
-            generatedExtensions = runCatching { SelfExtendingExtensionStore(svc).all() }.getOrDefault(emptyList())
-        )
-        val eligible = inventory.tools.filter { it.available }.joinToString(", ") { fact ->
-            val mode = ToolPermissions.mode(svc, fact.name)
-            fact.name + " (eligible; not live-tested)"
-        }.ifBlank { "none" }
-        val blocked = inventory.tools.filterNot { it.available }.joinToString("\n") {
-            "- ${it.name}: ${it.reason.ifBlank { it.state.name.lowercase() }}"
-        }.ifBlank { "none reported" }
-        "CAPABILITY ANSWER — do not overstate this snapshot:\n" +
-            "Eligible to attempt, NOT proven successful: $eligible\n" +
-            "Blocked / permission / setup / disabled / denied:\n$blocked\n" +
-            "Unsupported tools must be described as unsupported. Tools default to ALLOW; only restart, shutdown and Wi-Fi toggles require confirmation. A successful dispatch and observable result are the only proof of completion."
-    }.getOrDefault("Capability inventory could not be read safely. Do not guess or list tools as executable.")
-
     private fun chatSystem(query: String? = null): String {
         val n = Prefs.userName(svc)
         val q = query.orEmpty()
@@ -931,9 +876,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // shared orchestration contract. This is the same context used by systemPrompt(), so Talk
         // and Command see one consistent capability picture.
         val central = runCatching { OrionCentralBrain.contextFor(svc, q) }.getOrDefault("")
-        val capabilityQuestion = Regex("(?i)\\b(?:phone actions|what can you do|actually execute|list.*(?:tools|actions|capabilities)|tools?.*(?:available|execute))\\b")
-            .containsMatchIn(q)
-        val capabilityContext = if (capabilityQuestion) "\n\n" + capabilityQuestionSummary() else ""
         return OrionPersona.CORE + "\n" + "You are Orion: the user's consistent, attentive AI companion and the single front door to the whole phone app. You are warm, sharp, conversational and practical, not a command-only interface. Talk naturally, follow the thread, use relevant context without reciting it, and remember the active objective across turns. Be proactive when a useful next step is clear, but never pretend to have feelings, independent awareness, background activity, or observations you have not made. " +
             "This is a typed chat UI, so give genuinely useful answers rather than limiting every reply to three sentences. Match the user's level of detail; use short paragraphs, headings, or bullets when they make a complex answer easier to follow. Avoid filler, fake certainty, and repetitive greetings. Never say systems are online, all tools are working, or integrations are healthy unless a current health check actually verified that state; casual greetings must not imply a system-health check. Ask one focused follow-up only when needed. " +
             "You may also speak replies aloud, so keep wording natural and avoid decorative formatting. Do not claim to have searched, opened, changed, remembered, or executed anything unless a tool or saved record confirms it. For phone actions, distinguish confirmed success, failure, and unverified outcome: a request being accepted is not proof the action happened. If the result cannot be checked, say so plainly. Only restart, shutdown and Wi-Fi toggles require confirmation through the app interface; all other authorized tools run without an approval prompt. " +
@@ -947,7 +889,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Only restart, shutdown and Wi-Fi toggles require confirmation through the app interface; every other authorized action executes immediately after its capability, scope and validation checks. " +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
-            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCapabilityAwareness.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCoordinator.summary().let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
+            "\n\n" + ToolRegistry.promptSection(q, ToolGate.statusFor(svc)) + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCapabilityAwareness.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCoordinator.summary().let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
     }
 
     /** Turns raw search results into a direct answer with sources; falls back to the raw list if the model call fails. */
@@ -1250,11 +1192,11 @@ RESPONSE QUALITY AND FORMAT:
                 "\n\nLIVE VOICE BOUNDARY: this path is conversation-only. The executive context informs continuity and factual context but does not expose or authorize tools, phone actions, shell commands, external writes, or background execution. If the user requests an action, explain that the main chat can execute it; do not claim it was routed or performed."
             liveHistory.put(msg("system", prompt))
             // Rehydrate recent typed/voice turns from the provider-neutral SQLite transcript.
-            ConversationContextPolicy.recent(ChatHistoryStore.load(svc), maxTurns = 8, maxChars = 1_200)
+            ConversationContextPolicy.recent(ChatHistoryStore.load(svc), maxTurns = 24, maxChars = 8_000)
                 .forEach { (role, content) -> liveHistory.put(msg(role, content)) }
         }
         liveHistory.put(msg("user", command))
-        while (liveHistory.length() > 9) liveHistory.remove(1)
+        while (liveHistory.length() > 26) liveHistory.remove(1)
         val answer = try {
             talkNim.chat(liveHistory, false, 180, 0.55, onDelta = { delta ->
                 if (!stopped && delta.isNotEmpty()) ui.stream(delta)
