@@ -142,8 +142,16 @@ internal object OrionProactiveEngine {
             )
         }
 
-        // 5. Pick the single most urgent item (ties: earliest due).
-        val best = candidates
+        // 5. Avoid repeating the same reminder after a confirmed delivery; other candidates
+        // remain eligible and are still ranked by urgency and due time.
+        val deliveryPrefs = app.getSharedPreferences("orion_proactive_spoken_v1", Context.MODE_PRIVATE)
+        val previousKey = deliveryPrefs.getString("last_item_key", "").orEmpty()
+        val previousAt = deliveryPrefs.getLong("last_item_at", 0L)
+        val eligible = candidates.filterNot { item ->
+            itemKey(item) == previousKey && previousAt in 1L..now &&
+                now - previousAt < 6L * 60L * 60L * 1000L
+        }
+        val best = eligible
             .sortedWith(compareByDescending<ProactiveItem> { it.urgency }
                 .thenBy { it.dueAtMillis ?: Long.MAX_VALUE })
             .firstOrNull() ?: return null
@@ -153,11 +161,18 @@ internal object OrionProactiveEngine {
         return best
     }
 
+    private fun itemKey(item: ProactiveItem): String =
+        item.kind + ":" + item.title.trim().lowercase(Locale.ROOT).take(100)
+
     /** Record a proactive interruption only after its delivery path confirms acceptance. */
-    fun markDelivered(context: Context, now: Long = System.currentTimeMillis()) {
+    fun markDelivered(context: Context, item: ProactiveItem, now: Long = System.currentTimeMillis()) {
         val app = context.applicationContext
         Prefs.setLastProactiveSpokenAt(app, now)
         recordSpoken(app, now)
+        app.getSharedPreferences("orion_proactive_spoken_v1", Context.MODE_PRIVATE).edit()
+            .putString("last_item_key", itemKey(item))
+            .putLong("last_item_at", now)
+            .apply()
     }
 
     /** Format a millisecond delta as a short human string. */
