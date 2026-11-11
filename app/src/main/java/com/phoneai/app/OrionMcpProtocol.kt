@@ -42,7 +42,7 @@ internal object OrionMcpProtocol {
         result.optJSONArray("contents") ?: JSONArray()
 
     fun isReadOnlyMethod(method: String): Boolean =
-        method in setOf("resources/list", "resources/read", "prompts/list", "prompts/get")
+        method in setOf("tools/list", "resources/list", "resources/read", "prompts/list", "prompts/get")
 
     fun prompts(result: JSONObject): JSONArray =
         result.optJSONArray("prompts") ?: JSONArray()
