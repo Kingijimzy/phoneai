@@ -78,7 +78,7 @@ internal class AccountAwareModelProvider(
             val account = client.readAccount()
             check(account?.isChatGptAccount == true) { "Sign in with your ChatGPT account in Account Connections first." }
             val catalogue = runCatching { client.availableModels() }.getOrDefault(emptyList())
-            val model = requestedModel?.takeIf { catalogue.isEmpty() || it in catalogue }
+            val model = if (catalogue.isEmpty()) null else requestedModel?.takeIf { it in catalogue }
                 ?: catalogue.firstOrNull()
             val thread = client.startThread(model)
             val answer = client.runTurnAndAwait(thread, prompt, model, onDelta = onDelta)
