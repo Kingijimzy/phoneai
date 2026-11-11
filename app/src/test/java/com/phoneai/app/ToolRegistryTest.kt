@@ -271,6 +271,13 @@ class ToolRegistryNativeSelectionTest {
         assertEquals(setOf("open_app", "lookup_app"), ToolRegistry.recentToolNames(history))
     }
 
+    @Test fun userVisibleSaveToolIsAlwaysFullyExposedToTheModel() {
+        assertTrue(ToolRegistry.detailedToolNames("an unrelated phone request").contains("save_file"))
+        assertTrue(ToolRegistry.promptSection("write a Python calculator").contains("USER-VISIBLE FILE SAVE RULE"))
+        assertTrue(ToolRegistry.nativeToolsFor("Write a Python calculator and save it as a file")
+            .any { it.name == "save_file" })
+    }
+
     @Test fun pythonTasksExposeNativeRuntimeAndFileToolsTogether() {
         val selected = ToolRegistry.nativeToolsFor(
             "Write a Python calculator, save it as a file, execute it and test it."
