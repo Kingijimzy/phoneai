@@ -24,6 +24,18 @@ internal object OrionToolContractCodec {
         }
     }
 
+    /** Responses API uses a flat function object rather than chat.completions' nested function. */
+    fun responses(tools: List<ToolDefinition>): JSONArray = JSONArray().apply {
+        tools.forEach { tool ->
+            put(JSONObject()
+                .put("type", "function")
+                .put("name", tool.name)
+                .put("description", tool.description.take(1000))
+                .put("parameters", parameters(tool))
+                .put("strict", true))
+        }
+    }
+
     fun anthropic(tools: List<ToolDefinition>): JSONArray = JSONArray().apply {
         tools.forEach { tool ->
             put(JSONObject()
