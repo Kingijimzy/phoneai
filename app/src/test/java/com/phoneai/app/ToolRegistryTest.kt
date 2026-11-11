@@ -36,6 +36,19 @@ class ToolRegistryTest {
         assertTrue(ToolRegistry.find("workspace_move")!!.promptLine.contains("without overwriting"))
     }
 
+    @Test fun savedGestureRoutinesAreExposedThroughTheNativePhoneDispatcher() {
+        listOf("routine_run", "routine_resume").forEach { name ->
+            assertEquals(ToolAccess.WRITE, ToolRegistry.access(name))
+            assertEquals("phone_control", AgentPolicy.packForTool(name))
+            assertTrue(ToolRegistry.requiresAccessibility(name))
+            assertEquals(OrionCapabilityAdapters.Backend.DEVICE, OrionCapabilityAdapters.route(name)?.backend)
+            assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.DEVICE, name))
+        }
+        val selected = ToolRegistry.nativeToolsFor("resume routine Morning routine").map { it.name }.toSet()
+        assertTrue(selected.containsAll(setOf("routine_run", "routine_resume")))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting("resume routine Morning routine"))
+    }
+
     @Test fun deviceLocationToolIsRegisteredAndMappedToPhoneControl() {
         assertTrue(ToolRegistry.all.any { it.name == "device_location" })
         assertEquals("phone_control", AgentPolicy.packForTool("device_location"))
