@@ -1124,15 +1124,8 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         messages.put(msg("user", command))
         val runawayStream = java.util.concurrent.atomic.AtomicBoolean(false)
         val streamWatch = HermesRepetitionGuard.RunawayStreamWatch()
-        val priorNativeToolNames = linkedSetOf<String>()
-        for (historyIndex in 0 until chatHist.length()) {
-            val priorMessage = chatHist.optJSONObject(historyIndex) ?: continue
-            val priorCalls = priorMessage.optJSONArray("tool_calls") ?: continue
-            for (callIndex in 0 until priorCalls.length()) {
-                val function = priorCalls.optJSONObject(callIndex)?.optJSONObject("function") ?: continue
-                function.optString("name").takeIf { it.isNotBlank() }?.let(priorNativeToolNames::add)
-            }
-        }
+        // Carry forward only the latest tool-call group; old tasks must not crowd out current intent.
+        val priorNativeToolNames = ToolRegistry.recentToolNames(chatHist)
         val nativeTools = ToolRegistry.nativeToolsFor(command, priorNativeToolNames)
         val toolTranscriptStart = messages.length()
         var toolRounds = 0
