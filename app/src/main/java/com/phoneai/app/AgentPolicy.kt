@@ -11,7 +11,7 @@ object AgentPolicy {
     data class Pack(val id: String, val title: String, val description: String, val implemented: Boolean = false)
     data class RuleResult(val decision: Decision, val reason: String)
     val packs = listOf(
-        Pack("workspace_shell", "Workspace shell", "Owner-authorized shell commands and SAF workspace read/write/patch operations; only catastrophic device-destruction commands are hard-blocked", true),
+        Pack("workspace_shell", "Workspace shell", "Owner-authorized shell commands and SAF workspace read/write/patch operations; potentially destructive commands emit warnings but are not blocked", true),
         Pack("phone_control", "Phone control", "Accessibility actions with act → verify → report", true),
         Pack("termux_bridge", "Termux bridge", "Optional Termux RUN_COMMAND service; requires install, user permission and external-app setting", true),
         Pack("remote_computer", "Remote computer", "Cursor Cloud Agent API; generic sandbox/VPS remains separate", true),
@@ -36,7 +36,7 @@ object AgentPolicy {
     /**
      * Core companion packs are enabled on first launch so phone and messaging features are discoverable.
      * This only makes their tools available: Android OS permissions, explicit capability scope and validation
-     * still apply. Only restart, shutdown and Wi-Fi toggles require an action confirmation. Optional bridges remain opt-in.
+     * still apply. Restart, shutdown and Wi-Fi toggles emit warnings but do not require an Orion confirmation. Optional bridges remain opt-in.
      */
     internal val defaultOnPacks = setOf(
         "orion_core", "connected_services", "workspace_shell", "self_test",
