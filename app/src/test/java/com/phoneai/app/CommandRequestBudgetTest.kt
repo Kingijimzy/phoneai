@@ -17,9 +17,9 @@ class CommandRequestBudgetTest {
 
     @Test fun defaultCommandBudgetSupportsLongMultiStepWorkflows() {
         val budget = CommandRequestBudget()
-        repeat(400) { assertTrue("Request ${it + 1} should be reserved", budget.tryReserve()) }
-        assertEquals(400, budget.used())
-        assertFalse("The 401st request must still be bounded", budget.tryReserve())
+        repeat(1000) { assertTrue("Request ${it + 1} should be reserved", budget.tryReserve()) }
+        assertEquals(1000, budget.used())
+        assertFalse("The 1001st request must still be bounded", budget.tryReserve())
     }
 
     @Test fun resetStartsANewCommandAndClearsFailureCounts() {
