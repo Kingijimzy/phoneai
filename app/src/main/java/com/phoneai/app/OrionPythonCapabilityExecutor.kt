@@ -31,7 +31,8 @@ internal class OrionPythonCapabilityExecutor(
 
         return when (tool) {
             "python_exec" -> {
-                val code = args.optString("code")
+                val code = PythonToolArguments.source(args)
+                    ?: return "error: Python source is required. Supply it as 'code' (preferred) or legacy 'script'."
                 if (stopped()) "error: task was stopped before Python execution."
                 else tools?.pythonExec(code, confirm, stopped)
                     ?: "error: Python tool bridge is unavailable in this execution context."
@@ -222,5 +223,20 @@ internal class OrionPythonCapabilityExecutor(
             "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback"
         )
         fun supports(tool: String): Boolean = tool in supportedTools
+    }
+}
+
+
+/**
+ * Normalizes provider/model argument drift at the single Python execution boundary.
+ * `code` is canonical; `script` remains accepted because several models emit that common alias.
+ * Conflicting values fail closed rather than executing an ambiguous payload.
+ */
+internal object PythonToolArguments {
+    fun source(args: JSONObject): String? {
+        val code = args.optString("code")
+        val script = args.optString("script")
+        if (code.isNotBlank() && script.isNotBlank() && code != script) return null
+        return code.takeIf { it.isNotBlank() } ?: script.takeIf { it.isNotBlank() }
     }
 }
