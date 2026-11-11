@@ -45,6 +45,10 @@ internal class LinuxCommandSession private constructor(
 
     fun isAlive(): Boolean = !closed.get() && process.isAlive
 
+    fun awaitExit(timeoutMs: Long): Boolean = process.waitFor(timeoutMs.coerceAtLeast(0L), TimeUnit.MILLISECONDS)
+
+    fun exitCodeOrNull(): Int? = if (process.isAlive) null else runCatching { process.exitValue() }.getOrNull()
+
     fun stderrSnapshot(maxLines: Int = 40): List<String> {
         val result = ArrayList<String>()
         stderr.drainTo(result, maxLines.coerceIn(1, 200))
