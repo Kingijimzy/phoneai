@@ -14,7 +14,7 @@ import java.util.UUID
  * Message bodies stay on-device; tool payloads and secrets are deliberately not stored here.
  */
 class OrionConversationRepository private constructor(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 5) {
+    SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 6) {
 
     data class ChatEvent(
         val id: String, val sessionId: String, val messageId: String?, val type: String,
@@ -59,6 +59,7 @@ class OrionConversationRepository private constructor(context: Context) :
         db.execSQL("CREATE INDEX messages_session_order ON messages(session_id, sort_order)")
         createEventsTable(db)
         createObjectiveEvidenceTable(db)
+        createTomProfileTable(db)
         createSearchIndex(db, true)
     }
 
@@ -70,6 +71,7 @@ class OrionConversationRepository private constructor(context: Context) :
             db.execSQL("ALTER TABLE chat_events ADD COLUMN correlation_id TEXT")
             db.execSQL("ALTER TABLE chat_events ADD COLUMN evidence_json TEXT")
         }
+        if (oldVersion < 6) createTomProfileTable(db)
     }
 
     private fun createEventsTable(db: SQLiteDatabase) {
@@ -87,6 +89,102 @@ class OrionConversationRepository private constructor(context: Context) :
             FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
         )""")
         db.execSQL("CREATE INDEX IF NOT EXISTS chat_events_session_time ON chat_events(session_id, created_at)")
+    }
+
+
+    data class TomPreference(
+        val dimension: String,
+        val value: String,
+        val confidence: Double,
+        val source: String,
+        val evidence: String,
+        val updatedAt: Long,
+        val ownerLocked: Boolean
+    )
+
+    private fun createTomProfileTable(db: SQLiteDatabase) {
+        db.execSQL("""CREATE TABLE IF NOT EXISTS tom_profile (
+            dimension TEXT PRIMARY KEY NOT NULL,
+            value TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            source TEXT NOT NULL,
+            evidence TEXT NOT NULL,
+            updated_at INTEGER NOT NULL,
+            owner_locked INTEGER NOT NULL DEFAULT 0
+        )""")
+        db.execSQL("CREATE INDEX IF NOT EXISTS tom_profile_updated ON tom_profile(updated_at)")
+    }
+
+    /** Store an evidence-backed, non-sensitive hypothesis. Owner-locked values always win. */
+    @Synchronized
+    fun observeTomPreference(context: Context, dimension: String, value: String, confidence: Double, evidence: String): Boolean {
+        migrateLegacy(context)
+        val key = dimension.trim().lowercase().take(48)
+        val cleanValue = value.replace(Regex("[\\r\\n\\t]+"), " ").trim().take(180)
+        val cleanEvidence = sanitizeEventSummary(evidence).take(240)
+        if (key.isBlank() || cleanValue.isBlank() || cleanEvidence.isBlank()) return false
+        val db = writableDatabase
+        val existing = tomPreference(context, key)
+        if (existing?.ownerLocked == true) return false
+        val bounded = confidence.coerceIn(0.0, 0.95)
+        if (existing != null && bounded + 0.08 < existing.confidence) return false
+        val values = ContentValues().apply {
+            put("dimension", key); put("value", cleanValue); put("confidence", bounded)
+            put("source", "inferred"); put("evidence", cleanEvidence); put("updated_at", System.currentTimeMillis())
+            put("owner_locked", 0)
+        }
+        return db.insertWithOnConflict("tom_profile", null, values, SQLiteDatabase.CONFLICT_REPLACE) >= 0
+    }
+
+    /** Explicit owner settings are authoritative until the owner changes or clears them. */
+    @Synchronized
+    fun setTomPreference(context: Context, dimension: String, value: String): Boolean {
+        migrateLegacy(context)
+        val key = dimension.trim().lowercase().take(48)
+        val cleanValue = value.replace(Regex("[\\r\\n\\t]+"), " ").trim().take(180)
+        if (key.isBlank() || cleanValue.isBlank()) return false
+        val values = ContentValues().apply {
+            put("dimension", key); put("value", cleanValue); put("confidence", 1.0)
+            put("source", "owner"); put("evidence", "explicit owner preference"); put("updated_at", System.currentTimeMillis())
+            put("owner_locked", 1)
+        }
+        return writableDatabase.insertWithOnConflict("tom_profile", null, values, SQLiteDatabase.CONFLICT_REPLACE) >= 0
+    }
+
+    @Synchronized
+    fun tomPreference(context: Context, dimension: String): TomPreference? {
+        migrateLegacy(context)
+        return readableDatabase.rawQuery(
+            "SELECT dimension,value,confidence,source,evidence,updated_at,owner_locked FROM tom_profile WHERE dimension=? LIMIT 1",
+            arrayOf(dimension.trim().lowercase())
+        ).use { c ->
+            if (!c.moveToFirst()) null else TomPreference(
+                c.getString(0), c.getString(1), c.getDouble(2), c.getString(3),
+                c.getString(4), c.getLong(5), c.getInt(6) != 0
+            )
+        }
+    }
+
+    @Synchronized
+    fun tomProfile(context: Context): List<TomPreference> {
+        migrateLegacy(context)
+        val out = mutableListOf<TomPreference>()
+        readableDatabase.rawQuery(
+            "SELECT dimension,value,confidence,source,evidence,updated_at,owner_locked FROM tom_profile ORDER BY owner_locked DESC,confidence DESC,updated_at DESC",
+            null
+        ).use { c ->
+            while (c.moveToNext()) out += TomPreference(
+                c.getString(0), c.getString(1), c.getDouble(2), c.getString(3),
+                c.getString(4), c.getLong(5), c.getInt(6) != 0
+            )
+        }
+        return out
+    }
+
+    @Synchronized
+    fun clearTomProfile(context: Context): Boolean {
+        migrateLegacy(context)
+        return writableDatabase.delete("tom_profile", null, null) >= 0
     }
 
     data class SearchHit(val sessionId: String, val turnId: String, val role: String, val timestamp: Long, val title: String, val snippet: String, val before: String, val after: String)
