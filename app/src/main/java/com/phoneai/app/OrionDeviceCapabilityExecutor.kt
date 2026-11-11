@@ -16,7 +16,8 @@ internal object OrionDeviceCapabilityExecutor {
         "list_app_deeplinks", "read_screen", "validate_action", "verify_action", "verify_send",
         "click", "click_text", "wait_for", "tap", "long_press", "swipe", "swipe_path",
         "scroll", "type", "key", "look", "play", "record_screen",
-        "chronos_awareness", "calendar_events", "voice_speak", "voice_listen"
+        "chronos_awareness", "calendar_events", "voice_speak", "voice_listen",
+        "routine_run", "routine_resume"
     )
 
     fun supports(tool: String): Boolean = tool in supportedTools
@@ -33,7 +34,8 @@ internal object OrionDeviceCapabilityExecutor {
         verifySend: (JSONObject) -> String,
         look: (String) -> String,
         play: (String, Int) -> String,
-        readScreen: () -> String
+        readScreen: () -> String,
+        runRoutine: (String, String) -> String = { _, _ -> "error: saved routine replay callback unavailable" }
     ): String = when (tool) {
         "lookup_app" -> tools.lookupApp(args.optString("name"))
         "open_app" -> service.openApp(args.optString("name"))
@@ -79,6 +81,8 @@ internal object OrionDeviceCapabilityExecutor {
         "key" -> service.key(args.optString("name"))
         "look" -> look(args.optString("question", "Describe what is on the screen."))
         "play" -> play(args.optString("goal"), args.optInt("steps", 20))
+        "routine_run" -> runRoutine("run", args.optString("name"))
+        "routine_resume" -> runRoutine("resume", args.optString("name"))
         "chronos_awareness" -> OrionChronosAwareness.summary(service).takeIf { it.isNotBlank() } ?: "Chronos context is unavailable without owner-granted app-usage and Chronos awareness consent."
         "calendar_events" -> {
             val lookahead = args.optInt("lookaheadHours", Prefs.calendarLookaheadHours(service))
