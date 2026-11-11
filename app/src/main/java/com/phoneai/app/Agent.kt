@@ -1116,7 +1116,18 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         val streamWatch = HermesRepetitionGuard.RunawayStreamWatch()
         // Carry forward only the latest tool-call group; old tasks must not crowd out current intent.
         val priorNativeToolNames = ToolRegistry.recentToolNames(chatHist)
-        val nativeTools = ToolRegistry.nativeToolsFor(command, priorNativeToolNames)
+        val baseNativeTools = ToolRegistry.nativeToolsFor(command, priorNativeToolNames)
+        // An explicitly invoked skill may grant a narrow tool set outside the ordinary
+        // request-ranked window. Expose those exact registered tools; preflightTool still
+        // enforces the skill's allowlist and invocation budget on every dispatch.
+        val skillNativeTools = activeSkillId?.let { skillId ->
+            OrionSkillsCapabilityExecutor.list(svc)
+                .firstOrNull { it.id == skillId }?.allowedTools.orEmpty()
+                .mapNotNull { ToolRegistry.find(it) }
+        }.orEmpty()
+        val nativeTools = (baseNativeTools + skillNativeTools)
+            .distinctBy { it.name }
+            .take(128)
         val toolTranscriptStart = messages.length()
         var toolRounds = 0
         fun preserveToolTranscript(note: String) {
