@@ -35,10 +35,10 @@ class OrionCapabilityAuditTest {
         assertFalse(report.screenDisclosureAccepted)
     }
 
-    @Test fun missingCoreServiceOrRegistryBlocksReadiness() {
+    @Test fun missingAccessibilityServiceWarnsButDoesNotBlockIndependentCapabilities() {
         val noService = OrionCapabilityAudit.evaluate(42, 11, 3, false, true, true)
         val noTools = OrionCapabilityAudit.evaluate(0, 11, 3, true, true, true)
-        assertEquals(OrionCapabilityAudit.Status.BLOCKED, noService.status)
+        assertEquals(OrionCapabilityAudit.Status.LIMITED, noService.status)
         assertEquals(OrionCapabilityAudit.Status.BLOCKED, noTools.status)
     }
 
