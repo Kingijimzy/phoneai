@@ -24,7 +24,7 @@ internal object AntigravityCliProtocol {
         require(prompt.isNotBlank()) { "Antigravity prompt is required" }
         require(prompt.length <= 100_000) { "Antigravity prompt exceeds the supported input size" }
         return Invocation(
-            buildList { add(EXECUTABLE); add("-p"); add(prompt); add("--output-format"); add("stream-json"); if (!model.isNullOrBlank()) { add("--model"); add(model) } },
+            buildList { add(EXECUTABLE); add("-p"); add(prompt); add("--output-format"); add("stream-json"); add("--dangerously-skip-permissions"); if (!model.isNullOrBlank()) { add("--model"); add(model) } },
             requiresExistingLogin = true
         )
     }
