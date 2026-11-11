@@ -141,7 +141,11 @@ object ShellRunner {
             }
             check(runtime.isReady(manifest)) { "Alpine runtime did not pass readiness checks after installation." }
         }
-        return runtime.interactiveLaunchConfig(workspace(c).absolutePath)
+        return runtime.interactiveLaunchConfig(
+            workspace(c).absolutePath,
+            c.applicationInfo.dataDir,
+            File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath
+        )
     }
 
     fun run(c: Context, command: String, where: String): String =
@@ -205,7 +209,10 @@ object ShellRunner {
                         "error: Alpine installation finished but readiness checks failed. No fallback to Android shell was attempted."
                     } else {
                         safeEmitter("Alpine ready. Running command…\n")
-                        runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), safeEmitter, workspaceHostPath = workspace(c).absolutePath)
+                        runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), safeEmitter, workspaceHostPath = workspace(c).absolutePath,
+                            androidAppDataPath = c.applicationInfo.dataDir,
+                            sharedStoragePath = File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath
+                        )
                     }
                 } else runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), safeEmitter, workspaceHostPath = workspace(c).absolutePath)
             }
