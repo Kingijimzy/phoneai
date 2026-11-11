@@ -2297,7 +2297,8 @@ Rules:
                 }
             }
             var proposedObjectiveGraph = OrionObjectiveGraph.load(svc)
-            val requiresSequentialGraph = Regex("(?i)\\b(?:depends on one another|in that order|sequential(?:ly)?)\\b").containsMatchIn(inputCommand)
+            val modelRequestedGraph = proposedObjectiveGraph != null || (step.optJSONArray("plan")?.length() ?: 0) >= 2
+            val requiresSequentialGraph = proposedObjectiveGraph?.nodes?.any { it.dependsOn.isNotEmpty() } == true
             val expectedGraphObjective = currentTask.ifBlank { inputCommand }.trim()
             var graphHasRequiredStructure = proposedObjectiveGraph != null &&
                 proposedObjectiveGraph.objective.equals(expectedGraphObjective, ignoreCase = true) &&
@@ -2306,7 +2307,7 @@ Rules:
             // Some providers return a valid ordered plan array but omit/mangle objective_graph.
             // Convert that already-visible plan into a deterministic graph instead of spending
             // repeated model turns asking for JSON the provider may never produce.
-            if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(inputCommand) && !graphHasRequiredStructure) {
+            if (modelRequestedGraph && !graphHasRequiredStructure) {
                 val plan = step.optJSONArray("plan")
                 val titles = plan?.let { arr -> (0 until minOf(arr.length(), 24)).map { arr.optString(it).trim() } }.orEmpty()
                 val fallback = OrionObjectiveGraph.fromPlan(
