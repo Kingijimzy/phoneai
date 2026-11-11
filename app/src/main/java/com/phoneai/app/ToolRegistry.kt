@@ -296,10 +296,9 @@ internal object ToolRegistry {
     }
 
     /**
-     * Keep native tool payloads focused without starving multi-domain tasks. The default 48-tool
-     * window can expose complete common capability families while staying below the 128-function
-     * ceiling supported by compatible endpoints. Providers that reject native tools fall back
-     * to the same guarded text planner.
+     * Keep native tool payloads focused without starving multi-domain tasks. The default 64-tool
+     * window exposes Ultron coordination beside phone/developer/MCP capabilities while remaining
+     * below the 128-function ceiling supported by compatible endpoints.
      */
     private val mcpNativeTools = listOf(
         "mcp_status", "mcp_list_tools", "mcp_call",
@@ -327,7 +326,7 @@ internal object ToolRegistry {
     fun nativeToolsFor(
         request: String?,
         priorToolNames: Set<String> = emptySet(),
-        maxTools: Int = 48
+        maxTools: Int = 64
     ): List<ToolDefinition> {
         val limit = maxTools.coerceIn(1, 128)
         val query = request.orEmpty().lowercase()
