@@ -24,10 +24,11 @@ class OrionNativeToolCallCodecTest {
     }
 
     @Test fun parsesGeminiNativeFunctionCallParts() {
-        val body = """{"candidates":[{"content":{"parts":[{"text":"Checking now."},{"functionCall":{"name":"device_info","args":{"detail":"hardware"}}}]}}]}"""
+        val body = """{"candidates":[{"content":{"parts":[{"text":"Checking now."},{"functionCall":{"id":"gemini-call-1","name":"device_info","args":{"detail":"hardware"}}}]}}]}"""
         val turn = OrionNativeToolCallCodec.parse("gemini", body, known)
         assertEquals("Checking now.", turn.text)
         assertEquals("device_info", turn.calls.single().name)
+        assertEquals("gemini-call-1", turn.calls.single().id)
         assertTrue(turn.calls.single().available)
         assertEquals("hardware", turn.calls.single().arguments.getString("detail"))
     }
