@@ -139,10 +139,7 @@ internal class OrionPythonPhoneApi(
         if (!OrionSensorConsent.read(context, OrionSensorScope.SCREEN_CONTEXT).active())
             return error("screen context grant is not enabled")
         val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
-        // Reuse the production screen reader and suppress its potentially sensitive surfaces entirely
-        // at the Python boundary rather than returning partially filtered node text.
-        return screenSnapshotIfSafe(service)
-            ?: error("screen reading is blocked on a potentially sensitive surface")
+        return service.readScreen()
     }
 
     fun ui_tap_text(text: String): String {
@@ -152,7 +149,6 @@ internal class OrionPythonPhoneApi(
         val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
         if (!OrionSensorConsent.read(context, OrionSensorScope.SCREEN_CONTEXT).active())
             return error("screen context grant is not enabled")
-        if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
         return tool("click_text", JSONObject().put("text", target))
     }
 
@@ -183,18 +179,6 @@ internal class OrionPythonPhoneApi(
         if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
         return tool("swipe", JSONObject().put("x1", x1).put("y1", y1).put("x2", x2).put("y2", y2)
             .put("ms", 350).put("allow_coordinates", true))
-    }
-
-    private fun screenSafe(service: PhoneAiService): Boolean = screenSnapshotIfSafe(service) != null
-
-    private fun screenSnapshotIfSafe(service: PhoneAiService): String? {
-        val root = service.rootInActiveWindow ?: return null
-        val packageName = root.packageName?.toString().orEmpty()
-        if (SafetyGate.isSensitiveApp(packageName, packageName)) return null
-        val snapshot = service.readScreen()
-        return snapshot.takeIf {
-            !it.startsWith("error:") && !it.contains("(OCR withheld on a potentially sensitive screen)")
-        }
     }
 
     fun fs_list(): String = workspace.list()
