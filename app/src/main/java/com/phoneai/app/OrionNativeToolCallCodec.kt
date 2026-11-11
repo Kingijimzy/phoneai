@@ -40,6 +40,10 @@ internal object OrionNativeToolCallCodec {
                 calls.add(Call(callId, name, JSONObject(), available, "arguments must be a valid JSON object"))
                 return
             }
+            if (args.toString().length > MAX_ARGUMENT_CHARS) {
+                calls.add(Call(callId, name, JSONObject(), available, "arguments exceed the 256 KB limit"))
+                return
+            }
             if (args.length() > 128) {
                 calls.add(Call(callId, name, JSONObject(), available, "arguments exceed the 128-field limit"))
                 return
