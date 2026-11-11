@@ -182,6 +182,31 @@ internal object OrionRuntimeNotifier {
         }
     }
 
+    /** Deliver one owner-opted-in proactive candidate. Returns true only after notify() succeeds. */
+    fun postProactiveItem(context: Context, item: OrionProactiveEngine.ProactiveItem): Boolean {
+        if (!AgentPolicy.enabled(context, "orion_core") ||
+            !AgentPolicy.enabled(context, "proactive") || !allowed(context)) return false
+        val title = AgentPrivacyFilter.safeOutput(item.title).replace(Regex("\\s+"), " ").take(80)
+            .ifBlank { "A follow-up is ready" }
+        val body = AgentPrivacyFilter.safeOutput(item.body).replace(Regex("\\s+"), " ").take(260)
+            .ifBlank { "Open Orion to review a proactive reminder." }
+        val id = NOTIFICATION_BASE + (item.kind.hashCode() and 0x1fff)
+        return runCatching {
+            manager(context).notify(
+                id,
+                builder(context)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle("Orion · $title")
+                    .setContentText(body)
+                    .setStyle(android.app.Notification.BigTextStyle().bigText(body))
+                    .setContentIntent(openIntent(context, id))
+                    .setAutoCancel(true)
+                    .build()
+            )
+            true
+        }.getOrDefault(false)
+    }
+
     /** Routine reminders contain only owner-approved, non-sensitive routine memory text. */
     fun postRoutineReminder(context: Context, title: String) {
         if (!allowed(context)) return
