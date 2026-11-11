@@ -1056,25 +1056,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         researchCancelled.set(false)
         talkNim.resume()
 
-        // A short explicit research continuation inherits the last substantive user request.
-        // Skip previous follow-up phrases so chains like "research it" → "verify it" keep the topic.
-        var previousUserRequest: String? = null
-        for (i in chatHist.length() - 1 downTo 0) {
-            val turn = runCatching { chatHist.getJSONObject(i) }.getOrNull() ?: continue
-            if (!turn.optString("role").equals("user", ignoreCase = true)) continue
-            val candidate = turn.optString("content").trim()
-            if (candidate.isBlank() || ResearchFollowUpPolicy.isResearchFollowUp(candidate)) continue
-            previousUserRequest = candidate
-            break
-        }
-        val contextualResearchCommand = ResearchFollowUpPolicy.commandFor(command, previousUserRequest)
-        if (contextualResearchCommand != command) {
-            chatHist.put(msg("user", command))
-            while (chatHist.length() > 12) chatHist.remove(0)
-            svc.notifyModeSwitch(true)
-            runInternal(contextualResearchCommand, reuseCommandBudget = false)
-            return
-        }
         val soulContext = OrionSessionContextProvider.forChat(svc, command)
         val safeSystem = (chatSystem(command) + "\n\n" + soulContext + "\n\n" + intentResolution.contextBlock).replace(
 
