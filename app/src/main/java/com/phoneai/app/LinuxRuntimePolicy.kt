@@ -31,14 +31,14 @@ internal object LinuxRuntimePolicy {
     // SHA-256 pinned in .github/workflows/build.yml for the APK-packaged Android W^X loader.
     const val PROOT_LOADER_SHA256 = "44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04"
     const val MAX_ROOTFS_BYTES = 300_000_000L
-    const val MAX_COMMAND = 16_000
+    const val MAX_COMMAND = 128_000
     const val MIN_PROCESS_TIMEOUT_MS = 250L
-    const val MAX_PROCESS_TIMEOUT_MS = 180_000L
+    const val MAX_PROCESS_TIMEOUT_MS = 1_800_000L
 
     /**
      * Normalize model/worker supplied timeouts at the process boundary.
      * Values below the platform minimum become the minimum; long-running profiles are
-     * bounded by the PRoot supervisor's hard 180-second ceiling. Keep this normalization
+     * bounded by the PRoot supervisor's hard 30-minute ceiling. Keep this normalization
      * centralized so model adapters, task resumes and direct shell callers cannot disagree.
      */
     fun normalizeProcessTimeout(requestedMs: Long): Long =
