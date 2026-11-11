@@ -36,6 +36,16 @@ internal object OrionNativeToolCallCodec {
         }
 
         when {
+            providerId == "gemini" -> {
+                val candidate = root.optJSONArray("candidates")?.optJSONObject(0)
+                val parts = candidate?.optJSONObject("content")?.optJSONArray("parts") ?: JSONArray()
+                for (i in 0 until parts.length()) {
+                    val part = parts.optJSONObject(i) ?: continue
+                    if (part.has("text")) text.append(part.optString("text"))
+                    val call = part.optJSONObject("functionCall") ?: continue
+                    add("gemini-${i + 1}", call.optString("name"), call.opt("args"))
+                }
+            }
             providerId == "opencode-zen" -> {
                 val output = root.optJSONArray("output") ?: JSONArray()
                 for (i in 0 until output.length()) {
