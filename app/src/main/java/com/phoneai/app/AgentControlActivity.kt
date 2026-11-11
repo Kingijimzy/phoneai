@@ -71,6 +71,7 @@ class AgentControlActivity : Activity() {
                 isEnabled = pack.implemented
                 setOnCheckedChangeListener { _, checked ->
                     AgentPolicy.setEnabled(this@AgentControlActivity, pack.id, checked)
+                    if (pack.id == "orion_core" || pack.id == "proactive") OrionProactiveWork.refresh(this@AgentControlActivity)
                     if (pack.id == "termux_bridge") {
                         getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
                             .putBoolean("termux_bridge_enabled", checked).apply()
