@@ -3,80 +3,6 @@ package com.phoneai.app
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Deterministic routing for intents where a chat-only answer would silently skip a requested action. */
-internal object OrionCommandIntentPolicy {
-    private val pythonCodeMention = Regex(
-        "(?i)\\bpython\\b.{0,100}\\b(?:code|script|program|calculator)\\b|\\b(?:code|script|program|calculator)\\b.{0,100}\\bpython\\b"
-    )
-    private val executionVerb = Regex("(?i)\\b(?:run|execute|test|verify)\\b")
-    private val negativeExecution = Regex(
-        "(?i)\\b(?:do not|don't|dont|never|without)\\b.{0,35}\\b(?:run|execute|test|verify)\\b"
-    )
-    private val connectedGitHub = Regex(
-        "(?i)\\b(?:my|your|the)\\s+(?:connected|linked|authenticated)\\s+github\\s+account\\b|\\b(?:connected|linked|authenticated)\\s+github\\s+account\\b"
-    )
-    private val inspectVerb = Regex(
-        "(?i)\\b(?:inspect|check|identify|find|list|show|read|review|look\\s+at|look\\s+up|which|what)\\b"
-    )
-
-    fun requiresPythonExecution(command: String): Boolean =
-        pythonCodeMention.containsMatchIn(command) &&
-            executionVerb.containsMatchIn(command) &&
-            !negativeExecution.containsMatchIn(command)
-
-    fun isCalculatorExecutionRequest(command: String): Boolean =
-        requiresPythonExecution(command) && Regex("(?i)\\bcalculator\\b").containsMatchIn(command)
-
-    fun isConnectedGitHubAccountRequest(command: String): Boolean =
-        connectedGitHub.containsMatchIn(command) && inspectVerb.containsMatchIn(command)
-
-    private val explicitObjectiveGraph = Regex(
-        "(?i)\\b(?:objective graph|dependency graph|depends on one another|in that order)\\b"
-    )
-    private val multiStepTask = Regex(
-        "(?i)\\b(?:two|three|four|five|six|\\d+)\\s*[- ]?\\s*(?:step|objective|task)s?\\b"
-    )
-    private val resumableProgress = Regex(
-        "(?i)\\b(?:save|persist|checkpoint)\\b.{0,80}\\b(?:progress|state)\\b.{0,80}\\b(?:resum(?:e|ed|ing)|continu(?:e|ed|ing)|reopen(?:ed)?)\\b"
-    )
-
-    private val createMultiStepTask = Regex(
-        "(?is)\\b(?:create|make|start|save)\\s+(?:a\\s+)?(?:new\\s+)?task\\b.{0,500}\\b(?:break\\s+(?:it|the\\s+task)\\s+into\\s+(?:these\\s+)?steps|steps?\\s*[:：]|checkpoint|next\\s+unfinished\\s+action)\\b"
-    )
-    private val explicitMemoryWrite = Regex(
-        "(?i)\\b(?:remember|record|save|store)\\b.{0,100}\\b(?:this\\s+)?(?:decision|preference|fact|rule|lesson)\\b|\\b(?:decision|preference|fact|rule|lesson)\\b.{0,80}\\b(?:remember|record|save|store)\\b"
-    )
-    // Detect requests spanning independent executor families. Keep these on the task planner.
-    private val compoundActionFamilies = listOf(
-        Regex("(?i)\\b(research|investigate|search|browse|look up|fetch|inspect|review)\\b"),
-        Regex("(?i)\\b(remember|recall|forget|save|store|record|update)\\b.{0,70}\\b(memory|lesson|fact|decision|preference|knowledge|note)\\b"),
-        Regex("(?i)\\b(remind|reminder|schedule|alarm|timer)\\b"),
-        Regex("(?i)\\b(write|create|generate|build)\\b.{0,90}\\b(code|script|calculator|document|report|summary|file|pdf|apk)\\b"),
-        Regex("(?i)\\b(save|download|extract|write)\\b.{0,70}\\b(file|filename|document|report|pdf|apk|script)\\b"),
-        Regex("(?i)\\b(run|execute|test|verify|compile)\\b"),
-        Regex("(?i)\\b(send|message|text|email|telegram|sms|call|reply|publish|post)\\b"),
-        Regex("(?i)\\b(open|launch|tap|click|press|install|uninstall|change|turn on|turn off)\\b")
-    )
-
-    /** Explicit multi-objective plans and memory writes must enter the guarded executor directly. */
-    fun requiresStructuredTaskPlanning(command: String): Boolean =
-        !isCalculatorExecutionRequest(command) && (
-            explicitObjectiveGraph.containsMatchIn(command) ||
-                createMultiStepTask.containsMatchIn(command) ||
-                (multiStepTask.containsMatchIn(command) && resumableProgress.containsMatchIn(command)) ||
-                compoundActionFamilies.count { it.containsMatchIn(command) } >= 2
-        )
-
-
-    fun requestedGitHubRepositoryName(command: String): String {
-        val trailing = Regex("(?i)\\b([A-Za-z0-9_.-]{2,100})\\s+(?:github\\s+)?(?:repo|repository|project)\\b").find(command)
-        val named = Regex("(?i)\\b(?:repo|repository|project)\\s+(?:called|named|for)\\s+([A-Za-z0-9_.-]{2,100})\\b").find(command)
-        return trailing?.groupValues?.getOrNull(1)
-            ?: named?.groupValues?.getOrNull(1)
-            ?: "PhoneAI"
-    }
-}
-
 /** What the agent uses to talk to the person. */
 interface AgentUi {
     fun say(text: String)
@@ -2012,48 +1938,6 @@ Rules:
             // Context is assessed for the planner only; internal bookkeeping is not shown in the chat.
             OrionPreActionContext.assess(svc, command)
         }
-        // This deterministic acceptance path performs the whole requested outcome:
-        // save a usable calculator to Downloads, then run non-interactive arithmetic tests.
-        // Disabled: the canned template ignored what the user asked for; the model now writes and runs real code.
-        if (false && !resumeRequest && !browserActionTask && !structuredTask &&
-            OrionCommandIntentPolicy.isCalculatorExecutionRequest(command)) {
-            // This script intentionally stays within Orion's restricted Python sandbox:
-            // it is executable, but not an interactive terminal program (input()/imports are unavailable).
-            val expressions = CalculatorRequestParser.parse(command)
-            val requestedFolder = CalculatorRequestParser.requestedFolder(command)
-            val fileCode = CalculatorRequestParser.script(expressions)
-            ui.phase("acting")
-            val saveResult = executeWithRecoveryGuard(
-                "save_file",
-                JSONObject().put("filename", "calculator.py").put("folder", requestedFolder).put("content", fileCode)
-            )
-            val saved = !saveResult.startsWith("error:", true)
-            val savedSource = if (saved) tools.readSavedFile(saveResult) else
-                "error: execution skipped because calculator.py was not saved."
-            val executionResult = if (saved && !savedSource.startsWith("error:", true)) {
-                // Execute the exact bytes read back from the saved MediaStore URI, never a
-                // separately reconstructed test snippet.
-                executeWithRecoveryGuard("python_exec", JSONObject().put("code", savedSource))
-            } else savedSource
-            val expectedChecks = expressions.map { "PASS: ${it.display}" }
-            val executed = executionResult.contains("PASS: arithmetic operations executed", ignoreCase = true) &&
-                executionResult.contains("PASS: division-by-zero guard", ignoreCase = true) &&
-                expectedChecks.all { executionResult.contains(it, ignoreCase = true) } &&
-                !executionResult.contains("FAIL:", ignoreCase = true) &&
-                !executionResult.startsWith("error:", true)
-            val answer = buildString {
-                append(if (saved) "Calculator saved and content-verified: $saveResult" else "Calculator was not saved: $saveResult")
-                append(if (executed) "\nExecution of the saved file: $executionResult" else "\nExecution of the saved file was not verified: $executionResult")
-                append("\n\nSaved file: calculator.py")
-                append("\nLocation: Downloads/$requestedFolder")
-                append("\nThis is a non-interactive calculator script. Orion's in-app Python sandbox does not provide terminal input(), so the saved file uses editable operands and verifies its arithmetic operations.")
-            }
-            logShortcut("python_calculator_save", saveResult)
-            logShortcut("python_calculator_execution", executionResult)
-            history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
-            ui.say(answer)
-            return
-        }
         // Chart analysis is a deliberate vision fallback: send a screenshot only when the user
         // explicitly asks Orion to inspect a chart, rather than sending screenshots on every turn.
         val chartCommand = command.lowercase()
@@ -2132,66 +2016,6 @@ Rules:
         // Explicit app/action requests must reach the agent tool loop before any generic
         // web-search shortcut. Otherwise "open YouTube and search for X" gets sent to
         // DuckDuckGo as one literal sentence and no phone action occurs.
-        val explicitAppAction = Regex(
-            "(?i)\\b(open|launch|start|switch to|go to|use)\\s+(the\\s+)?(youtube|whatsapp|telegram|instagram|tiktok|facebook|chrome|browser|settings|camera|photos|gallery|gmail|maps|spotify|play store)\\b"
-        ).containsMatchIn(command) || Regex(
-            "(?i)\\b(search in|search on|inside|within)\\s+(youtube|whatsapp|telegram|instagram|tiktok|facebook|spotify)\\b"
-        ).containsMatchIn(command)
-        // Connected-account intent must be handled before the public repository-name shortcut.
-        // This prevents a phrase like "my connected GitHub account ... PhoneAI repository" from
-        // searching public GitHub and selecting an unrelated repository with the same name.
-        if (!resumeRequest && !browserActionTask && !structuredTask &&
-            OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(command)) {
-            val requestedName = OrionCommandIntentPolicy.requestedGitHubRepositoryName(command)
-            ui.phase("acting")
-            // Account identity and repository listing are one durable research task.
-            // Both reads are checkpointed before/after guarded dispatch; a failed first read
-            // prevents the second from running and an uncertain receipt requires recovery.
-            val accountAndRepositories = researchShortcut(
-                command,
-                listOf(
-                    OrionResearchShortcutLifecycle.Step(
-                        "github_account_read", JSONObject().put("path", "/user")
-                    ),
-                    OrionResearchShortcutLifecycle.Step(
-                        "github_account_read", JSONObject().put("path", "/user/repos?per_page=100&sort=updated")
-                    )
-                )
-            )
-            val account = accountAndRepositories.substringBefore("\n\n")
-            val repositories = accountAndRepositories.substringAfter("\n\n", "")
-            val answer = if (account.startsWith("error:", true)) {
-                "I could not inspect the connected GitHub account: $account"
-            } else if (repositories.isBlank() || repositories.startsWith("error:", true)) {
-                "I could read the GitHub account, but could not list its repositories: " +
-                    repositories.ifBlank { "the repository-list step was not completed" }
-            } else {
-                    val accountLine = account.lineSequence()
-                        .map { it.trim() }
-                        .firstOrNull { it.isNotBlank() && !it.startsWith("GITHUB DATA", true) }
-                    val login = accountLine?.substringBefore(' ')?.takeIf { it.isNotBlank() } ?: "authenticated account"
-                    val matchingRepos = repositories.lineSequence().map { it.trim() }
-                        .mapNotNull { line ->
-                            val match = Regex("^([A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100})(?:\\s|$)").find(line)
-                            match?.let { it.groupValues[1] to line }
-                        }
-                        .filter { it.first.substringAfterLast('/').equals(requestedName, true) }
-                        .toList()
-                    if (matchingRepos.isEmpty()) {
-                        "Authenticated GitHub account: $login. No repository named '$requestedName' was found in the connected account's visible repository list. I did not substitute an unrelated public repository."
-                    } else {
-                        "Authenticated GitHub account: $login\n" +
-                            matchingRepos.joinToString("\n") { (fullName, details) ->
-                                "Repository: $fullName\nURL: https://github.com/$fullName\nAccount result: $details"
-                            }
-                    }
-                }
-            logShortcut("github_connected_account_lookup", answer)
-            history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
-            ui.say(answer)
-            return
-        }
-
         // URL-first GitHub routing: exact supplied URLs take precedence over prose/name heuristics.
         // All reads use the unified Research executor so capability policy, cancellation, preflight,
         // adapter ownership and durable evidence stay connected to the same task.
