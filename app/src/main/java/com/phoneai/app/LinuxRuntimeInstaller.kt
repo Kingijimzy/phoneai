@@ -308,7 +308,7 @@ internal class LinuxRuntimeInstaller(
                         if (count < 0) break
                         val chunk = String(buffer, 0, count)
                         synchronized(output) {
-                            if (output.length < 6000) output.append(chunk.take(6000 - output.length))
+                            if (output.length < 100_000) output.append(chunk.take(100_000 - output.length))
                         }
                         // Stream raw chunks immediately, including partial lines and progress bars.
                         runCatching { onOutput(chunk) }
@@ -368,7 +368,7 @@ internal class LinuxRuntimeInstaller(
             throw IOException("Interrupted while collecting Linux process output.", interrupted)
         }
 
-        val captured = synchronized(output) { output.toString().take(6000) }
+        val captured = synchronized(output) { output.toString().take(100_000) }
         if (finished && readerFailure.get() != null) {
             throw IOException("Could not reliably collect Linux process output.", readerFailure.get())
         }
