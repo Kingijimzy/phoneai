@@ -37,4 +37,13 @@ class OrionRouterTest {
         assertTrue(message.contains("latest-detail"))
     }
 
+    @Test fun conversationRestoreDoesNotApplyAnArbitraryTurnOrCharacterLimit() {
+        val turns = (1..60).map { "user" to "turn-$it " + "detail ".repeat(900) }
+        val restored = ConversationContextPolicy.recent(turns)
+        assertEquals(60, restored.size)
+        assertTrue(restored.first().second.contains("turn-1"))
+        assertTrue(restored.first().second.length > 4000)
+        assertTrue(restored.last().second.contains("turn-60"))
+    }
+
 }
