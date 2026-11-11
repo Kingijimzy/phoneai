@@ -390,6 +390,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         val answer = StringBuilder()
         val nonSseBody = StringBuilder()
         var terminalEventSeen = false
+        var streamFinishReason = ""
         try {
             conn.requestMethod = "POST"
             conn.connectTimeout = 15000
@@ -427,6 +428,9 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                         when {
                             p.anthropicStyle -> {
                                 val type = root.optString("type")
+                                if (type == "message_delta") {
+                                    streamFinishReason = root.optJSONObject("delta")?.optString("stop_reason").orEmpty()
+                                }
                                 if (type == "message_stop") {
                                     terminalEventSeen = true
                                     break
@@ -436,6 +440,9 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                             p.id == "opencode-zen" -> {
                                 val type = root.optString("type")
                                 if (type == "response.completed" || type == "response.done") {
+                                    val response = root.optJSONObject("response")
+                                    streamFinishReason = response?.optJSONObject("incomplete_details")?.optString("reason")
+                                        ?: response?.optString("status").orEmpty()
                                     terminalEventSeen = true
                                     break
                                 }
@@ -445,7 +452,10 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                             }
                             else -> {
                                 val choices = root.optJSONArray("choices")
-                                choices?.optJSONObject(0)?.optJSONObject("delta")?.optString("content", "") ?: ""
+                                val choice = choices?.optJSONObject(0)
+                                val finish = choice?.optString("finish_reason").orEmpty()
+                                if (finish.isNotBlank() && finish != "null") streamFinishReason = finish
+                                choice?.optJSONObject("delta")?.optString("content", "") ?: ""
                             }
                         }
                     } catch (_: Exception) { "" }
@@ -471,9 +481,14 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 }
             }
             val synthetic = when {
-                p.anthropicStyle -> JSONObject().put("content", JSONArray().put(JSONObject().put("type", "text").put("text", answer.toString()))).toString()
-                p.id == "opencode-zen" -> JSONObject().put("output_text", answer.toString()).toString()
-                else -> JSONObject().put("choices", JSONArray().put(JSONObject().put("message", JSONObject().put("content", answer.toString())))).toString()
+                p.anthropicStyle -> JSONObject()
+                    .put("stop_reason", streamFinishReason)
+                    .put("content", JSONArray().put(JSONObject().put("type", "text").put("text", answer.toString()))).toString()
+                p.id == "opencode-zen" -> JSONObject().put("output_text", answer.toString())
+                    .put("incomplete_details", if (streamFinishReason == "max_output_tokens") JSONObject().put("reason", "max_output_tokens") else JSONObject.NULL).toString()
+                else -> JSONObject().put("choices", JSONArray().put(JSONObject()
+                    .put("message", JSONObject().put("content", answer.toString()))
+                    .put("finish_reason", streamFinishReason.ifBlank { JSONObject.NULL }))).toString()
             }
             return Http(200, synthetic, -1)
         } finally {
@@ -884,6 +899,19 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         ""
     }
 
+    private fun responseWasTruncated(p: Provider, body: String): Boolean {
+        val root = runCatching { JSONObject(body) }.getOrNull() ?: return false
+        val reason = when {
+            p.id == "gemini" -> root.optJSONArray("candidates")?.optJSONObject(0)?.optString("finishReason").orEmpty()
+            p.anthropicStyle -> root.optString("stop_reason")
+            p.id == "opencode-zen" -> root.optJSONObject("incomplete_details")?.optString("reason")
+                ?: root.optJSONObject("response")?.optJSONObject("incomplete_details")?.optString("reason").orEmpty()
+            else -> root.optJSONArray("choices")?.optJSONObject(0)?.optString("finish_reason").orEmpty()
+        }
+        return reason.equals("length", true) || reason.equals("max_tokens", true) ||
+            reason.equals("max_output_tokens", true) || reason.equals("MAX_TOKENS", true)
+    }
+
     /** A command begins at its explicit caller; the shared budget covers every fallback. */
     override fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, fastResponse: Boolean, onDelta: ((String) -> Unit)?): String {
         if (cancelled) throw RuntimeException("Stopped.")
@@ -974,7 +1002,9 @@ internal class Nim internal constructor(private val ctx: Context, private val co
     }
 
     private fun chatOne(
-        p: Provider, messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, hasBackup: Boolean, fastResponse: Boolean = false, onDelta: ((String) -> Unit)? = null
+        p: Provider, messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double,
+        hasBackup: Boolean, fastResponse: Boolean = false, onDelta: ((String) -> Unit)? = null,
+        continuationDepth: Int = 0
     ): String {
         val key = Prefs.key(ctx, p.id)
         // Gemini needs room for its internal thinking. NVIDIA Nemotron 3.5 Super VL
@@ -1202,6 +1232,10 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             }
             if (r.code !in 200..299) throw AiException("${p.label}: error ${r.code} ${r.body.take(120)}")
             val requestedTools = activeNativeTools.get().orEmpty()
+            val truncated = responseWasTruncated(p, r.body)
+            if (truncated && requestedTools.isNotEmpty()) {
+                throw AiException("${p.label}: response hit its output-token limit while preparing a tool call. No partial tool call was dispatched; reduce the task scope or increase the model output limit.")
+            }
             val parsedTurn = if (requestedTools.isNotEmpty()) {
                 OrionNativeToolCallCodec.parse(p.id, r.body) { name -> ToolRegistry.find(name) != null }
             } else OrionNativeToolCallCodec.Turn(extract(p, r.body), emptyList())
@@ -1209,6 +1243,24 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 nativeToolCalls.set(parsedTurn.calls.map { OrionModelToolCall(it.id, it.name, it.arguments, it.available, it.validationError) })
             }
             val content = parsedTurn.text
+            if (truncated) {
+                if (content.isBlank()) {
+                    throw AiException("${p.label}: model reached its output-token limit without producing readable text.")
+                }
+                if (continuationDepth >= 2) {
+                    throw AiException("${p.label}: response still reached its output-token limit after two continuations. The partial answer was not accepted as complete.")
+                }
+                onStatus?.invoke("${p.label}: response reached its output-token limit; continuing the same answer without repeating completed work...")
+                val continuation = JSONArray(messages.toString())
+                    .put(JSONObject().put("role", "assistant").put("content", content))
+                    .put(JSONObject().put("role", "user").put("content",
+                        "Continue exactly where your previous response stopped. Do not repeat earlier text, restart the answer, or change the task. Finish the response completely and do not claim completion for work not performed."))
+                val remainder = chatOne(
+                    p, continuation, vision, maxTokens, temperature, hasBackup,
+                    fastResponse, onDelta, continuationDepth + 1
+                )
+                return content + remainder
+            }
             if ((content.isBlank() || content == "null") && parsedTurn.calls.isEmpty()) {
                 lastNote = "$model -> empty reply"
                 // A selected catalog model can return HTTP 200 but no usable text.
