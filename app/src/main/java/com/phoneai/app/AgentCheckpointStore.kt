@@ -175,7 +175,7 @@ object AgentCheckpointStore {
      * This is deliberately not an execution authority: resume still reconciles the checkpoint
      * and replans instead of trusting a stale in-memory phase.
      */
-    fun recordLifecycleState(
+    internal fun recordLifecycleState(
         c: Context,
         phase: TaskLifecycle.Phase,
         recoveries: Int,
