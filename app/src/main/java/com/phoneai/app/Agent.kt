@@ -637,6 +637,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 is OrionRetrieveBeforeActPolicy.DispatchGate.Blocked -> {
                     val blocked = "error: retrieve-before-act blocked '$tool' immediately before dispatch: ${gate.reason}. No action was dispatched."
                     recordDispatchBlocked(tool, args, "retrieve_before_act_stale_before_dispatch")
+                    OrionExecutiveStore.finishDispatchAttempt(
+                        svc, executiveHandle.attemptId, OrionExecutiveStore.DispatchOutcome.FAILED, "", blocked
+                    )
                     taskProofs.record(tool, blocked)
                     return blocked
                 }
