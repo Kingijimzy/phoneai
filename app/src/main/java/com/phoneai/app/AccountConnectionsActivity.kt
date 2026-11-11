@@ -202,6 +202,7 @@ class AccountConnectionsActivity : Activity() {
                         if (current !in models) Prefs.setModel(applicationContext, provider, false, models.first())
                     }
                     Prefs.setAccountConnected(applicationContext, "antigravity", true)
+                    Prefs.setProvider(applicationContext, false, "antigravity")
                     runOnUiThread {
                         if (!isFinishing) antigravityOutput.text =
                             "Google account authenticated · real model request verified.\\nAvailable models: " +
@@ -239,6 +240,7 @@ class AccountConnectionsActivity : Activity() {
                 val answer = client.runTurnAndAwait(thread, "Reply with exactly: ORION_CODEX_AUTH_OK", selectedModel.takeIf { it.isNotBlank() })
                 check(answer.contains("ORION_CODEX_AUTH_OK")) { "Codex account did not pass the model verification challenge." }
                 Prefs.setAccountConnected(applicationContext, "codex", true)
+                Prefs.setProvider(applicationContext, false, "codex")
                 account to models
             }
             runOnUiThread {
