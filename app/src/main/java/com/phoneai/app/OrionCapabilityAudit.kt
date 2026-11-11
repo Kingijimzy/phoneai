@@ -35,7 +35,8 @@ internal object OrionCapabilityAudit {
         if (!screenPerceptionReady) limitations += "screen_perception_unavailable"
 
         val status = when {
-            registeredTools <= 0 || implementedPacks <= 0 || !accessibilityReady -> Status.BLOCKED
+            registeredTools <= 0 || implementedPacks <= 0 -> Status.BLOCKED
+            !accessibilityReady -> Status.LIMITED
             enabledPacks <= 0 || !screenDisclosureAccepted || !screenPerceptionReady -> Status.LIMITED
             else -> Status.READY
         }
