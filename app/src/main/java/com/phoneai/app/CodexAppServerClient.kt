@@ -19,7 +19,7 @@ internal class CodexAppServerClient(
 
     fun initialize(): Boolean {
         val response = request(CodexAppServerProtocol.initialize(ids.getAndIncrement()))
-        session.writeLine(JSONObject().put("jsonrpc", "2.0").put("method", "initialized").put("params", JSONObject()).toString())
+        session.writeLine(JSONObject().put("method", "initialized").put("params", JSONObject()).toString())
         initialized = response.optJSONObject("serverInfo") != null || response.has("capabilities")
         return initialized
     }
