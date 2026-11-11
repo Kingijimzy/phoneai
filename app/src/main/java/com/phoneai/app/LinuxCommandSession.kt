@@ -94,7 +94,7 @@ internal class LinuxCommandSession private constructor(
             val session = LinuxCommandSession(process, stdin, stdout, stderr, closed)
             // The launch config starts an interactive guest shell. Replace it with the
             // requested executable so its stdin/stdout become the protocol transport.
-            session.writeLine("exec " + argv.joinToString(" ") { shellQuote(it) })
+            session.writeLine("cd /workspace && exec " + argv.joinToString(" ") { shellQuote(it) })
             return session
         }
 
