@@ -66,45 +66,26 @@ internal object OrionPythonRuntime {
             }
         }
 
-        // CPython can write directly through the bind mount, bypassing OrionPythonWorkspace.write().
-        // Refuse to start with an already exhausted/unsafe workspace and audit it again after exit.
-        when (workspace.quotaStatus()) {
-            "ok" -> Unit
-            "exceeded" -> return "error: Python workspace is already over its 1 GiB quota; remove files before execution."
-            else -> return "error: Python workspace failed its integrity check; refusing execution."
-        }
-
         val phoneApi = OrionPythonPhoneApi(app, readOnly = ToolPermissions.level(app) == "read_only", toolInvoker = toolInvoker)
         val bridge = try { OrionPythonPhoneBridge(phoneApi) }
         catch (failure: Exception) {
             return "error: could not start the private Python-to-Android bridge (${failure.javaClass.simpleName})."
         }
-        var quotaExceededDuringRun = false
         val result = try {
             val full = OrionOwnerDialSettings.read(app).pythonProfile == OrionPythonProfile.FULL
             val bootstrap = OrionPythonPhoneBridge.bootstrapCommand(full)
-            val limits = if (full) "ulimit -c 0; ulimit -t 3500; ulimit -f 2097152; ulimit -n 2048; ulimit -u 1024" else "ulimit -c 0; ulimit -t 300; ulimit -f 65536; ulimit -n 256; ulimit -u 128"
             installer.execute(
                 manifest,
-                "$limits; cd /workspace && exec python3 -I -c '$bootstrap'",
+                "cd /workspace && exec python3 -I -c '$bootstrap'",
                 if (full) FULL_EXECUTION_TIMEOUT_MS else EXECUTION_TIMEOUT_MS,
                 onOutput = onOutput,
                 workspaceHostPath = workspaceRoot.absolutePath,
-                shouldStop = {
-                    if (stopped()) true
-                    else if (workspace.quotaStatus() == "exceeded") {
-                        quotaExceededDuringRun = true
-                        true
-                    } else false
-                },
+                shouldStop = stopped,
                 extraEnvironment = bridge.environment()
             )
         } finally {
             bridge.close()
         }
-        val quotaAfter = workspace.quotaStatus()
-        if (quotaAfter == "unsafe") return "error: Python finished, but workspace integrity validation failed; inspect the workspace before using its files.\n${result.take(MAX_OUTPUT_CHARS)}"
-        if (quotaExceededDuringRun || quotaAfter == "exceeded") return "error: Python exceeded the 1 GiB workspace quota and was stopped. Further execution is blocked until the workspace is cleaned.\n${result.take(MAX_OUTPUT_CHARS)}"
         return result.take(MAX_OUTPUT_CHARS)
     }
 
