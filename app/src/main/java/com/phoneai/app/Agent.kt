@@ -21,6 +21,13 @@ internal object OrionCommandIntentPolicy {
         "(?i)\\b(?:inspect|check|identify|find|list|show|read|review|look\\s+at|look\\s+up|which|what)\\b"
     )
 
+    private val pythonAuthoringVerb = Regex("(?i)\\b(?:code|write|create|build|make|develop|generate|implement)\\b")
+
+    /** Authoring and execution are distinct intents: writing code must not require the user to say "run". */
+    fun requiresPythonAuthoring(command: String): Boolean =
+        pythonCodeMention.containsMatchIn(command) &&
+            pythonAuthoringVerb.containsMatchIn(command)
+
     fun requiresPythonExecution(command: String): Boolean =
         pythonCodeMention.containsMatchIn(command) &&
             executionVerb.containsMatchIn(command) &&
@@ -73,6 +80,7 @@ internal object OrionCommandIntentPolicy {
             requiresStructuredTaskPlanning(command) ||
             AgentHooks.isPhoneActionRequest(command) ||
             requiresPythonExecution(command) ||
+            requiresPythonAuthoring(command) ||
             isConnectedGitHubAccountRequest(command) ||
             TaskScopePolicy.modeFor(command) == TaskMode.RESEARCH
 
