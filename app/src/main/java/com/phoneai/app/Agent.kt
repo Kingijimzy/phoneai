@@ -478,7 +478,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             (tool in consequentialTools && !(tool == "mcp_call" && mcpReadScopeGranted))
         // Retrieve current durable context immediately before any write/consequential dispatch.
         // The receipt is created inside this Agent instance, never accepted from model arguments.
-        val retrievalRequired = false && OrionRetrieveBeforeActPolicy.requiresRetrieval(
+        val retrievalRequired = OrionRetrieveBeforeActPolicy.requiresRetrieval(
             tool,
             if (mcpReadScopeGranted) ToolAccess.READ else (ToolRegistry.access(tool) ?: ToolAccess.WRITE),
             consequential
