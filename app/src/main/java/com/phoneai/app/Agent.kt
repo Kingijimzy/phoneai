@@ -22,11 +22,13 @@ internal object OrionCommandIntentPolicy {
     )
 
     private val pythonAuthoringVerb = Regex("(?i)\\b(?:code|write|create|build|make|develop|generate|implement)\\b")
+    private val educationalPythonIntent = Regex("(?i)\\b(?:explain|teach|describe|what is|what are|how does|how do|show me how to)\\b")
 
     /** Authoring and execution are distinct intents: writing code must not require the user to say "run". */
     fun requiresPythonAuthoring(command: String): Boolean =
         pythonCodeMention.containsMatchIn(command) &&
-            pythonAuthoringVerb.containsMatchIn(command)
+            pythonAuthoringVerb.containsMatchIn(command) &&
+            !educationalPythonIntent.containsMatchIn(command)
 
     fun requiresPythonExecution(command: String): Boolean =
         pythonCodeMention.containsMatchIn(command) &&
