@@ -202,6 +202,20 @@ class OrionWorkerJobStoreTest {
         assertNotNull(store.claim(waiting.id) { true })
     }
 
+    @Test fun unacknowledgedCancellationCanBeResolvedToReviewWithoutReplayingProviderWork() {
+        val store = OrionWorkerJobStore(context)
+        val job = store.enqueue("parent-1", "Provider cancellation was not acknowledged")!!
+        assertNotNull(store.claim(job.id) { true })
+        assertTrue(store.cancel(job.id, "owner_requested"))
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, store.all().single().status)
+
+        assertTrue(store.needsReview(job.id, "worker_restarted_with_unacknowledged_cancellation"))
+        val resolved = store.all().single()
+        assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW, resolved.status)
+        assertFalse(store.hasPendingForParent("parent-1"))
+        assertFalse(store.complete(job.id, "must not replay or commit"))
+    }
+
     @Test fun processDeathAfterCancellationRequestRequiresReview() {
         val store = OrionWorkerJobStore(context)
         val job = store.enqueue("parent-1", "Cancelled analysis")!!
