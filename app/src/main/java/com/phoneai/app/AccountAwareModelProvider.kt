@@ -102,12 +102,24 @@ internal class AccountAwareModelProvider(
         val installer = AntigravityRuntimeInstaller(app)
         installer.install().getOrThrow()
         val model = requestedModel?.takeIf { it.isNotBlank() }
-        val answer = installer.runPrompt(app.filesDir.absolutePath, prompt, model)
-        check(answer.isNotBlank()) { "Antigravity returned an empty model response." }
-        Prefs.setAccountConnected(app, "antigravity", true)
-        accountRequests++
-        onDelta?.invoke(answer)
-        return answer
+        try {
+            val answer = installer.runPrompt(app.filesDir.absolutePath, prompt, model) { session ->
+                activeAntigravity = session
+            }
+            check(answer.isNotBlank()) { "Antigravity returned an empty model response." }
+            Prefs.setAccountConnected(app, "antigravity", true)
+            accountRequests++
+            onDelta?.invoke(answer)
+            return answer
+        } catch (failure: Exception) {
+            if (failure.message.orEmpty().contains("auth", true) ||
+                failure.message.orEmpty().contains("sign in", true)) {
+                Prefs.setAccountConnected(app, "antigravity", false)
+            }
+            throw failure
+        } finally {
+            activeAntigravity = null
+        }
     }
 
     override fun testModel(provider: Provider, model: String, vision: Boolean): String {
