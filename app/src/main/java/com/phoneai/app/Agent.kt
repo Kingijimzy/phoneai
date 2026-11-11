@@ -1933,7 +1933,7 @@ Rules:
         }
         // Persist only actual tool-agent objectives; shared context generation is side-effect free.
 
-        if (!contextualFollowUp && !Regex("(?i)^(continue|resume|keep going)\\b").containsMatchIn(command)) {
+        if (!contextualFollowUp) {
             try {
                 if (currentTask.isNotBlank() && ExperiencePolicy.isCorrection(command)) OrionMemoryCapabilityExecutor.recordCorrection(svc, currentTask, command)
                 else if (currentTask.isNotBlank() && ExperiencePolicy.isPraise(command)) OrionMemoryCapabilityExecutor.recordPraise(svc, currentTask)
@@ -1945,7 +1945,6 @@ Rules:
             }
             runStartedAt = System.currentTimeMillis(); runTools = 0; runFailed = 0
         }
-        val resumeRequest = contextualFollowUp && OrionTasksCapabilityExecutor.pendingCheckpoint(svc) != null
         if (!resumeRequest && !contextualFollowUp) {
             failedCallGuard.clear()
             // Proofs belong to one task only. Reusing a previous task's success could
@@ -1955,12 +1954,8 @@ Rules:
         // BrowserActivity tags these requests so general web-search shortcuts cannot steal
         // them and turn an action request into a page summary or a separate search.
         val browserActionTask = command.contains("ORION_BROWSER_ACTION_TASK:", ignoreCase = true)
-        // A deterministic one-intent route must win over generic compound-action classification.
-        // Otherwise "open YouTube Music and play ..." is incorrectly promoted to a graph task
-        // and can be stranded by model-generated planning instead of reaching play_media.
-        val structuredTask = OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command) &&
-            !OrionCommandIntentPolicy.isCalculatorExecutionRequest(command) &&
-            FastIntents.parse(command) == null
+        // Objective decomposition is model-selected from the GRASP decision, not phrase-count heuristics.
+        val structuredTask = false
         if (resumeRequest) {
             if (OrionTasksCapabilityExecutor.pendingCheckpoint(svc) == null) {
                 ui.say("I do not have a paused task to resume. Tell me what you would like me to do.")
@@ -1990,60 +1985,6 @@ Rules:
                 return
             }
         }
-        // Explicit "create a subagent ..." must create one deterministically. Relying on the
-        // legacy text-sentinel routing previously produced a conversation reply, a web search, or
-        // an unrelated GitHub check on "continue".
-        if (!resumeRequest && !browserActionTask && activeSkillId == null) {
-            val createRequest = OrionExplicitActionPolicy.createAgentRequest(command)
-            val pending = pendingAgentTopic
-            if (createRequest != null) {
-                var topic = OrionExplicitActionPolicy.cleanTopic(createRequest.topic)
-                if (topic.isNotBlank() && OrionExplicitActionPolicy.isPronounTopic(topic)) {
-                    topic = OrionExplicitActionPolicy.cleanTopic(lastUserTopic(command).orEmpty())
-                }
-                if (topic.isBlank()) {
-                    pendingAgentTopic = ""
-                    ui.say("What should the subagent research or do?")
-                    return
-                }
-                pendingAgentTopic = null
-                ui.say(createSpecialist(topic))
-                return
-            }
-            if (pending != null) {
-                val topic = OrionExplicitActionPolicy.cleanTopic(command)
-                pendingAgentTopic = null
-                if (Regex("(?i)^(never mind|cancel|stop|no|forget it)\\b").containsMatchIn(topic)) {
-                    ui.say("Okay, I won't create that subagent.")
-                    return
-                }
-                val looksLikeQuestion = Regex("(?i)^(what|who|why|how|when|where|which|is|are|can|do|does|did)\\b").containsMatchIn(topic)
-                if (topic.isNotBlank() && !looksLikeQuestion) {
-                    ui.say(createSpecialist(topic))
-                    return
-                }
-            }
-        }
-        val skillMatch = Regex("(?is)^run skill\\s+([a-z0-9._-]{2,48})\\s*:\\s*(.+)$").matchEntire(command.trim())
-        if (skillMatch != null && activeSkillId == null) {
-            val requestedId = skillMatch.groupValues[1]
-            val skillRun = OrionSkillsCapabilityExecutor.beginRun(svc, requestedId)
-            if (skillRun == null) {
-                ui.say("That skill is not available or enabled. Open the Skills section to review your registered skills.")
-                return
-            }
-            activeSkillId = skillRun.skillId
-            activeSkillStartedAt = skillRun.startedAt
-            activeSkillCalls = skillRun.callsUsed
-            try {
-                runInternal(skillMatch.groupValues[2].trim(), reuseCommandBudget = true)
-            } finally {
-                activeSkillId = null
-                activeSkillStartedAt = 0L
-                activeSkillCalls = 0
-            }
-            return
-        }
         stopped = false
         setRequestScope(command)
         researchCancelled.set(false)
@@ -2059,39 +2000,10 @@ Rules:
             ui.say(question)
             return
         }
-        if (!resumeRequest && !browserActionTask && !structuredTask && runSavedRoutineCommand(command)) return
         // Ground every run in live capability/graph context before acting.
         if (!resumeRequest) {
             // Context is assessed for the planner only; internal bookkeeping is not shown in the chat.
             OrionPreActionContext.assess(svc, command)
-        }
-        // One-intent commands (play music, Google it in Chrome) skip the model entirely.
-        if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask) {
-            val fast = FastIntents.parse(command)
-            if (fast != null) {
-                ui.phase("acting")
-                val r = when (fast) {
-                    is FastIntents.Intent.PlayMedia -> executeWithRecoveryGuard(
-                        "play_media", JSONObject().put("query", fast.query).put("app", fast.app)
-                    )
-                    is FastIntents.Intent.ChromeSearch -> executeWithRecoveryGuard(
-                        "chrome_search", JSONObject().put("query", fast.query)
-                    )
-                }
-                if (r.startsWith("error", true)) {
-                    // A device action may have partially started even when verification failed.
-                    // Never fall through and ask the model to dispatch the same intent again.
-                    ui.say(r)
-                    return
-                }
-                if (!r.startsWith("error")) {
-                    val say = r.replaceFirstChar { it.uppercase() } + "."
-                    logShortcut("fast_intent", say)
-                    history.put(msg("assistant", JSONObject().put("say", say).put("tool", "done").toString()))
-                    ui.say(say)
-                    return
-                }
-            }
         }
         // This deterministic acceptance path performs the whole requested outcome:
         // save a usable calculator to Downloads, then run non-interactive arithmetic tests.
