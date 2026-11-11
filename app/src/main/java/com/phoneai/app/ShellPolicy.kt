@@ -2,25 +2,24 @@ package com.phoneai.app
 
 enum class ShellRisk { SAFE, BLOCKED }
 
-/** Central hard-block policy for catastrophic device destruction and private key-store reads. */
 internal object ShellPolicy {
     private val confirmedCommands = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-
     fun confirm(command: String) { confirmedCommands.add(command.trim()) }
 
     private fun normalized(command: String): String =
-        command.lowercase().replace(Regex("""['"\\\\]"""), "")
-            .replace(Regex("""\\s+"""), " ").trim()
+        command.lowercase().replace(Regex("""["'\\]"""), "")
+            .replace(Regex("""\\s+"""), " ")
+            .replace(Regex("""\\s*([|;&])\\s*"""), " $1 ").trim()
 
     private fun isCatastrophicDelete(command: String): Boolean {
         val c = normalized(command)
-        val rootDelete = Regex("""\\brm\\b[^;&|]*\\s(?:/|/\\*|/system|/vendor|/product|/boot|/recovery|/data|/metadata|/dev)\\b""")
-        val explicitWipe = Regex("""\\b(factory\\s*reset|factory_reset|wipe[ ._-]*(data|cache|all|system)|format[ ._-]*(userdata|data|system)|erase[ ._-]*all)\\b""")
-        val recoveryFastboot = Regex("""\\b(recovery\\s+--wipe|fastboot\\s+(erase|format|wipe))\\b""")
+        val rootDelete = Regex("""\\brm\\b[^;&|]*\\s/(?:\\s|$|\\*|system(?:/|$)|vendor(?:/|$)|product(?:/|$)|boot(?:/|$)|recovery(?:/|$)|data(?:/|$)|metadata(?:/|$)|dev(?:/|$))""")
+        val explicitWipe = Regex("""\\bfactory\\s+reset\\b|\\bfactory_reset\\b|\\bwipe[ ._-]*(?:data|cache|all|system)\\b|\\bformat[ ._-]*(?:userdata|data|system)\\b|\\berase[ ._-]*all\\b""")
+        val recoveryFastboot = Regex("""\\brecovery\\s+--wipe\\b|\\bfastboot\\s+(?:erase|format|wipe)\\b""")
         val resetSettings = c.contains("settings put global device_provisioned 0") ||
             c.contains("settings put secure setup_wizard_finished 0")
-        val forkBomb = c.contains(":(){:|:&};:") || c.contains("fork(){fork|fork&};fork")
-        val rawDeviceFormat = Regex("""\\b(mkfs\\.[a-z0-9]+|wipefs|blkdiscard)\\b[^;&|]*\\b/dev/(block|mmcblk|sd[a-z])""")
+        val forkBomb = Regex(""":\\s*\\(\\)\\s*\\{\\s*:\\s*\\|\\s*:\\s*&\\s*\\}\\s*;\\s*:""").containsMatchIn(c)
+        val rawDeviceFormat = Regex("""\\b(?:mkfs\\.[a-z0-9]+|wipefs|blkdiscard)\\b[^;&|]*\\b/dev/(?:block/|mmcblk|sd[a-z])""")
         return rootDelete.containsMatchIn(c) || explicitWipe.containsMatchIn(c) ||
             recoveryFastboot.containsMatchIn(c) || resetSettings || forkBomb ||
             rawDeviceFormat.containsMatchIn(c)
@@ -28,12 +27,16 @@ internal object ShellPolicy {
 
     private fun writesRawDevice(command: String): Boolean {
         val c = normalized(command)
-        val device = """/dev/(?:block/|mmcblk\\d|sd[a-z]|nvme\\d|sda\\b)"""
-        val destination = Regex("""(?:\\bof\\s*=|>+\\s*|\\b(?:cp|mv|tee|truncate)\\b[^;&|]*\\s)${device}""")
-        val pythonWrite = Regex("""open\\([^)]*${device}[^)]*,\\s*(?:w|a|wb|ab|r\\+)""")
+        val device = Regex("""/dev/(?:block/|mmcblk\\d+|sd[a-z]|nvme\\d+n\\d+|sda\\b)""")
         val ddWrite = Regex("""\\bdd\\b""").containsMatchIn(c) &&
-            Regex("""\\bof\\s*=""").containsMatchIn(c) && device.toRegex().containsMatchIn(c)
-        return ddWrite || destination.containsMatchIn(c) || pythonWrite.containsMatchIn(c)
+            Regex("""\\bof\\s*=""").containsMatchIn(c) && device.containsMatchIn(c)
+        val redirectedWrite = Regex("""(?:>{1,2}\\s*|\\btee\\s+)""").containsMatchIn(c) &&
+            device.containsMatchIn(c)
+        val copyWrite = Regex("""\\b(?:cp|mv|truncate)\\b[^;&|]*\\s""").containsMatchIn(c) &&
+            device.containsMatchIn(c)
+        val pythonWrite = Regex("""open\\([^)]*,\\s*['"](?:w|a|wb|ab|r\\+)['"]""").containsMatchIn(c) &&
+            device.containsMatchIn(c)
+        return ddWrite || redirectedWrite || copyWrite || pythonWrite
     }
 
     private fun readsPrivateKeyStorage(command: String): Boolean {
@@ -53,5 +56,5 @@ internal object ShellPolicy {
 
     fun clip(output: String, max: Int = 6000): String =
         if (output.length <= max) output else output.take(max / 2) +
-            "\\n… [${output.length - max} chars omitted] …\\n" + output.takeLast(max / 2)
+            "\n… [\${output.length - max} chars omitted] …\n" + output.takeLast(max / 2)
 }
