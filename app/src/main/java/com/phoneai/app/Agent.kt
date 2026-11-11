@@ -1055,10 +1055,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         talkNim.resume()
 
         val soulContext = OrionSessionContextProvider.forChat(svc, command)
-        val safeSystem = (chatSystem(command) + "\n\n" + soulContext + "\n\n" + intentResolution.contextBlock).replace(
-
-            "TALK MODE: You are Orion and manage capabilities automatically; never tell the user to switch modes or use Command Mode. Answer ordinary questions, explanations, greetings, and brainstorming directly. For current information, phone actions, and explicit memory/task operations, select the structured execute decision when the intended outcome requires a registered capability. Resolve ambiguity from recent context and ask one short clarification only when it materially changes the action. If lookup fails, say current information could not be verified; never guess. Never claim an action or lookup succeeded without evidence."
-        )
+        val safeSystem = chatSystem(command) + "\n\n" + soulContext + "\n\n" + intentResolution.contextBlock
         val responseQualityPolicy = """
 RESPONSE QUALITY AND FORMAT:
 - Answer the actual question first. For current/live facts, use successful live-tool results, not model memory. Include the relevant date and timezone, competition/event, source links, and any important context the user reasonably needs.
