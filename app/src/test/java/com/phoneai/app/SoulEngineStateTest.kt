@@ -116,10 +116,11 @@ class SoulEngineStateTest {
     }
 
     @Test fun watcherStatusPersistsAcrossSnapshots() {
-        assertTrue(SoulEngineState.recordWatcherStatus(context, "limited", "local_capability_audit"))
+        assertTrue(SoulEngineState.recordWatcherStatus(context, "limited", "local_capability_audit", "Review the capability board and retry the accessibility check."))
         val snapshot = SoulEngineState.snapshot(context)
         assertEquals("limited", snapshot.watcherStatus)
         assertEquals("local_capability_audit", snapshot.watcherAction)
+        assertEquals("Review the capability board and retry the accessibility check.", snapshot.watcherNextStep)
         assertTrue(snapshot.watcherAt > 0L)
     }
 
