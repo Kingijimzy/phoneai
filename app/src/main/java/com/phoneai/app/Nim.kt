@@ -379,7 +379,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         p: Provider, url: String, body: String, key: String, readMs0: Int, onDelta: (String) -> Unit
     ): Http {
         if (!commandRequestBudget.tryReserve()) {
-            throw AiException("Stopped before sending another request: this command reached Orion's 15-request budget. No additional HTTP request was made.")
+            throw AiException("Stopped before sending another request: this command reached Orion's 60-request safety budget. No additional HTTP request was made.")
         }
         noteHit(p.id)
         val conn = URL(url).openConnection() as HttpURLConnection
@@ -946,7 +946,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         }
 
         val now = System.currentTimeMillis()
-        // Auto-switch may try eligible saved providers in order, but the shared 15-request
+        // Auto-switch may try eligible saved providers in order, but the shared 60-request
         // command budget is the hard cap across model discovery, retries, and provider fallback.
         val backups = if (Prefs.autoSwitch(ctx)) {
             Providers.all
