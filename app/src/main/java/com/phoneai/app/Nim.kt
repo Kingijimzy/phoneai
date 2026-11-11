@@ -352,7 +352,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         p: Provider, url: String, body: String, key: String, readMs0: Int, onDelta: (String) -> Unit
     ): Http {
         if (!commandRequestBudget.tryReserve()) {
-            throw AiException("Stopped before sending another request: this command reached Orion's 400-request safety ceiling. No additional HTTP request was made.")
+            throw AiException("Stopped before sending another request: this command reached Orion's 1000-request safety ceiling. No additional HTTP request was made.")
         }
         noteHit(p.id)
         val conn = URL(url).openConnection() as HttpURLConnection
