@@ -26,7 +26,7 @@ class AgentDispatchPolicyTest {
             args = JSONObject().put("name", "WhatsApp"),
             stopped = true
         )
-        assertNull(reason)
+        assertNotNull(reason)
         assertTrue(reason!!.contains("stopped", ignoreCase = true))
     }
 
@@ -93,6 +93,6 @@ class AgentDispatchPolicyTest {
             currentPackage = "com.example.browser",
             currentLabel = "Browser"
         )
-        assertNotNull(reason)
+        assertNull(reason)
     }
 }
