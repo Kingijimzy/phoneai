@@ -275,6 +275,7 @@ internal object ToolRegistry {
         "macro_save", "macro_run", "macro_list", "macro_delete",
         "voice_speak", "voice_listen", "document_extract", "device_info",
         "python_exec", "image_generate", "shell", "workspace_read", "workspace_write", "save_file",
+        "routine_run", "routine_resume",
         "mcp_status", "mcp_list_tools",
         "browser_navigate", "browser_snapshot", "fetch_url", "web_search", "live_web_search"
     )
@@ -363,6 +364,9 @@ internal object ToolRegistry {
         }
         if (Regex("\\b(code|python|project|repo|build|test|shell|script|file|program|developer|kotlin|javascript|android)\\b").containsMatchIn(query)) {
             add(developerNativeTools)
+        }
+        if (Regex("\\b(?:routine|teach\\s+mode|recorded\\s+gesture)\\b").containsMatchIn(query)) {
+            add(phoneNativeTools.filter { it == "routine_run" || it == "routine_resume" })
         }
         ranked.filter { it.second > 0 }.forEach { if (selected.size < limit) selected += it.first.name }
         // The caller supplies only the latest tool-call group; append it after current-intent tools.
