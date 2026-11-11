@@ -56,5 +56,5 @@ internal object ShellPolicy {
 
     fun clip(output: String, max: Int = 6000): String =
         if (output.length <= max) output else output.take(max / 2) +
-            "\n… [\${output.length - max} chars omitted] …\n" + output.takeLast(max / 2)
+            "\n… [" + (output.length - max) + " chars omitted] …\n" + output.takeLast(max / 2)
 }
