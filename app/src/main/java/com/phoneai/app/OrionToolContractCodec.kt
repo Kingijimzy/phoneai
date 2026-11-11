@@ -19,7 +19,7 @@ internal object OrionToolContractCodec {
                 .put("type", "function")
                 .put("function", JSONObject()
                     .put("name", tool.name)
-                    .put("description", tool.promptLine.take(1600))
+                    .put("description", tool.description.take(1000))
                     .put("parameters", schema)))
         }
     }
