@@ -157,9 +157,8 @@ internal object OrionCentralBrain {
         }.getOrNull()
         checkpointSummary?.let { sections += it }
 
-        // Resolve short follow-ups against the persisted objective before Talk or Command plans.
-        // This joins the original request, transcript evidence, objective graph, checkpoint,
-        // decisions and learned failure corrections into one provider-neutral continuity frame.
+        // Keep conversation and objective state available to the semantic model.
+        // No regex intent classifier decides whether a turn is a follow-up or an action.
         val pendingTask = observedNullable("pending_checkpoint") { AgentCheckpointStore.pending(app) }
         val savedGraph = observedNullable("objective_graph") { OrionObjectiveGraph.load(app) }
         val savedSoulGoal = observed("soul_goal", "") { SoulEngineState.snapshot(app).goal }
@@ -169,67 +168,67 @@ internal object OrionCentralBrain {
             .asReversed().map { hit ->
                 (if (hit.role == "ai" || hit.role == "assistant") "assistant" else "user") to hit.snippet
             }
-        val continuity = runCatching {
-            val current = OrionContextualIntentInterpreter.resolve(request, recentTurns, activeObjective)
-            if (current.needsClarification && savedSoulGoal.isNotBlank())
-                OrionContextualIntentInterpreter.resolve(request, recentTurns, savedSoulGoal)
-            else current
-        }.getOrNull()
-        val isFollowUp = continuity != null && !continuity.needsClarification &&
-            continuity.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE &&
-            continuity.kind != OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP
-        val continuityObjective = continuity?.resolvedObjective?.takeIf { isFollowUp }
-            ?: activeObjective.takeIf { isFollowUp }.orEmpty()
-        val contextQuery = continuityObjective.takeIf { isFollowUp && it.isNotBlank() } ?: request
-        if (isFollowUp && continuityObjective.isNotBlank()) {
-            val resume = if (pendingTask != null) runCatching { AgentCheckpointStore.resumeInstruction(app) }.getOrNull() else null
+        val contextQuery = request
+        sections += buildString {
+            appendLine("LIVE CONVERSATION STATE — semantic context, not a command classification:")
+            if (activeObjective.isNotBlank()) appendLine("Active objective: ${activeObjective.take(700)}")
+            if (savedSoulGoal.isNotBlank()) appendLine("Standing Soul goal: ${savedSoulGoal.take(400)}")
+            if (recentTurns.isNotEmpty()) {
+                appendLine("Recent dialogue:")
+                recentTurns.takeLast(8).forEach { (role, text) ->
+                    appendLine("- $role: ${text.take(420)}")
+                }
+            }
+            appendLine("Resolve pronouns, references, corrections, continuation and implied goals from the complete dialogue. The latest message may be a follow-up even when it contains no explicit action verb. Do not require a command phrase.")
+        }
+        if (pendingTask != null) {
+            val resume = runCatching { AgentCheckpointStore.resumeInstruction(app) }.getOrNull()
             if (!resume.isNullOrBlank()) {
-                sections += "TASK RESUME INSTRUCTIONS — EXISTING OBJECTIVE, DO NOT RESTART\n" + resume.take(3600)
+                sections += "TASK RESUME INSTRUCTIONS — reconcile this checkpoint with the current conversation before continuing:\\n" + resume.take(3600)
             }
-            savedGraph?.let { graph ->
-                sections += OrionObjectiveGraph.prompt(graph) +
-                    "\nNext objective candidates: " + graph.ready().joinToString(" | ") { "${it.id}: ${it.title}" }
-            }
-            val discussion = runCatching { ChatHistoryStore.search(app, continuityObjective, 3) }.getOrDefault(emptyList())
-            if (discussion.isNotEmpty()) {
-                sections += buildString {
-                    appendLine("PREVIOUS DISCUSSIONS FOR THIS OBJECTIVE (durable transcript evidence)")
-                    discussion.forEach { hit ->
-                        appendLine("[session=${hit.sessionId} turn=${hit.turnId} role=${hit.role} time=${hit.timestamp} title=${hit.title}] ${hit.snippet.take(420)}")
-                        if (hit.before.isNotBlank()) appendLine("preceding turn: ${hit.before.take(180)}")
-                        if (hit.after.isNotBlank()) appendLine("following turn: ${hit.after.take(180)}")
-                    }
-                    appendLine("User turns establish requests. Assistant turns provide context only and are never proof that an action succeeded.")
+        }
+        savedGraph?.let { graph ->
+            sections += OrionObjectiveGraph.prompt(graph) +
+                "\\nReady objective candidates: " + graph.ready().joinToString(" | ") { "${it.id}: ${it.title}" }
+        }
+
+        val discussion = runCatching { ChatHistoryStore.search(app, request, 4) }.getOrDefault(emptyList())
+        if (discussion.isNotEmpty()) {
+            sections += buildString {
+                appendLine("RELATED CONVERSATION EVIDENCE")
+                discussion.forEach { hit ->
+                    appendLine("[session=${hit.sessionId} turn=${hit.turnId} role=${hit.role} time=${hit.timestamp}] ${hit.snippet.take(420)}")
+                    if (hit.before.isNotBlank()) appendLine("preceding: ${hit.before.take(180)}")
+                    if (hit.after.isNotBlank()) appendLine("following: ${hit.after.take(180)}")
                 }
+                appendLine("User turns establish requests. Assistant turns are context only, never proof of completed actions.")
             }
-            val decisions = runCatching { OrionDecisionHistoryStore.get(app).search(continuityObjective, 4) }.getOrDefault(emptyList())
-            if (decisions.isNotEmpty()) {
-                sections += buildString {
-                    appendLine("DECISIONS AND UNRESOLVED QUESTIONS FOR THIS OBJECTIVE")
-                    decisions.forEach { d ->
-                        appendLine("- [${d.status}] ${d.topic.take(80)}: ${d.statement.take(350)}; rationale=${d.rationale.take(300)}; rejected=${d.rejectedAlternative.take(180)}; rejection_reason=${d.rejectionReason.take(240)}; source=${d.sourceRole}/${d.sourceSessionId ?: "unknown"}/${d.sourceTurnId ?: "unknown"}")
-                    }
-                    appendLine("Accepted decisions are user-backed constraints; proposals are not accepted. Superseded decisions are historical only. Unresolved questions remain open. Re-check the current request before applying any old decision.")
+        }
+        val decisions = runCatching { OrionDecisionHistoryStore.get(app).search(request, 4) }.getOrDefault(emptyList())
+        if (decisions.isNotEmpty()) {
+            sections += buildString {
+                appendLine("RELEVANT DECISION HISTORY")
+                decisions.forEach { d ->
+                    appendLine("- [${d.status}] ${d.topic.take(80)}: ${d.statement.take(350)}; rationale=${d.rationale.take(240)}; source=${d.sourceRole}/${d.sourceSessionId ?: "unknown"}/${d.sourceTurnId ?: "unknown"}")
                 }
+                appendLine("Accepted decisions are user-backed constraints; proposals are not accepted. Re-check the current request before applying old decisions.")
             }
         }
 
-        if (!isFollowUp && contextQuery.trim().length >= 7) {
-            val activeSession = runCatching { ChatHistoryStore.activeSessionId(app) }.getOrNull()
-            val indexedHistory = runCatching { ChatHistoryStore.search(app, contextQuery, 5) }
-                .getOrDefault(emptyList())
-                .filter { it.sessionId != activeSession }
-                .take(3)
-            if (indexedHistory.isNotEmpty()) {
-                sections += buildString {
-                    appendLine("RELEVANT PAST CONVERSATIONS FROM THE LOCAL SEARCH INDEX")
-                    indexedHistory.forEach { hit ->
-                        appendLine("[session=${hit.sessionId} role=${hit.role} title=${hit.title}] ${hit.snippet.take(360)}")
-                        if (hit.before.isNotBlank()) appendLine("before: ${hit.before.take(140)}")
-                        if (hit.after.isNotBlank()) appendLine("after: ${hit.after.take(140)}")
-                    }
-                    appendLine("Historical context only. Re-check current facts and never treat an assistant message as proof that an action succeeded.")
+        val activeSession = runCatching { ChatHistoryStore.activeSessionId(app) }.getOrNull()
+        val indexedHistory = runCatching { ChatHistoryStore.search(app, request, 5) }
+            .getOrDefault(emptyList())
+            .filter { it.sessionId != activeSession }
+            .take(3)
+        if (indexedHistory.isNotEmpty()) {
+            sections += buildString {
+                appendLine("RELEVANT PAST CONVERSATIONS FROM THE LOCAL SEARCH INDEX")
+                indexedHistory.forEach { hit ->
+                    appendLine("[session=${hit.sessionId} role=${hit.role} title=${hit.title}] ${hit.snippet.take(360)}")
+                    if (hit.before.isNotBlank()) appendLine("before: ${hit.before.take(140)}")
+                    if (hit.after.isNotBlank()) appendLine("after: ${hit.after.take(140)}")
                 }
+                appendLine("Historical context only. Re-check current facts and never treat an assistant message as proof that an action succeeded.")
             }
         }
 
