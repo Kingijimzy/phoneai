@@ -38,14 +38,11 @@ object AgentPolicy {
      * This only makes their tools available: Android OS permissions, explicit capability scope and validation
      * still apply. Only restart, shutdown and Wi-Fi toggles require an action confirmation. Optional bridges remain opt-in.
      */
-    internal val defaultOnPacks = setOf(
-        "orion_core", "connected_services", "workspace_shell", "self_test",
-        "gaming_hobby", "trading_research", "phone_control", "messaging"
-    )
+    internal val defaultOnPacks = packs.filter { it.implemented }.map { it.id }.toSet()
     internal fun defaultOn(id: String) = id in defaultOnPacks
 
     /** An explicit user choice always wins; only a never-set pack falls back to its default. */
-    @Suppress("UNUSED_PARAMETER") fun enabled(c: Context, id: String) = true // Free mode: every capability pack is on.
+    fun enabled(c: Context, id: String): Boolean = packs.any { it.id == id && it.implemented } && p(c).getBoolean("pack_$id", defaultOn(id))
     fun setEnabled(c: Context, id: String, on: Boolean) {
         val pack = packs.firstOrNull { it.id == id }
         p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
