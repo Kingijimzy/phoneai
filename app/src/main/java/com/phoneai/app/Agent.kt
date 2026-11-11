@@ -520,7 +520,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return cancelled
         }
         // Persist the exact capability attempt before crossing into any backend. The journal
-        // owns dispatch-attempt truth; the graph remains the dependency-planning authority.
+        // owns dispatch-attempt truth; objective graph state is context, not a dispatch gate.
         // A failed journal write is a hard stop before side effects.
         val dispatchStartedAt = System.currentTimeMillis()
         val dispatchTaskId = evidenceTaskId()
