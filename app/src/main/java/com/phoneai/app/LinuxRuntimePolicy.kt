@@ -32,6 +32,16 @@ internal object LinuxRuntimePolicy {
     const val PROOT_LOADER_SHA256 = "44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04"
     const val MAX_ROOTFS_BYTES = 300_000_000L
     const val MAX_COMMAND = 16_000
+    const val MIN_PROCESS_TIMEOUT_MS = 250L
+    const val MAX_PROCESS_TIMEOUT_MS = 180_000L
+
+    /**
+     * Normalize model/worker supplied timeouts at the process boundary.
+     * Values below the platform minimum become the minimum; long-running profiles are
+     * bounded by the PRoot supervisor's hard 180-second ceiling.
+     */
+    fun normalizeProcessTimeout(requestedMs: Long): Long =
+        requestedMs.coerceIn(MIN_PROCESS_TIMEOUT_MS, MAX_PROCESS_TIMEOUT_MS)
     private val sha256Pattern = Regex("^[0-9a-f]{64}$")
     private val versionPattern = Regex("^[A-Za-z0-9._-]{1,48}$")
 
