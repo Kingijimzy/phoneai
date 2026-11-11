@@ -277,4 +277,15 @@ class ToolRegistryNativeSelectionTest {
             .put(org.json.JSONObject().put("function", org.json.JSONObject().put("name", "device_info")))))
         assertEquals(setOf("device_info"), ToolRegistry.recentToolNames(history))
     }
+
+    @Test fun combinedRequestsExposeCompletePhoneMcpAndDeveloperFamilies() {
+        val selected = ToolRegistry.nativeToolsFor("Inspect MCP servers, use the phone, and build a Python project")
+            .map { it.name }.toSet()
+        val required = setOf(
+            "mcp_status", "mcp_list_tools", "mcp_call", "mcp_list_resources",
+            "open_app", "read_screen", "click", "type", "system_intent",
+            "python_exec", "workspace_read", "workspace_write", "dev_python", "dev_shell"
+        )
+        assertTrue("Combined task must expose all relevant tool families", selected.containsAll(required))
+    }
 }
