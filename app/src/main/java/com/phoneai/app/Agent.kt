@@ -361,6 +361,11 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         runCatching { OrionEvidenceLedger.recordBlocked(svc, evidenceTaskId(), tool, category) }
     }
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
+        OrionMasterControl.dispatchBlockReason(svc)?.let { reason ->
+            taskProofs.record(tool, reason)
+            recordDispatchBlocked(tool, args, "orion_master_power_off")
+            return "error: $reason"
+        }
         val loopCheck = toolLoopDetector.check(tool, loopParams(args))
         if (loopCheck.level == Level.CRITICAL) {
             val blocked = loopCheck.message ?: "error: repeated tool calls were blocked by the session circuit breaker."
