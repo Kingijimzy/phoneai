@@ -135,7 +135,7 @@ class AccountConnectionsActivity : Activity() {
                 installer.install({ line ->
                     runOnUiThread { if (!isFinishing) status.text = line.take(240) }
                 }).getOrThrow()
-                val client = installer.openAppServer(filesDir.absolutePath, filesDir.absolutePath)
+                val client = installer.openAppServer(filesDir.absolutePath)
                 check(client.initialize()) { "Codex app-server initialization was not acknowledged" }
                 val login = client.beginChatGptLogin()
                 codex = client
