@@ -68,16 +68,29 @@ internal object LinuxRuntimePolicy {
         installedVersion != null && installedVersion == m.version
 
     /** Fixed argv shape; model text is passed as one /bin/sh -c argument, never host-shell interpolation. */
-    fun prootArgs(prootPath: String, rootfsDir: String, command: String, workspaceHostPath: String? = null): List<String>? {
+    fun prootArgs(
+        prootPath: String,
+        rootfsDir: String,
+        command: String,
+        workspaceHostPath: String? = null,
+        androidAppDataPath: String? = null,
+        sharedStoragePath: String? = null
+    ): List<String>? {
         if (command.isBlank() || command.length > MAX_COMMAND || command.contains('\u0000')) return null
         if (!prootPath.startsWith("/") || prootPath.contains("..") ||
             !rootfsDir.startsWith("/") || rootfsDir.contains("..")) return null
         if (workspaceHostPath != null && (!workspaceHostPath.startsWith("/") || workspaceHostPath.contains("..") || workspaceHostPath.contains(':') || workspaceHostPath.contains('\u0000'))) return null
+        val hostPaths = listOfNotNull(androidAppDataPath, sharedStoragePath)
+        if (hostPaths.any { !it.startsWith("/") || it.contains("..") || it.contains(':') || it.contains('\u0000') }) return null
         return buildList {
             // PRoot -0 maps the guest process to Alpine root without granting Android host-root access.
             // The previous launcher inherited Android app UID 10390, which cannot write to
             // root-owned guest paths such as /root/.api-anything even though HOME was /root.
             addAll(listOf(prootPath, "-0", "-r", rootfsDir, "-b", "/dev", "-b", "/proc"))
+            // Expose only host paths that the Android app UID can already access. Android's
+            // permission model and SELinux continue to enforce every host read/write.
+            if (androidAppDataPath != null) addAll(listOf("-b", "$androidAppDataPath:/android-app"))
+            if (sharedStoragePath != null) addAll(listOf("-b", "$sharedStoragePath:/sdcard"))
             if (workspaceHostPath != null) addAll(listOf("-b", "$workspaceHostPath:/workspace"))
             addAll(listOf("-w", "/root", "/bin/sh", "-c", command))
         }
