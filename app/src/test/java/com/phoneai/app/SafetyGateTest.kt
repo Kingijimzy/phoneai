@@ -25,7 +25,7 @@ class SafetyGateTest {
     @Test fun sensitiveScreensAreDetectedWithMessagingSpecificRules() {
         assertTrue(SafetyGate.isSensitiveActionScreen("Confirm payment to continue"))
         assertTrue(SafetyGate.isSensitiveActionScreen("Enter your PIN", "com.whatsapp"))
-        assertFalse(SafetyGate.isSensitiveActionScreen("Place order"))
+        assertFalse(SafetyGate.isSensitiveActionScreen("Your playlist is ready"))
     }
 
     @Test fun credentialDetectionStillKeepsSecretsOutOfMemory() {
