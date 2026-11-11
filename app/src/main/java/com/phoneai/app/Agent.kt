@@ -5,10 +5,12 @@ import org.json.JSONObject
 
 /** Deterministic routing for intents where a chat-only answer would silently skip a requested action. */
 internal object OrionCommandIntentPolicy {
+    // Python scraper/crawler creation plus a test/run request must route to Python first.
+    // Otherwise a URL in the same sentence can pull the model router into browser navigation.
     private val pythonCodeMention = Regex(
-        "(?i)\\bpython\\b.{0,100}\\b(?:code|script|program|calculator)\\b|\\b(?:code|script|program|calculator)\\b.{0,100}\\bpython\\b"
+        "(?i)\\bpython\\b.{0,120}\\b(?:code|script|program|calculator|scraper|scraping|crawler|automation)\\b|\\b(?:code|script|program|calculator|scraper|scraping|crawler|automation)\\b.{0,120}\\bpython\\b"
     )
-    private val executionVerb = Regex("(?i)\\b(?:run|execute|test|verify)\\b")
+    private val executionVerb = Regex("(?i)\\b(?:run|execute|test|verify|try|validate)\\b")
     private val negativeExecution = Regex(
         "(?i)\\b(?:do not|don't|dont|never|without)\\b.{0,35}\\b(?:run|execute|test|verify)\\b"
     )
@@ -21,6 +23,13 @@ internal object OrionCommandIntentPolicy {
 
     fun requiresPythonExecution(command: String): Boolean =
         pythonCodeMention.containsMatchIn(command) &&
+            executionVerb.containsMatchIn(command) &&
+            !negativeExecution.containsMatchIn(command)
+
+    fun isPythonScraperBuildAndTest(command: String): Boolean =
+        Regex("(?i)\\bpython\\b").containsMatchIn(command) &&
+            Regex("(?i)\\b(?:scraper|scraping|crawler)\\b").containsMatchIn(command) &&
+            Regex("(?i)\\b(?:code|build|create|write|make|develop)\\b").containsMatchIn(command) &&
             executionVerb.containsMatchIn(command) &&
             !negativeExecution.containsMatchIn(command)
 
