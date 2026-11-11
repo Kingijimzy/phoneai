@@ -260,6 +260,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             main.removeCallbacks(autonomyTick)
             wakeGen++
             stopOfflineWakeDetector()
+            if (::agent.isInitialized) runCatching { agent.stop() }
             if (listening) runCatching { voice.stopListening() }
             orionRuntime?.stop()
             runCatching { bubble?.let { wm.removeView(it) } }
