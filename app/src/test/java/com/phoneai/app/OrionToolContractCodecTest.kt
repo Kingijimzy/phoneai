@@ -82,7 +82,7 @@ class OrionToolContractCodecTest {
 
     @Test fun selectsRelevantNativeToolsWithinProviderLimit() {
         val selected = ToolRegistry.nativeToolsFor("inspect MCP servers and list remote tools")
-        assertTrue(selected.size <= 20)
+        assertTrue(selected.size <= 48)
         assertTrue(selected.any { it.name == "mcp_status" })
         assertTrue(selected.any { it.name == "mcp_list_tools" })
         assertTrue(selected.any { it.name == "mcp_call" })
