@@ -34,7 +34,7 @@ internal object ShellPolicy {
             device.containsMatchIn(c)
         val copyWrite = Regex("""\b(?:cp|mv|truncate)\b[^;&|]*\s""").containsMatchIn(c) &&
             device.containsMatchIn(c)
-        val pythonWrite = Regex("""open\([^)]*,\s*['"](?:w|a|wb|ab|r\+)['"]""").containsMatchIn(c) &&
+        val pythonWrite = Regex("""open\([^)]*,\s*(?:w|a|wb|ab|r\+)""").containsMatchIn(c) &&
             device.containsMatchIn(c)
         return ddWrite || redirectedWrite || copyWrite || pythonWrite
     }
