@@ -4,7 +4,8 @@ import org.json.JSONObject
 
 /** Serializes native model tool calls through Central Brain's existing guarded executor. */
 internal object OrionNativeToolDispatcher {
-    const val MAX_CALLS_PER_TURN = 8
+    const val MAX_CALLS_PER_TURN = 32
+    const val MAX_RESULT_CHARS = 96_000
     const val MAX_ROUNDS_PER_COMMAND = 200
 
     data class Outcome(val call: OrionModelToolCall, val content: String, val dispatched: Boolean)
@@ -36,7 +37,7 @@ internal object OrionNativeToolDispatcher {
                     } catch (failure: Exception) {
                         "error: ${failure.message ?: failure.javaClass.simpleName}"
                     }
-                    Outcome(call, result.take(8000), true)
+                    Outcome(call, result.take(MAX_RESULT_CHARS), true)
                 }
             }
             outcomes += outcome
