@@ -895,7 +895,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Only restart, shutdown and Wi-Fi toggles require confirmation through the app interface; every other authorized action executes immediately after its capability, scope and validation checks. " +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
-            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionLivingLoop.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + OrionInnerLife.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + OrionFactStore.promptBlock(svc, Prefs.userName(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
+            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionMemoryLayers.block(svc, query, Prefs.userName(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCapabilityAwareness.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
     }
 
     /** Turns raw search results into a direct answer with sources; falls back to the raw list if the model call fails. */
@@ -1551,10 +1551,12 @@ Rules:
     internal fun currentTaskCommand(): String = currentTask
 
     fun run(inputCommand: String) {
+        val ownerTurn = !inputCommand.trimStart().startsWith("[ORION")
+        if (ownerTurn) runCatching { svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit().putLong("owner_last_active", System.currentTimeMillis()).apply() }
         // Remember what Kingi tells Orion about himself automatically, without a tool call or a prompt.
-        runCatching { OrionFactExtractor.extract(inputCommand, Prefs.userName(svc)).forEach { (s, p, o) -> OrionFactStore.add(svc, s, p, o) } }
+        if (ownerTurn) runCatching { OrionFactExtractor.extract(inputCommand, Prefs.userName(svc)).forEach { (s, p, o) -> OrionFactStore.add(svc, s, p, o) } }
         runInternal(inputCommand, reuseCommandBudget = false)
-        reflectOnExchange(inputCommand)
+        if (ownerTurn) reflectOnExchange(inputCommand)
     }
 
     /**
@@ -1572,11 +1574,11 @@ Rules:
             runCatching {
                 val msgs = JSONArray()
                     .put(msg("system", "You are Orion's memory. Read one exchange between Kingi and Orion. Reply with ONLY compact JSON: " +
-                        "{\"facts\":[[subject,predicate,object]],\"lessons\":[string]}. facts = durable things Kingi stated about himself, his people, " +
+                        "{\"facts\":[[subject,predicate,object]],\"lessons\":[string],\"tom\":[{\"dimension\":string,\"value\":string,\"confidence\":0-1,\"evidence\":string}]}. facts = durable things Kingi stated about himself, his people, " +
                         "projects, preferences or plans (subject is usually \"Kingi\"); lessons = how Orion should behave differently next time because Kingi " +
-                        "corrected, was frustrated, or something failed (written as a short instruction to Orion). Use [] when there is nothing. Never invent."))
+                        "corrected, was frustrated, or something failed (written as a short instruction to Orion). tom = what this exchange reveals about HOW Kingi likes to work and be spoken to (detail level, initiative he wants, tone, pace, risk appetite, format), only with concrete evidence from the exchange; never health, religion, politics, sexuality or private mental states. Use [] when there is nothing. Never invent."))
                     .put(msg("user", "Kingi: " + command.take(900) + "\nOrion: " + lastReply))
-                val raw = talkNim.chat(msgs, false, 400, 0.0)
+                val raw = talkNim.chat(msgs, false, 650, 0.0)
                 val json = JSONObject(raw.substring(raw.indexOf('{'), raw.lastIndexOf('}') + 1))
                 val facts = json.optJSONArray("facts")
                 if (facts != null) for (i in 0 until facts.length()) {
@@ -1585,6 +1587,11 @@ Rules:
                 }
                 val lessons = json.optJSONArray("lessons")
                 if (lessons != null) for (i in 0 until lessons.length()) OrionLessons.learn(svc, lessons.optString(i))
+                val tom = json.optJSONArray("tom")
+                if (tom != null) for (i in 0 until minOf(tom.length(), 5)) {
+                    val t = tom.optJSONObject(i) ?: continue
+                    OrionFactStore.tomObserve(svc, t.optString("dimension"), t.optString("value"), t.optDouble("confidence", 0.0), t.optString("evidence"))
+                }
             }
         }.apply { isDaemon = true }.start()
     }

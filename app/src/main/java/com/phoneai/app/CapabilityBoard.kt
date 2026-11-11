@@ -80,6 +80,7 @@ internal object SoulWatch {
         val now = System.currentTimeMillis()
         val notes = ArrayList<String>()
         try { val tick = SoulEngineWatcher.run(c); notes += "watcher:${tick.status}:${tick.action}" } catch (_: Exception) { }
+        try { val a = OrionCapabilityAwareness.scan(c); if (a.added.isNotEmpty() || a.removed.isNotEmpty()) notes += "self:+${a.added.size}/-${a.removed.size}" } catch (_: Exception) { }
         if (!SoulPolicy.due(lastTick(c), now)) return notes.joinToString(",").ifBlank { "not_due" }
         if (!enabled(c)) {
             sp(c).edit().putLong("soul_watch_last", now).apply()

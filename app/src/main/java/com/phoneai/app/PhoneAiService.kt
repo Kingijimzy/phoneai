@@ -1965,8 +1965,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun runInitiative() {
         val prefs = getSharedPreferences("phoneai", MODE_PRIVATE)
         val now = System.currentTimeMillis()
-        if (now - prefs.getLong("initiative_last", 0L) < 3 * 60 * 60_000L) return
-        prefs.edit().putLong("initiative_last", now).apply()
+        val gate = OrionProactiveGate.decide(OrionProactiveGate.gather(this))
+        if (!gate.open) { AgentPolicy.log(this, "proactive_gate", "closed", null, gate.reason); return }
+        AgentPolicy.log(this, "proactive_gate", "open", null, gate.reason)
+        OrionProactiveGate.recordAction(this)
         running = true
         try {
             agent.run(
