@@ -179,7 +179,7 @@ class AccountConnectionsActivity : Activity() {
                     runOnUiThread {
                         if (!isFinishing) {
                             antigravityOutput.append("\\n" + line.take(500))
-                            val url = Regex("https://[^\\\\s]+").find(line)?.value?.trimEnd('.', ')', ']')
+                            val url = Regex("https://[^\\s]+").find(line)?.value?.trimEnd('.', ')', ']')
                             if (url != null) runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
                         }
                     }
