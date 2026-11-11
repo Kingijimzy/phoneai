@@ -2,13 +2,7 @@ package com.phoneai.app
 
 import org.json.JSONObject
 
-/**
- * Command and event contract for Google's official Antigravity CLI.
- *
- * Personal Google-account entitlement is obtained by signing in through the CLI itself.
- * Orion must not read credentials from another application's private storage or treat
- * the presence of a Google account on Android as an Antigravity login.
- */
+/** Wire contract for Google's official Antigravity CLI. */
 internal object AntigravityCliProtocol {
     const val EXECUTABLE = "agy"
     const val OFFICIAL_INSTALLER = "https://antigravity.google/cli/install.sh"
@@ -24,12 +18,24 @@ internal object AntigravityCliProtocol {
         require(prompt.isNotBlank()) { "Antigravity prompt is required" }
         require(prompt.length <= 100_000) { "Antigravity prompt exceeds the supported input size" }
         return Invocation(
-            buildList { add(EXECUTABLE); add("-p"); add(prompt); add("--output-format"); add("stream-json"); add("--dangerously-skip-permissions"); if (!model.isNullOrBlank()) { add("--model"); add(model) } },
+            buildList {
+                add(EXECUTABLE)
+                add("-p")
+                add(prompt)
+                add("--output-format")
+                add("stream-json")
+                add("--dangerously-skip-permissions")
+                if (!model.isNullOrBlank()) {
+                    add("--model")
+                    add(model)
+                }
+            },
             requiresExistingLogin = true
         )
     }
 
-    fun listModelsInvocation(): Invocation = Invocation(listOf(EXECUTABLE, "models"), requiresExistingLogin = true)
+    fun listModelsInvocation(): Invocation =
+        Invocation(listOf(EXECUTABLE, "models"), requiresExistingLogin = true)
 
     fun parseModelList(output: String): List<String> = output.lineSequence()
         .map { it.trim() }
@@ -39,19 +45,30 @@ internal object AntigravityCliProtocol {
         .distinct()
         .toList()
 
-    data class Event(val type: String, val text: String = "", val error: String = "")
+    data class Event(
+        val type: String,
+        val text: String = "",
+        val error: String = "",
+        val status: String = ""
+    )
 
-    /** Parses one JSONL event; malformed/non-JSON terminal output is not treated as a response. */
+    /** Parse the documented init / step_update / result NDJSON events. */
     fun parseStreamEvent(line: String): Event? {
         val value = runCatching { JSONObject(line) }.getOrNull() ?: return null
-        val type = value.optString("type").ifBlank { value.optString("event") }
+        val type = value.optString("event").ifBlank { value.optString("type") }
         if (type.isBlank()) return null
-        val text = value.optString("text")
-            .ifBlank { value.optString("content") }
-            .ifBlank { value.optString("response") }\n            .ifBlank { value.optString("result") }\n            .ifBlank { value.optJSONObject("message")?.optString("content").orEmpty() }
-        val error = value.optString("error")
+        val step = value.optJSONObject("step_update")
+        val result = value.optJSONObject("result")
+        val text = step?.optString("text_delta").orEmpty()
+            .ifBlank { result?.optString("response").orEmpty() }
+            .ifBlank { value.optString("text") }
+            .ifBlank { value.optString("response") }
+            .ifBlank { value.optJSONObject("message")?.optString("content").orEmpty() }
+        val error = result?.optString("error").orEmpty()
+            .ifBlank { value.optString("error") }
             .ifBlank { value.optJSONObject("error")?.optString("message").orEmpty() }
-        return Event(type, text, error)
+        val status = result?.optString("status").orEmpty().ifBlank { value.optString("status") }
+        return Event(type, text, error, status)
     }
 
     fun isAuthenticationRequired(event: Event): Boolean {
