@@ -86,6 +86,8 @@ class OrionToolContractCodecTest {
         assertTrue(selected.any { it.name == "mcp_status" })
         assertTrue(selected.any { it.name == "mcp_list_tools" })
         assertTrue(selected.any { it.name == "mcp_call" })
+        assertTrue(selected.any { it.name == "mcp_list_resources" })
+        assertTrue(selected.any { it.name == "mcp_get_prompt" })
         assertTrue(selected.all { ToolRegistry.find(it.name) != null })
         val phone = ToolRegistry.nativeToolsFor("open WhatsApp and read the screen")
         assertTrue(phone.any { it.name == "lookup_app" })
