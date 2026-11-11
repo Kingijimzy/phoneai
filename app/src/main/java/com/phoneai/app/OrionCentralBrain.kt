@@ -153,8 +153,8 @@ internal object OrionCentralBrain {
             if (saved == null) null else {
                 val steps = saved.optJSONArray("steps")
                 val active = saved.optJSONObject("inFlight")
-                val status = saved.optString("status", "unknown").take(40)
-                val notice = saved.optString("recoveryNotice", "").replace(Regex("\\s+"), " ").take(220)
+                val status = saved.optString("status", "unknown")
+                val notice = saved.optString("recoveryNotice", "").replace(Regex("\\s+"), " ")
                 buildString {
                     appendLine("DURABLE EXECUTION CHECKPOINT")
                     appendLine("status=$status; recorded_steps=${steps?.length() ?: 0}; in_flight_tool=${active?.optString("tool", "unknown") ?: "none"}.")
@@ -164,7 +164,7 @@ internal object OrionCentralBrain {
                     if (steps != null) {
                         for (index in 0 until steps.length()) {
                             val step = steps.optJSONObject(index) ?: continue
-                            val tool = step.optString("tool", "unknown").take(80)
+                            val tool = step.optString("tool", "unknown")
                             val result = step.optString("result", "result unavailable")
                                 .replace(Regex("\\s+"), " ").take(220)
                             appendLine("recorded_action[$index]=$tool; result=$result")
@@ -213,7 +213,7 @@ internal object OrionCentralBrain {
         if (isFollowUp && continuityObjective.isNotBlank()) {
             val resume = if (pendingTask != null) runCatching { AgentCheckpointStore.resumeInstruction(app) }.getOrNull() else null
             if (!resume.isNullOrBlank()) {
-                sections += "TASK RESUME INSTRUCTIONS — EXISTING OBJECTIVE, DO NOT RESTART\n" + resume.take(3600)
+                sections += "TASK RESUME INSTRUCTIONS — EXISTING OBJECTIVE, DO NOT RESTART\n" + resume
             }
             savedGraph?.let { graph ->
                 sections += OrionObjectiveGraph.prompt(graph) +
