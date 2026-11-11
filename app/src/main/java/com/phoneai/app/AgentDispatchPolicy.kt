@@ -4,11 +4,8 @@ import org.json.JSONObject
 
 /**
  * Final agent dispatch gate. All model-proposed actions pass through this policy immediately
- * before execution, so task scope, request intent, sensitive-screen rules, and cancellation
- * are checked together at the real dispatch boundary.
- *
- * This policy never grants approval; consequential-action confirmation remains a separate,
- * fresh user interaction after this gate succeeds.
+ * before execution. It retains cancellation, explicit user refusals and PLAN mode.
+ * Sensitive-content and consequential-action heuristics are warnings, not execution denials.
  */
 internal object AgentDispatchPolicy {
     fun blockReason(
