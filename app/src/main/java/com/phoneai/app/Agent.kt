@@ -49,10 +49,21 @@ internal object IrreversibleActionConfirmationPolicy {
         "(?i)\\b(?:trading\\s+desk|place\\s+(?:an?\\s+)?order|open\\s+(?:a\\s+)?position|close\\s+(?:a\\s+)?position|modify\\s+(?:an?\\s+)?order|cancel\\s+(?:an?\\s+)?order)\\b"
     )
 
-    fun requiresConfirmation(actionDescription: String): Boolean =
-        destructiveAction.containsMatchIn(actionDescription) || tradingWrite.containsMatchIn(actionDescription)
+    private val computerAction = Regex(
+        """(?i)\\bcomputer_settings\\b.{0,180}\\b(?:restart|shutdown|wifi(?:[_ -]?toggle)?|toggle[_ -]?(?:wifi|wi[- ]?fi)|turn\\s+(?:wifi|wi[- ]?fi)\\s+(?:on|off))\\b"""
+    )
 
-    fun computerSettingAction(tool: String, args: JSONObject): String? = null
+    fun requiresConfirmation(actionDescription: String): Boolean =
+        destructiveAction.containsMatchIn(actionDescription) ||
+            tradingWrite.containsMatchIn(actionDescription) ||
+            computerAction.containsMatchIn(actionDescription)
+
+    /** Returns the exact high-impact settings action that needs a warning/confirmation surface. */
+    fun computerSettingAction(tool: String, args: JSONObject): String? {
+        if (tool != "computer_settings") return null
+        val action = args.optString("action").trim().lowercase().replace('-', '_').replace(' ', '_')
+        return action.takeIf { it in setOf("restart", "shutdown", "wifi", "wifi_toggle", "toggle_wifi") }
+    }
 }
 /** The brain: asks the AI what to do, runs the tool it picks, repeats. */
 class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
