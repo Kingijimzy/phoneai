@@ -19,6 +19,7 @@ class OrionMcpProtocolTest {
     @Test fun resourcesAndPromptsUseBoundedReadOnlyMcpContracts() {
         val resources = OrionMcpProtocol.listResources("next-page")
         assertEquals("resources/list", resources.optString("method"))
+        assertTrue(OrionMcpProtocol.isReadOnlyMethod("tools/list"))
         assertTrue(OrionMcpProtocol.isReadOnlyMethod("resources/list"))
         assertTrue(OrionMcpProtocol.isReadOnlyMethod("resources/read"))
         assertTrue(OrionMcpProtocol.isReadOnlyMethod("prompts/list"))
@@ -70,6 +71,18 @@ class OrionMcpProtocolTest {
         val parsed = McpConnector.parseSseResponse(raw, 2L)
         assertEquals(2L, parsed.optLong("id"))
         assertTrue(parsed.optJSONObject("result")?.optBoolean("accepted") == true)
+    }
+
+    @Test fun mcpToolResultIsErrorPropagatesAsAnExplicitFailure() {
+        val failed = JSONObject().put("jsonrpc", "2.0").put("id", 9)
+            .put("result", JSONObject().put("isError", true)
+                .put("content", org.json.JSONArray().put(JSONObject().put("type", "text").put("text", "remote validation failed"))))
+        val rendered = McpConnector.formatToolCallResult("calendar.create", failed)
+        assertTrue(rendered.startsWith("error:"))
+        assertTrue(rendered.contains("isError=true"))
+        val ok = JSONObject().put("jsonrpc", "2.0").put("id", 10)
+            .put("result", JSONObject().put("isError", false).put("content", org.json.JSONArray()))
+        assertTrue(McpConnector.formatToolCallResult("calendar.read", ok).startsWith("MCP tool result"))
     }
 
     @Test fun mcpReconnectPolicyNeverRetriesAmbiguousToolCalls() {
