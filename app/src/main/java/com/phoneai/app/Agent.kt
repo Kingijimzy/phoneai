@@ -307,10 +307,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var lastActionScope: String = ""
     @Volatile private var lastActionScopeAt: Long = 0L
 
-    /** Local command shortcuts must still respect capability-pack availability. */
-    /** No word lists: chatReply() lets the model itself answer or hand the job to the tool loop with ACTION. */
-    private fun requiresToolPolicy(command: String): Boolean = false
-
     /** Every entry point (chat, command, resume) must set the scope, or a stale one blocks real tools. */
     private fun setRequestScope(command: String) {
         val scope = TaskScopePolicy.scopeFor(command, lastActionScope, System.currentTimeMillis() - lastActionScopeAt)
@@ -923,70 +919,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         } catch (_: Exception) {
             metadata + "\n\nREADME excerpt:\n" + repositoryEvidence.take(5000)
         }
-    }
-
-    /** One small AI call for plain questions and chat. Returns null when the request needs the phone-control agent. */
-    private fun chatReply(command: String): String? = withInteractionTrace { chatReplyBody(command) }
-
-    private fun chatReplyBody(command: String): String? {
-        val key = MacroStore.norm(command)
-        val msgs = JSONArray().put(msg("system", chatSystem(command)))
-        val from = 0
-        for (i in from until chatHist.length()) msgs.put(chatHist.getJSONObject(i))
-        msgs.put(msg("user", command))
-        // Stream ordinary conversational replies into the live assistant bubble. Keep the
-        // cache fast path above, but never make a fresh request wait for the entire response.
-        // Suppress the internal ACTION routing sentinel so it is never flashed to the user.
-        val visiblePrefix = StringBuilder()
-        val heldTail = StringBuilder()
-        val sentinelTail = Regex("(?i)(?:^|\n)[ \t]*A(?:C(?:T(?:I(?:O(?:N)?)?)?)?)?\\W*$")
-        val isKnownTool: (String) -> Boolean = { name -> ToolRegistry.find(name) != null }
-        var visibleStarted = false
-        val raw = talkNim.chat(msgs, false, 1000, 0.75, onDelta = { delta ->
-            if (!stopped && delta.isNotEmpty()) {
-                if (visibleStarted) {
-                    heldTail.append(delta)
-                    val text = heldTail.toString()
-                    if (!OrionToolCallRecovery.shouldHoldFromChat(text, isKnownTool)) {
-                        val m = sentinelTail.find(text)
-                        if (m != null) {
-                            if (m.range.first > 0) ui.stream(text.substring(0, m.range.first))
-                            heldTail.setLength(0); heldTail.append(text.substring(m.range.first))
-                        } else { ui.stream(text); heldTail.setLength(0) }
-                    }
-                } else {
-                    visiblePrefix.append(delta)
-                    val candidate = visiblePrefix.toString()
-                    val normalized = candidate.trimStart()
-                    val actionPrefix = "ACTION"
-                    if (normalized.equals(actionPrefix, ignoreCase = true)) {
-                    } else if (normalized.startsWith("$actionPrefix ", ignoreCase = true) ||
-                        normalized.startsWith("$actionPrefix\n", ignoreCase = true) ||
-                        normalized.equals("$actionPrefix.", ignoreCase = true)) {
-                        visiblePrefix.setLength(0)
-                    } else if (!actionPrefix.startsWith(normalized, ignoreCase = true) &&
-                        !OrionToolCallRecovery.shouldHoldFromChat(candidate, isKnownTool)) {
-                        visibleStarted = true
-                        ui.stream(candidate)
-                        visiblePrefix.setLength(0)
-                    }
-                }
-            }
-        }).trim()
-        val recoveredToolCall = OrionToolCallRecovery.recover(raw, isKnownTool)
-        val containsToolMarkup = raw.contains("<tool_call>") || raw.contains("DSML")
-        if (visiblePrefix.isNotEmpty() && !visibleStarted &&
-            !visiblePrefix.toString().trim().equals("ACTION", ignoreCase = true) &&
-            recoveredToolCall == null && !containsToolMarkup) ui.stream(visiblePrefix.toString())
-        val endsWithAction = Regex("(?i)(?:^|\n)[ \t]*ACTION\\W*$").containsMatchIn(raw)
-        if (heldTail.isNotEmpty() && !endsWithAction && recoveredToolCall == null && !containsToolMarkup) ui.stream(heldTail.toString())
-        if (raw.isEmpty() || raw.uppercase().startsWith("ACTION") || endsWithAction) return null
-        if (containsToolMarkup || Regex("(?i)\\b(generat|creat|draw|sav|writ|build|run)(ing|e)\\b[^\\.\\n]{0,40}\\b(now|right away|this second)\\b").containsMatchIn(raw.take(400)) ||
-            recoveredToolCall != null) return null
-        chatHist.put(msg("user", command))
-        chatHist.put(msg("assistant", raw))
-        // No reply cache: Orion answers each message fresh, with the whole conversation in mind.
-        return raw
     }
 
     /**
