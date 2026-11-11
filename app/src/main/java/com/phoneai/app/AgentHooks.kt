@@ -142,15 +142,15 @@ internal object AgentHooks {
   )) return true
   val command = args.optString("command").ifBlank { args.optString("cmd") }.ifBlank { args.optString("script") }
   if (tool in setOf("shell", "termux_command") &&
-   Regex("""(?is)(?:^|[;&|]\\s*)(?:command\\s+)?(?:rm|rmdir|unlink|shred)\\b|\\bfind\\b[^;&|]*\\s-delete\\b|\\b(?:wipe|erase|factory[_ -]?reset|format|wipefs|blkdiscard)\\b""").containsMatchIn(command)
+   Regex("""(?is)(?:^|[;&|]\s*)(?:command\s+)?(?:rm|rmdir|unlink|shred)\b|\bfind\b[^;&|]*\s-delete\b|\b(?:wipe|erase|factory[_ -]?reset|format|wipefs|blkdiscard)\b""").containsMatchIn(command)
   ) return true
   val code = args.optString("code").ifBlank { args.optString("script") }
   if (tool in setOf("python_exec", "dev_python") &&
-   Regex("""(?is)\\b(?:os\\s*\\.\\s*(?:remove|unlink|rmdir)|shutil\\s*\\.\\s*rmtree|\\.\\s*(?:unlink|rmdir)\\s*\\()""").containsMatchIn(code)
+   Regex("""(?is)\b(?:os\s*\.\s*(?:remove|unlink|rmdir)|shutil\s*\.\s*rmtree|\.\s*(?:unlink|rmdir)\s*\()""").containsMatchIn(code)
   ) return true
   if (tool == "mcp_call") {
    val remote = args.optString("name")
-   if (Regex("(?i)\\b(?:delete|remove|wipe|erase|truncate)\\b").containsMatchIn(remote)) return true
+   if (Regex("(?i)\b(?:delete|remove|wipe|erase|truncate)\b").containsMatchIn(remote)) return true
   }
   return false
  }
