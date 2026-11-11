@@ -23,4 +23,10 @@ class ShellRunnerPolicyTest {
         assertEquals(ShellExecutionRouting.Backend.LINUX, ShellExecutionRouting.backend("linux"))
         assertEquals(ShellExecutionRouting.Backend.LINUX, ShellExecutionRouting.backend("alpine"))
     }
+
+    @Test fun builtinShellCanChangeToAnyDirectoryAllowedByAndroidUid() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        assertEquals("cwd: /", ShellRunner.runBuiltin(context, "cd /"))
+        assertEquals("/", ShellRunner.runBuiltin(context, "pwd"))
+    }
 }
