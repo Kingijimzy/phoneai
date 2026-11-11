@@ -106,7 +106,7 @@ internal class AntigravityRuntimeInstaller(context: Context) {
                 if (AntigravityCliProtocol.isAuthenticationRequired(event)) {
                     error("Antigravity requires Google-account sign-in.")
                 }
-                if (event.error.isNotBlank()) error("Antigravity: \${event.error}")
+                if (event.error.isNotBlank()) error("Antigravity: ${event.error}")
                 if (event.type == "step_update" && event.text.isNotBlank()) output.append(event.text)
                 if (event.type == "result") {
                     finalStatus = event.status
@@ -118,7 +118,7 @@ internal class AntigravityRuntimeInstaller(context: Context) {
             }
             check(!session.isAlive()) { "Antigravity model request timed out." }
             check(session.exitCodeOrNull() == 0) {
-                "Antigravity model request failed: \${diagnostics.toString().take(500)}"
+                "Antigravity model request failed: ${diagnostics.toString().take(500)}"
             }
             if (output.isEmpty()) output.append(finalResponse)
             val response = output.toString().trim()
