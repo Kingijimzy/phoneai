@@ -73,7 +73,6 @@ internal object OrionCommandIntentPolicy {
             requiresStructuredTaskPlanning(command) ||
             AgentHooks.isPhoneActionRequest(command) ||
             requiresPythonExecution(command) ||
-            OrionSelfDiagnostics.isExplicitRequest(command) ||
             isConnectedGitHubAccountRequest(command) ||
             TaskScopePolicy.modeFor(command) == TaskMode.RESEARCH
 
@@ -83,28 +82,6 @@ internal object OrionCommandIntentPolicy {
         return trailing?.groupValues?.getOrNull(1)
             ?: named?.groupValues?.getOrNull(1)
             ?: "PhoneAI"
-    }
-}
-
-/** Turns the planner's selected route into a short owner-facing update without exposing hidden reasoning. */
-internal object OrionProgressMessagePolicy {
-    fun messageFor(command: String, brief: String?): String {
-        if (OrionSelfDiagnostics.isExplicitRequest(command)) {
-            return "I’ll inspect Orion’s local runtime and registered capabilities first, then check the available read-only service, provider and MCP status endpoints. I’ll separate verified results from anything I cannot test."
-        }
-        val intent = brief.orEmpty().lineSequence()
-            .firstOrNull { it.startsWith("INTENT:", ignoreCase = true) }
-            ?.substringAfter(':')?.trim()?.take(150)
-        val route = brief.orEmpty().lineSequence()
-            .firstOrNull { it.startsWith("ROUTE:", ignoreCase = true) }
-            ?.substringAfter(':')?.trim()?.take(180)
-        return when {
-            !intent.isNullOrBlank() && !route.isNullOrBlank() ->
-                "I understand the goal: $intent. I’ll start with: $route"
-            !intent.isNullOrBlank() ->
-                "I understand the goal: $intent. I’ll work through it and verify each result."
-            else -> "I’ll work through the request step by step and verify each result before calling it complete."
-        }
     }
 }
 
@@ -261,23 +238,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         val detail = result.replace("\n", " ").take(220)
         return "[TASK:${if (failed) "FAILED" else "RESULT"}]\n$tool — $detail"
-    }
-
-    /**
-     * One short inner-monologue pass before real work: intent, what Orion can find out itself, best route,
-     * a smarter alternative, and the fallback. Skipped for tiny commands; any failure just skips it.
-     */
-    private fun deliberate(command: String): String? {
-        if (command.trim().split(Regex("\\s+")).size < 4) return null
-        return try {
-            val facts = runCatching { OrionLivingLoop.promptBlock(svc) }.getOrDefault("")
-            val m = JSONArray()
-                .put(msg("system", "You are Orion's inner voice, thinking before acting for Kingi. Reply in at most 6 short lines, no preamble:\n" +
-                    "INTENT: what he really wants.\nFIND MYSELF: what I can look up or work out instead of asking.\nROUTE: the best first tool/action and why.\n" +
-                    "SMARTER: a better or more creative approach, or something he'll want next.\nIF IT FAILS: the second route.\nASK: only if a wrong guess is costly, else 'none'.\n" + facts.take(600)))
-                .put(msg("user", command.take(1200)))
-            commandNim.chat(m, false, 320, 0.6).trim().takeIf { it.length > 20 }?.take(1200)
-        } catch (_: Exception) { null }
     }
 
     private fun aiOneShot(instruction: String, data: String): String {
@@ -974,11 +934,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val capabilityQuestion = Regex("(?i)\\b(?:phone actions|what can you do|actually execute|list.*(?:tools|actions|capabilities)|tools?.*(?:available|execute))\\b")
             .containsMatchIn(q)
         val capabilityContext = if (capabilityQuestion) "\n\n" + capabilityQuestionSummary() else ""
-        val selfDiagnosticRequest = OrionSelfDiagnostics.isExplicitRequest(q)
-        val selfDiagnosticContext = if (selfDiagnosticRequest) {
-            runCatching { OrionSelfDiagnostics.inspect(svc, recordActivity = true).promptBlock() }
-                .getOrDefault("Local self-diagnostics could not be completed. Do not claim the system is healthy.")
-        } else ""
         return OrionPersona.CORE + "\n" + "You are Orion: the user's consistent, attentive AI companion and the single front door to the whole phone app. You are warm, sharp, conversational and practical, not a command-only interface. Talk naturally, follow the thread, use relevant context without reciting it, and remember the active objective across turns. Be proactive when a useful next step is clear, but never pretend to have feelings, independent awareness, background activity, or observations you have not made. " +
             "This is a typed chat UI, so give genuinely useful answers rather than limiting every reply to three sentences. Match the user's level of detail; use short paragraphs, headings, or bullets when they make a complex answer easier to follow. Avoid filler, fake certainty, and repetitive greetings. Never say systems are online, all tools are working, or integrations are healthy unless a current health check actually verified that state; casual greetings must not imply a system-health check. Ask one focused follow-up only when needed. " +
             "You may also speak replies aloud, so keep wording natural and avoid decorative formatting. Do not claim to have searched, opened, changed, remembered, or executed anything unless a tool or saved record confirms it. For phone actions, distinguish confirmed success, failure, and unverified outcome: a request being accepted is not proof the action happened. If the result cannot be checked, say so plainly. Only restart, shutdown and Wi-Fi toggles require confirmation through the app interface; all other authorized tools run without an approval prompt. " +
@@ -1543,18 +1498,9 @@ Rules:
             val raw = talkNim.chat(OrionRouter.toMessages(OrionRouter.SYSTEM, user), false, 90, 0.0, true)
             OrionRouter.parse(raw)
         }.getOrNull() ?: OrionRouter.fallback(command)
-        // Explicit Python scraper build-and-test requests are code execution, not browser
-        // navigation. A URL is the scraper's target input, not an instruction to open a WebView.
-        // This is an explicit code-build-and-execute objective. Do not let a model-selected
-        // RESEARCH/BROWSER route override it: the URL is input data for Python, not a browsing request.
-        // Keep the policy at the route boundary so every provider receives the same deterministic route.
-        val decision = when {
-            OrionCommandIntentPolicy.isPythonScraperBuildAndTest(command) ->
-                OrionRouter.Decision(OrionRouter.Kind.ACT, plan = false, sequential = false, source = "python_scraper_policy")
-            OrionSelfDiagnostics.isExplicitRequest(command) ->
-                OrionRouter.Decision(OrionRouter.Kind.ACT, plan = true, sequential = true, source = "health_check_policy")
-            else -> modelDecision
-        }
+        // The model owns intent interpretation. Structural fallback is used only when
+        // the model/provider cannot return a valid decision; no phrase-specific health route.
+        val decision = modelDecision
         routeCache = command to decision
         runCatching { AgentPolicy.log(svc, "router", decision.kind.name.lowercase(), null, "source=${decision.source}; plan=${decision.plan}") }
         return decision
@@ -2743,14 +2689,8 @@ Rules:
         }
         var damagedReplies = 0
         var graphRepairAttempts = 0
-        // Command-mode model output is structured JSON and must not be exposed token-by-token.
-        // Give the user one natural live progress line while the guarded planner works; tool
-        // details remain in the single compact activity card and the final assistant bubble.
-        val actionBrief = if (!resumeRequest) deliberate(command) else null
-        actionBrief?.let { brief ->
-            history.put(msg("user", "[ORION PRIVATE PLANNING SUMMARY — use this to select the first action; do not expose hidden reasoning]\n" + brief))
-        }
-        ui.stream(OrionProgressMessagePolicy.messageFor(command, actionBrief))
+        // One Central Brain planner call owns the objective, context and tool selection.
+        // Do not add a separate truncated inner-voice call or inject a synthetic plan.
         val stall = SessionStall()
         var stallRedirects = 0
         var promiseNudged = false
