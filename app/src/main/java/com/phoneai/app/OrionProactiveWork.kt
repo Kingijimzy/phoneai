@@ -27,15 +27,15 @@ internal class OrionProactiveWorker(
 
         // If the accessibility service is already connected, enqueue through its single
         // durable runtime instead of racing a second direct watcher execution.
+        val gate = OrionProactiveGate.evaluate(applicationContext)
         val liveService = PhoneAiService.instance
         if (liveService != null) {
             return if (liveService.requestSoulWatch("workmanager_fallback")) Result.success() else Result.retry()
         }
 
-        // After process death, perform only the bounded local watcher fallback. It records
-        // its own lifecycle, reflection and inner-life work under the same policy gates.
+        // The gate controls unsolicited delivery, not local health observation or memory consolidation.
         return runCatching {
-            SoulEngineWatcher.run(applicationContext)
+            SoulEngineWatcher.run(applicationContext, gate)
             Result.success()
         }.getOrElse {
             AgentPolicy.log(
@@ -44,6 +44,50 @@ internal class OrionProactiveWorker(
             )
             if (runAttemptCount < OrionProactivePolicy.MAX_RETRIES) Result.retry() else Result.failure()
         }
+    }
+}
+
+internal object OrionProactiveGate {
+    data class Decision(
+        val candidate: OrionProactiveEngine.ProactiveItem?,
+        val allowDelivery: Boolean,
+        val reason: String
+    )
+
+    /** Gate unsolicited delivery separately from quiet internal observation and learning. */
+    fun evaluate(context: Context, now: Long = System.currentTimeMillis()): Decision {
+        val app = context.applicationContext
+        if (!OrionProactivePolicy.shouldRun(
+                AgentPolicy.enabled(app, "orion_core"),
+                AgentPolicy.enabled(app, "proactive")
+            )) return Decision(null, false, "owner_pack_disabled")
+
+        val candidate = runCatching { OrionProactiveEngine.evaluate(app, now) }.getOrNull()
+            ?: return Decision(null, false, "no_eligible_candidate")
+
+        val calendar = java.util.Calendar.getInstance().apply { timeInMillis = now }
+        val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+        val quietStart = Prefs.quietPeriodStartHour(app)
+        val quietEnd = Prefs.quietPeriodEndHour(app)
+        val quiet = if (quietStart < quietEnd) hour in quietStart until quietEnd
+            else hour >= quietStart || hour < quietEnd
+        if (quiet) return Decision(candidate, false, "owner_quiet_hours")
+
+        val notificationsEnabled = runCatching {
+            (app.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager)
+                ?.areNotificationsEnabled() == true
+        }.getOrDefault(false)
+        if (!notificationsEnabled) return Decision(candidate, false, "android_notifications_disabled")
+
+        val device = runCatching { OrionDeviceContextProvider.summary(app) }.getOrDefault("")
+        val battery = Regex("battery=(\\d+)%").find(device)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: -1
+        val charging = device.contains("charging=true", ignoreCase = true)
+        val threshold = Prefs.proactiveBatteryLowThreshold(app)
+        if (battery >= 0 && threshold > 0 && battery <= threshold && !charging && candidate.urgency < 2) {
+            return Decision(candidate, false, "low_battery_defer_nonurgent")
+        }
+
+        return Decision(candidate, true, "delivery_allowed")
     }
 }
 
