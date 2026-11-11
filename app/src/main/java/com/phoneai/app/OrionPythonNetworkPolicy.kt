@@ -4,7 +4,7 @@ import android.content.Context
 import java.net.InetAddress
 import java.net.URI
 
-/** Exact-host network grants. RFC1918 LAN endpoints are permitted only after an explicit host grant. */
+/** Public HTTPS reads use global NETWORK consent; LAN, WebSocket and write access retain exact-host grants. */
 internal object OrionPythonNetworkPolicy {
     private const val PREFS = "orion_python_network_hosts_v1"
     data class Endpoint(
