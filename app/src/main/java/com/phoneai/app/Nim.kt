@@ -102,7 +102,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         tools: List<ToolDefinition>,
         onDelta: ((String) -> Unit)?
     ): OrionModelTurn {
-        activeNativeTools.set(tools.take(128))
+        activeNativeTools.set(tools)
         nativeToolCalls.set(emptyList())
         return try {
             val text = chat(messages, vision, maxTokens, temperature, fastResponse, onDelta)
@@ -1170,7 +1170,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             if (r.code !in 200..299) throw AiException("${p.label}: error ${r.code} ${r.body.take(120)}")
             val requestedTools = activeNativeTools.get().orEmpty()
             val parsedTurn = if (requestedTools.isNotEmpty()) {
-                OrionNativeToolCallCodec.parse(p.id, r.body) { name -> requestedTools.any { it.name == name } }
+                OrionNativeToolCallCodec.parse(p.id, r.body) { name -> ToolRegistry.find(name) != null }
             } else OrionNativeToolCallCodec.Turn(extract(p, r.body), emptyList())
             if (parsedTurn.calls.isNotEmpty()) {
                 nativeToolCalls.set(parsedTurn.calls.map { OrionModelToolCall(it.id, it.name, it.arguments) })
