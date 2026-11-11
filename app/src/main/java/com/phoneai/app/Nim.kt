@@ -13,7 +13,7 @@ class AiException(message: String, val httpStatus: Int? = null) : RuntimeExcepti
 }
 
 /** Talks to the selected AI service, with bounded same-provider model recovery and cross-provider fallback. */
-class Nim internal constructor(private val ctx: Context, private val commandMode: Boolean = false, sharedBudget: CommandRequestBudget? = null) :
+internal class Nim internal constructor(private val ctx: Context, private val commandMode: Boolean = false, sharedBudget: CommandRequestBudget? = null) :
     OrionModelProvider {
     // Structured tool calls are scoped to one synchronous chatTurn invocation.
     private val activeNativeTools = ThreadLocal<List<ToolDefinition>?>()
