@@ -1000,27 +1000,16 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val command = input.trim()
         if (command.isEmpty()) return
         indexMemoryObservation(command, "typed chat")
-        val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         // Orion Chat is the front door: explicit repository, terminal/runtime and website tasks
         // must enter the same guarded Agent path instead of being answered as plain conversation.
         talkNim.beginCommand()
         stopped = false
         setRequestScope(command)
-        if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
-            taskProofs.clear()
-            OrionObjectiveGraph.save(svc, OrionObjectiveGraph.Graph(
-                objective = intentResolution.resolvedObjective.orEmpty(),
-                nodes = listOf(OrionObjectiveGraph.Objective(
-                    id = "main", title = intentResolution.resolvedObjective.orEmpty().take(240),
-                    status = OrionObjectiveGraph.Status.RUNNING
-                ))
-            ))
-        }
         researchCancelled.set(false)
         talkNim.resume()
 
         val soulContext = OrionSessionContextProvider.forChat(svc, command)
-        val safeSystem = chatSystem(command) + "\n\n" + soulContext + "\n\n" + intentResolution.contextBlock
+        val safeSystem = chatSystem(command) + "\n\n" + soulContext + "\n\n"
         val responseQualityPolicy = """
 RESPONSE QUALITY AND FORMAT:
 - Answer the actual question first. For current/live facts, use successful live-tool results, not model memory. Include the relevant date and timezone, competition/event, source links, and any important context the user reasonably needs.
@@ -1047,6 +1036,18 @@ RESPONSE QUALITY AND FORMAT:
         persistTomUpdates(decision)
         when (decision) {
             is OrionTurnDecision.Execute -> {
+                setRequestScope(decision.objective)
+                val currentGraph = runCatching { OrionObjectiveGraph.load(svc) }.getOrNull()
+                if (currentGraph?.objective != decision.objective) {
+                    taskProofs.clear()
+                    OrionObjectiveGraph.save(svc, OrionObjectiveGraph.Graph(
+                        objective = decision.objective,
+                        nodes = listOf(OrionObjectiveGraph.Objective(
+                            id = "main", title = decision.objective.take(240),
+                            status = OrionObjectiveGraph.Status.RUNNING
+                        ))
+                    ))
+                }
                 chatHist.put(msg("user", command))
                 while (chatHist.length() > 12) chatHist.remove(0)
                 svc.notifyModeSwitch(true)
