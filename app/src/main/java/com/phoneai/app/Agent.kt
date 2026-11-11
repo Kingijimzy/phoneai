@@ -1177,7 +1177,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 }
                 if (!stopped) {
                     turn = talkNim.chatTurn(
-                        messages, false, 900, 0.7, tools = nativeTools
+                        messages, false, 32768, 0.7, tools = nativeTools
                     )
                 }
             }
