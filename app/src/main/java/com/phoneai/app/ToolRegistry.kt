@@ -295,9 +295,9 @@ internal object ToolRegistry {
     }
 
     /**
-     * Native provider tool lists have practical per-request limits (OpenAI Chat Completions
-     * currently documents at most 128 function definitions). Keep the native set relevant while
-     * the full registry remains discoverable in the system prompt and planner.
+     * Keep native tool payloads focused: OpenAI recommends starting with fewer than 20 functions
+     * and documents a hard limit of 128. The full registry remains discoverable in the system
+     * prompt and planner; this request receives only relevant definitions plus prior-call tools.
      */
     private val mcpNativeTools = listOf(
         "mcp_status", "mcp_list_tools", "mcp_call",
