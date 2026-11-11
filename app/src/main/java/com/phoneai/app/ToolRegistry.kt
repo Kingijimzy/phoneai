@@ -105,7 +105,7 @@ internal object ToolRegistry {
         tool("flashlight", ToolAccess.WRITE, "flashlight {on}: turn flashlight on or off"),
         tool("copy", ToolAccess.WRITE, "copy {text}: copy text to clipboard"),
         tool("image_read", ToolAccess.READ, "image_read {path}: on-device OCR of an image file (screenshot, photo, scan). For describing a picture use look"),
-        tool("image_generate", ToolAccess.WRITE, "image_generate {prompt, model?, size?}: create an image with the chat provider's /images/generations endpoint and save it to the workspace"),
+        tool("image_generate", ToolAccess.WRITE, "image_generate {prompt, model?, size?}: generate an image through the configured provider or keyless fallback and save a verified image in the workspace"),
         tool("call_status", ToolAccess.READ, "call_status {}: current phone call state (idle, ringing, in call)"),
         tool("call_place", ToolAccess.WRITE, "call_place {number}: place a phone call directly"),
         tool("call_answer", ToolAccess.WRITE, "call_answer {}: answer the ringing call"),
