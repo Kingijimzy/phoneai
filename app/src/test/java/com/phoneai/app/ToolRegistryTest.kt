@@ -271,6 +271,15 @@ class ToolRegistryNativeSelectionTest {
         assertEquals(setOf("open_app", "lookup_app"), ToolRegistry.recentToolNames(history))
     }
 
+    @Test fun pythonTasksExposeNativeRuntimeAndFileToolsTogether() {
+        val selected = ToolRegistry.nativeToolsFor(
+            "Write a Python calculator, save it as a file, execute it and test it."
+        ).map { it.name }.toSet()
+        assertTrue(selected.containsAll(setOf(
+            "python_exec", "workspace_write", "workspace_read", "workspace_list", "save_file"
+        )))
+    }
+
     @Test fun unknownHistoricalToolNamesAreIgnored() {
         val history = org.json.JSONArray().put(org.json.JSONObject().put("role", "assistant").put("tool_calls", org.json.JSONArray()
             .put(org.json.JSONObject().put("function", org.json.JSONObject().put("name", "invented_tool")))
