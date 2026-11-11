@@ -20,8 +20,12 @@ internal object OrionRecallSpecialists {
 
     fun retrieve(context: Context, query: String, approvedMemories: List<Memory>, perLane: Int = 3): List<Finding> {
         if (query.trim().length < 3) return emptyList()
+        val governed = approvedMemories.filter {
+            MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) &&
+                OrionMemoryLifecycle.isActive(context, it.id)
+        }
         return lanes.mapNotNull { lane ->
-            val candidates = approvedMemories.filter { it.category in lane.categories }
+            val candidates = governed.filter { it.category in lane.categories }
             if (candidates.isEmpty()) return@mapNotNull null
             val hits = OrionRecall.top(context, candidates, query, perLane)
             if (hits.isEmpty()) null else Finding(lane.id, lane.title, hits)
