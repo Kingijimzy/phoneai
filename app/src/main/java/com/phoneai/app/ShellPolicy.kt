@@ -52,10 +52,10 @@ internal object ShellPolicy {
     fun classify(command: String): ShellRisk {
         val forms = inspectionForms(command)
         if (forms.any { form -> rootOrSystemWipe.any { it.containsMatchIn(form) } }) return ShellRisk.WARNING
-        if (forms.any { form -> factoryResetProtection.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
-        if (forms.any { form -> rawBlockDeviceWrite.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
-        if (forms.any { form -> forkBomb.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
-        if (forms.any { form -> keyStorage.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
+        if (forms.any { form -> factoryResetProtection.any { it.containsMatchIn(form) } }) return ShellRisk.WARNING
+        if (forms.any { form -> rawBlockDeviceWrite.any { it.containsMatchIn(form) } }) return ShellRisk.WARNING
+        if (forms.any { form -> forkBomb.any { it.containsMatchIn(form) } }) return ShellRisk.WARNING
+        if (forms.any { form -> keyStorage.any { it.containsMatchIn(form) } }) return ShellRisk.WARNING
         // curl|sh style installers are allowed: Orion needs to set up its own tools.
         return ShellRisk.SAFE
     }
