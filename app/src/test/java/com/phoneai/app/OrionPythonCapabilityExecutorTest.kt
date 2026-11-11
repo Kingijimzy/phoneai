@@ -125,6 +125,8 @@ class OrionPythonCapabilityExecutorTest {
 }
 
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class PythonToolArgumentsTest {
     @Test fun acceptsCanonicalCodeField() {
         val code = "print('hello')"
