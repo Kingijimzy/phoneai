@@ -79,7 +79,7 @@ internal interface OrionModelProvider {
 /** Nim satisfies the common provider interface. No provider-specific logic leaks past it. */
 internal object OrionModelProviderFactories {
     fun create(ctx: Context, commandMode: Boolean = false, sharedBudget: CommandRequestBudget? = null): OrionModelProvider =
-        Nim(ctx, commandMode, sharedBudget)
+        AccountAwareModelProvider(ctx, Nim(ctx, commandMode, sharedBudget), commandMode)
 }
 
 /** NVIDIA is a first-class cloud provider; it is treated like every other OpenAI-compatible
