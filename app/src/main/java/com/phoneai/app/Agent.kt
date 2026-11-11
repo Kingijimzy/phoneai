@@ -1030,6 +1030,19 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
 
     fun runConversation(input: String) = withInteractionTrace { runConversationBody(input) }
 
+    /** Shared owner-turn bookkeeping for typed chat and action-capable voice turns. */
+    private fun recordOwnerTurn(command: String, source: String) {
+        if (command.trimStart().startsWith("[ORION")) return
+        svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit()
+            .putLong("owner_last_active", System.currentTimeMillis()).apply()
+        indexMemoryObservation(command, source)
+        // Capture explicit owner facts at the common entry point, not only in run().
+        runCatching {
+            OrionFactExtractor.extract(command, Prefs.userName(svc))
+                .forEach { (subject, predicate, value) -> OrionFactStore.add(svc, subject, predicate, value) }
+        }
+    }
+
     private fun runConversationBody(input: String) {
         if (!OrionMasterControl.isEnabled(svc)) {
             ui.say("Orion is shut down. Start the brain from the Soul Engine command center before sending another request.")
@@ -1037,10 +1050,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         var command = input.trim()
         if (command.isEmpty()) return
-        // Record genuine foreground activity for the Proactive Gate.
-        svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit()
-            .putLong("owner_last_active", System.currentTimeMillis()).apply()
-        indexMemoryObservation(command, "typed chat")
+        // All action-capable entry points share the same owner-turn bookkeeping.
+        recordOwnerTurn(command, "typed chat")
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         // Orion Chat is the front door. Requests use one model-facing native tool loop;
         // task coordination and multi-step execution are model-selected tools, not a second planner.
@@ -1219,7 +1230,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             val explanation = "The selected model returned an obsolete ACTION marker instead of calling an exposed Orion tool. No action was dispatched. Retry with a model that supports native tool calls, or check this provider's tool-calling integration."
             chatHist.put(msg("user", command))
             chatHist.put(msg("assistant", explanation))
-            reflectOnExchange(command)
+            if (!command.trimStart().startsWith("[ORION")) reflectOnExchange(command)
             ui.say(explanation)
             return
         }
@@ -1245,9 +1256,6 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         }
         val command = input.trim()
         if (command.isEmpty()) return
-        svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit()
-            .putLong("owner_last_active", System.currentTimeMillis()).apply()
-        indexMemoryObservation(command, "standard voice")
         talkNim.beginCommand()
         // Voice actions enter the same conversational brain and native-tool loop as typed chat.
         // Do not send voice requests through the legacy JSON-planner execution path.
@@ -1257,6 +1265,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             runConversation(command)
             return
         }
+        recordOwnerTurn(command, "standard voice")
         stopped = false
         researchCancelled.set(false)
         talkNim.resume()
@@ -1638,10 +1647,6 @@ Rules:
             ui.say("Orion is shut down. Start the brain from the Soul Engine command center before running tasks.")
             return
         }
-        val ownerTurn = !inputCommand.trimStart().startsWith("[ORION")
-        if (ownerTurn) runCatching { svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit().putLong("owner_last_active", System.currentTimeMillis()).apply() }
-        // Remember what Kingi tells Orion about himself automatically, without a tool call or a prompt.
-        if (ownerTurn) runCatching { OrionFactExtractor.extract(inputCommand, Prefs.userName(svc)).forEach { (s, p, o) -> OrionFactStore.add(svc, s, p, o) } }
         // Explicit skill invocation uses the same native-tool loop. The skill's allowed-tool,
         // invocation-scope and call-count checks remain enforced by preflightTool on every call.
         val skillMatch = Regex("(?is)^\\s*run skill\\s+([a-z0-9._-]{2,48})\\s*:\\s*(.+)$")
