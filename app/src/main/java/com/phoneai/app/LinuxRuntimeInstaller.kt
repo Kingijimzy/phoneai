@@ -125,7 +125,17 @@ internal class LinuxRuntimeInstaller(
         }
     }
 
-    fun execute(manifest: LinuxRuntimePolicy.Manifest, command: String, timeoutMs: Long = 60_000L, onOutput: (String) -> Unit = {}, workspaceHostPath: String? = null, shouldStop: () -> Boolean = { false }, extraEnvironment: Map<String, String> = emptyMap()): String {
+    fun execute(
+        manifest: LinuxRuntimePolicy.Manifest,
+        command: String,
+        timeoutMs: Long = 60_000L,
+        onOutput: (String) -> Unit = {},
+        workspaceHostPath: String? = null,
+        shouldStop: () -> Boolean = { false },
+        extraEnvironment: Map<String, String> = emptyMap(),
+        androidAppDataPath: String? = null,
+        sharedStoragePath: String? = null
+    ): String {
         if (!isReady(manifest)) return "error: Alpine runtime is not installed or failed readiness checks. Install/repair the pinned Linux runtime first."
         // Never leak provider/model timeout values into the process supervisor unchecked.
         // The old rejection caused otherwise valid Python work to fail before launch when a
@@ -150,7 +160,10 @@ internal class LinuxRuntimeInstaller(
             }
             canonical.absolutePath
         }
-        val args = LinuxRuntimePolicy.prootArgs(proot.absolutePath, rootfs.absolutePath, command, workspace)
+        val args = LinuxRuntimePolicy.prootArgs(
+            proot.absolutePath, rootfs.absolutePath, command, workspace,
+            androidAppDataPath, sharedStoragePath
+        )
             ?: return "error: Linux command rejected by runtime policy."
         // Android's resolver is network-specific. Public DNS literals inside a PRoot guest
         // can be unreachable on mobile carriers/private DNS, so mirror the active Android
@@ -192,7 +205,11 @@ internal class LinuxRuntimeInstaller(
      * Prepares the exact PRoot launch tuple for the maintained Termux terminal emulator.
      * The emulator owns PTY creation, VT parsing, keyboard translation and screen resizing.
      */
-    fun interactiveLaunchConfig(workspaceHostPath: String): LinuxTerminalLaunchConfig {
+    fun interactiveLaunchConfig(
+        workspaceHostPath: String,
+        androidAppDataPath: String? = null,
+        sharedStoragePath: String? = null
+    ): LinuxTerminalLaunchConfig {
         val manifest = LinuxRuntimePolicy.productionManifest
         check(isReady(manifest)) { "Alpine runtime is not installed or failed readiness checks." }
         val expected = File(app.filesDir, "orion-python/workspace")
@@ -218,7 +235,8 @@ internal class LinuxRuntimeInstaller(
             android.util.Log.w("OrionLinux", warning)
         }
         val argv = LinuxRuntimePolicy.prootArgs(
-            proot.absolutePath, rootfs.absolutePath, "exec /bin/sh -i", canonicalExpected.absolutePath
+            proot.absolutePath, rootfs.absolutePath, "exec /bin/sh -i", canonicalExpected.absolutePath,
+            androidAppDataPath, sharedStoragePath
         ) ?: error("Interactive Linux command rejected by runtime policy.")
         val environment = arrayOf(
             "HOME=/root",
