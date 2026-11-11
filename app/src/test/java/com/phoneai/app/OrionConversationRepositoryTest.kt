@@ -69,6 +69,46 @@ class OrionConversationRepositoryTest {
         assertFalse(repository.deleteArchivedById(context, deleteTarget.id))
     }
 
+    @Test fun upgradesVersionFiveDatabaseByAddingMissingEvidenceColumnsWithoutLosingRows() {
+        repository.close()
+        resetRepositorySingleton()
+        context.deleteDatabase("orion_conversations.db")
+
+        // Recreate the pre-v6 schema exactly as an existing install would have it.
+        val legacy = context.openOrCreateDatabase("orion_conversations.db", Context.MODE_PRIVATE, null)
+        legacy.execSQL("""CREATE TABLE chat_events (
+            id TEXT PRIMARY KEY NOT NULL,
+            session_id TEXT NOT NULL,
+            message_id TEXT,
+            event_type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            trace_id TEXT
+        )""")
+        legacy.execSQL("""INSERT INTO chat_events
+            (id, session_id, event_type, status, summary, created_at)
+            VALUES ('kept-event', 'session-1', 'tool_result', 'success', 'preserve me', 1)""")
+        legacy.version = 5
+        legacy.close()
+
+        repository = OrionConversationRepository.get(context)
+        val upgraded = repository.writableDatabase
+        val columns = mutableSetOf<String>()
+        upgraded.rawQuery("PRAGMA table_info(chat_events)", null).use { cursor ->
+            while (cursor.moveToNext()) columns += cursor.getString(1)
+        }
+
+        assertTrue(columns.contains("trace_id"))
+        assertTrue(columns.contains("correlation_id"))
+        assertTrue(columns.contains("evidence_json"))
+        upgraded.rawQuery("SELECT summary FROM chat_events WHERE id='kept-event'", null).use {
+            assertTrue(it.moveToFirst())
+            assertEquals("preserve me", it.getString(0))
+        }
+        assertEquals(6, upgraded.version)
+    }
+
     @Test fun savedActiveConversationSurvivesRepositoryRecreationLikeProcessRestart() {
         val saved = listOf("me" to "persist this", "ai" to "persisted answer")
         repository.saveActive(context, saved)
