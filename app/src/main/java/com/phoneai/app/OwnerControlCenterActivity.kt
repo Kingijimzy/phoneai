@@ -342,7 +342,7 @@ class OwnerControlCenterActivity : Activity() {
                     0 -> chooseInt("Automatic retry limit", listOf(0, 1, 2, 3, 4), current.recoveryMaxAttempts) { v ->
                         OrionOwnerDialSettings.write(this, current.copy(recoveryMaxAttempts = v)); AgentPolicy.log(this, "owner-recovery", "max-retries", true, "max retries=$v"); showRecoveryDials()
                     }
-                    1 -> chooseInt("Base backoff seconds", listOf(15, 30, 60, 120, 300), current.recoveryBackoffSeconds) { v ->
+                    1 -> chooseInt("Base backoff seconds", listOf(1, 2, 3, 5, 10, 15, 30, 60), current.recoveryBackoffSeconds) { v ->
                         OrionOwnerDialSettings.write(this, current.copy(recoveryBackoffSeconds = v)); AgentPolicy.log(this, "owner-recovery", "backoff", true, "base backoff=$v seconds"); showRecoveryDials()
                     }
                     2 -> showRuntimeRecoveryQueue()
