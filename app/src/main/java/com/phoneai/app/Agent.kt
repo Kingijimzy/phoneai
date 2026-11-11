@@ -895,7 +895,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Only restart, shutdown and Wi-Fi toggles require confirmation through the app interface; every other authorized action executes immediately after its capability, scope and validation checks. " +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
-            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionMemoryLayers.block(svc, query, Prefs.userName(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCapabilityAwareness.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
+            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCapabilityAwareness.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
     }
 
     /** Turns raw search results into a direct answer with sources; falls back to the raw list if the model call fails. */
@@ -1033,6 +1033,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun runConversationBody(input: String) {
         val command = input.trim()
         if (command.isEmpty()) return
+        // Record genuine foreground activity for the Proactive Gate.
+        svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit()
+            .putLong("owner_last_active", System.currentTimeMillis()).apply()
         indexMemoryObservation(command, "typed chat")
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         // Orion Chat is the front door: explicit repository, terminal/runtime and website tasks
