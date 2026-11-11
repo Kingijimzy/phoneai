@@ -79,6 +79,8 @@ internal object OrionCentralBrain {
         // only while the matching grant remains active; raw sensor vectors never enter prompts.
         addObservedSection("sensor_context") { OrionSensorContextStore.summary(app) }
         addObservedSection("notification_context") { OrionNotificationListener.contextSummary() }
+        // Provider readiness is a local status snapshot, not a live health check; actual calls still prove availability.
+        addObservedSection("provider_readiness") { Nim.status(app).take(1_400) }
         addObservedSection("device_context") { OrionDeviceContextProvider.summary(app) }
         addObservedSection("location_context") { OrionLocationContextProvider.summary(app) }
         addObservedSection("app_usage_context") { OrionAppUsageContextProvider.summary(app) }
