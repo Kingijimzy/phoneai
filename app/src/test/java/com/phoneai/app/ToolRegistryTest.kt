@@ -231,8 +231,6 @@ class ToolRegistryPromptAvailabilityTest {
         assertTrue(compact.contains("Also available, signatures only"))
         assertTrue(compact.contains("task_list {}"))
     }
-}
-
 
     @Test fun mcpDiscoveryGuidanceUsesOnlyRegisteredReadTools() {
         val prompt = ToolRegistry.promptSection("Check my MCP servers and discover API Anything tools")
@@ -243,3 +241,5 @@ class ToolRegistryPromptAvailabilityTest {
         assertEquals(ToolAccess.READ, ToolRegistry.access("mcp_status"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("mcp_list_tools"))
     }
+}
+
