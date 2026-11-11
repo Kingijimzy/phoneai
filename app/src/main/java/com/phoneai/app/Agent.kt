@@ -1196,7 +1196,7 @@ RESPONSE QUALITY AND FORMAT:
             // Persist tool-routed user turns too. Previously ACTION returned before chatHist was
             // updated, so follow-ups such as "go research it" lost their subject and were reinterpreted.
             chatHist.put(msg("user", command))
-            while (chatHist.length() > 12) chatHist.remove(0)
+            while (chatHist.length() > 80) chatHist.remove(0)
             // The model judged this needs tools: switch to Command mode and run the guarded agent now.
             svc.notifyModeSwitch(true)
             runInternal(command, reuseCommandBudget = true)
@@ -1207,7 +1207,7 @@ RESPONSE QUALITY AND FORMAT:
             ?: "I'm here. What would you like to talk about?"
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", safeAnswer))
-        while (chatHist.length() > 12) chatHist.remove(0)
+        while (chatHist.length() > 80) chatHist.remove(0)
         reflectOnExchange(command)
         ui.say(safeAnswer)
     }
