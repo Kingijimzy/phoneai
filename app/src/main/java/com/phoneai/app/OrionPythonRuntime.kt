@@ -9,9 +9,8 @@ import java.io.File
  * Full Python execution uses CPython installed in Orion's pinned Alpine/PRoot guest.
  * Generated extensions intentionally remain on the restricted Chaquopy data-transform runtime.
  *
- * PRoot runs under the app UID (it is not a kernel security boundary). Only the dedicated,
- * quota-limited Python workspace is bind-mounted; Orion databases, preferences and credentials
- * are never mounted into the guest.
+ * PRoot runs under the app UID (it is not a kernel security boundary). The project workspace
+ * is bind-mounted; Android app permissions and the OS sandbox govern any other host access.
  */
 internal object OrionPythonRuntime {
     private const val SCRIPT_NAME = "orion_main.py"
