@@ -67,15 +67,16 @@ internal object OrionProactiveGate {
                 AgentPolicy.enabled(app, "proactive")
             )) return Decision(null, false, "owner_pack_disabled")
 
-        val candidate = runCatching { OrionProactiveEngine.evaluate(app, now) }.getOrNull()
-            ?: return Decision(null, false, "no_eligible_candidate")
-
         val calendar = java.util.Calendar.getInstance().apply { timeInMillis = now }
         val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
         val quietStart = Prefs.quietPeriodStartHour(app)
         val quietEnd = Prefs.quietPeriodEndHour(app)
         val quiet = if (quietStart < quietEnd) hour in quietStart until quietEnd
             else hour >= quietStart || hour < quietEnd
+        if (quiet) return Decision(null, false, "owner_quiet_hours")
+
+        val candidate = runCatching { OrionProactiveEngine.evaluate(app, now) }.getOrNull()
+            ?: return Decision(null, false, "no_eligible_candidate")
         val notificationsEnabled = runCatching {
             (app.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager)
                 ?.areNotificationsEnabled() == true
