@@ -20,14 +20,24 @@ internal object AntigravityCliProtocol {
         requiresExistingLogin = false
     )
 
-    fun headlessPrompt(prompt: String): Invocation {
+    fun headlessPrompt(prompt: String, model: String? = null): Invocation {
         require(prompt.isNotBlank()) { "Antigravity prompt is required" }
         require(prompt.length <= 100_000) { "Antigravity prompt exceeds the supported input size" }
         return Invocation(
-            listOf(EXECUTABLE, "-p", prompt, "--output-format", "stream-json"),
+            buildList { add(EXECUTABLE); add("-p"); add(prompt); add("--output-format"); add("stream-json"); if (!model.isNullOrBlank()) { add("--model"); add(model) } },
             requiresExistingLogin = true
         )
     }
+
+    fun listModelsInvocation(): Invocation = Invocation(listOf(EXECUTABLE, "models"), requiresExistingLogin = true)
+
+    fun parseModelList(output: String): List<String> = output.lineSequence()
+        .map { it.trim() }
+        .mapNotNull { line ->
+            Regex("^([a-zA-Z0-9][a-zA-Z0-9._-]{2,80})\\\\s+").find(line)?.groupValues?.get(1)
+        }
+        .distinct()
+        .toList()
 
     data class Event(val type: String, val text: String = "", val error: String = "")
 
