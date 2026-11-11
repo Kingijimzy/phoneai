@@ -1144,9 +1144,9 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         }
         val answer = try {
             var turn = talkNim.chatTurn(
-                messages, false, 900, 0.7, tools = nativeTools
+                messages, false, 32768, 0.7, tools = nativeTools
             )
-            while (turn.toolCalls.isNotEmpty() && !stopped && toolRounds < 4) {
+            while (turn.toolCalls.isNotEmpty() && !stopped && toolRounds < OrionNativeToolDispatcher.MAX_ROUNDS_PER_COMMAND) {
                 toolRounds++
                 val callEnvelope = JSONArray()
                 turn.toolCalls.forEach { call ->
@@ -1186,8 +1186,8 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 return
             }
             if (turn.toolCalls.isNotEmpty()) {
-                preserveToolTranscript("I paused after four tool-reasoning rounds to keep this task bounded. Review the tool results above, then continue from the last confirmed state.")
-                ui.say("I paused after four tool-reasoning rounds to keep this task bounded. The completed results are preserved in conversation history; say continue to resume.")
+                preserveToolTranscript("I reached the 200-round task safety ceiling. Review the preserved tool results and continue from the last confirmed state.")
+                ui.say("I reached the 200-round task safety ceiling. Completed results are preserved in conversation history; say continue to resume.")
                 return
             }
             turn.text.trim()
