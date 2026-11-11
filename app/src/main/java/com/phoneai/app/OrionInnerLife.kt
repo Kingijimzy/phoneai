@@ -72,7 +72,7 @@ object OrionInnerLife {
         }
         "INNER STATE: mood ${m.label} (${m.tone}). Let it colour your tone and pacing, never your honesty." +
             (if (instincts.isEmpty()) "" else "\nINSTINCTS: " + instincts.joinToString("; ")) +
-            "\nPRIME DIRECTIVE: $PRIME_DIRECTIVE"
+            "\nPRIME DIRECTIVE: ${SoulEngineState.snapshot(c).purpose.ifBlank { PRIME_DIRECTIVE }}"
     }.getOrDefault("")
 
     /** Heartbeat step: instincts, a self-set goal once a day, and the nightly monologue. Returns what it did. Never throws. */
