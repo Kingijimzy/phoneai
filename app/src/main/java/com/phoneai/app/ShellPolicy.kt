@@ -20,7 +20,7 @@ internal object ShellPolicy {
         val resetSettings = c.contains("settings put global device_provisioned 0") ||
             c.contains("settings put secure setup_wizard_finished 0")
         val forkBomb = Regex(""":\s*\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:""").containsMatchIn(c)
-        val rawDeviceFormat = Regex("""\b(?:mkfs\.[a-z0-9]+|wipefs|blkdiscard)\b[^;&|]*\b/dev/(?:block/|mmcblk|sd[a-z])""")
+        val rawDeviceFormat = Regex("""\b(?:mkfs\.[a-z0-9]+|wipefs|blkdiscard)\b[^;&|]*(?:^|\s)/dev/(?:block/|mmcblk|sd[a-z])""")
         return rootDelete.containsMatchIn(c) || rootFindDelete.containsMatchIn(c) || explicitWipe.containsMatchIn(c) ||
             recoveryFastboot.containsMatchIn(c) || resetSettings || forkBomb ||
             rawDeviceFormat.containsMatchIn(c)
