@@ -1,0 +1,229 @@
+package com.phoneai.app
+
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * Durable executive ledger. The language model proposes intent and plans; this store enforces
+ * objective phases, optimistic concurrency, step evidence and restart-visible recovery state.
+ */
+internal object OrionExecutiveStore {
+    enum class Phase {
+        GROUND, RETRIEVE, ASSESS, SELECT, PERFORM, VERIFY, LEARN,
+        WAITING_FOR_OWNER, BLOCKED, COMPLETED, FAILED
+    }
+
+    enum class StepStatus { PENDING, READY, RUNNING, VERIFIED, FAILED, SKIPPED }
+
+    data class Objective(
+        val id: String,
+        val intent: String,
+        val phase: Phase,
+        val revision: Long,
+        val planRevision: Long,
+        val recoveryCursor: String,
+        val blocker: String,
+        val updatedAt: Long
+    )
+
+    data class Step(
+        val id: String,
+        val objectiveId: String,
+        val ordinal: Int,
+        val title: String,
+        val dependencies: List<String>,
+        val status: StepStatus,
+        val capability: String,
+        val argumentsDigest: String,
+        val attempts: Int,
+        val resultSummary: String,
+        val evidenceRef: String
+    )
+
+    private class Db(context: Context) : SQLiteOpenHelper(context, "orion_executive.db", null, 1) {
+        override fun onCreate(db: SQLiteDatabase) {
+            db.execSQL("""CREATE TABLE objectives(
+                id TEXT PRIMARY KEY NOT NULL, intent TEXT NOT NULL, phase TEXT NOT NULL,
+                revision INTEGER NOT NULL, plan_revision INTEGER NOT NULL DEFAULT 0,
+                recovery_cursor TEXT NOT NULL DEFAULT '', blocker TEXT NOT NULL DEFAULT '',
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)""")
+            db.execSQL("CREATE INDEX idx_objectives_updated ON objectives(updated_at DESC)")
+            db.execSQL("""CREATE TABLE objective_steps(
+                id TEXT PRIMARY KEY NOT NULL, objective_id TEXT NOT NULL, ordinal INTEGER NOT NULL,
+                title TEXT NOT NULL, dependencies TEXT NOT NULL, status TEXT NOT NULL,
+                capability TEXT NOT NULL DEFAULT '', arguments_digest TEXT NOT NULL DEFAULT '',
+                attempts INTEGER NOT NULL DEFAULT 0, result_summary TEXT NOT NULL DEFAULT '',
+                evidence_ref TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL,
+                FOREIGN KEY(objective_id) REFERENCES objectives(id) ON DELETE CASCADE,
+                UNIQUE(objective_id, ordinal))""")
+            db.execSQL("CREATE INDEX idx_steps_objective ON objective_steps(objective_id, ordinal)")
+        }
+        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    }
+
+    private val terminal = setOf(Phase.COMPLETED, Phase.FAILED)
+    private val allowed = mapOf(
+        Phase.GROUND to setOf(Phase.RETRIEVE, Phase.BLOCKED, Phase.FAILED),
+        Phase.RETRIEVE to setOf(Phase.ASSESS, Phase.BLOCKED, Phase.FAILED),
+        Phase.ASSESS to setOf(Phase.SELECT, Phase.WAITING_FOR_OWNER, Phase.BLOCKED, Phase.FAILED),
+        Phase.SELECT to setOf(Phase.PERFORM, Phase.WAITING_FOR_OWNER, Phase.BLOCKED, Phase.FAILED),
+        Phase.PERFORM to setOf(Phase.VERIFY, Phase.WAITING_FOR_OWNER, Phase.BLOCKED, Phase.FAILED),
+        Phase.VERIFY to setOf(Phase.LEARN, Phase.PERFORM, Phase.WAITING_FOR_OWNER, Phase.BLOCKED, Phase.FAILED),
+        Phase.LEARN to setOf(Phase.GROUND, Phase.COMPLETED, Phase.BLOCKED, Phase.FAILED),
+        Phase.WAITING_FOR_OWNER to setOf(Phase.GROUND, Phase.BLOCKED, Phase.FAILED),
+        Phase.BLOCKED to setOf(Phase.GROUND, Phase.FAILED)
+    )
+
+    internal fun canTransition(from: Phase, to: Phase): Boolean = to in allowed[from].orEmpty()
+
+    fun create(context: Context, id: String, intent: String): Objective? {
+        val cleanId = id.trim().take(100)
+        val cleanIntent = intent.trim().take(2_000)
+        if (cleanId.isBlank() || cleanIntent.isBlank()) return null
+        val now = System.currentTimeMillis()
+        return runCatching {
+            val db = Db(context.applicationContext).writableDatabase
+            db.execSQL(
+                "INSERT OR IGNORE INTO objectives(id,intent,phase,revision,plan_revision,recovery_cursor,blocker,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                arrayOf(cleanId, cleanIntent, Phase.GROUND.name, 0, 0, "", "", now, now)
+            )
+            get(db, cleanId)
+        }.getOrNull()
+    }
+
+    fun get(context: Context, id: String): Objective? =
+        runCatching { Db(context.applicationContext).readableDatabase.use { get(it, id) } }.getOrNull()
+
+    private fun get(db: SQLiteDatabase, id: String): Objective? =
+        db.rawQuery("SELECT id,intent,phase,revision,plan_revision,recovery_cursor,blocker,updated_at FROM objectives WHERE id=?", arrayOf(id)).use {
+            if (!it.moveToFirst()) null else Objective(
+                it.getString(0), it.getString(1), Phase.valueOf(it.getString(2)), it.getLong(3),
+                it.getLong(4), it.getString(5), it.getString(6), it.getLong(7)
+            )
+        }
+
+    /** Compare-and-set transition: stale workers cannot overwrite a newer executive decision. */
+    fun transition(
+        context: Context,
+        id: String,
+        expectedRevision: Long,
+        to: Phase,
+        recoveryCursor: String = "",
+        blocker: String = ""
+    ): Objective? = runCatching {
+        val db = Db(context.applicationContext).writableDatabase
+        db.beginTransaction()
+        try {
+            val current = get(db, id) ?: return null
+            if (current.revision != expectedRevision || terminal.contains(current.phase) ||
+                !canTransition(current.phase, to)) return null
+            val changed = db.compileStatement(
+                "UPDATE objectives SET phase=?,revision=revision+1,recovery_cursor=?,blocker=?,updated_at=? WHERE id=? AND revision=?"
+            ).run {
+                bindString(1, to.name)
+                bindString(2, recoveryCursor.take(240))
+                bindString(3, blocker.take(500))
+                bindLong(4, System.currentTimeMillis())
+                bindString(5, id)
+                bindLong(6, expectedRevision)
+                executeUpdateDelete()
+            }
+            if (changed != 1) return null
+            db.setTransactionSuccessful()
+            get(db, id)
+        } finally { db.endTransaction() }
+    }.getOrNull()
+
+    /** Replace a proposed plan atomically. Existing evidence is preserved only when step IDs match. */
+    fun replacePlan(context: Context, objectiveId: String, steps: List<Step>): Boolean {
+        if (steps.isEmpty() || steps.size > 32 || steps.any { it.id.isBlank() || it.title.isBlank() }) return false
+        val db = Db(context.applicationContext).writableDatabase
+        db.beginTransaction()
+        return try {
+            val current = get(db, objectiveId) ?: return false
+            if (terminal.contains(current.phase) || current.phase == Phase.PERFORM || current.phase == Phase.VERIFY) return false
+            val nextRevision = current.planRevision + 1
+            val keepIds = steps.map { it.id }.toSet()
+            db.delete("objective_steps", "objective_id=? AND id NOT IN (${keepIds.joinToString(",") { "?" }})",
+                (listOf(objectiveId) + keepIds).toTypedArray())
+            steps.forEachIndexed { index, step ->
+                val existing = db.rawQuery("SELECT status,capability,arguments_digest,attempts,result_summary,evidence_ref FROM objective_steps WHERE id=? AND objective_id=?", arrayOf(step.id, objectiveId)).use {
+                    if (it.moveToFirst()) listOf(it.getString(0),it.getString(1),it.getString(2),it.getInt(3).toString(),it.getString(4),it.getString(5)) else null
+                }
+                db.execSQL("""INSERT OR REPLACE INTO objective_steps
+                    (id,objective_id,ordinal,title,dependencies,status,capability,arguments_digest,attempts,result_summary,evidence_ref,updated_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    arrayOf(step.id, objectiveId, index, step.title.take(240), JSONArray(step.dependencies).toString(),
+                        existing?.get(0) ?: StepStatus.PENDING.name, existing?.get(1) ?: "", existing?.get(2) ?: "",
+                        existing?.get(3)?.toIntOrNull() ?: 0, existing?.get(4) ?: "", existing?.get(5) ?: "", System.currentTimeMillis()))
+            }
+            db.execSQL("UPDATE objectives SET plan_revision=?,revision=revision+1,updated_at=? WHERE id=?",
+                arrayOf(nextRevision, System.currentTimeMillis(), objectiveId))
+            db.setTransactionSuccessful()
+            true
+        } catch (_: Exception) { false } finally { db.endTransaction() }
+    }
+
+    fun steps(context: Context, objectiveId: String): List<Step> = runCatching {
+        Db(context.applicationContext).readableDatabase.use { db ->
+            db.rawQuery("""SELECT id,objective_id,ordinal,title,dependencies,status,capability,arguments_digest,attempts,result_summary,evidence_ref
+                FROM objective_steps WHERE objective_id=? ORDER BY ordinal""", arrayOf(objectiveId)).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) {
+                        val deps = runCatching {
+                            val json = JSONArray(cursor.getString(4)); (0 until json.length()).map { json.getString(it) }
+                        }.getOrDefault(emptyList())
+                        add(Step(cursor.getString(0), cursor.getString(1), cursor.getInt(2), cursor.getString(3), deps,
+                            StepStatus.valueOf(cursor.getString(5)), cursor.getString(6), cursor.getString(7),
+                            cursor.getInt(8), cursor.getString(9), cursor.getString(10)))
+                    }
+                }
+            }
+        }
+    }.getOrDefault(emptyList())
+
+    /** Persist attempt metadata before invoking a tool; arguments themselves are never stored here. */
+    fun markStepRunning(context: Context, objectiveId: String, stepId: String, capability: String, argumentsDigest: String): Boolean =
+        runCatching {
+            val db = Db(context.applicationContext).writableDatabase
+            db.execSQL("""UPDATE objective_steps SET status=?,capability=?,arguments_digest=?,attempts=attempts+1,updated_at=?
+                WHERE id=? AND objective_id=? AND status IN (?,?)""",
+                arrayOf(StepStatus.RUNNING.name, capability.take(100), argumentsDigest.take(128), System.currentTimeMillis(),
+                    stepId, objectiveId, StepStatus.PENDING.name, StepStatus.FAILED.name))
+            db.rawQuery("SELECT changes()", null).use { it.moveToFirst() && it.getInt(0) == 1 }
+        }.getOrDefault(false)
+
+    /** A step is VERIFIED only when the caller supplies a real evidence reference. */
+    fun recordStepResult(context: Context, objectiveId: String, stepId: String, status: StepStatus, result: String, evidenceRef: String): Boolean {
+        if (status !in setOf(StepStatus.VERIFIED, StepStatus.FAILED, StepStatus.SKIPPED)) return false
+        if (status == StepStatus.VERIFIED && evidenceRef.isBlank()) return false
+        return runCatching {
+            val db = Db(context.applicationContext).writableDatabase
+            db.execSQL("""UPDATE objective_steps SET status=?,result_summary=?,evidence_ref=?,updated_at=?
+                WHERE id=? AND objective_id=? AND status=?""",
+                arrayOf(status.name, result.take(500), evidenceRef.take(160), System.currentTimeMillis(), stepId, objectiveId, StepStatus.RUNNING.name))
+            db.rawQuery("SELECT changes()", null).use { it.moveToFirst() && it.getInt(0) == 1 }
+        }.getOrDefault(false)
+    }
+
+    fun contextBlock(context: Context): String = runCatching {
+        val db = Db(context.applicationContext).readableDatabase
+        val objective = db.rawQuery("""SELECT id,intent,phase,revision,plan_revision,recovery_cursor,blocker
+            FROM objectives WHERE phase NOT IN (?,?) ORDER BY updated_at DESC LIMIT 1""",
+            arrayOf(Phase.COMPLETED.name, Phase.FAILED.name)).use {
+            if (!it.moveToFirst()) null else Objective(it.getString(0),it.getString(1),Phase.valueOf(it.getString(2)),
+                it.getLong(3),it.getLong(4),it.getString(5),it.getString(6),0L)
+        } ?: return ""
+        val steps = steps(context, objective.id)
+        buildString {
+            appendLine("SQLITE EXECUTIVE LEDGER — authoritative persisted state")
+            appendLine("objective_id=${objective.id}; phase=${objective.phase}; revision=${objective.revision}; plan_revision=${objective.planRevision}")
+            appendLine("intent=${objective.intent.take(500)}; recovery_cursor=${objective.recoveryCursor}; blocker=${objective.blocker}")
+            steps.forEach { appendLine("step[${it.ordinal}]=${it.id}; ${it.status}; ${it.title}; capability=${it.capability}; attempts=${it.attempts}; evidence=${it.evidenceRef}; result=${it.resultSummary.take(180)}") }
+            appendLine("Only VERIFIED steps with evidence references are complete. Reconcile RUNNING steps before retrying; do not infer completion from a model response.")
+        }
+    }.getOrDefault("")
+}
