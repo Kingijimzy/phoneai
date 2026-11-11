@@ -28,7 +28,7 @@ internal object SoulEngineState {
     )
     data class MemoryNudgeRules(val enabled: Boolean, val cooldownMillis: Long, val lastPromptAt: Long)
     data class Snapshot(
-        val goal: String, val mode: Mode, val watching: List<String>, val proposals: List<Proposal>,
+        val goal: String, val purpose: String, val mode: Mode, val watching: List<String>, val proposals: List<Proposal>,
         val lessons: List<Lesson>, val memoryNudges: List<MemoryNudge>, val memoryNudgeRules: MemoryNudgeRules,
         val lastTick: Long, val lastOutcome: String,
         val watcherStatus: String, val watcherAction: String, val watcherAt: Long
@@ -97,7 +97,7 @@ internal object SoulEngineState {
 
     fun snapshot(context: Context): Snapshot = synchronized(lock) {
         val o = read(context)
-        Snapshot(safeText(o.optString("goal")), runCatching { Mode.valueOf(o.optString("mode", "TALK")) }.getOrDefault(Mode.TALK),
+        Snapshot(safeText(o.optString("goal")), safeText(o.optString("purpose", OrionInnerLife.PRIME_DIRECTIVE), 360), runCatching { Mode.valueOf(o.optString("mode", "TALK")) }.getOrDefault(Mode.TALK),
             strings(o, "watching"), proposals(o), lessons(o), memoryNudges(o), memoryNudgeRules(o),
             o.optLong("lastTick"), safeText(o.optString("lastOutcome"), 100),
             safeText(o.optString("watcherStatus"), 40), safeText(o.optString("watcherAction"), 100), o.optLong("watcherAt"))
@@ -112,6 +112,22 @@ internal object SoulEngineState {
             .put("lastTick", now)
             .put("lastOutcome", "watcher:$status")
         write(context, o)
+    }
+
+    /** Persist the watcher's standing purpose separately from the user's current task goal. */
+    fun ensurePurpose(context: Context, fallback: String = OrionInnerLife.PRIME_DIRECTIVE): Boolean = synchronized(lock) {
+        val o = read(context)
+        if (o.optString("purpose").isNotBlank()) return@synchronized true
+        val purpose = safeText(fallback, 360)
+        if (purpose.isBlank() || purpose == "[sensitive content omitted]") return@synchronized false
+        o.put("purpose", purpose).put("lastTick", System.currentTimeMillis())
+        write(context, o)
+    }
+
+    fun setPurpose(context: Context, purpose: String): Boolean = synchronized(lock) {
+        val clean = safeText(purpose, 360)
+        if (clean.isBlank() || clean == "[sensitive content omitted]") return@synchronized false
+        write(context, read(context).put("purpose", clean).put("lastTick", System.currentTimeMillis()))
     }
 
     fun setGoal(context: Context, goal: String, mode: Mode? = null): Boolean = synchronized(lock) {
