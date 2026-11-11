@@ -59,8 +59,8 @@ internal class AntigravityRuntimeInstaller(context: Context) {
         val session = LinuxCommandSession.start(config, listOf(VERSION_MARKER, *invocation.argv.drop(1).toTypedArray()))
         val output = StringBuilder()
         val deadline = System.currentTimeMillis() + 60_000L
-        while (session.isAlive() && System.currentTimeMillis() < deadline) {
-            session.readLine(500L)?.let { output.append(it).append('\\n') }
+        while ((session.isAlive() || session.hasPendingOutput()) && System.currentTimeMillis() < deadline) {
+            (session.readLine(500L) ?: session.readStderrLine(20L))?.let { output.append(it).append('\n') }
         }
         val exit = session.exitCodeOrNull()
         session.close()
@@ -74,8 +74,8 @@ internal class AntigravityRuntimeInstaller(context: Context) {
         val output = StringBuilder()
         val deadline = System.currentTimeMillis() + 300_000L
         try {
-            while (session.isAlive() && System.currentTimeMillis() < deadline) {
-                val line = session.readLine(500L) ?: continue
+        while ((session.isAlive() || session.hasPendingOutput()) && System.currentTimeMillis() < deadline) {
+            (session.readLine(500L) ?: session.readStderrLine(20L))?.let { output.append(it).append('\n') }
                 val event = AntigravityCliProtocol.parseStreamEvent(line) ?: continue
                 if (AntigravityCliProtocol.isAuthenticationRequired(event)) {
                     error("Antigravity requires Google-account sign-in.")
