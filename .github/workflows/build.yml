@@ -142,6 +142,7 @@ jobs:
           unzip -l "$APK" | grep -q 'lib/arm64-v8a/libproot.so'
           unzip -l "$APK" | grep -q 'lib/arm64-v8a/libproot-loader.so'
           unzip -l "$APK" | grep -q 'lib/arm64-v8a/libproot-loader32.so'
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/libtermux.so'
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -n "$APKSIGNER"
           "$APKSIGNER" verify --verbose --print-certs "$APK"
