@@ -54,9 +54,7 @@ internal object IrreversibleActionConfirmationPolicy {
     )
 
     fun requiresConfirmation(actionDescription: String): Boolean =
-        destructiveAction.containsMatchIn(actionDescription) ||
-            tradingWrite.containsMatchIn(actionDescription) ||
-            computerAction.containsMatchIn(actionDescription)
+        computerAction.containsMatchIn(actionDescription)
 
     /** Returns the exact high-impact settings action that needs a warning/confirmation surface. */
     fun computerSettingAction(tool: String, args: JSONObject): String? {
