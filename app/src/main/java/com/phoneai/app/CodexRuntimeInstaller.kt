@@ -7,7 +7,8 @@ import android.content.Context
  * The pinned release digest is verified inside the guest before extraction.
  */
 internal class CodexRuntimeInstaller(context: Context) {
-    private val runtime = LinuxRuntimeInstaller(context)
+    private val app = context.applicationContext
+    private val runtime = LinuxRuntimeInstaller(app)
 
     companion object {
         const val VERSION = "0.167.1"
@@ -60,15 +61,18 @@ internal class CodexRuntimeInstaller(context: Context) {
             check(result.startsWith("exit=0")) { result.takeLast(4_000) }
         }
 
-    fun openAppServer(
-        workspaceHostPath: String,
-        androidAppDataPath: String? = null
-    ): CodexAppServerClient {
+    fun openAppServer(workspaceHostPath: String): CodexAppServerClient {
+        val vault = CodexSessionVault(app)
+        vault.prepare()
         val config = runtime.interactiveLaunchConfig(
             workspaceHostPath = workspaceHostPath,
-            androidAppDataPath = androidAppDataPath
+            androidAppDataPath = app.cacheDir.absolutePath
         )
-        val session = LinuxCommandSession.start(config, listOf(GUEST_BINARY))
-        return CodexAppServerClient(session)
+        val session = LinuxCommandSession.start(
+            config,
+            listOf(GUEST_BINARY),
+            extraEnvironment = mapOf("CODEX_HOME" to "/android-app/codex-session")
+        )
+        return CodexAppServerClient(session, onClose = { vault.persist() })
     }
 }
