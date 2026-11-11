@@ -303,7 +303,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var lastActionScopeAt: Long = 0L
 
     /** Local command shortcuts must still respect capability-pack availability. */
-    /** No word lists: chatReply() lets the model itself answer or hand the job to the tool loop with ACTION. */
+    /** Model-selected structured routing; no user-facing trigger words or action sentinels. */
     private fun requiresToolPolicy(command: String): Boolean = false
 
     /** Every entry point (chat, command, resume) must set the scope, or a stale one blocks real tools. */
@@ -1075,49 +1075,45 @@ RESPONSE QUALITY AND FORMAT:
         val from = maxOf(0, chatHist.length() - 8)
         for (i in from until chatHist.length()) messages.put(chatHist.getJSONObject(i))
         messages.put(msg("user", command))
-        val runawayStream = java.util.concurrent.atomic.AtomicBoolean(false)
-        val streamWatch = HermesRepetitionGuard.RunawayStreamWatch()
         val answer = try {
-            talkNim.chat(messages, false, 900, 0.7, onDelta = { delta ->
-                if (!stopped && !runawayStream.get()) {
-                    if (streamWatch.feed(delta)) {
-                        runawayStream.set(true)
-                        talkNim.cancel()
-                    } else {
-                        ui.stream(delta)
-                    }
-                }
-            }).trim()
+            talkNim.chat(messages, false, 1200, 0.2).trim()
         } catch (e: Exception) {
             if (stopped) return
-            if (runawayStream.get()) {
-                ui.say("The model response entered a repetition loop. I stopped the stream and discarded the repeated answer instead of saving it.")
-                return
-            }
-            ui.say("I couldn't reach the AI just now. " + (e.message ?: "Please try again."))
+            ui.say("I couldn't reach the AI. " + (e.message ?: "Please try again."))
             return
         }
         if (stopped) return
-        if (runawayStream.get() || HermesRepetitionGuard.isRunawayRepetition(answer)) {
-            ui.say("The model response fell into a repetition loop. I discarded the repeated answer instead of saving it as conversation history. Please retry or switch models.")
-            return
+        when (val decision = OrionTurnDecisionParser.parse(answer)) {
+            is OrionTurnDecision.Execute -> {
+                chatHist.put(msg("user", command))
+                while (chatHist.length() > 12) chatHist.remove(0)
+                svc.notifyModeSwitch(true)
+                runInternal(decision.objective, reuseCommandBudget = true)
+                return
+            }
+            is OrionTurnDecision.Clarify -> {
+                chatHist.put(msg("user", command))
+                chatHist.put(msg("assistant", decision.question))
+                while (chatHist.length() > 12) chatHist.remove(0)
+                ui.say(decision.question)
+                return
+            }
+            is OrionTurnDecision.Reply -> {
+                chatHist.put(msg("user", command))
+                chatHist.put(msg("assistant", decision.text))
+                while (chatHist.length() > 12) chatHist.remove(0)
+                ui.say(decision.text)
+                return
+            }
+            null -> {
+                val fallback = answer.ifBlank { "I couldn't interpret the response safely. Please try again." }
+                chatHist.put(msg("user", command))
+                chatHist.put(msg("assistant", fallback))
+                while (chatHist.length() > 12) chatHist.remove(0)
+                ui.say(fallback)
+                return
+            }
         }
-        if (answer.trim().trim('.', '!').equals("ACTION", true)) {
-            // Persist tool-routed user turns too. Previously ACTION returned before chatHist was
-            // updated, so follow-ups such as "go research it" lost their subject and were reinterpreted.
-            chatHist.put(msg("user", command))
-            while (chatHist.length() > 12) chatHist.remove(0)
-            // The model judged this needs tools: switch to Command mode and run the guarded agent now.
-            svc.notifyModeSwitch(true)
-            runInternal(command, reuseCommandBudget = true)
-            return
-        }
-        val safeAnswer = answer.takeIf { it.isNotBlank() }
-            ?: "I'm here. What would you like to talk about?"
-        chatHist.put(msg("user", command))
-        chatHist.put(msg("assistant", safeAnswer))
-        while (chatHist.length() > 12) chatHist.remove(0)
-        ui.say(safeAnswer)
     }
 
     /**
@@ -1174,7 +1170,7 @@ RESPONSE QUALITY AND FORMAT:
             ui.say("The voice response repeated itself, so I discarded it. Please try again.")
             return
         }
-        val safeAnswer = answer.takeIf { it.isNotBlank() && !it.uppercase().startsWith("ACTION") }
+        val safeAnswer = answer.takeIf { it.isNotBlank() }
             ?: "I couldn't get a response just now. Please try saying that once more."
         liveHistory.put(msg("assistant", safeAnswer))
         while (liveHistory.length() > 9) liveHistory.remove(1)
