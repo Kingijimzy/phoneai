@@ -270,7 +270,7 @@ internal object ToolRegistry {
         "model_decision_log", "model_decision_search", "model_status", "model_offline_mode",
         "dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan", "dev_summary",
         "macro_save", "macro_run", "macro_list", "macro_delete",
-        "voice_speak", "voice_listen", "document_extract",
+        "voice_speak", "voice_listen", "document_extract", "device_info",
         "python_exec", "image_generate", "shell", "workspace_read", "workspace_write",
         "mcp_status", "mcp_list_tools",
         "browser_navigate", "browser_snapshot", "fetch_url", "web_search", "live_web_search"
