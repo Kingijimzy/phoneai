@@ -86,6 +86,28 @@ internal object OrionCommandIntentPolicy {
     }
 }
 
+/** Turns the planner's selected route into a short owner-facing update without exposing hidden reasoning. */
+internal object OrionProgressMessagePolicy {
+    fun messageFor(command: String, brief: String?): String {
+        if (OrionSelfDiagnostics.isExplicitRequest(command)) {
+            return "I’ll inspect Orion’s local runtime and registered capabilities first, then check the available read-only service, provider and MCP status endpoints. I’ll separate verified results from anything I cannot test."
+        }
+        val intent = brief.orEmpty().lineSequence()
+            .firstOrNull { it.startsWith("INTENT:", ignoreCase = true) }
+            ?.substringAfter(':')?.trim()?.take(150)
+        val route = brief.orEmpty().lineSequence()
+            .firstOrNull { it.startsWith("ROUTE:", ignoreCase = true) }
+            ?.substringAfter(':')?.trim()?.take(180)
+        return when {
+            !intent.isNullOrBlank() && !route.isNullOrBlank() ->
+                "I understand the goal: $intent. I’ll start with: $route"
+            !intent.isNullOrBlank() ->
+                "I understand the goal: $intent. I’ll work through it and verify each result."
+            else -> "I’ll work through the request step by step and verify each result before calling it complete."
+        }
+    }
+}
+
 /**
  * Voice is an interaction surface, not a reduced-capability assistant.
  * Action-shaped utterances enter the same guarded command/task lifecycle as chat.
@@ -2720,10 +2742,11 @@ Rules:
         // Command-mode model output is structured JSON and must not be exposed token-by-token.
         // Give the user one natural live progress line while the guarded planner works; tool
         // details remain in the single compact activity card and the final assistant bubble.
-        if (!resumeRequest) deliberate(command)?.let { brief ->
-            history.put(msg("user", "[ORION INNER THOUGHT — your own analysis of this request; use it to pick the first action, do not recite it]\n" + brief))
+        val actionBrief = if (!resumeRequest) deliberate(command) else null
+        actionBrief?.let { brief ->
+            history.put(msg("user", "[ORION PRIVATE PLANNING SUMMARY — use this to select the first action; do not expose hidden reasoning]\n" + brief))
         }
-        ui.stream("I’m working through this now. I’ll check each result before moving on.")
+        ui.stream(OrionProgressMessagePolicy.messageFor(command, actionBrief))
         val stall = SessionStall()
         var stallRedirects = 0
         var promiseNudged = false
