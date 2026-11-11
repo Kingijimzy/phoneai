@@ -16,7 +16,7 @@ internal object OrionExecutiveStore {
         WAITING_FOR_OWNER, BLOCKED, COMPLETED, FAILED
     }
 
-    enum class StepStatus { PENDING, READY, RUNNING, VERIFIED, FAILED, SKIPPED }
+    enum class StepStatus { PENDING, READY, RUNNING, RECONCILIATION_REQUIRED, VERIFIED, FAILED, SKIPPED }
 
     data class Objective(
         val id: String,
@@ -174,6 +174,11 @@ internal object OrionExecutiveStore {
     }
 
     /** A prior result survives replanning only when the executable meaning is unchanged. */
+    internal fun canResolveStepResult(current: StepStatus, next: StepStatus, evidenceRef: String): Boolean =
+        current in setOf(StepStatus.RUNNING, StepStatus.RECONCILIATION_REQUIRED) &&
+            next in setOf(StepStatus.VERIFIED, StepStatus.FAILED, StepStatus.SKIPPED) &&
+            (next != StepStatus.VERIFIED || evidenceRef.isNotBlank())
+
     internal fun canPreserveStepState(existing: Step, proposed: Step): Boolean =
         existing.id == proposed.id &&
             existing.title == proposed.title &&
@@ -183,7 +188,7 @@ internal object OrionExecutiveStore {
 
     /** Replace a proposed plan atomically. Evidence survives only for semantically identical steps. */
     fun replacePlan(context: Context, objectiveId: String, steps: List<Step>): Boolean {
-        if (!isValidPlan(steps)) return false
+        if (!isValidPlan(steps) || steps.any { it.objectiveId.isNotBlank() && it.objectiveId != objectiveId }) return false
         val db = Db(context.applicationContext).writableDatabase
         db.beginTransaction()
         return try {
@@ -276,15 +281,29 @@ internal object OrionExecutiveStore {
             } finally { db.endTransaction() }
         }.getOrDefault(false)
 
+    /**
+     * A process death while a capability is RUNNING is an unknown outcome, not a failure.
+     * Quarantine it so a normal planner cannot replay a possibly non-idempotent action.
+     */
+    fun reconcileInterruptedSteps(context: Context, objectiveId: String): Int = runCatching {
+        val db = Db(context.applicationContext).writableDatabase
+        db.execSQL(
+            "UPDATE objective_steps SET status=?,updated_at=? WHERE objective_id=? AND status=?",
+            arrayOf(StepStatus.RECONCILIATION_REQUIRED.name, System.currentTimeMillis(), objectiveId, StepStatus.RUNNING.name)
+        )
+        db.rawQuery("SELECT changes()", null).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+    }.getOrDefault(0)
+
     /** A step is VERIFIED only when the caller supplies a real evidence reference. */
     fun recordStepResult(context: Context, objectiveId: String, stepId: String, status: StepStatus, result: String, evidenceRef: String): Boolean {
-        if (status !in setOf(StepStatus.VERIFIED, StepStatus.FAILED, StepStatus.SKIPPED)) return false
-        if (status == StepStatus.VERIFIED && evidenceRef.isBlank()) return false
+        if (status !in setOf(StepStatus.VERIFIED, StepStatus.FAILED, StepStatus.SKIPPED) ||
+            !canResolveStepResult(StepStatus.RUNNING, status, evidenceRef)) return false
         return runCatching {
             val db = Db(context.applicationContext).writableDatabase
             db.execSQL("""UPDATE objective_steps SET status=?,result_summary=?,evidence_ref=?,updated_at=?
-                WHERE id=? AND objective_id=? AND status=?""",
-                arrayOf(status.name, result.take(500), evidenceRef.take(160), System.currentTimeMillis(), stepId, objectiveId, StepStatus.RUNNING.name))
+                WHERE id=? AND objective_id=? AND status IN (?,?)""",
+                arrayOf(status.name, result.take(500), evidenceRef.take(160), System.currentTimeMillis(), stepId, objectiveId,
+                    StepStatus.RUNNING.name, StepStatus.RECONCILIATION_REQUIRED.name))
             db.rawQuery("SELECT changes()", null).use { it.moveToFirst() && it.getInt(0) == 1 }
         }.getOrDefault(false)
     }
