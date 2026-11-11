@@ -57,6 +57,23 @@ class OrionNativeToolCallCodecTest {
         assertEquals(listOf("device_info", "python_exec"), calls.map { it.name })
     }
 
+    @Test fun preservesMoreThanEightNativeCallsForLargeToolBatches() {
+        val calls = org.json.JSONArray()
+        repeat(16) { index ->
+            calls.put(org.json.JSONObject()
+                .put("id", "call-$index")
+                .put("type", "function")
+                .put("function", org.json.JSONObject()
+                    .put("name", "device_info")
+                    .put("arguments", "{}")))
+        }
+        val body = org.json.JSONObject()
+            .put("choices", org.json.JSONArray().put(org.json.JSONObject()
+                .put("message", org.json.JSONObject().put("tool_calls", calls))))
+            .toString()
+        assertEquals(16, OrionNativeToolCallCodec.parse("openai", body, known).calls.size)
+    }
+
     @Test fun malformedArgumentsBecomeAFeedbackCallInsteadOfBeingExecuted() {
         val body = """{"choices":[{"message":{"tool_calls":[{"id":"bad","function":{"name":"python_exec","arguments":"not-json"}}]}}]}"""
         val call = OrionNativeToolCallCodec.parse("openai", body, known).calls.single()
