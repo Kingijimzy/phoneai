@@ -13,7 +13,7 @@ import org.json.JSONArray
  * rotates to a backup after a recoverable failure.
  *
  * Failure recovery is bounded: same-provider model recovery runs first, then up to
- * MAX_BACKUP_PROVIDERS backup providers, all within the shared 15-request command budget.
+ * MAX_BACKUP_PROVIDERS backup providers, all within the shared 60-request command budget.
  * Cancellation, authentication errors, billing blocks, and general network-unavailable
  * conditions are never rotated through — they fail closed and are reported honestly.
  */
