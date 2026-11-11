@@ -287,7 +287,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun effectiveRecoveryMaxAttempts(): Int {
         val autonomy = OrionAutonomySettings.read(svc).maxRetries
         val owner = OrionOwnerDialSettings.read(svc).recoveryMaxAttempts
-        return minOf(autonomy, owner).coerceIn(0, 1)
+        return minOf(autonomy, owner).coerceIn(0, 4)
     }
     private fun ownerRecoveryBackoffSeconds(): Int =
         OrionOwnerDialSettings.read(svc).recoveryBackoffSeconds.coerceIn(15, 300)
