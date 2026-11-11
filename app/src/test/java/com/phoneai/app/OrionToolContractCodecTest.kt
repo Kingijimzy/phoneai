@@ -31,6 +31,22 @@ class OrionToolContractCodecTest {
         assertTrue(gemini.getJSONObject("parameters").getJSONObject("properties").has("path"))
     }
 
+    @Test fun derivesNestedArrayAndObjectArgumentSchemas() {
+        val tool = ToolDefinition(
+            "batch",
+            "batch {steps:[{stepIndex: integer, args:{code}}]}: execute a batch",
+            "execute a batch",
+            ToolAccess.WRITE
+        )
+        val steps = OrionToolContractCodec.parameters(tool)
+            .getJSONObject("properties").getJSONObject("steps")
+        assertEquals("array", steps.getString("type"))
+        val item = steps.getJSONObject("items")
+        assertEquals("object", item.getString("type"))
+        assertEquals("integer", item.getJSONObject("properties").getJSONObject("stepIndex").getString("type"))
+        assertEquals("object", item.getJSONObject("properties").getJSONObject("args").getString("type"))
+    }
+
     @Test fun emptySignatureProducesStrictEmptyObjectSchema() {
         val tool = ToolDefinition("status", "status {}: report status", "report status", ToolAccess.READ)
         val schema = OrionToolContractCodec.parameters(tool)
