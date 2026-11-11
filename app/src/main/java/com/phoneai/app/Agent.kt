@@ -1663,7 +1663,7 @@ Rules:
         // The public command/voice/autonomy entry now shares the same conversational
         // brain and native-tool dispatcher as typed chat. Keep the legacy skill runner only
         // for its explicit skill contract until skill execution is represented natively.
-        if (Regex("(?is)^\\\\s*run skill\\\\s+[a-z0-9._-]{2,48}\\\\s*:").containsMatchIn(inputCommand.trim())) {
+        if (Regex("(?is)^\\s*run skill\\s+[a-z0-9._-]{2,48}\\s*:").containsMatchIn(inputCommand.trim())) {
             runInternal(inputCommand, reuseCommandBudget = false)
             if (ownerTurn) reflectOnExchange(inputCommand)
         } else {
