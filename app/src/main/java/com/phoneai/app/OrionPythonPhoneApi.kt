@@ -161,7 +161,6 @@ internal class OrionPythonPhoneApi(
             return error("screen context grant is not enabled")
         val metrics = context.resources.displayMetrics
         if (x > metrics.widthPixels || y > metrics.heightPixels) return error("tap coordinates are outside the current display")
-        if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
         return tool("tap", JSONObject().put("x", x).put("y", y).put("allow_coordinates", true))
     }
 
@@ -176,7 +175,6 @@ internal class OrionPythonPhoneApi(
         if (values.filterIndexed { index, _ -> index % 2 == 0 }.any { it > metrics.widthPixels } ||
             values.filterIndexed { index, _ -> index % 2 == 1 }.any { it > metrics.heightPixels })
             return error("swipe coordinates are outside the current display")
-        if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
         return tool("swipe", JSONObject().put("x1", x1).put("y1", y1).put("x2", x2).put("y2", y2)
             .put("ms", 350).put("allow_coordinates", true))
     }
