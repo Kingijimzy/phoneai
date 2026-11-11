@@ -21,6 +21,11 @@ class ContextWindowBudgetReceiptTest {
         assertTrue(packed.omittedSectionLabels.any { it.contains("GENERAL LOW PRIORITY") })
     }
 
+    @Test fun protectsGraspAndMmagSectionsAboveGenericContext() {
+        assertTrue(ContextWindowBudget.priority("ORION GRASP EXECUTIVE CYCLE") > ContextWindowBudget.priority("GENERAL CONTEXT"))
+        assertTrue(ContextWindowBudget.priority("MEMORY LAYERS (reference data)") > ContextWindowBudget.priority("GENERAL CONTEXT"))
+    }
+
     @Test fun emptyContextHasZeroedReceipt() {
         val packed = ContextWindowBudget.pack(listOf("", "  "), maxTokens = 20)
         assertEquals("", packed.text)
