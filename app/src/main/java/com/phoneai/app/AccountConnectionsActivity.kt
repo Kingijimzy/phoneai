@@ -136,9 +136,9 @@ class AccountConnectionsActivity : Activity() {
                     runOnUiThread { if (!isFinishing) status.text = line.take(240) }
                 }).getOrThrow()
                 val client = installer.openAppServer(filesDir.absolutePath)
+                codex = client
                 check(client.initialize()) { "Codex app-server initialization was not acknowledged" }
                 val login = client.beginChatGptLogin()
-                codex = client
                 runOnUiThread {
                     if (isFinishing) { client.close(); return@runOnUiThread }
                     status.text = "Complete the official ChatGPT sign-in. Return here while Orion checks the account."
@@ -153,6 +153,8 @@ class AccountConnectionsActivity : Activity() {
                     startAccountPolling()
                 }
             } catch (failure: Exception) {
+                codex?.close()
+                codex = null
                 runOnUiThread {
                     if (!isFinishing) {
                         status.text = "Codex connection failed: ${failure.message ?: failure.javaClass.simpleName}"
@@ -270,6 +272,8 @@ class AccountConnectionsActivity : Activity() {
         worker.shutdownNow()
         codex?.close()
         codex = null
+        antigravity?.close()
+        antigravity = null
         super.onDestroy()
     }
 
