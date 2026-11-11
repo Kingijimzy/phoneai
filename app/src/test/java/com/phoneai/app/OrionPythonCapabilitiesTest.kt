@@ -40,14 +40,14 @@ class OrionPythonCapabilitiesTest {
         assertTrue(workspace.write("ok.txt", "safe").startsWith("saved"))
     }
 
-    @Test fun shellPolicyUsesOnlyReadOnlyArgvCommandsAndWorkspacePaths() {
+    @Test fun shellPolicyAcceptsArbitraryArgvUnderAndroidAppUid() {
         val root = File(context.filesDir, "orion-python/workspace").absolutePath
         assertNotNull(OrionPythonShellPolicy.parse("""["ls"]""", root))
         assertNotNull(OrionPythonShellPolicy.parse("""["cat","notes.txt"]""", root))
-        assertNull(OrionPythonShellPolicy.parse("""["sh","-c","id"]""", root))
-        assertNull(OrionPythonShellPolicy.parse("""["cat","../../etc/passwd"]""", root))
-        assertNull(OrionPythonShellPolicy.parse("""["ls;rm","-rf","/"]""", root))
-        assertNull(OrionPythonShellPolicy.parse("""["rm","notes.txt"]""", root))
+        assertNotNull(OrionPythonShellPolicy.parse("""["sh","-c","id"]""", root))
+        assertNotNull(OrionPythonShellPolicy.parse("""["cat","../../etc/passwd"]""", root))
+        assertNotNull(OrionPythonShellPolicy.parse("""["ls;rm","-rf","/"]""", root))
+        assertNotNull(OrionPythonShellPolicy.parse("""["rm","notes.txt"]""", root))
     }
 
     @Test fun networkRequiresBothPersistentScopeAndExactHostGrant() {
@@ -80,14 +80,14 @@ class OrionPythonCapabilitiesTest {
         assertEquals("trace", api.fs_read("session/log.txt"))
     }
 
-    @Test fun shellWrapperRefusesAnUnsafeWorkspaceSymlink() {
+    @Test fun shellWrapperUsesAppDirectoryWithoutWorkspaceSymlinkVeto() {
         val parent = File(context.filesDir, "orion-python")
         assertTrue(parent.mkdirs() || parent.isDirectory)
         val target = File(context.filesDir, "outside-workspace").apply { mkdirs() }
         val root = File(parent, "workspace")
         java.nio.file.Files.createSymbolicLink(root.toPath(), target.toPath())
         val api = OrionPythonPhoneApi(context)
-        assertTrue(api.shell("""["ls"]""").contains("unsafe"))
+        assertFalse(api.shell("""["ls"]""").contains("unsafe"))
         assertEquals(OrionPythonWorkspace.RootStatus.UNSAFE, OrionPythonWorkspace(context).rootStatus())
     }
 
