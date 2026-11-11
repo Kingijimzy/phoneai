@@ -29,7 +29,7 @@ internal object SoulEngineWatcher {
         val nextStep: String
     )
 
-    fun run(context: Context): TickResult {
+    fun run(context: Context, allowUnpromptedInitiative: Boolean = true): TickResult {
         val c = context.applicationContext
         // Genuine lifecycle state: the watcher tick means the Soul is monitoring.
         OrionSoulLifecycle.watcherTick(c)
@@ -115,7 +115,7 @@ internal object SoulEngineWatcher {
 
         // Chronos may create one low-pressure, review-only suggestion from coarse focus duration.
         // It never dispatches an action and is gated by both owner switches and ambient-context consent.
-        val chronosSuggestion = runCatching { OrionChronosAwareness.proactiveSuggestion(c) }.getOrNull()
+        val chronosSuggestion = if (allowUnpromptedInitiative) runCatching { OrionChronosAwareness.proactiveSuggestion(c) }.getOrNull() else null
         if (!chronosSuggestion.isNullOrBlank()) {
             val category = OrionChronosAwareness.summary(c).substringAfter("category=").substringBefore(";")
             val proposed = runCatching {
