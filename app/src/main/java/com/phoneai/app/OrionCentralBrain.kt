@@ -173,6 +173,7 @@ internal object OrionCentralBrain {
             appendLine("LIVE CONVERSATION STATE — semantic context, not a command classification:")
             appendLine("PREVIOUS DISCUSSIONS FOR THIS OBJECTIVE: use the recent dialogue and matching local transcript evidence below; do not require a keyword match.")
             appendLine("DECISIONS AND UNRESOLVED QUESTIONS: retrieve accepted decisions for the active objective; an empty search is not proof that no earlier decision exists.")
+            appendLine("Keep provider-neutral conversation history across model/provider switches; restore the same user and assistant turns before continuing.")
             appendLine("RELEVANT EXECUTION LESSONS: retrieve cause/correction/verification evidence before retrying; target_not_found is a known failure category that requires a fresh screen read.")
             if (activeObjective.isNotBlank()) appendLine("Active objective: ${activeObjective.take(700)}")
             if (savedSoulGoal.isNotBlank()) appendLine("Standing Soul goal: ${savedSoulGoal.take(400)}")
