@@ -85,7 +85,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 )) {
                 val runtime = orionRuntime
                 if (runtime != null && runtime.enqueue(
-                        OrionRuntime.WorkType.SOUL_WATCH, "autonomy-tick", 2,
+                        OrionRuntime.WorkType.SOUL_WATCH, "soul-watch", 2,
                         goal = "Run due autonomy goals", checkpoint = "autonomy_tick"
                     )) {
                     scheduleRuntimeDrain()
@@ -260,6 +260,26 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         return true
     }
 
+    /** Route every live and WorkManager-triggered Soul tick through the single durable queue. */
+    internal fun requestSoulWatch(reason: String): Boolean {
+        if (!AgentPolicy.enabled(this, "orion_core") || !AgentPolicy.enabled(this, "proactive")) return false
+        val runtime = orionRuntime ?: return false
+        if (runtime.snapshot().state in setOf(
+                OrionRuntime.State.STOPPED,
+                OrionRuntime.State.PAUSED,
+                OrionRuntime.State.DEGRADED
+            )) return false
+        val accepted = runtime.enqueue(
+            OrionRuntime.WorkType.SOUL_WATCH,
+            "soul-watch",
+            2,
+            goal = "Review the persisted Soul purpose, active readiness, learning state and opted-in standing orders",
+            checkpoint = reason.take(100)
+        )
+        if (accepted) scheduleRuntimeDrain()
+        return accepted
+    }
+
     /**
      * Keep the Soul watcher attached to the live AccessibilityService event stream.
      * Meaningful foreground-window transitions trigger a bounded local observation;
@@ -279,17 +299,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             if (!shouldObserve) return
             lastContinuousWatcherAt = now
         }
-        worker.execute {
-            if (instance !== this ||
-                !AgentPolicy.enabled(this, "orion_core") ||
-                !AgentPolicy.enabled(this, "proactive")) return@execute
-            runCatching { SoulEngineWatcher.run(this) }.onFailure {
-                AgentPolicy.log(
-                    this, "soul_watcher", "continuous_observation", null,
-                    "event=$reason; failure=" + it.javaClass.simpleName
-                )
-            }
-        }
+        if (instance === this) requestSoulWatch(reason)
     }
 
     private fun scheduleRuntimeDrain() {
@@ -345,7 +355,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                             OrionRuntime.WorkType.SOUL_WATCH -> {
                                 // Opt-in, read-only watcher: standing orders plus connected-service checks; no AI call.
                                 // Connector failures back off via the runtime; standing orders always run.
-                                SoulWatch.run(this)
+                                SoulEngineWatcher.run(this)
                                 // In AUTOPILOT the owner has explicitly allowed Orion to start due goals.
                                 runDueAutonomyGoal()
                             }
