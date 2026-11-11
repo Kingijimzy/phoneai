@@ -12,7 +12,8 @@ import java.util.UUID
 /** Durable execution ledger for delegated work; separate from the user's reminder/task list. */
 internal class OrionDistributedTaskStore(context: Context, private val clock: () -> Long = { System.currentTimeMillis() }) {
     data class Record(val envelope: OrionTaskEnvelope, val status: String, val resultRef: String?, val updatedAt: Long)
-    private val lock = Any()
+    // All store instances in the app process must serialize read-modify-write transitions.
+    private val lock = PROCESS_LOCK
     private val atomic = AtomicFile(File(context.applicationContext.filesDir, "orion_distributed_tasks.json"))
 
     fun enqueue(task: OrionTaskEnvelope): Boolean = synchronized(lock) {
@@ -154,6 +155,7 @@ internal class OrionDistributedTaskStore(context: Context, private val clock: ()
         catch (_: Exception) { stream?.let { runCatching { atomic.failWrite(it) } }; false }
     }
     companion object {
+        private val PROCESS_LOCK = Any()
         private const val MAX_TASKS = 2_000
         private val TERMINAL = setOf("completed", "failed", "cancelled")
         private val SAFE_REF = Regex("^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$")
