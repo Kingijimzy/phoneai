@@ -22,4 +22,24 @@ class OrionExecutiveStoreTest {
         assertFalse(OrionExecutiveStore.canTransition(OrionExecutiveStore.Phase.COMPLETED, OrionExecutiveStore.Phase.GROUND))
         assertFalse(OrionExecutiveStore.canTransition(OrionExecutiveStore.Phase.FAILED, OrionExecutiveStore.Phase.PERFORM))
     }
+    private fun step(id: String, dependencies: List<String> = emptyList()) =
+        OrionExecutiveStore.Step(
+            id = id, objectiveId = "objective", ordinal = 0, title = id,
+            dependencies = dependencies, status = OrionExecutiveStore.StepStatus.PENDING,
+            capability = "", argumentsDigest = "", attempts = 0, resultSummary = "", evidenceRef = ""
+        )
+
+    @Test fun plansRejectDuplicateIdsMissingDependenciesAndCycles() {
+        assertFalse(OrionExecutiveStore.isValidPlan(listOf(step("a"), step("a"))))
+        assertFalse(OrionExecutiveStore.isValidPlan(listOf(step("a", listOf("missing")))))
+        assertFalse(OrionExecutiveStore.isValidPlan(listOf(step("a", listOf("b")), step("b", listOf("a")))))
+        assertFalse(OrionExecutiveStore.isValidPlan(listOf(step("a", listOf("a")))))
+    }
+
+    @Test fun plansAcceptBoundedAcyclicDependencyGraphs() {
+        assertTrue(OrionExecutiveStore.isValidPlan(listOf(step("research"), step("verify", listOf("research")))))
+        assertFalse(OrionExecutiveStore.isValidPlan(emptyList()))
+        assertFalse(OrionExecutiveStore.isValidPlan((0..32).map { step("step-$it") }))
+    }
+
 }
