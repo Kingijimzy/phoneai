@@ -281,7 +281,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         }
     }
 
-    private val commandRequestBudget = sharedBudget ?: CommandRequestBudget(maxRequests = 60)
+    private val commandRequestBudget = sharedBudget ?: CommandRequestBudget(maxRequests = 400)
 
     /** Starts a fresh request budget and identical-failure counter for one user command. */
     /** AI requests used by the current command (for the cost line). */
@@ -309,7 +309,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
 
     private fun request(p: Provider, method: String, url: String, body: String?, key: String, readMs0: Int = 45000): Http {
         if (!commandRequestBudget.tryReserve()) {
-            throw AiException("Stopped before sending another request: this command reached Orion's 60-request safety budget. No additional HTTP request was made.")
+            throw AiException("Stopped before sending another request: this command reached Orion's 400-request safety ceiling. No additional HTTP request was made.")
         }
         // Count every network attempt here, including model catalogues and requests that fail to connect.
         noteHit(p.id)
@@ -322,7 +322,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         try {
             conn.requestMethod = method
             conn.connectTimeout = 30000
-            conn.readTimeout = if (p.noKey) 180000 else readMs
+            conn.readTimeout = if (p.noKey) 600000 else readMs
             if (p.anthropicStyle) {
                 conn.setRequestProperty("x-api-key", key)
                 conn.setRequestProperty("anthropic-version", "2023-06-01")
@@ -393,8 +393,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         var streamFinishReason = ""
         try {
             conn.requestMethod = "POST"
-            conn.connectTimeout = 15000
-            conn.readTimeout = if (p.noKey) 180000 else readMs0
+            conn.connectTimeout = 30000
+            conn.readTimeout = if (p.noKey) 600000 else readMs0
             if (p.anthropicStyle) {
                 conn.setRequestProperty("x-api-key", key)
                 conn.setRequestProperty("anthropic-version", "2023-06-01")
@@ -1023,7 +1023,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         // Fast/background turns still stay bounded; the next saved provider is tried afterward.
         val maxAttempts = if (fastResponse) 3 else if (Prefs.quotaSaver(ctx)) 3 else 5
         val start = System.currentTimeMillis()
-        val totalTimeoutMs = if (fastResponse) 30000L else 180000L
+        val totalTimeoutMs = if (fastResponse) 30000L else 600000L
         while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < totalTimeoutMs) {
             if (cancelled) throw RuntimeException("Stopped.")
             val model = queue.removeAt(0)
@@ -1110,8 +1110,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             val r: Http? = try {
                 // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
                 if (onDelta != null && !vision && !p.anthropicStyle && p.id != "opencode-zen" && p.id != "gemini" && activeNativeTools.get().isNullOrEmpty()) {
-                    requestStream(p, url, payload, key, if (fastResponse) 30000 else 180000, onDelta)
-                } else request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 30000 else 180000)
+                    requestStream(p, url, payload, key, if (fastResponse) 30000 else 600000, onDelta)
+                } else request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 30000 else 600000)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
