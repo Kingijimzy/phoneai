@@ -1494,7 +1494,7 @@ Rules:
     /** One model judgment per message (cached for the turn); structural fallback only if the provider cannot answer. */
     private fun routeFor(command: String): OrionRouter.Decision {
         routeCache?.let { if (it.first == command) return it.second }
-        val decision = runCatching {
+        val modelDecision = runCatching {
             val user = OrionRouter.userMessage(
                 command, recentConversationTurns(), contextualActiveObjective(),
                 OrionCapabilityAwareness.availability(svc)
@@ -1502,6 +1502,12 @@ Rules:
             val raw = talkNim.chat(OrionRouter.toMessages(OrionRouter.SYSTEM, user), false, 90, 0.0, true)
             OrionRouter.parse(raw)
         }.getOrNull() ?: OrionRouter.fallback(command)
+        // Explicit Python scraper build-and-test requests are code execution, not browser
+        // navigation. A URL is the scraper's target input, not an instruction to open a WebView.
+        val decision = if (OrionCommandIntentPolicy.isPythonScraperBuildAndTest(command) &&
+            modelDecision.kind == OrionRouter.Kind.CHAT) {
+            OrionRouter.Decision(OrionRouter.Kind.ACT, plan = false, sequential = false, source = "python_scraper_policy")
+        } else modelDecision
         routeCache = command to decision
         runCatching { AgentPolicy.log(svc, "router", decision.kind.name.lowercase(), null, "source=${decision.source}; plan=${decision.plan}") }
         return decision
