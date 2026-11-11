@@ -35,6 +35,16 @@ internal object OrionRouter {
         return Decision(kind, kind == Kind.PLAN || o.optBoolean("plan", false), o.optBoolean("sequential", false), "model")
     }
 
+    /**
+     * Explicit action requests do not need a second model call to decide whether they are actions.
+     * Ambiguous intent remains model-led; clear Python authoring, phone actions, research and
+     * authenticated-account requests enter the tool path deterministically.
+     */
+    fun explicitAction(command: String): Decision? =
+        if (OrionCommandIntentPolicy.requiresDirectActionRouting(command))
+            fallback(command).copy(source = "explicit-action")
+        else null
+
     /** Structural last resort, used only when no model answer is available. */
     fun fallback(command: String): Decision {
         val plan = OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command)
