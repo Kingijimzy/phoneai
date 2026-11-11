@@ -22,7 +22,10 @@ internal object OrionTomPreferenceExtractor {
         "(?i)\\b(?:always|please)\\s+(verify|test|check)\\s+(?:the result|your work|the outcome|everything)\\b"
     )
     private val intent = Regex(
-        "(?i)\\b(?:stop|don't|do not)\\s+(?:making me|asking me to|requiring me to)\\s+(?:use commands?|switch modes?|repeat myself)\\b|\\bunderstand what i mean from context\\b"
+        "(?i)\\b(?:stop|don't|do not)\\s+(?:making|having)\\s+(?:me|orion|it)\\s+(?:read|parse|use|require)\\s+(?:user )?(?:commands?|prompts?|command syntax)\\b|" +
+            "\\bteach (?:orion|it) to infer intent\\b|" +
+            "\\b(?:stop|don't|do not)\\s+(?:making me|asking me to|requiring me to)\\s+(?:use commands?|switch modes?|repeat myself)\\b|" +
+            "\\bunderstand what i mean from context\\b"
     )
 
     fun extract(text: String): List<Observation> {
