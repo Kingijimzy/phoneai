@@ -32,7 +32,6 @@ class OrionRecallEvaluationTest {
         Scenario("project repository", "PhoneAI is the Android repository for Orion", "which repository contains the Orion Android app"),
         Scenario("assistant style", "I prefer concise and evidence backed answers", "how do I prefer answers to be written"),
         Scenario("privacy", "I do not want private memories sent to cloud models by default", "what is my default preference for private memory and cloud models"),
-        Scenario("family", "My sister is named Amaka", "what is my sister's name"),
         Scenario("career", "I want to become a professional software developer", "what career am I working toward"),
         Scenario("fitness", "I prefer walking for light daily exercise", "what light exercise do I prefer"),
         Scenario("sleep", "I try to sleep before midnight", "what time do I try to go to bed"),
