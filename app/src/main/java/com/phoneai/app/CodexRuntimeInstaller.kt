@@ -26,11 +26,11 @@ internal class CodexRuntimeInstaller(context: Context) {
             tar -xzf /tmp/orion-codex-$VERSION/app-server.tar.gz -C /tmp/orion-codex-$VERSION
             find /tmp/orion-codex-$VERSION -type f ! -name '*.tar.gz' -exec sh -c '
               for file do
-                name=$(basename "$file")
-                case "$name" in
-                  *-aarch64-unknown-linux-musl) name=${name%-aarch64-unknown-linux-musl} ;;
+                name=$(basename "${'$'}file")
+                case "${'$'}name" in
+                  *-aarch64-unknown-linux-musl) name=${'$'}{name%-aarch64-unknown-linux-musl} ;;
                 esac
-                install -m 755 "$file" "/usr/local/bin/$name"
+                install -m 755 "${'$'}file" "/usr/local/bin/${'$'}name"
               done
             ' sh {} +
             test -x '$GUEST_BINARY'
