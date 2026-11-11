@@ -40,7 +40,7 @@ class TaskLifecycleTest {
         }
         t = t.fail()!!
         assertEquals("the failure after the recovery budget pauses the task without making it terminal", Phase.BLOCKED, t.phase)
-        assertEquals(Phase.EXECUTE, t.blockedFrom)
+        assertEquals(Phase.VERIFY, t.blockedFrom)
         assertFalse(t.verified)
         assertEquals(Phase.PLAN, t.resume()!!.phase)
     }
