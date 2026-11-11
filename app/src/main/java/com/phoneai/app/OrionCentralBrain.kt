@@ -141,6 +141,9 @@ internal object OrionCentralBrain {
             appendLine("EXTENSION: when no registered capability can achieve a reusable subtask, inspect the real extension lab and available workspace, create the smallest testable draft, run the supported sandbox tests, and report the exact promotion/runtime status. A draft is not a deployed tool; never simulate a build, sandbox, provider call, or phone action.")
         }
 
+        // SQLite executive state is authoritative when present; legacy checkpoints remain a recovery source.
+        runCatching { OrionExecutiveStore.contextBlock(app) }.getOrNull()?.takeIf { it.isNotBlank() }?.let { sections += it }
+
         // Feed the real durable action checkpoint into the same brain. Deliberately expose
         // only progress metadata, never stored command text, arguments, or tool payloads.
         val checkpointSummary = runCatching {
