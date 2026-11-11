@@ -1040,9 +1040,10 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 throw AiException("The selected model context cannot safely fit all attached images with the current conversation. Start a fresh chat or attach fewer images.", 413)
             }
             attempts++
+            onStatus?.invoke(p.label + ": preparing " + model.substringAfterLast('/') + "...")
             pace(p)
             if (cancelled) throw RuntimeException("Stopped.")
-            onStatus?.invoke(p.label + ": asking " + model.substringAfterLast('/') + "...")
+            onStatus?.invoke(p.label + ": waiting for " + model.substringAfterLast('/') + " response...")
             val url: String
             val payload: String
             if (p.id == "gemini") {
