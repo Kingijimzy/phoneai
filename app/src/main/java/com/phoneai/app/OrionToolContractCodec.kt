@@ -70,11 +70,11 @@ internal object OrionToolContractCodec {
             val c = contract[i]
             if (quote != null) {
                 if (escaped) escaped = false
-                else if (c == '\\\\') escaped = true
+                else if (c.code == 92) escaped = true
                 else if (c == quote) quote = null
                 continue
             }
-            if (c == '\'' || c == '"') quote = c
+            if (c.code == 39 || c.code == 34) quote = c
             else if (c == '{') depth++
             else if (c == '}' && --depth == 0) return contract.substring(start + 1, i)
         }
@@ -115,11 +115,11 @@ internal object OrionToolContractCodec {
         val enumMatch = Regex("(?:enum|one of)\\s*\\[([^]]+)]", RegexOption.IGNORE_CASE).find(hint)
         if (enumMatch != null) {
             val values = JSONArray()
-            enumMatch.groupValues[1].split('|', ';').map { it.trim().trim('\\'', '"') }
+            enumMatch.groupValues[1].split('|', ';').map { it.trim().trim { it.code == 39 || it.code == 34 } }
                 .filter { it.isNotBlank() }.forEach(values::put)
             if (values.length() > 0) schema.put("enum", values)
         } else if (value.startsWith("'") || value.startsWith('"')) {
-            val literal = value.trimEnd(',', ' ').trim('\\'', '"')
+            val literal = value.trimEnd(',', ' ').trim { it.code == 39 || it.code == 34 }
             if (literal.isNotBlank()) schema.put("enum", JSONArray().put(literal))
         }
         return schema
