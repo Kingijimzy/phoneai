@@ -133,6 +133,10 @@ internal object AgentHooks {
  }
  /** Only destructive deletion/wiping and Trading Desk writes require owner confirmation. */
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean {
+  if (tool == "computer_settings") {
+   val action = args.optString("action").trim().lowercase()
+   if (action in setOf("restart", "shutdown", "wifi_toggle", "toggle_wifi", "wifi")) return true
+  }
   val pack = AgentPolicy.packForTool(tool) ?: ""
   if (pack == "trading_research" && ToolRegistry.access(tool) == ToolAccess.WRITE) return true
   if (tool in setOf(
