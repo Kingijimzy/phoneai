@@ -474,13 +474,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recordDispatchBlocked(tool, args, "tool_pack_mapping_denied")
             return blocked
         }
-        val shellCommand = if (tool == "shell" || tool == "termux_command") args.optString("command") else ""
-        if (shellCommand.isNotBlank() && args.optBoolean("confirmed")) ShellPolicy.confirm(shellCommand)
-        if (shellCommand.isNotBlank() && ShellPolicy.classify(shellCommand) == ShellRisk.BLOCKED) {
-            val blocked = "error: this command deletes or wipes something important. Ask Kingi in chat to confirm; when he says yes, call the same tool again with confirmed=true."
-            recordDispatchBlocked(tool, args, "android_linux_shell_hard_block")
-            return blocked
-        }
+        // Shell risk is surfaced as a warning by ShellRunner; it is never an execution veto.
         val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
         val mcpReadOperation = tool in setOf("mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt")
         val mcpScope = when {
