@@ -78,6 +78,12 @@ class OrionCommandIntentPolicyTest {
         assertTrue(OrionCommandIntentPolicy.isPythonScraperBuildAndTest(request))
         assertTrue(OrionCommandIntentPolicy.requiresPythonExecution(request))
         assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+        assertTrue(OrionCommandIntentPolicy.browserToolBlockedBeforePython(request, "browser_navigate"))
+        assertTrue(OrionCommandIntentPolicy.browserToolBlockedBeforePython(request, "web_search"))
+        assertFalse(OrionCommandIntentPolicy.browserToolBlockedBeforePython(request, "python_exec"))
+        assertFalse(OrionCommandIntentPolicy.browserToolBlockedBeforePython(
+            "Open this website in the browser: https://gamehub.xiaoji.com/en/", "browser_navigate"
+        ))
     }
 
     @Test fun codeOnlyAndNegatedExecutionRequestsStayNonExecuting() {
