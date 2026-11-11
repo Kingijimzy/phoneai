@@ -8,7 +8,8 @@ import java.util.concurrent.atomic.AtomicInteger
 internal class CodexAppServerClient(
     private val session: LinuxCommandSession,
     private val requestTimeoutMs: Long = 30_000L,
-    private val onNotification: (JSONObject) -> Unit = {}
+    private val onNotification: (JSONObject) -> Unit = {},
+    private val onClose: () -> Unit = {}
 ) : Closeable {
     private val ids = AtomicInteger(1)
     @Volatile private var initialized = false
@@ -67,5 +68,8 @@ internal class CodexAppServerClient(
         }
     }
 
-    override fun close() = session.close()
+    override fun close() {
+        runCatching { session.close() }
+        onClose()
+    }
 }
