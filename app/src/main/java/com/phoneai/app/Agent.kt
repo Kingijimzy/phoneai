@@ -445,7 +445,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         // The only owner approval boundary: destructive deletion/wiping and Trading Desk writes.
         // Approval is attached to this exact dispatch; ordinary tools never enter this prompt.
-        if (AgentHooks.requiresConfirmation(tool, args, targetLabel) && !args.optBoolean("confirmed")) {
+        if (AgentHooks.requiresConfirmation(tool, args, targetLabel)) {
             val reason = if (AgentPolicy.packForTool(tool) == "trading_research") {
                 "Trading Desk write"
             } else {
@@ -457,12 +457,11 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 taskProofs.record(tool, denied)
                 return denied
             }
-            args.put("confirmed", true)
         }
         val shellCommand = if (tool == "shell" || tool == "termux_command") args.optString("command") else ""
-        if (shellCommand.isNotBlank() && args.optBoolean("confirmed")) ShellPolicy.confirm(shellCommand)
+        if (shellCommand.isNotBlank() && AgentHooks.requiresConfirmation(tool, args, targetLabel)) ShellPolicy.confirm(shellCommand)
         if (shellCommand.isNotBlank() && ShellPolicy.classify(shellCommand) == ShellRisk.BLOCKED) {
-            val blocked = "error: this command deletes or wipes something important. Ask Kingi in chat to confirm; when he says yes, call the same tool again with confirmed=true."
+            val blocked = "error: this command deletes or wipes something important. confirmation is required before this command can be dispatched."
             recordDispatchBlocked(tool, args, "android_linux_shell_hard_block")
             return blocked
         }
