@@ -95,7 +95,8 @@ internal object OrionUnifiedExecutionCoordinator {
                 OrionWorkerJobStore.Status.QUEUED,
                 OrionWorkerJobStore.Status.RUNNING,
                 OrionWorkerJobStore.Status.RESULT_PENDING,
-                OrionWorkerJobStore.Status.PAUSED
+                OrionWorkerJobStore.Status.PAUSED,
+                OrionWorkerJobStore.Status.CANCEL_REQUESTED
             )
         }
         val legacyChanged = legacy.cancelParent(parentTaskId, reason)
