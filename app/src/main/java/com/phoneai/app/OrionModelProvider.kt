@@ -35,7 +35,7 @@ internal interface OrionModelProvider {
     fun chat(
         messages: JSONArray,
         vision: Boolean,
-        maxTokens: Int = 8192,
+        maxTokens: Int = 32768,
         temperature: Double = 0.2,
         fastResponse: Boolean = false,
         onDelta: ((String) -> Unit)? = null
