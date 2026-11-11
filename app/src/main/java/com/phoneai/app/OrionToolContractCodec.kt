@@ -31,7 +31,8 @@ internal object OrionToolContractCodec {
                 .put("type", "function")
                 .put("name", tool.name)
                 .put("description", tool.description.take(1000))
-                .put("parameters", parameters(tool)))
+                .put("parameters", parameters(tool))
+                .put("strict", false))
         }
     }
 
@@ -131,15 +132,18 @@ internal object OrionToolContractCodec {
             val name = key.groupValues[1]
             val optional = key.groupValues[2] == "?"
             val hint = key.groupValues[3].trim()
-            val defaulted = hint.contains('=') || hint.startsWith("optional", true)
+            val defaulted = hint.contains('=') || hint.startsWith("optional", true) ||
+                hint.startsWith("'") || hint.startsWith("\"")
             Field(name, inferSchema(hint), !optional && !defaulted)
         }.distinctBy { it.name }
     }
 
     private fun inferSchema(hint: String): JSONObject {
         val value = hint.substringAfter('=', "").trim().trim(',', ' ')
+        val literal = value.ifBlank { hint.trim() }
         val lower = hint.lowercase()
         val schema = when {
+            lower.startsWith("json") -> JSONObject().put("type", "object")
             lower.startsWith("boolean") || value in setOf("true", "false") ->
                 JSONObject().put("type", "boolean")
             lower.startsWith("integer") || value.matches(Regex("-?\\d+")) ->
@@ -174,9 +178,9 @@ internal object OrionToolContractCodec {
             enumMatch.groupValues[1].split('|', ';').map { it.trim().trim { it.code == 39 || it.code == 34 } }
                 .filter { it.isNotBlank() }.forEach(values::put)
             if (values.length() > 0) schema.put("enum", values)
-        } else if (value.startsWith("'") || value.startsWith('"')) {
-            val literal = value.trimEnd(',', ' ').trim { it.code == 39 || it.code == 34 }
-            if (literal.isNotBlank()) schema.put("enum", JSONArray().put(literal))
+        } else if (literal.startsWith("'") || literal.startsWith('"')) {
+            val enumValue = literal.trimEnd(',', ' ').trim { it.code == 39 || it.code == 34 }
+            if (enumValue.isNotBlank()) schema.put("enum", JSONArray().put(enumValue))
         }
         return schema
     }
