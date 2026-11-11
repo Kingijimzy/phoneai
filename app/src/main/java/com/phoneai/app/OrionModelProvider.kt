@@ -20,7 +20,9 @@ import org.json.JSONArray
 internal data class OrionModelToolCall(
     val id: String,
     val name: String,
-    val arguments: org.json.JSONObject
+    val arguments: org.json.JSONObject,
+    val available: Boolean = true,
+    val validationError: String? = null
 )
 
 internal data class OrionModelTurn(
