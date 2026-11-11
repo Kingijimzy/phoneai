@@ -65,7 +65,16 @@ class TerminalActivity : Activity() {
 
     private fun refreshBackend() { backendBtn.text = if (backend == Backend.BUILTIN) "Built-in" else "Linux"; append("— using " + (if (backend == Backend.BUILTIN) "built-in shell" else "Alpine Linux") + " —\n") }
 
-    private fun append(s: String) { out.append(s); scroll.post { scroll.fullScroll(ScrollView.FOCUS_DOWN) } }
+    private fun append(s: String) {
+        // TextView cannot render VT100 control sequences. Consume clear-screen commands
+        // and remove unsupported ANSI sequences instead of printing escape bytes literally.
+        if (s.contains("\u001B[H") || s.contains("\u001B[2J") || s.contains("\u001B[H\u001B[J")) out.text = ""
+        val safe = s
+            .replace(Regex("\u001B\\[[0-?]*[ -/]*[@-~]"), "")
+            .replace(Regex("\u001B\\][^\u0007]*(?:\u0007|\u001B\\\\)"), "")
+        if (safe.isNotEmpty()) out.append(safe)
+        scroll.post { scroll.fullScroll(ScrollView.FOCUS_DOWN) }
+    }
 
     private fun runInput() {
         val cmd = input.text.toString().trim(); if (cmd.isEmpty()) return
@@ -78,6 +87,10 @@ class TerminalActivity : Activity() {
 
     private fun executeCommand(cmd: String) {
         input.setText("")
+        if (cmd.equals("clear", ignoreCase = true) || cmd.equals("cls", ignoreCase = true)) {
+            out.text = ""
+            return
+        }
         append("$ $cmd\n")
         append("⏳ Running — live output will appear below…\n")
         val where = if (backend == Backend.BUILTIN) "builtin" else "linux"

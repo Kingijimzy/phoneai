@@ -63,7 +63,10 @@ internal object LinuxRuntimePolicy {
             !rootfsDir.startsWith("/") || rootfsDir.contains("..")) return null
         if (workspaceHostPath != null && (!workspaceHostPath.startsWith("/") || workspaceHostPath.contains("..") || workspaceHostPath.contains(':') || workspaceHostPath.contains('\u0000'))) return null
         return buildList {
-            addAll(listOf(prootPath, "-r", rootfsDir, "-b", "/dev", "-b", "/proc"))
+            // PRoot -0 maps the guest process to Alpine root without granting Android host-root access.
+            // The previous launcher inherited Android app UID 10390, which cannot write to
+            // root-owned guest paths such as /root/.api-anything even though HOME was /root.
+            addAll(listOf(prootPath, "-0", "-r", rootfsDir, "-b", "/dev", "-b", "/proc"))
             if (workspaceHostPath != null) addAll(listOf("-b", "$workspaceHostPath:/workspace"))
             addAll(listOf("-w", "/root", "/bin/sh", "-c", command))
         }
