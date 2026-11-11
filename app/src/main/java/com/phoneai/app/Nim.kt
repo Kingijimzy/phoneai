@@ -301,7 +301,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             if (p.anthropicStyle) {
                 conn.setRequestProperty("x-api-key", key)
                 conn.setRequestProperty("anthropic-version", "2023-06-01")
-            } else {
+            } else if (p.id != "gemini") {
                 conn.setRequestProperty("Authorization", "Bearer $key")
             }
             conn.setRequestProperty("Accept", "application/json")
@@ -725,6 +725,91 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         return o.toString()
     }
 
+    /** Gemini's native generateContent request/response format; no OpenAI compatibility shim. */
+    private fun geminiBody(
+        messages: JSONArray,
+        tokens: Int,
+        temperature: Double,
+        tools: List<ToolDefinition>
+    ): String {
+        val system = StringBuilder()
+        val contents = JSONArray()
+        val callNames = HashMap<String, String>()
+        fun appendContent(role: String, parts: JSONArray) {
+            if (parts.length() == 0) return
+            contents.put(JSONObject().put("role", role).put("parts", parts))
+        }
+        for (i in 0 until messages.length()) {
+            val message = messages.optJSONObject(i) ?: continue
+            val role = message.optString("role", "user")
+            val content = message.opt("content")
+            if (role == "system") {
+                if (system.isNotEmpty()) system.append("\n")
+                system.append(content?.toString().orEmpty())
+                continue
+            }
+            if (role == "assistant" && message.optJSONArray("tool_calls") != null) {
+                val parts = JSONArray()
+                if (!content?.toString().isNullOrBlank()) parts.put(JSONObject().put("text", content.toString()))
+                val calls = message.optJSONArray("tool_calls") ?: JSONArray()
+                for (j in 0 until calls.length()) {
+                    val call = calls.optJSONObject(j) ?: continue
+                    val fn = call.optJSONObject("function") ?: continue
+                    val name = fn.optString("name")
+                    val id = call.optString("id")
+                    callNames[id] = name
+                    val args = runCatching { JSONObject(fn.optString("arguments", "{}")) }.getOrDefault(JSONObject())
+                    parts.put(JSONObject().put("functionCall", JSONObject().put("name", name).put("args", args)))
+                }
+                appendContent("model", parts)
+                continue
+            }
+            if (role == "tool") {
+                val id = message.optString("tool_call_id")
+                val name = callNames[id].orEmpty()
+                val parts = JSONArray().put(JSONObject().put("functionResponse",
+                    JSONObject().put("name", name).put("response",
+                        JSONObject().put("content", content?.toString().orEmpty()))))
+                appendContent("user", parts)
+                continue
+            }
+            val parts = JSONArray()
+            if (content is JSONArray) {
+                for (j in 0 until content.length()) {
+                    val part = content.optJSONObject(j) ?: continue
+                    if (part.optString("type") == "image_url") {
+                        val imageUrl = part.optJSONObject("image_url")?.optString("url").orEmpty()
+                        val mime = Regex("^data:([^;]+);base64,").find(imageUrl)?.groupValues?.get(1) ?: "image/jpeg"
+                        val data = imageUrl.substringAfter("base64,", "")
+                        if (data.isNotBlank()) parts.put(JSONObject().put("inlineData",
+                            JSONObject().put("mimeType", mime).put("data", data)))
+                    } else if (part.has("text")) {
+                        parts.put(JSONObject().put("text", part.optString("text")))
+                    }
+                }
+            } else if (content != null) {
+                parts.put(JSONObject().put("text", content.toString()))
+            }
+            appendContent(if (role == "assistant") "model" else "user", parts)
+        }
+        val body = JSONObject().put("contents", contents)
+            .put("generationConfig", JSONObject().put("maxOutputTokens", tokens).put("temperature", temperature))
+        if (system.isNotEmpty()) body.put("systemInstruction",
+            JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system.toString()))))
+        if (tools.isNotEmpty()) {
+            body.put("tools", OrionToolContractCodec.gemini(tools))
+            body.put("toolConfig", JSONObject().put("functionCallingConfig", JSONObject().put("mode", "AUTO")))
+        }
+        return body.toString()
+    }
+
+    private fun geminiUrl(p: Provider, model: String, key: String): String {
+        val root = p.base.substringBefore("/openai").trimEnd('/')
+        val encodedModel = java.net.URLEncoder.encode(model, "UTF-8")
+        val encodedKey = java.net.URLEncoder.encode(key, "UTF-8")
+        return "$root/models/$encodedModel:generateContent?key=$encodedKey"
+    }
+
     private fun extract(p: Provider, body: String): String = try {
         if (p.id == "opencode-zen") {
             val root = JSONObject(body)
@@ -897,7 +982,10 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             onStatus?.invoke(p.label + ": asking " + model.substringAfterLast('/') + "...")
             val url: String
             val payload: String
-            if (p.anthropicStyle) {
+            if (p.id == "gemini") {
+                url = geminiUrl(p, model, key)
+                payload = geminiBody(requestMessages, boundedTokens, temperature, activeNativeTools.get().orEmpty())
+            } else if (p.anthropicStyle) {
                 url = p.base + "/messages"
                 payload = anthropicBody(model, requestMessages, boundedTokens, temperature, activeNativeTools.get().orEmpty())
             } else if (p.id == "opencode-zen") {
