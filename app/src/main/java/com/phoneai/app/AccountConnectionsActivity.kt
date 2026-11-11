@@ -111,8 +111,8 @@ class AccountConnectionsActivity : Activity() {
                 val value = antigravityCode.text.toString().trim()
                 if (value.isNotEmpty()) {
                     runCatching { antigravity?.writeLine(value) }
-                        .onSuccess { antigravityCode.setText(""); antigravityOutput.append("\\nCode submitted.") }
-                        .onFailure { antigravityOutput.append("\\nCould not send code: ${it.message}") }
+                        .onSuccess { antigravityCode.setText(""); antigravityOutput.append("\nCode submitted.") }
+                        .onFailure { antigravityOutput.append("\nCould not send code: ${it.message}") }
                 }
             }
         }, LinearLayout.LayoutParams(-1, dp(48)))
@@ -171,7 +171,7 @@ class AccountConnectionsActivity : Activity() {
             try {
                 val installer = AntigravityRuntimeInstaller(applicationContext)
                 installer.install({ line ->
-                    runOnUiThread { if (!isFinishing) antigravityOutput.append("\\n" + line.take(220)) }
+                    runOnUiThread { if (!isFinishing) antigravityOutput.append("\n" + line.take(220)) }
                 }).getOrThrow()
                 val session = installer.openLoginSession(filesDir.absolutePath)
                 antigravity = session
@@ -180,7 +180,7 @@ class AccountConnectionsActivity : Activity() {
                     val line = session.readLine(1_000L) ?: session.readStderrLine(50L) ?: continue
                     runOnUiThread {
                         if (!isFinishing) {
-                            antigravityOutput.append("\\n" + line.take(500))
+                            antigravityOutput.append("\n" + line.take(500))
                             val url = Regex("https://[^\\s]+").find(line)?.value?.trimEnd('.', ')', ']')
                             if (url != null) runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
                         }
@@ -188,7 +188,7 @@ class AccountConnectionsActivity : Activity() {
                 }
                 val exit = session.exitCodeOrNull()
                 if (exit == 0 && !isFinishing) {
-                    runOnUiThread { antigravityOutput.append("\\nLogin command exited. Verifying with a real Antigravity model request…") }
+                    runOnUiThread { antigravityOutput.append("\nLogin command exited. Verifying with a real Antigravity model request…") }
                     val result = installer.runPrompt(
                         filesDir.absolutePath,
                         "Reply with exactly: ORION_ANTIGRAVITY_AUTH_OK"
@@ -207,15 +207,15 @@ class AccountConnectionsActivity : Activity() {
                     Prefs.setProvider(applicationContext, false, "antigravity")
                     runOnUiThread {
                         if (!isFinishing) antigravityOutput.text =
-                            "Google account authenticated · real model request verified.\\nAvailable models: " +
+                            "Google account authenticated · real model request verified.\nAvailable models: " +
                                 models.take(20).joinToString(", ").ifBlank { "model list unavailable" }
                     }
                 } else if (!isFinishing) {
-                    runOnUiThread { antigravityOutput.append("\\nLogin process ended with exit code ${exit ?: "unknown"}.") }
+                    runOnUiThread { antigravityOutput.append("\nLogin process ended with exit code ${exit ?: "unknown"}.") }
                 }
             } catch (failure: Exception) {
                 runOnUiThread {
-                    if (!isFinishing) antigravityOutput.append("\\nConnection failed: ${failure.message ?: failure.javaClass.simpleName}")
+                    if (!isFinishing) antigravityOutput.append("\nConnection failed: ${failure.message ?: failure.javaClass.simpleName}")
                 }
             }
         }
