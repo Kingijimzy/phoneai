@@ -184,7 +184,7 @@ internal object OrionCentralBrain {
         if (pendingTask != null) {
             val resume = runCatching { AgentCheckpointStore.resumeInstruction(app) }.getOrNull()
             if (!resume.isNullOrBlank()) {
-                sections += "TASK RESUME INSTRUCTIONS — reconcile this checkpoint with the current conversation before continuing:\\n" + resume.take(3600)
+                sections += "TASK RESUME INSTRUCTIONS — reconcile this checkpoint with the current conversation before continuing:\n" + resume.take(3600)
             }
         }
         savedGraph?.let { graph ->
