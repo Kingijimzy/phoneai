@@ -26,6 +26,13 @@ class ContextWindowBudgetReceiptTest {
         assertTrue(ContextWindowBudget.priority("MEMORY LAYERS (reference data)") > ContextWindowBudget.priority("GENERAL CONTEXT"))
     }
 
+    @Test fun protectsDurableObjectiveGraphAndCheckpointFromContextClipping() {
+        assertTrue(ContextWindowBudget.priority("DURABLE OBJECTIVE GRAPH:") >
+            ContextWindowBudget.priority("ORION CENTRAL BRAIN — SHARED EXECUTIVE CONTRACT"))
+        assertTrue(ContextWindowBudget.priority("DURABLE EXECUTION CHECKPOINT") >
+            ContextWindowBudget.priority("GENERAL CONTEXT"))
+    }
+
     @Test fun emptyContextHasZeroedReceipt() {
         val packed = ContextWindowBudget.pack(listOf("", "  "), maxTokens = 20)
         assertEquals("", packed.text)
