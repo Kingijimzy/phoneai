@@ -39,7 +39,5 @@ internal object GatePolicy {
 internal object IrreversibleActionConfirmationPolicy {
     private val computerAction = Regex("""(?i)computer_settings[^}]{0,180}(restart|shutdown|(?:wifi|wi[- ]?fi)(?:[_ -]?toggle)?|toggle[_ -]?(?:wifi|wi[- ]?fi)|turn\s+(?:wifi|wi[- ]?fi)\s+(?:on|off))""")
     fun requiresConfirmation(description: String): Boolean =
-        computerAction.containsMatchIn(description) &&
-            !Regex("""(?i)computer_settings[^}]{0,180}(restart|shutdown|wifi(?:[_ -]?toggle)?|toggle[_ -]?wifi|turn\s+wifi\s+(?:on|off))""")
-                .containsMatchIn(description.substringBefore("settings screen"))
+        computerAction.containsMatchIn(description)
 }
