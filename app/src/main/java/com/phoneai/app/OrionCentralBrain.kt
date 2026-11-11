@@ -134,7 +134,7 @@ internal object OrionCentralBrain {
             appendLine("ROUTING: prefer an already registered, enabled, working capability; use compatible alternatives when one fails. Use memory and learned routes as hints only, revalidate them against current state, and never claim a tool, provider, MCP server, browser, Python/Linux runtime, or account is available without evidence.")
             appendLine("RECOVERY: do not repeat the same failed call unchanged. Inspect the error, current screen/state, and checkpoint; try a materially different supported route, continue independent parts of the task, and record whether the result is verified, failed, or unknown. Never report completion merely because a tool was invoked.")
             appendLine("REPAIR: use self_diagnose to gather current evidence before attempting a fix. repair_apply accepts only a registered repair_id; the app constructs the typed proposal, plan digest, preflight, approval decision, app-owned apply/rollback adapter and verification receipt. Never invent repair IDs or supply shell/source/path commands. Do not call a repair complete until its receipt is VERIFIED. Dangerous, suspicious, external or consequential repairs must wait for the owner-confirmation callback.")
-            appendLine("AUTONOMY: use capabilities the user has already enabled and permissions Android already grants without asking for duplicate consent. Do not invent application-level restrictions. Ask only when a real OS permission, missing connection, ambiguous target, cancellation, or action-specific approval is actually required. A standing user setting does not replace Android permission or remote-service authentication.")
+            appendLine("AUTONOMY: all implemented capability packs are available by default; missing optional setup, provider connection, or Android permission is a scoped warning, not a reason to block unrelated work or stop the whole objective. Continue every independent supported step and explain the exact unavailable operation. Ask only for a genuinely required OS permission, missing account connection, ambiguous target, cancellation, or the narrow confirmation for an irreversible computer setting. A standing user setting does not replace Android permission or remote-service authentication.")
             appendLine("EXTENSION: when no registered capability can achieve a reusable subtask, inspect the real extension lab and available workspace, create the smallest testable draft, run the supported sandbox tests, and report the exact promotion/runtime status. A draft is not a deployed tool; never simulate a build, sandbox, provider call, or phone action.")
         }
 
@@ -188,14 +188,14 @@ internal object OrionCentralBrain {
             }
         }
         savedGraph?.let { graph ->
-            sections += OrionObjectiveGraph.prompt(graph) +
-                "\\nReady objective candidates: " + graph.ready().joinToString(" | ") { "${it.id}: ${it.title}" }
+            sections += "DURABLE OBJECTIVE GRAPH\\n" + OrionObjectiveGraph.prompt(graph) +
+                "\\nNext objective candidates: " + graph.ready().joinToString(" | ") { "${it.id}: ${it.title}" }
         }
 
         val discussion = runCatching { ChatHistoryStore.search(app, request, 4) }.getOrDefault(emptyList())
         if (discussion.isNotEmpty()) {
             sections += buildString {
-                appendLine("RELATED CONVERSATION EVIDENCE")
+                appendLine("PREVIOUS DISCUSSIONS FOR THIS OBJECTIVE — RELATED CONVERSATION EVIDENCE")
                 discussion.forEach { hit ->
                     appendLine("[session=${hit.sessionId} turn=${hit.turnId} role=${hit.role} time=${hit.timestamp}] ${hit.snippet.take(420)}")
                     if (hit.before.isNotBlank()) appendLine("preceding: ${hit.before.take(180)}")
@@ -207,7 +207,7 @@ internal object OrionCentralBrain {
         val decisions = runCatching { OrionDecisionHistoryStore.get(app).search(request, 4) }.getOrDefault(emptyList())
         if (decisions.isNotEmpty()) {
             sections += buildString {
-                appendLine("RELEVANT DECISION HISTORY")
+                appendLine("DECISIONS AND UNRESOLVED QUESTIONS — RELEVANT DECISION HISTORY")
                 decisions.forEach { d ->
                     appendLine("- [${d.status}] ${d.topic.take(80)}: ${d.statement.take(350)}; rationale=${d.rationale.take(240)}; source=${d.sourceRole}/${d.sourceSessionId ?: "unknown"}/${d.sourceTurnId ?: "unknown"}")
                 }
