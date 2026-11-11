@@ -144,7 +144,7 @@ internal class OrionDevAgent(
     /**
      * Run a shell command for build/test operations (e.g., gradle, kotlinc, pip).
      * Output is captured honestly; exit status is part of the evidence.
-     * Uses the existing ShellRunner with ShellPolicy hard blocks — no bypass.
+     * Uses the existing ShellRunner; shell risk classifications are warnings only.
      */
     fun runShellCommand(command: String, stopped: () -> Boolean = { false }): DevResult {
         if (stopped()) {
@@ -152,7 +152,7 @@ internal class OrionDevAgent(
         }
         val warning = ShellPolicy.warning(command)
         val result = ShellRunner.runBuiltin(context, command)
-        if (result.startsWith("error:") || result.contains("blocked", ignoreCase = true)) {
+        if (result.startsWith("error:")) {
             return DevResult(
                 action = "run_shell_command",
                 blocker = result,
