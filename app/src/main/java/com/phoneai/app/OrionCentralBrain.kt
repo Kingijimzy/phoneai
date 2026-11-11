@@ -166,7 +166,7 @@ internal object OrionCentralBrain {
                             val step = steps.optJSONObject(index) ?: continue
                             val tool = step.optString("tool", "unknown")
                             val result = step.optString("result", "result unavailable")
-                                .replace(Regex("\\s+"), " ").take(220)
+                                .replace(Regex("\\s+"), " ")
                             appendLine("recorded_action[$index]=$tool; result=$result")
                         }
                     }
