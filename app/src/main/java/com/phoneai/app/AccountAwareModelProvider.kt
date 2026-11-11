@@ -66,7 +66,9 @@ internal class AccountAwareModelProvider(
                 else -> error("Unsupported account provider: " + provider.id)
             }
         }
-        return OrionModelTurn(answer)
+        // Account CLI turns currently return text events only. Do not advertise Orion
+        // native tools until an actual MCP/tool bridge is attached to the account session.
+        return OrionModelTurn(answer, toolCallingAvailable = false)
     }
 
     private fun runCodex(prompt: String, requestedModel: String?, onDelta: ((String) -> Unit)?): String {

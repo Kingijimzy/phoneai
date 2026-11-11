@@ -57,10 +57,11 @@ internal object OrionRuntimeCapabilityExecutor {
         githubAccountRead: (String) -> String = { "error: GitHub account reader callback unavailable" },
         researchCancelled: java.util.concurrent.atomic.AtomicBoolean = java.util.concurrent.atomic.AtomicBoolean(false),
         askUser: (String, List<String>, String) -> String = { _, _, _ -> "" },
-        pythonExecutor: OrionPythonCapabilityExecutor? = null
+        pythonExecutor: OrionPythonCapabilityExecutor? = null,
+        routineReplay: (String, String) -> String = { _, _ -> "error: saved routine replay callback unavailable" }
     ): String? = when (backend) {
         OrionCapabilityAdapters.Backend.DEVICE -> OrionDeviceCapabilityExecutor.execute(
-            tool, args, service, tools, stopped, confirm, validateAction, verifyAction, verifySend, look, play, readScreen
+            tool, args, service, tools, stopped, confirm, validateAction, verifyAction, verifySend, look, play, readScreen, routineReplay
         )
         OrionCapabilityAdapters.Backend.MCP -> OrionMcpCapabilityExecutor.execute(tool, args, service, tools)
         OrionCapabilityAdapters.Backend.INTEGRATIONS -> OrionIntegrationCapabilityExecutor.execute(tool, args, service, tools, githubAccountRead)

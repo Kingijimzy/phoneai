@@ -19,7 +19,7 @@ import java.util.UUID
  */
 internal class OrionWorkerJobStore(context: Context, private val clock: () -> Long = { System.currentTimeMillis() }) {
     enum class Kind { ANALYSIS, READ_ONLY_RESEARCH, TRADING_ANALYSIS, TASK_PLANNING }
-    enum class Status { QUEUED, RUNNING, RESULT_PENDING, PAUSED, COMPLETED, FAILED, CANCELLED, NEEDS_REVIEW }
+    enum class Status { QUEUED, RUNNING, RESULT_PENDING, PAUSED, CANCEL_REQUESTED, COMPLETED, FAILED, CANCELLED, NEEDS_REVIEW }
 
     data class Job(
         val id: String,
@@ -98,7 +98,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         // intentionally acquire the checkpoint lock before cancelling child jobs.
         val candidate = synchronized(lock) {
             loadLocked()
-            if (jobs.count { it.status in setOf(Status.RUNNING, Status.RESULT_PENDING) } >= maxActive) return@synchronized null
+            if (jobs.count { it.status in setOf(Status.RUNNING, Status.RESULT_PENDING, Status.CANCEL_REQUESTED) } >= maxActive) return@synchronized null
             jobs.firstOrNull { it.status == Status.QUEUED }?.copy()
         } ?: return null
         val parentRunning = runCatching { parentIsRunning(candidate.parentTaskId) }.getOrDefault(false)
@@ -106,7 +106,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
             loadLocked()
             val current = jobs.firstOrNull { it.id == candidate.id && it.status == Status.QUEUED }
                 ?: return@synchronized null
-            if (jobs.count { it.status in setOf(Status.RUNNING, Status.RESULT_PENDING) } >= maxActive) return@synchronized null
+            if (jobs.count { it.status in setOf(Status.RUNNING, Status.RESULT_PENDING, Status.CANCEL_REQUESTED) } >= maxActive) return@synchronized null
             if (!parentRunning) {
                 val cancelled = current.copy(status = Status.CANCELLED, updatedAt = clock(),
                     lastError = "parent_not_running_or_unverifiable")
@@ -154,11 +154,19 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
             lastError = AgentPrivacyFilter.safeCommand(reason).replace(Regex("\\s+"), " ").take(240))
     }
 
-    fun cancel(jobId: String, reason: String = "cancelled_by_parent"): Boolean = transition(
-        jobId, setOf(Status.QUEUED, Status.RUNNING, Status.RESULT_PENDING, Status.PAUSED)
-    ) {
-        it.copy(status = Status.CANCELLED, updatedAt = clock(),
+    fun cancel(jobId: String, reason: String = "cancelled_by_parent"): Boolean = synchronized(lock) {
+        loadLocked()
+        val current = jobs.firstOrNull { it.id == jobId } ?: return@synchronized false
+        val nextStatus = when (current.status) {
+            Status.RUNNING, Status.CANCEL_REQUESTED -> Status.CANCEL_REQUESTED
+            Status.QUEUED, Status.RESULT_PENDING, Status.PAUSED -> Status.CANCELLED
+            else -> return@synchronized false
+        }
+        val updated = current.copy(status = nextStatus, updatedAt = clock(),
             lastError = AgentPrivacyFilter.safeCommand(reason).take(240))
+        if (!replaceLocked(current, updated)) return@synchronized false
+        if (!persistLocked()) { replaceLocked(updated, current); return@synchronized false }
+        true
     }
 
     fun cancelParent(parentTaskId: String, reason: String = "parent_cancelled"): Int = synchronized(lock) {
@@ -169,9 +177,17 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         val before = jobs.toList()
         var changed = 0
         jobs = jobs.map { job ->
-            if (job.parentTaskId == parent && job.status in setOf(Status.QUEUED, Status.RUNNING, Status.RESULT_PENDING, Status.PAUSED)) {
+            if (job.parentTaskId == parent && job.status in setOf(
+                    Status.QUEUED, Status.RUNNING, Status.RESULT_PENDING, Status.PAUSED, Status.CANCEL_REQUESTED
+                )) {
                 changed++
-                job.copy(status = Status.CANCELLED, updatedAt = clock(), lastError = safeReason)
+                job.copy(
+                    status = when (job.status) {
+                        Status.RUNNING, Status.CANCEL_REQUESTED -> Status.CANCEL_REQUESTED
+                        else -> Status.CANCELLED
+                    },
+                    updatedAt = clock(), lastError = safeReason
+                )
             } else job
         }.toMutableList()
         if (changed > 0 && !persistLocked()) { jobs = before.toMutableList(); return@synchronized 0 }
@@ -182,7 +198,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
     fun claim(jobId: String, parentIsRunning: (String) -> Boolean): Job? {
         val candidate = synchronized(lock) {
             loadLocked()
-            if (jobs.count { it.status in setOf(Status.RUNNING, Status.RESULT_PENDING) } >= maxActive) return@synchronized null
+            if (jobs.count { it.status in setOf(Status.RUNNING, Status.RESULT_PENDING, Status.CANCEL_REQUESTED) } >= maxActive) return@synchronized null
             jobs.firstOrNull { it.id == jobId && it.status == Status.QUEUED }?.copy()
         } ?: return null
         val parentRunning = runCatching { parentIsRunning(candidate.parentTaskId) }.getOrDefault(false)
@@ -190,7 +206,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
             loadLocked()
             val current = jobs.firstOrNull { it.id == candidate.id && it.status == Status.QUEUED }
                 ?: return@synchronized null
-            if (jobs.count { it.status in setOf(Status.RUNNING, Status.RESULT_PENDING) } >= maxActive) return@synchronized null
+            if (jobs.count { it.status in setOf(Status.RUNNING, Status.RESULT_PENDING, Status.CANCEL_REQUESTED) } >= maxActive) return@synchronized null
             if (!parentRunning) {
                 val cancelled = current.copy(status = Status.CANCELLED, updatedAt = clock(),
                     lastError = "parent_not_running_or_unverifiable")
@@ -205,8 +221,15 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         }
     }
 
+    /** Finalize a cancellation only after the worker has observed the parent stop. */
+    fun confirmCancellation(jobId: String, reason: String = "worker_acknowledged_cancellation"): Boolean =
+        transition(jobId, setOf(Status.RUNNING, Status.CANCEL_REQUESTED)) {
+            it.copy(status = Status.CANCELLED, updatedAt = clock(),
+                lastError = AgentPrivacyFilter.safeCommand(reason).replace(Regex("\\s+"), " ").take(240))
+        }
+
     /** An interrupted/ambiguous provider outcome is terminal for automatic scheduling. */
-    fun needsReview(jobId: String, reason: String): Boolean = transition(jobId, setOf(Status.RUNNING, Status.RESULT_PENDING)) {
+    fun needsReview(jobId: String, reason: String): Boolean = transition(jobId, setOf(Status.RUNNING, Status.RESULT_PENDING, Status.CANCEL_REQUESTED)) {
         it.copy(status = Status.NEEDS_REVIEW, updatedAt = clock(),
             lastError = AgentPrivacyFilter.safeCommand(reason).replace(Regex("\\s+"), " ").take(240))
     }
@@ -215,7 +238,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
     fun hasPendingForParent(parentTaskId: String): Boolean = synchronized(lock) {
         loadLocked()
         jobs.any { it.parentTaskId == parentTaskId &&
-            it.status in setOf(Status.QUEUED, Status.RUNNING, Status.RESULT_PENDING) }
+            it.status in setOf(Status.QUEUED, Status.RUNNING, Status.RESULT_PENDING, Status.CANCEL_REQUESTED) }
     }
 
     /** Compact status receipts for the central chat brain; results remain evidence, never instructions. */
@@ -270,11 +293,11 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
             val parent = o.optString("parentTaskId").take(80)
             val key = o.optString("idempotencyKey").take(100)
             if (id.isBlank() || parent.isBlank() || key.isBlank()) return@mapNotNull null
-            val restoredStatus = if (recoverInterrupted && status == Status.RUNNING) Status.NEEDS_REVIEW else status
+            val restoredStatus = if (recoverInterrupted && status in setOf(Status.RUNNING, Status.CANCEL_REQUESTED)) Status.NEEDS_REVIEW else status
             Job(id, key, parent, o.optString("parentObjectiveId").takeIf { it.isNotBlank() && it != "null" },
                 kind, o.optString("objective").take(700), restoredStatus,
                 o.optLong("createdAt"), clock(), o.optInt("attempts").coerceIn(0, 3),
-                o.optString("result").take(1200), if (recoverInterrupted && status == Status.RUNNING)
+                o.optString("result").take(1200), if (recoverInterrupted && status in setOf(Status.RUNNING, Status.CANCEL_REQUESTED))
                     "process_interrupted_outcome_must_be_reviewed" else o.optString("lastError").take(240),
                 o.optString("manifestId").takeIf { it.isNotBlank() && it != "null" && it.matches(Regex("^[A-Fa-f0-9-]{16,80}$")) },
                 o.optString("conversationId").takeIf { it.isNotBlank() && it != "null" && it.matches(Regex("^[A-Za-z0-9_-]{8,128}$")) })

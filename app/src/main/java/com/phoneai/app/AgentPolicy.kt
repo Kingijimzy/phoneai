@@ -137,7 +137,7 @@ object AgentPolicy {
         "device_location", "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "media_status", "media_control", "play_media", "chrome_search",
         "find_files", "open_file", "save_file", "list_apps", "list_app_deeplinks", "read_screen", "look", "validate_action", "verify_action",
         "verify_send", "click", "click_text", "wait_for", "tap", "long_press", "swipe", "swipe_path", "scroll", "type",
-        "key", "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify", "browser_click",
+        "routine_run", "routine_resume", "key", "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify", "browser_click",
         "browser_click_verify", "browser_type", "browser_scroll", "browser_navigate", "browser_back", "browser_tabs",
         "browser_upload", "browser_handoff", "browser_wait", "browser_close", "settings", "dial", "alarm", "timer",
         "volume", "flashlight", "copy", "clipboard_read", "self_edit", "web_api", "fact_add", "fact_query", "fact_forget", "show_file", "call_status", "call_place", "call_answer", "call_end", "battery", "time", "device_info", "integration_status", "mcp_status",

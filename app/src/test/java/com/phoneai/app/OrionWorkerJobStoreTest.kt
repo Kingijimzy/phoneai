@@ -131,9 +131,104 @@ class OrionWorkerJobStoreTest {
         val queued = store.enqueue("parent-1", "Research queued")!!
         assertNotNull(store.claimNext { true })
         assertEquals(2, store.cancelParent("parent-1"))
-        assertTrue(store.all().all { it.status == OrionWorkerJobStore.Status.CANCELLED })
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED,
+            store.all().first { it.id == running.id }.status)
+        assertEquals(OrionWorkerJobStore.Status.CANCELLED,
+            store.all().first { it.id == queued.id }.status)
         assertFalse(store.complete(running.id, "late result"))
+        assertTrue(store.needsReview(running.id, "provider outcome uncertain after cancellation"))
+        assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW,
+            store.all().first { it.id == running.id }.status)
         assertFalse(store.cancel(queued.id))
+    }
+
+    @Test fun repeatedParentCancellationKeepsRunningJobPendingUntilWorkerAcknowledges() {
+        val store = OrionWorkerJobStore(context)
+        val job = store.enqueue("parent-1", "Long analysis")!!
+        assertNotNull(store.claim(job.id) { true })
+
+        assertEquals(1, store.cancelParent("parent-1", "first_stop"))
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, store.all().single().status)
+        assertEquals(1, store.cancelParent("parent-1", "retry_stop"))
+        val pending = store.all().single()
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, pending.status)
+        assertEquals("retry_stop", pending.lastError)
+        assertTrue(store.hasPendingForParent("parent-1"))
+        assertTrue(store.confirmCancellation(job.id, "worker_acknowledged"))
+        assertFalse(store.hasPendingForParent("parent-1"))
+    }
+
+    @Test fun directCancellationRequestsStopWithoutErasingRunningProviderOwnership() {
+        val store = OrionWorkerJobStore(context)
+        val job = store.enqueue("parent-1", "Long analysis")!!
+        assertNotNull(store.claim(job.id) { true })
+
+        assertTrue(store.cancel(job.id, "owner_requested"))
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED,
+            store.all().single().status)
+        assertFalse(store.stageResult(job.id, "late provider result"))
+        assertTrue(store.needsReview(job.id, "worker stopped with uncertain provider outcome"))
+        assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW, store.all().single().status)
+    }
+
+    @Test fun repeatedDirectCancellationCannotReleaseActiveProviderSlot() {
+        val store = OrionWorkerJobStore(context)
+        val active = (0 until 3).map { index ->
+            store.enqueue("parent-1", "Provider call still running $index")!!
+        }
+        val waiting = store.enqueue("parent-2", "Wait for an active slot")!!
+        active.forEach { assertNotNull(store.claim(it.id) { true }) }
+
+        val cancelled = active.first()
+        assertTrue(store.cancel(cancelled.id, "first_request"))
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, store.all().first { it.id == cancelled.id }.status)
+        assertTrue(store.cancel(cancelled.id, "retry_request"))
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, store.all().first { it.id == cancelled.id }.status)
+        assertNull(store.claim(waiting.id) { true })
+
+        assertTrue(store.confirmCancellation(cancelled.id, "worker_stopped"))
+        assertNotNull(store.claim(waiting.id) { true })
+    }
+
+    @Test fun acknowledgedRunningCancellationBecomesTerminalAndReleasesActiveSlot() {
+        val store = OrionWorkerJobStore(context)
+        val running = store.enqueue("parent-1", "Cancel this running analysis")!!
+        val waiting = store.enqueue("parent-2", "Run after cancellation")!!
+        assertNotNull(store.claim(running.id) { true })
+
+        assertEquals(1, store.cancelParent("parent-1", "parent_stopped"))
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, store.all().first { it.id == running.id }.status)
+        assertTrue(store.hasPendingForParent("parent-1"))
+        assertTrue(store.confirmCancellation(running.id, "worker_observed_parent_stop"))
+        assertEquals(OrionWorkerJobStore.Status.CANCELLED, store.all().first { it.id == running.id }.status)
+        assertFalse(store.hasPendingForParent("parent-1"))
+        assertNotNull(store.claim(waiting.id) { true })
+    }
+
+    @Test fun unacknowledgedCancellationCanBeResolvedToReviewWithoutReplayingProviderWork() {
+        val store = OrionWorkerJobStore(context)
+        val job = store.enqueue("parent-1", "Provider cancellation was not acknowledged")!!
+        assertNotNull(store.claim(job.id) { true })
+        assertTrue(store.cancel(job.id, "owner_requested"))
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, store.all().single().status)
+
+        assertTrue(store.needsReview(job.id, "worker_restarted_with_unacknowledged_cancellation"))
+        val resolved = store.all().single()
+        assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW, resolved.status)
+        assertFalse(store.hasPendingForParent("parent-1"))
+        assertFalse(store.complete(job.id, "must not replay or commit"))
+    }
+
+    @Test fun processDeathAfterCancellationRequestRequiresReview() {
+        val store = OrionWorkerJobStore(context)
+        val job = store.enqueue("parent-1", "Cancelled analysis")!!
+        assertNotNull(store.claim(job.id) { true })
+        assertTrue(store.cancel(job.id, "owner_requested"))
+
+        OrionWorkerJobStore.simulateProcessRestartForTest(context)
+        val restored = OrionWorkerJobStore(context).all().single { it.id == job.id }
+        assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW, restored.status)
+        assertTrue(restored.lastError.contains("must_be_reviewed"))
     }
 
     @Test fun processDeathMovesRunningJobToNeedsReviewInsteadOfReplayingProviderCall() {
@@ -277,5 +372,33 @@ class OrionWorkerJobStoreTest {
     @Test fun jobKindsCannotRepresentPhoneActionsOrTradingOrders() {
         assertEquals(setOf("ANALYSIS", "READ_ONLY_RESEARCH", "TRADING_ANALYSIS", "TASK_PLANNING"),
             OrionWorkerJobStore.Kind.values().map { it.name }.toSet())
+    }
+
+    @Test fun sameProcessReplacementSeesProviderThreadStillActiveUntilItExits() {
+        OrionSpecialistProviderRuns.clearForTest()
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val thread = Thread {
+            entered.countDown()
+            release.await(3, TimeUnit.SECONDS)
+            OrionSpecialistProviderRuns.unregister("job-live", Thread.currentThread())
+        }
+        OrionSpecialistProviderRuns.register("job-live", thread)
+        thread.start()
+        assertTrue(entered.await(2, TimeUnit.SECONDS))
+        assertTrue(OrionSpecialistProviderRuns.isActive("job-live"))
+        release.countDown()
+        thread.join(2000)
+        assertFalse(thread.isAlive)
+        assertFalse(OrionSpecialistProviderRuns.isActive("job-live"))
+    }
+
+    @Test fun deadProviderThreadDoesNotRemainInProcessOwnershipRegistry() {
+        OrionSpecialistProviderRuns.clearForTest()
+        val thread = Thread { }
+        OrionSpecialistProviderRuns.register("job-finished", thread)
+        thread.start()
+        thread.join(2000)
+        assertFalse(OrionSpecialistProviderRuns.isActive("job-finished"))
     }
 }

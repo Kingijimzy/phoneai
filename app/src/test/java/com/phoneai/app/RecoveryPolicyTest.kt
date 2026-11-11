@@ -105,15 +105,18 @@ class RecoveryPolicyTest {
         assertTrue(RecoveryPolicy.replanNudge("shell", Failure.DIAGNOSTIC, "exit code 1").contains("Do not repeat this action unchanged"))
     }
 
-    @Test fun repeatedReplansExhaustTheLifecycleIntoRecord() {
-        // Three alternate routes are allowed; the fourth failure stops the task.
+    @Test fun repeatedReplansExhaustTheLifecycleIntoBlockedReview() {
+        // Three alternate routes are allowed; the next failure pauses for owner review.
+        // BLOCKED is resumable and must not be confused with terminal RECORD.
         var lc = TaskLifecycle(phase = Phase.EXECUTE)
         repeat(TaskLifecycle.MAX_RECOVERIES) {
             lc = lc.fail()!!; assertEquals(Phase.RECOVER, lc.phase)
             lc = lc.replan()!!.advance()!!.advance()!!.advance()!!
         }
         lc = lc.fail()!!
-        assertEquals("recovery budget exhausted", Phase.RECORD, lc.phase)
+        assertEquals("recovery budget exhausted", Phase.BLOCKED, lc.phase)
+        assertFalse(lc.isTerminal)
+        assertEquals(Phase.PLAN, lc.resume()!!.phase)
     }
 
     private fun isErr(r: String) = r.startsWith("error")

@@ -2285,6 +2285,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (Prefs.voice(this)) voice.speak(text)
     }
 
+    override fun progress(text: String) {
+        status(text)
+        // Progress speech follows the owner's existing voice-output preference. Do not
+        // interrupt a reply or enqueue repeated narration while Orion is already speaking.
+        if (Prefs.voice(this) && !voice.isSpeaking()) voice.speak(text)
+    }
+
     override fun status(text: String) {
         main.post {
             if (panel != null) {

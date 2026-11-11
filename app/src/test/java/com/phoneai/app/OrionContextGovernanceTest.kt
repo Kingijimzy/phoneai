@@ -81,4 +81,51 @@ class OrionContextGovernanceTest {
         assertFalse(OrionLocationContextProvider.isFresh(2_000L, 1_000L))
     }
 
+    @Test fun messagePackingKeepsToolCallsTogetherWithMatchingResults() {
+        val messages = JSONArray()
+            .put(JSONObject().put("role", "system").put("content", "system contract"))
+            .put(JSONObject().put("role", "user").put("content", "do the work"))
+            .put(JSONObject().put("role", "assistant").put("content", "")
+                .put("tool_calls", JSONArray()
+                    .put(JSONObject().put("id", "call_a").put("type", "function"))
+                    .put(JSONObject().put("id", "call_b").put("type", "function"))))
+            .put(JSONObject().put("role", "tool").put("tool_call_id", "call_a").put("content", "result A"))
+            .put(JSONObject().put("role", "tool").put("tool_call_id", "call_b").put("content", "result B"))
+            .put(JSONObject().put("role", "assistant").put("content", "Both actions completed."))
+            .put(JSONObject().put("role", "user").put("content", "what happened?"))
+        val caps = OrionModelCapabilities(16_384, 2_048, false, false, false, false)
+        val packed = OrionProviderContextPolicy.fitMessages(messages, caps, 512)
+        val assistantCalls = (0 until packed.length()).mapNotNull { packed.optJSONObject(it) }
+            .firstOrNull { it.optJSONArray("tool_calls") != null }
+        assertNotNull(assistantCalls)
+        val callIds = (0 until (assistantCalls?.optJSONArray("tool_calls")?.length() ?: 0))
+            .map { assistantCalls?.optJSONArray("tool_calls")?.optJSONObject(it)?.optString("id") }
+            .toSet()
+        val resultIds = (0 until packed.length()).mapNotNull { packed.optJSONObject(it) }
+            .filter { it.optString("role") == "tool" }
+            .map { it.optString("tool_call_id") }.toSet()
+        assertEquals(setOf("call_a", "call_b"), callIds)
+        assertEquals(callIds, resultIds)
+        assertEquals("what happened?", packed.optJSONObject(packed.length() - 1)?.optString("content"))
+    }
+
+    @Test fun messagePackingDropsIncompleteToolExchangeInsteadOfSendingOrphans() {
+        val messages = JSONArray()
+            .put(JSONObject().put("role", "system").put("content", "system contract"))
+            .put(JSONObject().put("role", "assistant").put("content", "")
+                .put("tool_calls", JSONArray()
+                    .put(JSONObject().put("id", "call_a").put("type", "function"))
+                    .put(JSONObject().put("id", "call_b").put("type", "function"))))
+            .put(JSONObject().put("role", "tool").put("tool_call_id", "call_a").put("content", "result A"))
+            .put(JSONObject().put("role", "user").put("content", "continue safely"))
+        val caps = OrionModelCapabilities(16_384, 2_048, false, false, false, false)
+        val packed = OrionProviderContextPolicy.fitMessages(messages, caps, 512)
+        for (i in 0 until packed.length()) {
+            val item = packed.optJSONObject(i) ?: continue
+            assertNull(item.optJSONArray("tool_calls"))
+            assertNotEquals("tool", item.optString("role"))
+        }
+        assertEquals("continue safely", packed.optJSONObject(packed.length() - 1)?.optString("content"))
+    }
+
 }
