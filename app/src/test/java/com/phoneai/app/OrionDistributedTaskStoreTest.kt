@@ -28,7 +28,7 @@ class OrionDistributedTaskStoreTest {
         assertEquals("cancelled", OrionDistributedTaskStore(c).get(grandchild.taskId)?.status)
     }
 
-    @Test fun runningCancellationRequiresRecoveryAndCannotBeClaimedAgain() {
+    @Test fun runningCancellationRemainsPendingUntilLeaseAwareCoordinatorReconcilesIt() {
         val store = OrionDistributedTaskStore(context())
         val task = OrionTaskEnvelope.create("running objective")
         assertTrue(store.enqueue(task)); assertTrue(store.claim(task.taskId))
@@ -36,8 +36,9 @@ class OrionDistributedTaskStoreTest {
         assertEquals("cancel_requested", store.get(task.taskId)?.status)
         assertTrue(store.isCancellationRequested(task.taskId))
         assertFalse(store.claim(task.taskId))
-        assertTrue(store.recoverQueued().contains(task.taskId))
-        assertEquals("cancelled", store.get(task.taskId)?.status)
+        // The store alone cannot know whether a worker still owns a live lease.
+        // OrionExecutionCoordinator performs the only safe terminal transition.
+        assertEquals("cancel_requested", store.get(task.taskId)?.status)
     }
 
     @Test fun completionIsIdempotentAndTerminalStatesDoNotReopen() {
