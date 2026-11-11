@@ -432,4 +432,45 @@ class OrionConversationRepositoryTest {
         field.isAccessible = true
         field.set(null, null)
     }
+    @Test fun theoryOfMindProfilePersistsEvidenceAndOwnerPreferenceCannotBeOverwrittenByInference() {
+        assertTrue(repository.observeTomPreference(
+            context, "detail_level", "prefers concise answers by default", 0.84,
+            "Repeated requests to remove unnecessary explanation across separate sessions."
+        ))
+        val inferred = repository.tomPreference(context, "detail_level")
+        assertNotNull(inferred)
+        assertEquals("inferred", inferred!!.source)
+        assertFalse(inferred.ownerLocked)
+        assertEquals(0.84, inferred.confidence, 0.001)
+
+        assertTrue(repository.setTomPreference(context, "detail_level", "concise by default; expand when asked"))
+        assertFalse(repository.observeTomPreference(
+            context, "detail_level", "always wants one-line answers", 0.95,
+            "A single recent message."
+        ))
+        val owner = repository.tomPreference(context, "detail_level")!!
+        assertTrue(owner.ownerLocked)
+        assertEquals("owner", owner.source)
+        assertEquals("concise by default; expand when asked", owner.value)
+    }
+
+    @Test fun theoryOfMindProfileSurvivesDatabaseHelperRecreation() {
+        assertTrue(repository.observeTomPreference(
+            context, "initiative", "prefers the assistant to continue useful work without repeated prompts",
+            0.79, "Repeated requests to continue and finish the active project."
+        ))
+        repository.close()
+        resetRepositorySingleton()
+        repository = OrionConversationRepository.get(context)
+        val restored = repository.tomProfile(context).single { it.dimension == "initiative" }
+        assertEquals("inferred", restored.source)
+        assertTrue(restored.evidence.contains("Repeated requests"))
+    }
+
+    @Test fun theoryOfMindProfileRejectsUnsupportedSensitiveDimensions() {
+        assertFalse(OrionTomProfileStore.setOwnerPreference(context, "health_status", "unknown"))
+        assertFalse(OrionTomProfileStore.setOwnerPreference(context, "political_view", "unknown"))
+        assertTrue(repository.tomProfile(context).isEmpty())
+    }
+
 }
