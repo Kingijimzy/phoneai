@@ -473,4 +473,15 @@ class OrionConversationRepositoryTest {
         assertTrue(repository.tomProfile(context).isEmpty())
     }
 
+    @Test fun mmagRetrievalUsesRelatedConversationEvidenceAsItsOwnLayer() {
+        repository.saveActive(context, listOf(
+            "me" to "I prefer concise explanations with the important reasoning preserved.",
+            "ai" to "I will keep the answer focused and retain the reasoning that matters."
+        ))
+        val recalled = OrionMmagRetrieval.contextFor(context, "concise explanations and reasoning")
+        assertTrue(recalled.contains("L1 CONVERSATIONAL MEMORY"))
+        assertTrue(recalled.contains("concise explanations"))
+        assertTrue(recalled.contains("ARBITRATION"))
+    }
+
 }
