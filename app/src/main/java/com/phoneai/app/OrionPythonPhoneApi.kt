@@ -252,7 +252,7 @@ internal class OrionPythonPhoneApi(
 
     fun ws_close(sessionId: String): String = OrionPythonWebSocketTransport.close(sessionId)
 
-    /** Public HTTPS GET needs global NETWORK consent; LAN/local access and POST still require exact host grants. */
+    /** Public HTTPS GET needs no separate host grant; LAN/local access and POST still require consent and exact host grants. */
     fun http_get(url: String): String = request(url, "GET", "")
 
     fun http_post(url: String, body: String): String {
