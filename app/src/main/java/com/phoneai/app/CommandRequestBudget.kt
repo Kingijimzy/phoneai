@@ -5,7 +5,7 @@ package com.phoneai.app
  * so connection failures and model-list requests count just like successful requests.
  */
 internal class CommandRequestBudget(
-    private val maxRequests: Int = 400,
+    private val maxRequests: Int = 1000,
     private val maxRequestsProvider: (() -> Int)? = null
 ) {
     private var usedRequests = 0
