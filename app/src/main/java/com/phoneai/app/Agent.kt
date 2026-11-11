@@ -1107,18 +1107,62 @@ RESPONSE QUALITY AND FORMAT:
         val runawayStream = java.util.concurrent.atomic.AtomicBoolean(false)
         val streamWatch = HermesRepetitionGuard.RunawayStreamWatch()
         val answer = try {
-            talkNim.chat(messages, false, 900, 0.7, onDelta = { delta ->
-                if (!stopped && !runawayStream.get()) {
-                    if (streamWatch.feed(delta)) {
-                        runawayStream.set(true)
-                        talkNim.cancel()
-                    } else {
-                        ui.stream(delta)
-                    }
+            var turn = talkNim.chatTurn(
+                messages, false, 900, 0.7, tools = ToolRegistry.all
+            )
+            var toolRounds = 0
+            while (turn.toolCalls.isNotEmpty() && !stopped && toolRounds < 4) {
+                toolRounds++
+                val callEnvelope = JSONArray()
+                turn.toolCalls.forEach { call ->
+                    callEnvelope.put(JSONObject()
+                        .put("id", call.id)
+                        .put("type", "function")
+                        .put("function", JSONObject()
+                            .put("name", call.name)
+                            .put("arguments", call.arguments.toString())))
                 }
-            }).trim()
+                messages.put(JSONObject()
+                    .put("role", "assistant")
+                    .put("content", turn.text)
+                    .put("tool_calls", callEnvelope))
+                for (call in turn.toolCalls) {
+                    if (stopped) break
+                    val args = JSONObject(call.arguments.toString())
+                    val result = when {
+                        !call.available || ToolRegistry.find(call.name) == null ->
+                            "error: tool '${call.name}' is not registered or available in this Orion build; no action was dispatched."
+                        else -> try {
+                            executeWithRecoveryGuard(call.name, args)
+                        } catch (e: Exception) {
+                            "error: ${e.message ?: e.javaClass.simpleName}"
+                        }
+                    }
+                    ui.note(activityNote(call.name, args, result))
+                    messages.put(JSONObject()
+                        .put("role", "tool")
+                        .put("tool_call_id", call.id)
+                        .put("name", call.name)
+                        .put("content", result.take(8000)))
+                }
+                if (!stopped) {
+                    turn = talkNim.chatTurn(
+                        messages, false, 900, 0.7, tools = ToolRegistry.all
+                    )
+                }
+            }
+            if (stopped) return
+            if (turn.toolCalls.isNotEmpty()) {
+                ui.say("I paused after four tool-reasoning rounds to keep this task bounded. The completed tool results are preserved; say continue and I will resume from them.")
+                return
+            }
+            turn.text.trim()
         } catch (e: Exception) {
             if (stopped) return
+            ui.say("I couldn't reach the AI just now. " + (e.message ?: "Please try again."))
+            return
+        }
+        if (stopped) return
             if (runawayStream.get()) {
                 ui.say("The model response entered a repetition loop. I stopped the stream and discarded the repeated answer instead of saving it.")
                 return
