@@ -21,6 +21,7 @@ internal class OrionProactiveWorker(
     params: WorkerParameters
 ) : Worker(appContext, params) {
     override fun doWork(): Result {
+        if (!OrionMasterControl.isEnabled(applicationContext)) return Result.success()
         val coreEnabled = runCatching { AgentPolicy.enabled(applicationContext, "orion_core") }.getOrDefault(false)
         val proactiveEnabled = runCatching { AgentPolicy.enabled(applicationContext, "proactive") }.getOrDefault(false)
         if (!OrionProactivePolicy.shouldRun(coreEnabled, proactiveEnabled)) return Result.success()
@@ -72,6 +73,10 @@ internal object OrionProactiveWork {
     fun refresh(context: Context) {
         runCatching {
             val app = context.applicationContext
+            if (!OrionMasterControl.isEnabled(app)) {
+                WorkManager.getInstance(app).cancelUniqueWork(UNIQUE_NAME)
+                return@runCatching
+            }
             if (!AgentPolicy.enabled(app, "orion_core") || !AgentPolicy.enabled(app, "proactive")) {
                 WorkManager.getInstance(app).cancelUniqueWork(UNIQUE_NAME)
                 return@runCatching
