@@ -67,13 +67,6 @@ internal object OrionCommandIntentPolicy {
                 compoundActionFamilies.count { it.containsMatchIn(command) } >= 2
         )
 
-    fun requiresDirectActionRouting(command: String): Boolean =
-        explicitMemoryWrite.containsMatchIn(command) ||
-            requiresStructuredTaskPlanning(command) ||
-            AgentHooks.isPhoneActionRequest(command) ||
-            requiresPythonExecution(command) ||
-            isConnectedGitHubAccountRequest(command) ||
-            TaskScopePolicy.modeFor(command) == TaskMode.RESEARCH
 
     fun requestedGitHubRepositoryName(command: String): String {
         val trailing = Regex("(?i)\\b([A-Za-z0-9_.-]{2,100})\\s+(?:github\\s+)?(?:repo|repository|project)\\b").find(command)
@@ -82,29 +75,6 @@ internal object OrionCommandIntentPolicy {
             ?: named?.groupValues?.getOrNull(1)
             ?: "PhoneAI"
     }
-}
-
-/**
- * Voice is an interaction surface, not a reduced-capability assistant.
- * Action-shaped utterances enter the same guarded command/task lifecycle as chat.
- */
-internal object OrionVoiceExecutionPolicy {
-    private val contextualActionKinds = setOf(
-        OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP,
-        OrionContextualIntentInterpreter.Kind.CONTINUE_OBJECTIVE,
-        OrionContextualIntentInterpreter.Kind.COMPLETE_REMAINING,
-        OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS,
-        OrionContextualIntentInterpreter.Kind.TEST_OBJECTIVE,
-        OrionContextualIntentInterpreter.Kind.AMBIGUOUS_REFERENCE
-    )
-
-    fun shouldRouteToCommand(
-        command: String,
-        recentTurns: List<Pair<String, String>>,
-        activeObjective: String
-    ): Boolean =
-        OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
-            OrionContextualIntentInterpreter.resolve(command, recentTurns, activeObjective).kind in contextualActionKinds
 }
 
 /** What the agent uses to talk to the person. */
