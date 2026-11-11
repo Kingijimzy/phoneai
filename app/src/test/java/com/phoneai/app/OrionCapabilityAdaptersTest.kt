@@ -26,6 +26,8 @@ class OrionCapabilityAdaptersTest {
             "save_file" to OrionCapabilityAdapters.Backend.FILES,
             "browser_navigate" to OrionCapabilityAdapters.Backend.BROWSER,
             "play_media" to OrionCapabilityAdapters.Backend.DEVICE,
+            "routine_run" to OrionCapabilityAdapters.Backend.DEVICE,
+            "routine_resume" to OrionCapabilityAdapters.Backend.DEVICE,
             "chrome_search" to OrionCapabilityAdapters.Backend.DEVICE,
             "github_search_repositories" to OrionCapabilityAdapters.Backend.RESEARCH,
             "mcp_call" to OrionCapabilityAdapters.Backend.MCP,
