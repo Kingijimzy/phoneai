@@ -1050,9 +1050,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val directActionRoute = OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
             routeFor(command).needsTools
         val activeModel = if (directActionRoute) commandNim else talkNim
-        val needsCentralPlanning = OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command)
-        if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
-            (directActionRoute && needsCentralPlanning)) {
+        // Ultron coordination is model-invoked through the same native tool loop.
+        // Historical lookup remains on the retrieval workflow; ordinary and multi-step
+        // objectives share one model-facing execution path.
+        if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP) {
             if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
                 taskProofs.clear()
                 OrionObjectiveGraph.clear(svc)
@@ -1214,13 +1215,13 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             return
         }
         if (answer.trim().trim('.', '!').equals("ACTION", true)) {
-            // Persist tool-routed user turns too. Previously ACTION returned before chatHist was
-            // updated, so follow-ups such as "go research it" lost their subject and were reinterpreted.
+            // The legacy ACTION sentinel is not an execution protocol. Never hand the same
+            // request to a second planner: doing so creates competing brains and duplicate routes.
+            val explanation = "The selected model returned an obsolete ACTION marker instead of calling an exposed Orion tool. No action was dispatched. Retry with a model that supports native tool calls, or check this provider's tool-calling integration."
             chatHist.put(msg("user", command))
-            // The model judged this needs tools: switch to Command mode and run the guarded agent now.
-            svc.notifyModeSwitch(true)
-            runInternal(command, reuseCommandBudget = true)
+            chatHist.put(msg("assistant", explanation))
             reflectOnExchange(command)
+            ui.say(explanation)
             return
         }
         val safeAnswer = answer.takeIf { it.isNotBlank() }
