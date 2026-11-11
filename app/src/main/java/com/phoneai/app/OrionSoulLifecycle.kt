@@ -62,7 +62,7 @@ internal object OrionSoulLifecycle {
         State.THINKING -> "Thinking — a request is being understood, planned, and capability-checked."
         State.ACTING -> "Acting — a registered tool is executing; results are being inspected."
         State.RECOVERING -> "Recovering — a prior step failed or was interrupted; checkpoint reconciliation is in progress."
-        State.PAUSED -> "Paused — owner explicitly paused; no automatic action until resumed."
+        State.PAUSED -> "Paused — owner pause or a required capability pack is disabled; no automatic action until resumed."
     }
 
     /** Milliseconds since the current state was entered, or -1 if unknown. */
