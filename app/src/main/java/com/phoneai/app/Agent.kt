@@ -1130,6 +1130,8 @@ RESPONSE QUALITY AND FORMAT:
                     if (stopped) break
                     val args = JSONObject(call.arguments.toString())
                     val result = when {
+                        call.validationError != null ->
+                            "error: malformed arguments for '${call.name}': ${call.validationError}. No action was dispatched."
                         !call.available || ToolRegistry.find(call.name) == null ->
                             "error: tool '${call.name}' is not registered or available in this Orion build; no action was dispatched."
                         else -> try {
