@@ -1522,8 +1522,10 @@ Rules:
         }.getOrNull() ?: OrionRouter.fallback(command)
         // Explicit Python scraper build-and-test requests are code execution, not browser
         // navigation. A URL is the scraper's target input, not an instruction to open a WebView.
-        val decision = if (OrionCommandIntentPolicy.isPythonScraperBuildAndTest(command) &&
-            modelDecision.kind == OrionRouter.Kind.CHAT) {
+        // This is an explicit code-build-and-execute objective. Do not let a model-selected
+        // RESEARCH/BROWSER route override it: the URL is input data for Python, not a browsing request.
+        // Keep the policy at the route boundary so every provider receives the same deterministic route.
+        val decision = if (OrionCommandIntentPolicy.isPythonScraperBuildAndTest(command)) {
             OrionRouter.Decision(OrionRouter.Kind.ACT, plan = false, sequential = false, source = "python_scraper_policy")
         } else modelDecision
         routeCache = command to decision
