@@ -156,7 +156,8 @@ internal object OrionExecutiveStore {
             steps.any { it.id.isBlank() || it.id.length > 120 || it.title.isBlank() || it.title.length > 240 }) return false
         val byId = steps.associateBy { it.id }
         if (byId.size != steps.size) return false
-        if (steps.any { step -> step.dependencies.any { it == step.id || it !in byId } }) return false
+        if (steps.any { step -> step.dependencies.size != step.dependencies.distinct().size || step.dependencies.any { it == step.id || it !in byId } }) return false
+        if (steps.any { it.objectiveId.isNotBlank() && it.objectiveId != steps.first().objectiveId }) return false
         val visiting = HashSet<String>()
         val visited = HashSet<String>()
         fun visit(id: String): Boolean {
@@ -172,7 +173,15 @@ internal object OrionExecutiveStore {
         return byId.keys.all(::visit)
     }
 
-    /** Replace a proposed plan atomically. Existing evidence is preserved only when step IDs match. */
+    /** A prior result survives replanning only when the executable meaning is unchanged. */
+    internal fun canPreserveStepState(existing: Step, proposed: Step): Boolean =
+        existing.id == proposed.id &&
+            existing.title == proposed.title &&
+            existing.dependencies == proposed.dependencies &&
+            existing.capability == proposed.capability &&
+            existing.argumentsDigest == proposed.argumentsDigest
+
+    /** Replace a proposed plan atomically. Evidence survives only for semantically identical steps. */
     fun replacePlan(context: Context, objectiveId: String, steps: List<Step>): Boolean {
         if (!isValidPlan(steps)) return false
         val db = Db(context.applicationContext).writableDatabase
@@ -182,18 +191,30 @@ internal object OrionExecutiveStore {
             if (terminal.contains(current.phase) || current.phase == Phase.PERFORM || current.phase == Phase.VERIFY) return false
             val nextRevision = current.planRevision + 1
             val keepIds = steps.map { it.id }.toSet()
+            // Avoid UNIQUE(objective_id, ordinal) collisions when a plan reorders existing rows.
+            db.execSQL("UPDATE objective_steps SET ordinal = -ordinal - 1 WHERE objective_id=?", arrayOf(objectiveId))
             db.delete("objective_steps", "objective_id=? AND id NOT IN (${keepIds.joinToString(",") { "?" }})",
                 (listOf(objectiveId) + keepIds).toTypedArray())
             steps.forEachIndexed { index, step ->
-                val existing = db.rawQuery("SELECT status,capability,arguments_digest,attempts,result_summary,evidence_ref FROM objective_steps WHERE id=? AND objective_id=?", arrayOf(step.id, objectiveId)).use {
-                    if (it.moveToFirst()) listOf(it.getString(0),it.getString(1),it.getString(2),it.getInt(3).toString(),it.getString(4),it.getString(5)) else null
+                val existing = db.rawQuery("""SELECT id,objective_id,ordinal,title,dependencies,status,capability,arguments_digest,attempts,result_summary,evidence_ref
+                    FROM objective_steps WHERE id=? AND objective_id=?""", arrayOf(step.id, objectiveId)).use { cursor ->
+                    if (!cursor.moveToFirst()) null else Step(
+                        cursor.getString(0), cursor.getString(1), cursor.getInt(2), cursor.getString(3),
+                        runCatching { val json = JSONArray(cursor.getString(4)); (0 until json.length()).map { json.getString(it) } }.getOrDefault(emptyList()),
+                        StepStatus.valueOf(cursor.getString(5)), cursor.getString(6), cursor.getString(7),
+                        cursor.getInt(8), cursor.getString(9), cursor.getString(10)
+                    )
                 }
+                val preserve = existing != null && canPreserveStepState(existing, step)
                 db.execSQL("""INSERT OR REPLACE INTO objective_steps
                     (id,objective_id,ordinal,title,dependencies,status,capability,arguments_digest,attempts,result_summary,evidence_ref,updated_at)
                     VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
                     arrayOf(step.id, objectiveId, index, step.title.take(240), JSONArray(step.dependencies).toString(),
-                        existing?.get(0) ?: StepStatus.PENDING.name, existing?.get(1) ?: "", existing?.get(2) ?: "",
-                        existing?.get(3)?.toIntOrNull() ?: 0, existing?.get(4) ?: "", existing?.get(5) ?: "", System.currentTimeMillis()))
+                        if (preserve) existing!!.status.name else StepStatus.PENDING.name,
+                        step.capability.take(100), step.argumentsDigest.take(128),
+                        if (preserve) existing!!.attempts else 0,
+                        if (preserve) existing!!.resultSummary else "",
+                        if (preserve) existing!!.evidenceRef else "", System.currentTimeMillis()))
             }
             db.execSQL("UPDATE objectives SET plan_revision=?,revision=revision+1,updated_at=? WHERE id=?",
                 arrayOf(nextRevision, System.currentTimeMillis(), objectiveId))
@@ -224,11 +245,35 @@ internal object OrionExecutiveStore {
     fun markStepRunning(context: Context, objectiveId: String, stepId: String, capability: String, argumentsDigest: String): Boolean =
         runCatching {
             val db = Db(context.applicationContext).writableDatabase
-            db.execSQL("""UPDATE objective_steps SET status=?,capability=?,arguments_digest=?,attempts=attempts+1,updated_at=?
-                WHERE id=? AND objective_id=? AND status IN (?,?)""",
-                arrayOf(StepStatus.RUNNING.name, capability.take(100), argumentsDigest.take(128), System.currentTimeMillis(),
-                    stepId, objectiveId, StepStatus.PENDING.name, StepStatus.FAILED.name))
-            db.rawQuery("SELECT changes()", null).use { it.moveToFirst() && it.getInt(0) == 1 }
+            db.beginTransaction()
+            try {
+                val dependencies = db.rawQuery(
+                    "SELECT dependencies FROM objective_steps WHERE id=? AND objective_id=?",
+                    arrayOf(stepId, objectiveId)
+                ).use { cursor ->
+                    if (!cursor.moveToFirst()) return false
+                    val json = JSONArray(cursor.getString(0))
+                    (0 until json.length()).map { json.getString(it) }
+                }
+                // A step cannot start until every prerequisite has durable VERIFIED evidence.
+                val prerequisitesVerified = dependencies.all { dependency ->
+                    db.rawQuery(
+                        "SELECT status,evidence_ref FROM objective_steps WHERE id=? AND objective_id=?",
+                        arrayOf(dependency, objectiveId)
+                    ).use { cursor ->
+                        cursor.moveToFirst() && cursor.getString(0) == StepStatus.VERIFIED.name &&
+                            cursor.getString(1).isNotBlank()
+                    }
+                }
+                if (!prerequisitesVerified) return false
+                db.execSQL("""UPDATE objective_steps SET status=?,capability=?,arguments_digest=?,attempts=attempts+1,updated_at=?
+                    WHERE id=? AND objective_id=? AND status IN (?,?)""",
+                    arrayOf(StepStatus.RUNNING.name, capability.take(100), argumentsDigest.take(128), System.currentTimeMillis(),
+                        stepId, objectiveId, StepStatus.PENDING.name, StepStatus.FAILED.name))
+                val changed = db.rawQuery("SELECT changes()", null).use { it.moveToFirst() && it.getInt(0) == 1 }
+                if (changed) db.setTransactionSuccessful()
+                changed
+            } finally { db.endTransaction() }
         }.getOrDefault(false)
 
     /** A step is VERIFIED only when the caller supplies a real evidence reference. */
