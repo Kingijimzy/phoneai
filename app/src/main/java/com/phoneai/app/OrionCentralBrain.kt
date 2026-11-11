@@ -55,6 +55,7 @@ internal object OrionCentralBrain {
         sections += OrionGraspProtocol.contextBlock()
         // Canonical identity is injected into every executive context, independent of provider or UI surface.
         sections += OrionPrimeDirective.contextBlock()
+        sections += OrionEntityPhilosophy.doctrineBlock()
         val contextLoadDiagnostics = mutableListOf<String>()
         fun <T> observed(label: String, fallback: T, block: () -> T): T {
             return try {
@@ -194,6 +195,16 @@ internal object OrionCentralBrain {
         val continuityObjective = continuity?.resolvedObjective?.takeIf { isFollowUp }
             ?: activeObjective.takeIf { isFollowUp }.orEmpty()
         val contextQuery = continuityObjective.takeIf { isFollowUp && it.isNotBlank() } ?: request
+        sections += OrionEntityPhilosophy.stateBlock(
+            OrionEntityPhilosophy.State(
+                currentIntent = continuity?.resolvedObjective?.takeIf { it.isNotBlank() } ?: request,
+                activeObjective = continuityObjective.ifBlank { savedSoulGoal },
+                registeredCapabilityCount = registered.size,
+                enabledSkillCount = enabledSkills.size,
+                memoryAvailable = recentTurns.isNotEmpty() || runCatching { OrionFactStore.tomProfile(app).isNotEmpty() }.getOrDefault(false),
+                unresolvedEvidenceSources = contextLoadDiagnostics.filter { it.contains("failed:") }
+            )
+        )
         if (isFollowUp && continuityObjective.isNotBlank()) {
             val resume = if (pendingTask != null) runCatching { AgentCheckpointStore.resumeInstruction(app) }.getOrNull() else null
             if (!resume.isNullOrBlank()) {
