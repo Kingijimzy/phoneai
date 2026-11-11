@@ -27,7 +27,9 @@ internal data class OrionModelToolCall(
 
 internal data class OrionModelTurn(
     val text: String,
-    val toolCalls: List<OrionModelToolCall> = emptyList()
+    val toolCalls: List<OrionModelToolCall> = emptyList(),
+    /** False when the selected provider cannot expose Orion's native tool protocol. */
+    val toolCallingAvailable: Boolean = true
 )
 
 internal interface OrionModelProvider {
