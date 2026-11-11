@@ -375,6 +375,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         // Objective dependencies are enforced at the actual dispatch boundary, not trusted from planner prose.
         val objectiveGraph = OrionObjectiveGraph.load(svc)
+        var executiveGraphStepId = ""
         // task_add only records planner bookkeeping; it does not execute an objective capability.
         // Keep dependency and capability gates on every real capability dispatch below.
         if (objectiveGraph != null && OrionObjectiveGraph.requiresObjectiveDispatch(tool)) {
@@ -404,6 +405,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 ui.note("[RECOVERY]\nBound invented objective '$activeObjectiveId' to '$objectiveId'.")
             }
             activeObjectiveId = objectiveId
+            executiveGraphStepId = objectiveId
         }
         // The request-time orchestrator is part of the real dispatch boundary, not just prompt text.
         // A model cannot call an unregistered tool or one the live registry marked unavailable.
@@ -594,6 +596,27 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recordDispatchBlocked(tool, args, "cancelled_before_execution")
             return cancelled
         }
+        // Persist the exact capability attempt before crossing into any backend. The journal
+        // owns dispatch-attempt truth; the graph remains the dependency-planning authority.
+        // A failed journal write is a hard stop before side effects.
+        val dispatchStartedAt = System.currentTimeMillis()
+        val dispatchTaskId = evidenceTaskId()
+        val dispatchIntent = currentTask.ifBlank { activeIntentContext }.ifBlank { activeRequestScope }
+        val executiveHandle = OrionExecutiveStore.beginToolDispatch(
+            svc,
+            OrionObjectiveGraph.resolveSessionId(svc),
+            dispatchIntent,
+            executiveGraphStepId.ifBlank { "unscoped" },
+            tool,
+            args,
+            dispatchStartedAt
+        )
+        if (executiveHandle == null) {
+            val blocked = "error: Orion could not persist this capability attempt in the executive journal. No action was dispatched."
+            taskProofs.record(tool, blocked)
+            recordDispatchBlocked(tool, args, "executive_dispatch_journal_unavailable")
+            return blocked
+        }
         val dispatchAction = {
             OrionExecutionLoop.dispatch(tool, stopped) {
                 if (tool in nativeUiActions) {
@@ -671,13 +694,30 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             )
         if (trustedVerification) taskProofs.recordVerified(tool, verifiedResult)
         else taskProofs.record(tool, verifiedResult)
+        var dispatchEvidenceSaved = false
         if (!isNonLoggedAction(tool, args)) {
-            runCatching {
+            dispatchEvidenceSaved = runCatching {
                 OrionEvidenceLedger.recordDispatch(
-                    svc, evidenceTaskId(), "agent_verification", tool, JSONObject(),
-                    System.currentTimeMillis(), verifiedResult, trustedVerification
+                    svc, dispatchTaskId, "agent_verification", tool, JSONObject(),
+                    dispatchStartedAt, verifiedResult, trustedVerification
                 )
-            }
+            }.getOrDefault(false)
+        }
+        val dispatchEvidenceRef = if (dispatchEvidenceSaved) {
+            OrionEvidenceLedger.dispatchEvidenceId(dispatchTaskId, tool, dispatchStartedAt, verifiedResult)
+        } else ""
+        val dispatchOutcome = OrionExecutiveStore.dispatchOutcomeFor(
+            trustedVerification,
+            verifiedResult.trimStart().startsWith("error", ignoreCase = true)
+        )
+        val executiveRecorded = dispatchEvidenceSaved && OrionExecutiveStore.finishDispatchAttempt(
+            svc, executiveHandle.attemptId, dispatchOutcome, dispatchEvidenceRef, verifiedResult
+        )
+        if (!executiveRecorded) {
+            verifiedResult += "\nEXECUTIVE JOURNAL WARNING: the action returned, but its final evidence could not be committed to the executive journal. Do not automatically repeat it; inspect the current state first."
+            OrionTasksCapabilityExecutor.requireRecovery(
+                svc, "A capability returned but its executive evidence receipt could not be committed. Inspect current state before any retry."
+            )
         }
         if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) {
             // Failure is not a reason to blindly repeat or immediately abandon the task.
