@@ -23,6 +23,15 @@ class OrionNativeToolCallCodecTest {
         assertEquals("hardware", turn.calls.single().arguments.getString("detail"))
     }
 
+    @Test fun parsesGeminiNativeFunctionCallParts() {
+        val body = """{"candidates":[{"content":{"parts":[{"text":"Checking now."},{"functionCall":{"name":"device_info","args":{"detail":"hardware"}}}]}}]}"""
+        val turn = OrionNativeToolCallCodec.parse("gemini", body, known)
+        assertEquals("Checking now.", turn.text)
+        assertEquals("device_info", turn.calls.single().name)
+        assertTrue(turn.calls.single().available)
+        assertEquals("hardware", turn.calls.single().arguments.getString("detail"))
+    }
+
     @Test fun parsesResponsesApiFunctionCall() {
         val body = """{"output":[{"type":"function_call","call_id":"fc_1","name":"python_exec","arguments":"{\"code\":\"print(7)\"}"},{"type":"message","content":[{"type":"output_text","text":"Done planning."}]}]}"""
         val turn = OrionNativeToolCallCodec.parse("opencode-zen", body, known)
@@ -33,7 +42,10 @@ class OrionNativeToolCallCodecTest {
 
     @Test fun ignoresUnknownMalformedAndOversizedCalls() {
         val body = """{"choices":[{"message":{"tool_calls":[{"id":"x","function":{"name":"shell_root","arguments":"{}"}},{"id":"y","function":{"name":"python_exec","arguments":"not-json"}}]}}]}"""
-        assertTrue(OrionNativeToolCallCodec.parse("openai", body, known).calls.isEmpty())
+        val calls = OrionNativeToolCallCodec.parse("openai", body, known).calls
+        assertEquals(1, calls.size)
+        assertFalse(calls.single().available)
+        assertEquals("shell_root", calls.single().name)
     }
 
     @Test fun nonJsonResponseIsAnEmptyTurn() {
