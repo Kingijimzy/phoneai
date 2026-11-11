@@ -27,15 +27,19 @@ internal class OrionProactiveWorker(
         if (!OrionProactivePolicy.shouldRun(coreEnabled, proactiveEnabled)) return Result.success()
 
         // Local health sensing still runs every heartbeat; unsolicited initiatives must pass the Proactive Gate.
+        if (!OrionMasterControl.isEnabled(applicationContext)) return Result.success()
         OrionSoulLifecycle.watcherTick(applicationContext)
+        if (!OrionMasterControl.isEnabled(applicationContext)) return Result.success()
         val gate = runCatching { OrionProactiveGate.decide(OrionProactiveGate.gather(applicationContext)) }
             .getOrElse { OrionProactiveGate.Decision(false, 0.0, "gate unavailable: ${it.javaClass.simpleName}") }
         AgentPolicy.log(applicationContext, "soul_watch", "proactive_gate", null,
             "open=${gate.open}; score=${"%.2f".format(gate.score)}; reason=${gate.reason}")
+        if (!OrionMasterControl.isEnabled(applicationContext)) return Result.success()
         val living = if (gate.open) runCatching { OrionLivingLoop.tick(applicationContext) }.getOrDefault("") else ""
         val inner = if (gate.open) runCatching { OrionInnerLife.tick(applicationContext) }.getOrDefault("") else ""
 
         return runCatching {
+            if (!OrionMasterControl.isEnabled(applicationContext)) return@runCatching Result.success()
             val watcher = SoulEngineWatcher.run(applicationContext, allowUnpromptedInitiative = gate.open)
             val initiativeOccurred = living.isNotBlank() || inner.isNotBlank() || watcher.action == "chronos_review_suggestion"
             if (gate.open && initiativeOccurred) OrionProactiveGate.recordAction(applicationContext)
