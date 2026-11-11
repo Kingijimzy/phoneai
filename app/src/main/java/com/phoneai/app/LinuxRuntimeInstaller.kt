@@ -143,9 +143,9 @@ internal class LinuxRuntimeInstaller(
         val boundedTimeoutMs = LinuxRuntimePolicy.normalizeProcessTimeout(timeoutMs)
         if (command == "__orion_install__") return "error: internal command is not executable"
         val workspace = workspaceHostPath?.let { candidate ->
-            // The guest may see exactly one host directory: Orion's dedicated Python workspace.
-            // A generic "inside filesDir" check would also permit accidental binding of databases,
-            // preferences or other private application state by a future caller.
+            // Keep the project workspace mount stable. The separately supplied app-data and
+            // shared-storage mounts are passed through under the Android app UID; OS permissions
+            // and SELinux determine which of those host paths can actually be read or changed.
             val expected = File(app.filesDir, "orion-python/workspace")
             val dir = File(candidate)
             val canonical = runCatching { dir.canonicalFile }.getOrNull()
