@@ -1364,9 +1364,9 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         if (routineName.isBlank() || routineName.length > 100 || routineName.any { it == '\n' || it == '\r' }) {
             return "error: routine_run/routine_resume requires an exact saved routine name (1–100 characters)."
         }
-        val verb = if (action.equals("resume", true)) "resume" else "run"
+        val replayAction = if (action.equals("resume", true)) RoutineReplayPolicy.Action.RESUME else RoutineReplayPolicy.Action.RUN
         routineReplayStatus = ""
-        val handled = runSavedRoutineCommand("$verb routine $routineName")
+        val handled = runSavedRoutine(RoutineReplayPolicy.Request(replayAction, routineName))
         if (!handled) return "error: the saved routine request could not be parsed; no gesture was dispatched."
         val summary = routineReplayStatus.ifBlank {
             "Routine '$routineName' returned without a status message. Inspect the saved checkpoint and screen before retrying."
@@ -1382,19 +1382,14 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
      * Execute an explicitly named locally recorded routine without asking a model to reconstruct
      * the gestures. Every step is gated by its recorded app/screen precondition and a durable cursor.
      */
-    private fun runSavedRoutineCommand(command: String): Boolean {
-        val request = RoutineReplayPolicy.parseRequest(command) ?: return false
+    private fun runSavedRoutine(request: RoutineReplayPolicy.Request): Boolean {
         val names = MacroStore.names(svc)
         val name = RoutineReplayPolicy.exactName(names, request.name)
         val existing = RoutineReplayCheckpointStore.load(svc)
 
         if (name == null) {
-            if (request.action == RoutineReplayPolicy.Action.RESUME ||
-                RoutineReplayPolicy.isExplicitRoutineCommand(command)) {
-                routineStatus("I couldn't find a saved routine with that exact name. Check Teach Mode > Your Routines; no gestures were replayed.")
-                return true
-            }
-            return false
+            routineStatus("I couldn't find a saved routine with that exact name. Check Teach Mode > Your Routines; no gestures were replayed.")
+            return true
         }
         val found = MacroStore.find(svc, name)
         val steps = found?.second
