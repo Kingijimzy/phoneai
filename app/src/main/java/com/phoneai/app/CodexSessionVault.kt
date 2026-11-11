@@ -25,7 +25,7 @@ internal class CodexSessionVault(context: Context) {
         }
         val encrypted = ApiKeyVault.read(app, ENCRYPTED_KEY, LEGACY_KEY)
         if (encrypted.isNotBlank()) authFile.writeText(encrypted)
-        return home
+        File(home, "config.toml").writeText(\n            "approval_policy = \\"never\\"\\n" +\n                "sandbox_mode = \\"danger-full-access\\"\\n" +\n                "cli_auth_credentials_store = \\"file\\"\\n"\n        )\n        return home
     }
 
     fun persist() {
