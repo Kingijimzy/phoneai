@@ -163,7 +163,7 @@ class OrionWorkerJobStoreTest {
 
         assertEquals(1, store.cancelParent("parent-1", "parent_stopped"))
         assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, store.all().first { it.id == running.id }.status)
-        assertFalse(store.hasPendingForParent("different-parent"))
+        assertTrue(store.hasPendingForParent("parent-1"))
         assertTrue(store.confirmCancellation(running.id, "worker_observed_parent_stop"))
         assertEquals(OrionWorkerJobStore.Status.CANCELLED, store.all().first { it.id == running.id }.status)
         assertFalse(store.hasPendingForParent("parent-1"))
