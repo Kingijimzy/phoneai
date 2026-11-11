@@ -173,17 +173,20 @@ class OrionWorkerJobStoreTest {
 
     @Test fun repeatedDirectCancellationCannotReleaseActiveProviderSlot() {
         val store = OrionWorkerJobStore(context)
-        val active = store.enqueue("parent-1", "Provider call still running")!!
-        val waiting = store.enqueue("parent-2", "Wait for the active slot")!!
-        assertNotNull(store.claim(active.id) { true })
+        val active = (0 until 3).map { index ->
+            store.enqueue("parent-1", "Provider call still running $index")!!
+        }
+        val waiting = store.enqueue("parent-2", "Wait for an active slot")!!
+        active.forEach { assertNotNull(store.claim(it.id) { true }) }
 
-        assertTrue(store.cancel(active.id, "first_request"))
-        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, store.all().first { it.id == active.id }.status)
-        assertTrue(store.cancel(active.id, "retry_request"))
-        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, store.all().first { it.id == active.id }.status)
+        val cancelled = active.first()
+        assertTrue(store.cancel(cancelled.id, "first_request"))
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, store.all().first { it.id == cancelled.id }.status)
+        assertTrue(store.cancel(cancelled.id, "retry_request"))
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, store.all().first { it.id == cancelled.id }.status)
         assertNull(store.claim(waiting.id) { true })
 
-        assertTrue(store.confirmCancellation(active.id, "worker_stopped"))
+        assertTrue(store.confirmCancellation(cancelled.id, "worker_stopped"))
         assertNotNull(store.claim(waiting.id) { true })
     }
 
