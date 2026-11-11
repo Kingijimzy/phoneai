@@ -131,9 +131,29 @@ internal object AgentHooks {
   val explicitSendIntent = !explicitlyWithheld && (explicit.containsMatchIn(request) || (target.equals("Send", true) && messagingIntent.containsMatchIn(request)))
   return if((riskyTarget||riskyTool)&&!explicitSendIntent) "Request does not explicitly authorize this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
  }
- /** Confirmation is reserved for the three irreversible computer settings only. */
- fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean =
-  IrreversibleActionConfirmationPolicy.computerSettingAction(tool,args) != null
+ /** Only destructive deletion/wiping and Trading Desk writes require owner confirmation. */
+ fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean {
+  val pack = AgentPolicy.packForTool(tool) ?: ""
+  if (pack == "trading_research" && ToolRegistry.access(tool) == ToolAccess.WRITE) return true
+  if (tool in setOf(
+    "workspace_delete", "file_delete", "delete_file", "wipe_workspace", "workspace_wipe",
+    "trash_empty", "task_delete", "macro_delete", "forget", "fact_forget", "goal_remove",
+    "extension_delete", "memory_delete"
+  )) return true
+  val command = args.optString("command").ifBlank { args.optString("cmd") }.ifBlank { args.optString("script") }
+  if (tool in setOf("shell", "termux_command") &&
+   Regex("""(?is)(?:^|[;&|]\\s*)(?:command\\s+)?(?:rm|rmdir|unlink|shred)\\b|\\bfind\\b[^;&|]*\\s-delete\\b|\\b(?:wipe|erase|factory[_ -]?reset|format|wipefs|blkdiscard)\\b""").containsMatchIn(command)
+  ) return true
+  val code = args.optString("code").ifBlank { args.optString("script") }
+  if (tool in setOf("python_exec", "dev_python") &&
+   Regex("""(?is)\\b(?:os\\s*\\.\\s*(?:remove|unlink|rmdir)|shutil\\s*\\.\\s*rmtree|\\.\\s*(?:unlink|rmdir)\\s*\\()""").containsMatchIn(code)
+  ) return true
+  if (tool == "mcp_call") {
+   val remote = args.optString("name")
+   if (Regex("(?i)\\b(?:delete|remove|wipe|erase|truncate)\\b").containsMatchIn(remote)) return true
+  }
+  return false
+ }
  fun goalAuditUnavailableVerdict(): String = "CONTINUE: independent goal audit unavailable; task completion cannot be confirmed."
 
  fun completionDecision(request:String,proofs:List<Proof>):GateDecision =
