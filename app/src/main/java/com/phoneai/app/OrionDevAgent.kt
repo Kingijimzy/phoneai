@@ -136,7 +136,7 @@ internal class OrionDevAgent(
         }
         return DevResult(
             action = "run_python_code",
-            evidence = (warning ?: "") + result.take(8_000),
+            evidence = result.take(8_000),
             summary = "Python code executed in the sandbox. Output above is execution evidence, not proof of compilation or test success."
         )
     }
@@ -161,7 +161,7 @@ internal class OrionDevAgent(
         }
         return DevResult(
             action = "run_shell_command",
-            evidence = result.take(8_000),
+            evidence = (warning ?: "") + result.take(8_000),
             summary = "Shell command executed. Exit status and output are evidence; command acceptance is not task completion."
         )
     }
