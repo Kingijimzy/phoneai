@@ -93,6 +93,14 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         }
     }
 
+    private fun nativeToolsRejected(failure: Throwable): Boolean {
+        val message = generateSequence(failure as Throwable?) { it.cause }
+            .joinToString(" ") { it.message.orEmpty() }
+            .lowercase()
+        return message.contains("400") &&
+            (message.contains("tool") || message.contains("function"))
+    }
+
     override fun chatTurn(
         messages: JSONArray,
         vision: Boolean,
@@ -105,8 +113,21 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         activeNativeTools.set(tools)
         nativeToolCalls.set(emptyList())
         return try {
-            val text = chat(messages, vision, maxTokens, temperature, fastResponse, onDelta)
-            OrionModelTurn(text, nativeToolCalls.get().orEmpty())
+            try {
+                val text = chat(messages, vision, maxTokens, temperature, fastResponse, onDelta)
+                OrionModelTurn(text, nativeToolCalls.get().orEmpty())
+            } catch (failure: Exception) {
+                if (tools.isEmpty() || cancelled || !nativeToolsRejected(failure)) throw failure
+                onStatus?.invoke("This provider rejected native tool definitions; retrying as text so the guarded planner can take over.")
+                activeNativeTools.set(emptyList())
+                nativeToolCalls.set(emptyList())
+                val fallbackMessages = JSONArray(messages.toString())
+                fallbackMessages.optJSONObject(0)?.let { system ->
+                    system.put("content", system.optString("content") +
+                        "\\nThis endpoint rejected native tool calling. Do not attempt native function calls; use exactly ACTION for a task that requires tools, otherwise answer normally.")
+                }
+                OrionModelTurn(chat(fallbackMessages, vision, maxTokens, temperature, fastResponse, onDelta))
+            }
         } finally {
             activeNativeTools.remove()
             nativeToolCalls.remove()
