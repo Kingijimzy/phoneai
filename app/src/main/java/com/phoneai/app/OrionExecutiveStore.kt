@@ -325,6 +325,24 @@ internal object OrionExecutiveStore {
         }.getOrDefault(false)
     }
 
+    data class DispatchHandle(val objectiveId: String, val attemptId: String)
+
+    fun beginToolDispatch(
+        context: Context,
+        sessionId: String,
+        intent: String,
+        graphStepId: String,
+        capability: String,
+        arguments: JSONObject,
+        startedAt: Long
+    ): DispatchHandle? {
+        val cleanIntent = intent.trim().take(2_000).ifBlank { "Capability dispatch" }
+        val objectiveId = "exec-" + digest(sessionId + "|" + cleanIntent).take(40)
+        val attempt = beginDispatchAttempt(context, objectiveId, cleanIntent, graphStepId,
+            capability, digest(arguments.toString()), startedAt) ?: return null
+        return DispatchHandle(objectiveId, attempt)
+    }
+
     /**
      * Begin a durable per-tool attempt before entering the backend. The attempt is tied to the
      * current process epoch so a later process can quarantine stale RUNNING attempts.
