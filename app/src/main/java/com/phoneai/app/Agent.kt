@@ -324,7 +324,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     /** Restart, shutdown and Wi-Fi changes surface a warning but do not prompt or veto execution. */
     private fun requestGateApproval(question: String): Boolean {
         if (IrreversibleActionConfirmationPolicy.requiresConfirmation(question)) {
-            ui.note("[WARNING]\\n$question. Continuing under the owner's warning-only execution policy.")
+            ui.note("[WARNING]\n$question. Continuing under the owner's warning-only execution policy.")
         }
         return true
     }
@@ -442,7 +442,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             else -> ""
         }
         AgentHooks.scopeWarning(activeRequestScope, tool, args, targetLabel)?.let { warning ->
-            ui.note("[WARNING]\\n$warning")
+            ui.note("[WARNING]\n$warning")
         }
         val dispatchBlock = AgentDispatchPolicy.blockReason(
             request = activeRequestScope,
