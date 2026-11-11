@@ -552,7 +552,10 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             body.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
         }
         val response = try {
-            if (p.id == "opencode-zen") {
+            if (p.id == "gemini") {
+                request(p, "POST", geminiUrl(p, model, Prefs.key(ctx, p.id)),
+                    geminiBody(messages, 32, 0.0, emptyList()), Prefs.key(ctx, p.id), readMs0 = 60000)
+            } else if (p.id == "opencode-zen") {
                 val input = JSONArray()
                 for (i in 0 until messages.length()) {
                     val message = messages.optJSONObject(i) ?: continue
@@ -679,7 +682,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             }
             if (role == "assistant" && m.optJSONArray("tool_calls") != null) {
                 val blocks = JSONArray()
-                if (!c.isNullOrBlank()) blocks.put(JSONObject().put("type", "text").put("text", c.toString()))
+                if (!c?.toString().isNullOrBlank()) blocks.put(JSONObject().put("type", "text").put("text", c.toString()))
                 val calls = m.optJSONArray("tool_calls") ?: JSONArray()
                 for (j in 0 until calls.length()) {
                     val call = calls.optJSONObject(j) ?: continue
@@ -811,7 +814,13 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
     }
 
     private fun extract(p: Provider, body: String): String = try {
-        if (p.id == "opencode-zen") {
+        if (p.id == "gemini") {
+            val parts = JSONObject(body).optJSONArray("candidates")?.optJSONObject(0)
+                ?.optJSONObject("content")?.optJSONArray("parts") ?: JSONArray()
+            buildString {
+                for (i in 0 until parts.length()) append(parts.optJSONObject(i)?.optString("text", "").orEmpty())
+            }
+        } else if (p.id == "opencode-zen") {
             val root = JSONObject(body)
             val direct = root.optString("output_text", "")
             if (direct.isNotBlank()) direct else {
