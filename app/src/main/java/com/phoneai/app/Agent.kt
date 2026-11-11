@@ -1107,11 +1107,20 @@ RESPONSE QUALITY AND FORMAT:
         val runawayStream = java.util.concurrent.atomic.AtomicBoolean(false)
         val streamWatch = HermesRepetitionGuard.RunawayStreamWatch()
         val nativeTools = ToolRegistry.nativeToolsFor(command)
+        val toolTranscriptStart = messages.length()
+        var toolRounds = 0
+        fun preserveToolTranscript(note: String) {
+            if (messages.length() <= toolTranscriptStart) return
+            chatHist.put(msg("user", command))
+            for (index in toolTranscriptStart until messages.length()) {
+                messages.optJSONObject(index)?.let { chatHist.put(JSONObject(it.toString())) }
+            }
+            chatHist.put(msg("assistant", note))
+        }
         val answer = try {
             var turn = talkNim.chatTurn(
                 messages, false, 900, 0.7, tools = nativeTools
             )
-            var toolRounds = 0
             while (turn.toolCalls.isNotEmpty() && !stopped && toolRounds < 4) {
                 toolRounds++
                 val callEnvelope = JSONArray()
@@ -1154,14 +1163,24 @@ RESPONSE QUALITY AND FORMAT:
                     )
                 }
             }
-            if (stopped) return
+            if (stopped) {
+                preserveToolTranscript("Tool execution was cancelled by the owner. Do not repeat any completed side effect; inspect the last tool results before resuming.")
+                return
+            }
             if (turn.toolCalls.isNotEmpty()) {
-                ui.say("I paused after four tool-reasoning rounds to keep this task bounded. The completed tool results are preserved; say continue and I will resume from them.")
+                preserveToolTranscript("I paused after four tool-reasoning rounds to keep this task bounded. Review the tool results above, then continue from the last confirmed state.")
+                ui.say("I paused after four tool-reasoning rounds to keep this task bounded. The completed results are preserved in conversation history; say continue to resume.")
                 return
             }
             turn.text.trim()
         } catch (e: Exception) {
-            if (stopped) return
+            if (stopped) {
+                preserveToolTranscript("Tool execution was cancelled by the owner. Do not repeat any completed side effect; inspect the last tool results before resuming.")
+                return
+            }
+            if (toolRounds > 0) {
+                preserveToolTranscript("The model follow-up failed after tool execution. Review the recorded tool results before retrying; do not repeat non-idempotent actions without checking their outcome.")
+            }
             ui.say("I couldn't reach the AI just now. " + (e.message ?: "Please try again."))
             return
         }
