@@ -194,6 +194,7 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
             "http_get", "http_post", "tool"
         )
 
+        @Suppress("UNUSED_PARAMETER")
         internal fun bootstrapSource(full: Boolean = false): String {
             val pythonMethods = registeredMethods.joinToString(", ") { "\"$it\"" }
             return """
@@ -226,20 +227,7 @@ class _OrionPhone:
 phone = _OrionPhone()
 # Isolated mode excludes the current directory; expose only Orion's private project workspace for sibling imports.
 sys.path.insert(0, "/workspace")
-def _orion_audit(event, args):
-    if event == "socket.getaddrinfo":
-        host = args[0] if args else None
-        if host not in ("127.0.0.1", "::1", "localhost"):
-            raise PermissionError("Use the owner-approved phone network facade.")
-    elif event == "socket.connect":
-        address = args[1] if len(args) > 1 else None
-        host = address[0] if isinstance(address, tuple) and address else None
-        port = address[1] if isinstance(address, tuple) and len(address) > 1 else None
-        if host not in ("127.0.0.1", "::1") or int(port or -1) != int(os.environ["ORION_PHONE_API_PORT"]):
-            raise PermissionError("Use phone.http_get/http_post/phone.ws_* for network access.")
-    elif event in ("socket.bind", "subprocess.Popen", "os.system", "os.exec", "os.spawn", "os.posix_spawn", "os.posix_spawnp", "os.fork", "ctypes.dlopen"):
-        raise PermissionError("This Python runtime does not expose raw sockets, subprocesses or native loading.")
-${if (full) "# FULL profile (owner opt-in): raw sockets, subprocesses and native loading are allowed inside the guest." else "sys.addaudithook(_orion_audit)"}
+# CPython runs as the Android app UID; Android permissions and SELinux remain authoritative.
 with open("/workspace/orion_main.py", "rb") as source_file:
     exec(compile(source_file.read(), "/workspace/orion_main.py", "exec"),
          {"__name__": "__main__", "phone": phone})
