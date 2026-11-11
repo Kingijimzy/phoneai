@@ -63,7 +63,8 @@ class OrionDistributedTaskStoreTest {
     }
 
     @Test fun separateStoreInstancesCannotClaimTheSameTaskConcurrently() {
-        val seed = OrionDistributedTaskStore(context())
+        val appContext = context()
+        val seed = OrionDistributedTaskStore(appContext)
         val task = OrionTaskEnvelope.create("single owner claim")
         assertTrue(seed.enqueue(task))
 
@@ -76,7 +77,7 @@ class OrionDistributedTaskStoreTest {
             pool.execute {
                 try {
                     gate.await(3, TimeUnit.SECONDS)
-                    if (OrionDistributedTaskStore(context()).claim(task.taskId)) claims.incrementAndGet()
+                    if (OrionDistributedTaskStore(appContext).claim(task.taskId)) claims.incrementAndGet()
                 } finally {
                     done.countDown()
                 }
@@ -86,7 +87,7 @@ class OrionDistributedTaskStoreTest {
         assertTrue(done.await(5, TimeUnit.SECONDS))
         pool.shutdownNow()
         assertEquals(1, claims.get())
-        assertEquals("running", OrionDistributedTaskStore(context()).get(task.taskId)?.status)
+        assertEquals("running", OrionDistributedTaskStore(appContext).get(task.taskId)?.status)
     }
 
     @Test fun completionIsIdempotentAndTerminalStatesDoNotReopen() {
