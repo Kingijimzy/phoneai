@@ -1505,6 +1505,11 @@ Rules:
     /** One model judgment per message (cached for the turn); structural fallback only if the provider cannot answer. */
     private fun routeFor(command: String): OrionRouter.Decision {
         routeCache?.let { if (it.first == command) return it.second }
+        OrionRouter.explicitAction(command)?.let { explicit ->
+            routeCache = command to explicit
+            runCatching { AgentPolicy.log(svc, "router", explicit.kind.name.lowercase(), null, "source=explicit-action; plan=" + explicit.plan) }
+            return explicit
+        }
         val modelDecision = runCatching {
             val environment = buildString {
                 appendLine(OrionCapabilityAwareness.availability(svc))
