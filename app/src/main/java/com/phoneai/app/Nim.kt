@@ -15,6 +15,10 @@ class AiException(message: String, val httpStatus: Int? = null) : RuntimeExcepti
 /** Talks to the selected AI service, with bounded same-provider model recovery and cross-provider fallback. */
 class Nim internal constructor(private val ctx: Context, private val commandMode: Boolean = false, sharedBudget: CommandRequestBudget? = null) :
     OrionModelProvider {
+    // Structured tool calls are scoped to one synchronous chatTurn invocation.
+    private val activeNativeTools = ThreadLocal<List<ToolDefinition>?>()
+    private val nativeToolCalls = ThreadLocal<List<OrionModelToolCall>>()
+
     companion object {
         /** provider id -> time (ms) until which it is skipped (rate limited or bad key) */
         val cooldown = ConcurrentHashMap<String, Long>()
@@ -86,6 +90,26 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             lastSuccess["chat"]?.let { sb.append("\\nLast successful chat: ").append(it) }
             lastSuccess["vision"]?.let { sb.append("\\nLast successful screen-vision: ").append(it) }
             return sb.toString().trim()
+        }
+    }
+
+    override fun chatTurn(
+        messages: JSONArray,
+        vision: Boolean,
+        maxTokens: Int,
+        temperature: Double,
+        fastResponse: Boolean,
+        tools: List<ToolDefinition>,
+        onDelta: ((String) -> Unit)?
+    ): OrionModelTurn {
+        activeNativeTools.set(tools.take(128))
+        nativeToolCalls.set(emptyList())
+        return try {
+            val text = chat(messages, vision, maxTokens, temperature, fastResponse, onDelta)
+            OrionModelTurn(text, nativeToolCalls.get().orEmpty())
+        } finally {
+            activeNativeTools.remove()
+            nativeToolCalls.remove()
         }
     }
 
@@ -626,7 +650,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
     }
 
     /** Converts OpenAI-style messages to Anthropic's format. */
-    private fun anthropicBody(model: String, messages: JSONArray, tokens: Int, temperature: Double): String {
+    private fun anthropicBody(model: String, messages: JSONArray, tokens: Int, temperature: Double, tools: List<ToolDefinition> = emptyList()): String {
         val system = StringBuilder()
         val out = JSONArray()
         for (i in 0 until messages.length()) {
@@ -670,6 +694,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         val o = JSONObject().put("model", model).put("max_tokens", tokens).put("messages", out)
         if (system.isNotEmpty()) o.put("system", system.toString())
         o.put("temperature", temperature)
+        if (tools.isNotEmpty()) o.put("tools", OrionToolContractCodec.anthropic(tools))
         return o.toString()
     }
 
@@ -847,7 +872,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             val payload: String
             if (p.anthropicStyle) {
                 url = p.base + "/messages"
-                payload = anthropicBody(model, requestMessages, boundedTokens, temperature)
+                payload = anthropicBody(model, requestMessages, boundedTokens, temperature, activeNativeTools.get().orEmpty())
             } else if (p.id == "opencode-zen") {
                 url = p.base + "/responses"
                 val input = JSONArray()
@@ -856,8 +881,11 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                     input.put(JSONObject().put("role", message.optString("role", "user"))
                         .put("content", message.opt("content") ?: ""))
                 }
-                payload = JSONObject().put("model", model).put("input", input)
-                    .put("max_output_tokens", boundedTokens).put("temperature", temperature).toString()
+                val responseBody = JSONObject().put("model", model).put("input", input)
+                    .put("max_output_tokens", boundedTokens).put("temperature", temperature)
+                val toolSpecs = activeNativeTools.get().orEmpty()
+                if (toolSpecs.isNotEmpty()) responseBody.put("tools", OrionToolContractCodec.responses(toolSpecs))
+                payload = responseBody.toString()
             } else {
                 url = p.base + "/chat/completions"
                 val requestBody = JSONObject()
@@ -865,7 +893,12 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                     .put("messages", requestMessages)
                     .put("temperature", temperature)
                     .put("max_tokens", boundedTokens)
-                if (onDelta != null && !vision) requestBody.put("stream", true)
+                val toolSpecs = activeNativeTools.get().orEmpty()
+                if (toolSpecs.isNotEmpty()) {
+                    requestBody.put("tools", OrionToolContractCodec.openAi(toolSpecs))
+                    requestBody.put("tool_choice", "auto")
+                }
+                if (onDelta != null && !vision && toolSpecs.isEmpty()) requestBody.put("stream", true)
                 if (p.id == "nvidia" && model.equals("nvidia/nemotron-3.5-super-vl-120b-a12b", ignoreCase = true)) {
                     requestBody.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
                 } else if (p.id == "nvidia" && model.lowercase().contains("deepseek-v4")) {
@@ -875,7 +908,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             }
             val r: Http? = try {
                 // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
-                if (onDelta != null && !vision && !p.anthropicStyle && p.id != "opencode-zen") {
+                if (onDelta != null && !vision && !p.anthropicStyle && p.id != "opencode-zen" && activeNativeTools.get().isNullOrEmpty()) {
                     requestStream(p, url, payload, key, if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000, onDelta)
                 } else request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000)
             } catch (e: java.net.SocketTimeoutException) {
@@ -991,8 +1024,15 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 throw AiException("${p.label}: service temporarily busy (HTTP ${r.code}). Try again shortly or use another saved provider.")
             }
             if (r.code !in 200..299) throw AiException("${p.label}: error ${r.code} ${r.body.take(120)}")
-            val content = extract(p, r.body)
-            if (content.isBlank() || content == "null") {
+            val requestedTools = activeNativeTools.get().orEmpty()
+            val parsedTurn = if (requestedTools.isNotEmpty()) {
+                OrionNativeToolCallCodec.parse(p.id, r.body) { name -> requestedTools.any { it.name == name } }
+            } else OrionNativeToolCallCodec.Turn(extract(p, r.body), emptyList())
+            if (parsedTurn.calls.isNotEmpty()) {
+                nativeToolCalls.set(parsedTurn.calls.map { OrionModelToolCall(it.id, it.name, it.arguments) })
+            }
+            val content = parsedTurn.text
+            if ((content.isBlank() || content == "null") && parsedTurn.calls.isEmpty()) {
                 lastNote = "$model -> empty reply"
                 // A selected catalog model can return HTTP 200 but no usable text.
                 // Allow one bounded alternate-model attempt even in quota-saver mode;
