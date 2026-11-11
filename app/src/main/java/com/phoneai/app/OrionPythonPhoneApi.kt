@@ -24,8 +24,8 @@ import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 
 /**
- * Narrow Python-to-Android bridge. Every method is explicit, read/write-scoped and rechecks
- * consent at call time. The Python AST admits only phone.<registered_method>() calls.
+ * Python-to-Android bridge. The Python AST admits only registered phone.<method>() calls.
+ * Android's native permission model remains authoritative for protected platform resources.
  */
 internal class OrionPythonPhoneApi(
     private val context: Context,
@@ -202,7 +202,7 @@ internal class OrionPythonPhoneApi(
     fun fs_write(path: String, content: String): String =
         if (readOnly) error("workspace writes are disabled by the read-only autonomy profile") else workspace.write(path, content)
 
-    /** JSON argv only. No /bin/sh, shell expansion, pipes, redirects, privilege escalation or root. */
+    /** Executes explicit argv under the Android app UID; Android permissions and sandbox still apply. */
     fun shell(argvJson: String): String {
         val root = File(context.filesDir, "orion-python/workspace")
         when (workspace.rootStatus()) {
@@ -213,20 +213,23 @@ internal class OrionPythonPhoneApi(
             OrionPythonWorkspace.RootStatus.UNSAFE -> return error("Python workspace path is suspicious or unsafe; refusing to execute even read-only commands")
         }
         val command = OrionPythonShellPolicy.parse(argvJson, root.absolutePath)
-            ?: return error("command rejected: use a registered read-only command and workspace-relative paths")
-        if (command.executable == "pwd") return root.absolutePath
+            ?: return error("command must be a non-empty JSON argv array")
         val output = File(root, ".command-output-${SystemClock.elapsedRealtime()}.tmp")
         return try {
             val executable = File(command.executable)
-            if (!executable.isFile || !executable.canExecute()) return error("Android utility is unavailable: ${executable.name}")
+            if (!executable.isFile || !executable.canExecute()) return error("Android executable is unavailable: ${executable.path.take(180)}")
             val process = ProcessBuilder(listOf(command.executable) + command.args)
                 .directory(root).redirectErrorStream(true).redirectOutput(output).start()
-            if (!process.waitFor(4, TimeUnit.SECONDS)) {
+            if (!process.waitFor(30, TimeUnit.MINUTES)) {
                 process.destroyForcibly()
-                return error("command timed out after 4 seconds")
+                return error("command timed out after 30 minutes")
             }
-            val text = if (output.isFile) output.inputStream().use { it.readNBytes(12_000).toString(Charsets.UTF_8) } else ""
-            JSONObject().put("exit_code", process.exitValue()).put("output", text).toString()
+            val text = if (output.isFile) output.inputStream().use { it.readNBytes(96_000).toString(Charsets.UTF_8) } else ""
+            val warning = ShellPolicy.warning((listOf(command.executable) + command.args).joinToString(" "))
+            JSONObject().put("exit_code", process.exitValue())
+                .put("output", text)
+                .put("warning", warning ?: JSONObject.NULL)
+                .toString()
         } catch (e: Exception) { error("command failed: ${e.javaClass.simpleName}") }
         finally { output.delete() }
     }
