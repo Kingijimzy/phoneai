@@ -2330,7 +2330,7 @@ Rules:
                     OrionObjectiveGraph.ensureStructuredGraph(svc, inputCommand, sequential = true)
                         ?: OrionObjectiveGraph.ensureSingleMain(svc, inputCommand)
                 }
-                history.put(msg("user", "Your response must include a valid objective_graph with at least two distinct objective nodes and explicit dependsOn IDs for every sequential prerequisite. For a request that says 'in that order', every node after the first must depend on an earlier node. Persist the graph before proposing any tool call. Do not answer with prose alone and do not execute a tool yet."))
+                history.put(msg("user", "Your response must include a valid objective_graph with at least two distinct objective nodes when you have selected a multi-objective plan. Every dependency must reference an earlier prerequisite node, and the graph must preserve the plan you actually selected. Persist the graph before proposing any tool call. Do not answer with prose alone and do not execute a tool yet."))
                 continue
             }
             step.optJSONArray("complete_objectives")?.let { updates ->
