@@ -39,8 +39,8 @@ internal object OrionOwnerDialSettings {
 
     /** GUARDED/DEVELOPER relax size only. FULL (owner opt-in, set in the credential-gated Owner Control Centre) also lifts the in-guest socket/subprocess block; per-run approval and the guest isolation stay. */
     fun pythonMaxCodeChars(context: Context): Int = when (read(context).pythonProfile) {
-        OrionPythonProfile.GUARDED -> 8_000
-        OrionPythonProfile.DEVELOPER -> 16_000
+        OrionPythonProfile.GUARDED -> PythonExecutionPolicy.GUARDED_MAX_CODE_CHARS
+        OrionPythonProfile.DEVELOPER -> PythonExecutionPolicy.DEVELOPER_MAX_CODE_CHARS
         OrionPythonProfile.FULL -> PythonExecutionPolicy.FULL_MAX_CODE_CHARS
     }
 }
