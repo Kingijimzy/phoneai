@@ -32,4 +32,12 @@ class OrionProactivePolicyTest {
         assertFalse(OrionProactiveGate.shouldDeliver(null, true, false, 80, true, 20))
     }
 
+    @Test fun proactiveGateAlsoDefersScheduledExternalReadsWhenTheDeviceShouldNotBeInterrupted() {
+        assertFalse(OrionProactiveGate.shouldRunStandingOrders(true, true, 80, false, 20))
+        assertFalse(OrionProactiveGate.shouldRunStandingOrders(false, false, 80, false, 20))
+        assertFalse(OrionProactiveGate.shouldRunStandingOrders(true, false, 10, false, 20))
+        assertTrue(OrionProactiveGate.shouldRunStandingOrders(true, false, 10, true, 20))
+        assertTrue(OrionProactiveGate.shouldRunStandingOrders(true, false, 80, false, 20))
+    }
+
 }
