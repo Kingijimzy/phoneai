@@ -343,9 +343,9 @@ internal object ToolRegistry {
         fun add(names: Iterable<String>) {
             names.forEach { if (selected.size < limit && it in byName) selected += it }
         }
-        add(priorToolNames)
+        // Current intent owns the native-tool budget. Historical tools are continuity hints only.
         add(listOf("ask_user"))
-        if (Regex("\\b(mcp|remote server|remote tool|api tools)\\b").containsMatchIn(query)) add(mcpNativeTools)
+        if (Regex("\\b(mcp|remote server|remote tool|api tools|anything tools)\\b").containsMatchIn(query)) add(mcpNativeTools)
         if (Regex("\\b(app|phone|screen|tap|click|swipe|open|launch|send|message|wifi|bluetooth|notification|battery|screenshot)\\b").containsMatchIn(query)) {
             add(phoneNativeTools)
         }
@@ -353,7 +353,25 @@ internal object ToolRegistry {
             add(developerNativeTools)
         }
         ranked.filter { it.second > 0 }.forEach { if (selected.size < limit) selected += it.first.name }
+        // The caller supplies only the latest tool-call group; append it after current-intent tools.
+        add(priorToolNames)
         return all.filter { it.name in selected }
+    }
+
+    /** Names from the most recent assistant tool-call group, not the entire chat history. */
+    internal fun recentToolNames(history: org.json.JSONArray, maxNames: Int = 8): Set<String> {
+        val names = LinkedHashSet<String>()
+        for (index in history.length() - 1 downTo 0) {
+            val message = history.optJSONObject(index) ?: continue
+            val calls = message.optJSONArray("tool_calls") ?: continue
+            for (callIndex in 0 until calls.length()) {
+                val function = calls.optJSONObject(callIndex)?.optJSONObject("function") ?: continue
+                function.optString("name").takeIf { it.isNotBlank() && it in byName }?.let(names::add)
+                if (names.size >= maxNames.coerceIn(1, 32)) break
+            }
+            break
+        }
+        return names
     }
 
     fun promptSection(request: String?, status: String = ""): String {
