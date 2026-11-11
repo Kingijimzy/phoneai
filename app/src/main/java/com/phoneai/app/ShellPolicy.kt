@@ -29,7 +29,9 @@ internal object ShellPolicy {
 
     fun classify(command: String): ShellRisk {
         val exact = command.trim()
-        if (exact.isBlank() || exact in confirmedCommands) return ShellRisk.SAFE
+        if (exact.isBlank()) return ShellRisk.SAFE
+        // A confirmation is single-use and applies only to the exact command being dispatched.
+        if (confirmedCommands.remove(exact)) return ShellRisk.SAFE
         return if (destructiveDelete.any { it.containsMatchIn(exact) }) ShellRisk.BLOCKED else ShellRisk.SAFE
     }
 
