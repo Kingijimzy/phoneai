@@ -50,9 +50,17 @@ internal object OrionToolContractCodec {
                 put(JSONObject()
                     .put("name", tool.name)
                     .put("description", tool.description.take(1000))
-                    .put("parameters", parameters(tool)))
+                    .put("parameters", geminiParameters(tool)))
             }
         }))
+    }
+
+    private fun geminiParameters(tool: ToolDefinition): JSONObject {
+        val schema = parameters(tool)
+        return JSONObject()
+            .put("type", "OBJECT")
+            .put("properties", schema.optJSONObject("properties") ?: JSONObject())
+            .put("required", schema.optJSONArray("required") ?: JSONArray())
     }
 
     internal fun parameters(tool: ToolDefinition): JSONObject {
