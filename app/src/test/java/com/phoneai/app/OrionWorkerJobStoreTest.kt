@@ -370,4 +370,32 @@ class OrionWorkerJobStoreTest {
         assertEquals(setOf("ANALYSIS", "READ_ONLY_RESEARCH", "TRADING_ANALYSIS", "TASK_PLANNING"),
             OrionWorkerJobStore.Kind.values().map { it.name }.toSet())
     }
+
+    @Test fun sameProcessReplacementSeesProviderThreadStillActiveUntilItExits() {
+        OrionSpecialistProviderRuns.clearForTest()
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val thread = Thread {
+            entered.countDown()
+            release.await(3, TimeUnit.SECONDS)
+            OrionSpecialistProviderRuns.unregister("job-live", Thread.currentThread())
+        }
+        OrionSpecialistProviderRuns.register("job-live", thread)
+        thread.start()
+        assertTrue(entered.await(2, TimeUnit.SECONDS))
+        assertTrue(OrionSpecialistProviderRuns.isActive("job-live"))
+        release.countDown()
+        thread.join(2000)
+        assertFalse(thread.isAlive)
+        assertFalse(OrionSpecialistProviderRuns.isActive("job-live"))
+    }
+
+    @Test fun deadProviderThreadDoesNotRemainInProcessOwnershipRegistry() {
+        OrionSpecialistProviderRuns.clearForTest()
+        val thread = Thread { }
+        OrionSpecialistProviderRuns.register("job-finished", thread)
+        thread.start()
+        thread.join(2000)
+        assertFalse(OrionSpecialistProviderRuns.isActive("job-finished"))
+    }
 }
