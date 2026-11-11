@@ -94,9 +94,13 @@ internal class Nim internal constructor(private val ctx: Context, private val co
     }
 
     private fun nativeToolsRejected(failure: Throwable): Boolean {
-        val message = generateSequence(failure as Throwable?) { it.cause }
-            .joinToString(" ") { it.message.orEmpty() }
-            .lowercase()
+        val messages = ArrayList<String>()
+        var current: Throwable? = failure
+        while (current != null) {
+            messages += current.message.orEmpty()
+            current = current.cause
+        }
+        val message = messages.joinToString(" ").lowercase()
         return message.contains("400") &&
             (message.contains("tool") || message.contains("function"))
     }
@@ -124,7 +128,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 val fallbackMessages = JSONArray(messages.toString())
                 fallbackMessages.optJSONObject(0)?.let { system ->
                     system.put("content", system.optString("content") +
-                        "\\nThis endpoint rejected native tool calling. Do not attempt native function calls; use exactly ACTION for a task that requires tools, otherwise answer normally.")
+                        "\nThis endpoint rejected native tool calling. Do not attempt native function calls; use exactly ACTION for a task that requires tools, otherwise answer normally.")
                 }
                 OrionModelTurn(chat(fallbackMessages, vision, maxTokens, temperature, fastResponse, onDelta))
             }
