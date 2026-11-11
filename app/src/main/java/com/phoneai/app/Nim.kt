@@ -119,15 +119,21 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 OrionModelTurn(text, nativeToolCalls.get().orEmpty())
             } catch (failure: Exception) {
                 if (tools.isEmpty() || cancelled || !nativeToolsRejected(failure)) throw failure
-                onStatus?.invoke("This provider rejected native tool definitions; retrying as text so the guarded planner can take over.")
+                // Keep ordinary conversation available, but never translate native-tool
+                // failure into the legacy ACTION/JSON planner. The caller receives an explicit
+                // capability flag and must not claim it executed a requested action.
+                onStatus?.invoke("This provider does not support Orion native tool calls; continuing in chat-only mode.")
                 activeNativeTools.set(emptyList())
                 nativeToolCalls.set(emptyList())
                 val fallbackMessages = JSONArray(messages.toString())
                 fallbackMessages.optJSONObject(0)?.let { system ->
                     system.put("content", system.optString("content") +
-                        "\nThis endpoint rejected native tool calling. Do not attempt native function calls; use exactly ACTION for a task that requires tools, otherwise answer normally.")
+                        "\nNative Orion tools are unavailable on this provider for this turn. You are chat-only: answer questions, but do not claim to perform phone, file, code, browser, research or external actions.")
                 }
-                OrionModelTurn(chat(fallbackMessages, vision, maxTokens, temperature, fastResponse, onDelta))
+                OrionModelTurn(
+                    chat(fallbackMessages, vision, maxTokens, temperature, fastResponse, onDelta),
+                    toolCallingAvailable = false
+                )
             }
         } finally {
             activeNativeTools.remove()
