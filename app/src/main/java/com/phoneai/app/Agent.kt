@@ -982,7 +982,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun chatReplyBody(command: String): String? {
         val key = MacroStore.norm(command)
         val msgs = JSONArray().put(msg("system", chatSystem(command)))
-        val from = maxOf(0, chatHist.length() - 16)
+        val from = maxOf(0, chatHist.length() - 40)
         for (i in from until chatHist.length()) msgs.put(chatHist.getJSONObject(i))
         msgs.put(msg("user", command))
         // Stream ordinary conversational replies into the live assistant bubble. Keep the
@@ -1141,7 +1141,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val contextualResearchCommand = ResearchFollowUpPolicy.commandFor(command, previousUserRequest)
         if (contextualResearchCommand != command) {
             chatHist.put(msg("user", command))
-            while (chatHist.length() > 12) chatHist.remove(0)
+            while (chatHist.length() > 80) chatHist.remove(0)
             svc.notifyModeSwitch(true)
             runInternal(contextualResearchCommand, reuseCommandBudget = false)
             return
@@ -1162,7 +1162,7 @@ RESPONSE QUALITY AND FORMAT:
 """.trimIndent()
         val finalSystem = safeSystem + "\n\n" + responseQualityPolicy
         val messages = JSONArray().put(msg("system", finalSystem))
-        val from = maxOf(0, chatHist.length() - 8)
+        val from = maxOf(0, chatHist.length() - 32)
         for (i in from until chatHist.length()) messages.put(chatHist.getJSONObject(i))
         messages.put(msg("user", command))
         val runawayStream = java.util.concurrent.atomic.AtomicBoolean(false)
