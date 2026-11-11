@@ -1045,7 +1045,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // Orion Chat is the front door. Requests use one model-facing native tool loop;
         // task coordination and multi-step execution are model-selected tools, not a second planner.
         val directActionRoute =
-            intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
+            activeSkillId != null ||
+                intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
                 OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
                 ConversationAutoRoutePolicy.requiresToolAgent(command)
         // Historical recall, ordinary actions and multi-step objectives all use the same
