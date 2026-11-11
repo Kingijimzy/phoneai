@@ -361,15 +361,19 @@ internal object ToolRegistry {
     /** Names from the most recent assistant tool-call group, not the entire chat history. */
     internal fun recentToolNames(history: org.json.JSONArray, maxNames: Int = 8): Set<String> {
         val names = LinkedHashSet<String>()
+        // Only an unfinished assistant tool-call turn is continuity context. A later user
+        // message or assistant answer closes that group; stale tools must not leak into a new task.
+        var latest: org.json.JSONObject? = null
         for (index in history.length() - 1 downTo 0) {
-            val message = history.optJSONObject(index) ?: continue
-            val calls = message.optJSONArray("tool_calls") ?: continue
-            for (callIndex in 0 until calls.length()) {
-                val function = calls.optJSONObject(callIndex)?.optJSONObject("function") ?: continue
-                function.optString("name").takeIf { it.isNotBlank() && it in byName }?.let(names::add)
-                if (names.size >= maxNames.coerceIn(1, 32)) break
-            }
+            val candidate = history.optJSONObject(index) ?: continue
+            latest = candidate
             break
+        }
+        val calls = latest?.optJSONArray("tool_calls") ?: return emptySet()
+        for (callIndex in 0 until calls.length()) {
+            val function = calls.optJSONObject(callIndex)?.optJSONObject("function") ?: continue
+            function.optString("name").takeIf { it.isNotBlank() && it in byName }?.let(names::add)
+            if (names.size >= maxNames.coerceIn(1, 32)) break
         }
         return names
     }
