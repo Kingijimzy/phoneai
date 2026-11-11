@@ -3,9 +3,9 @@ package com.phoneai.app
 import android.content.Context
 
 /**
- * Call at the start of every user command turn (Ultron agency layer).
+ * Call after semantic objective resolution (Ultron agency layer).
  * Locks the mission, suppresses background noise as the active goal, and
- * returns the objective string for continue/fix-that.
+ * reconciles the model-selected objective with durable mission state.
  */
 internal object OrionAgencyBootstrap {
 
