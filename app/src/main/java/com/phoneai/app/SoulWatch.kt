@@ -29,7 +29,7 @@ internal object SoulEngineWatcher {
         val nextStep: String
     )
 
-    fun run(context: Context): TickResult {
+    fun run(context: Context, proactiveGate: OrionProactiveGate.Decision? = null): TickResult {
         val c = context.applicationContext
         val coreEnabled = runCatching { AgentPolicy.enabled(c, "orion_core") }.getOrDefault(false)
         val proactiveEnabled = runCatching { AgentPolicy.enabled(c, "proactive") }.getOrDefault(false)
@@ -161,11 +161,12 @@ internal object SoulEngineWatcher {
         // The proactive engine is now part of the real watcher path. Candidate selection is
         // side-effect free; delivery receipts are written only after NotificationManager accepts it.
         var proactiveDetail = ""
-        val proactiveItem = if (coreEnabled && proactiveEnabled) {
-            runCatching { OrionProactiveEngine.evaluate(c) }.getOrNull()
-        } else null
+        val gate = proactiveGate ?: runCatching { OrionProactiveGate.evaluate(c) }
+            .getOrElse { OrionProactiveGate.Decision(null, false, "proactive_gate_error") }
+        val proactiveItem = if (coreEnabled && proactiveEnabled) gate.candidate else null
         if (proactiveItem != null) {
-            val delivered = runCatching { OrionRuntimeNotifier.postProactiveItem(c, proactiveItem) }.getOrDefault(false)
+            val delivered = gate.allowDelivery &&
+                runCatching { OrionRuntimeNotifier.postProactiveItem(c, proactiveItem) }.getOrDefault(false)
             if (delivered) {
                 OrionProactiveEngine.markDelivered(c, proactiveItem)
                 action += "+proactive_notification"
@@ -176,11 +177,11 @@ internal object SoulEngineWatcher {
                         c,
                         "proactive_delivery",
                         "Proactive reminder ready: ${proactiveItem.title}",
-                        proactiveItem.body + " Notification delivery was unavailable; review this reminder in Orion."
+                        proactiveItem.body + " Delivery gate: " + gate.reason + ". Review this reminder in Orion."
                     )
                 }
                 action += "+proactive_pending"
-                proactiveDetail = "A ${proactiveItem.kind} reminder is saved for review because notification delivery was unavailable."
+                proactiveDetail = "A ${proactiveItem.kind} reminder is saved for review; proactive gate=" + gate.reason + "."
             }
         }
 
