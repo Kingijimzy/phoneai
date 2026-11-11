@@ -901,6 +901,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
 
     /** One small AI call for plain questions and chat. Returns null when the request needs the phone-control agent. */
     private fun chatReply(command: String): String? = withInteractionTrace { chatReplyBody(command) }
+    private fun persistTomUpdates(decision: OrionTurnDecision?) {
+        val updates = when (decision) {
+            is OrionTurnDecision.Reply -> decision.tomUpdates
+            is OrionTurnDecision.Execute -> decision.tomUpdates
+            is OrionTurnDecision.Clarify -> decision.tomUpdates
+            null -> emptyList()
+        }
+        if (updates.isNotEmpty()) runCatching { OrionTomProfileStore.apply(svc, updates) }
+    }
 
     private fun chatReplyBody(command: String): String? {
         pendingStructuredObjective = ""
@@ -912,7 +921,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // Routing is a typed model decision, not a user-facing magic word or phrase matcher.
         // Invalid output is treated as a conversational response, never as execution authority.
         val raw = talkNim.chat(msgs, false, 1200, 0.2).trim()
-        return when (val decision = OrionTurnDecisionParser.parse(raw)) {
+        val decision = OrionTurnDecisionParser.parse(raw)
+        persistTomUpdates(decision)
+        return when (decision) {
             is OrionTurnDecision.Reply -> {
                 chatHist.put(msg("user", command))
                 chatHist.put(msg("assistant", decision.text))
@@ -990,25 +1001,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         // Orion Chat is the front door: explicit repository, terminal/runtime and website tasks
         // must enter the same guarded Agent path instead of being answered as plain conversation.
-        val contextualActionRoute = intentResolution.kind in setOf(
-            OrionContextualIntentInterpreter.Kind.CONTINUE_OBJECTIVE,
-            OrionContextualIntentInterpreter.Kind.COMPLETE_REMAINING,
-            OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS,
-            OrionContextualIntentInterpreter.Kind.TEST_OBJECTIVE,
-            OrionContextualIntentInterpreter.Kind.AMBIGUOUS_REFERENCE
-        )
-        if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
-            contextualActionRoute) {
-            if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
-                taskProofs.clear()
-                OrionObjectiveGraph.clear(svc)
-            }
-            chatHist.put(msg("user", command))
-            while (chatHist.length() > 12) chatHist.remove(0)
-            svc.notifyModeSwitch(true)
-            runInternal(command, reuseCommandBudget = false)
-            return
-        }
         talkNim.beginCommand()
         stopped = false
         setRequestScope(command)
@@ -1049,7 +1041,9 @@ RESPONSE QUALITY AND FORMAT:
             return
         }
         if (stopped) return
-        when (val decision = OrionTurnDecisionParser.parse(answer)) {
+        val decision = OrionTurnDecisionParser.parse(answer)
+        persistTomUpdates(decision)
+        when (decision) {
             is OrionTurnDecision.Execute -> {
                 chatHist.put(msg("user", command))
                 while (chatHist.length() > 12) chatHist.remove(0)
@@ -1123,7 +1117,9 @@ RESPONSE QUALITY AND FORMAT:
         }
         if (stopped) return
 
-        val safeAnswer = when (val decision = OrionTurnDecisionParser.parse(answer)) {
+        val decision = OrionTurnDecisionParser.parse(answer)
+        persistTomUpdates(decision)
+        val safeAnswer = when (decision) {
             is OrionTurnDecision.Execute -> {
                 chatHist.put(msg("user", command))
                 while (chatHist.length() > 12) chatHist.remove(0)
