@@ -2562,7 +2562,13 @@ Rules:
                 }
                 if (allowed != null && allowed.phase == next) managedTask = allowed
             }
+            val persisted = AgentCheckpointStore.recordLifecycleState(
+                svc, managedTask.phase, managedTask.recoveries, detail
+            )
             ui.note("[TASK:${managedTask.phase.name}]\n$detail")
+            if (!persisted) {
+                ui.note("[TASK:CHECKPOINT_WARNING]\nThe current lifecycle update could not be persisted; execution remains guarded by the last durable action checkpoint.")
+            }
         }
         if (managedTask.phase == TaskLifecycle.Phase.UNDERSTAND) {
             managedTask = managedTask.advance() ?: managedTask // UNDERSTAND -> PLAN
