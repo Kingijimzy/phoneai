@@ -25,14 +25,16 @@ class OrionVoiceExecutionPolicyTest {
     }
 
     @Test fun voiceRoutingDoesNotGrantPermissionOrBypassTheDispatchPolicy() {
-        // Voice routes through the same dispatcher. Sending is immediate; only restart,
-        // shutdown and Wi-Fi toggle use the shared irreversible-action confirmation.
+        // Voice uses the same structured model decision and guarded dispatcher as typed chat.
+        // The route decision never grants permission; ordinary sends are not app-gated.
         assertTrue(OrionVoiceExecutionPolicy.shouldRouteToCommand("Send this message to Amma", emptyList(), ""))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("telegram_send"))
         assertEquals("messaging", AgentPolicy.packForTool("telegram_send"))
         assertFalse(AgentHooks.requiresConfirmation("telegram_send", org.json.JSONObject().put("message", "Hello")))
-        assertTrue(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "restart")))
-        assertTrue(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "shutdown")))
-        assertTrue(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "wifi_toggle")))
+        assertTrue(AgentHooks.requiresConfirmation("workspace_delete", org.json.JSONObject()))
+        assertTrue(AgentHooks.requiresConfirmation("mcp_call", org.json.JSONObject().put("name", "delete_event")))
+        assertFalse(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "restart")))
+        assertFalse(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "shutdown")))
+        assertFalse(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "wifi_toggle")))
     }
 }
