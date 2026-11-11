@@ -428,7 +428,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         var memoryRetrievalReceipt: OrionMemoryRetrievalReceipt? = null
         var memoryRetrievalObjective = ""
         if (retrievalRequired) {
-            val objective = 
+            val objective = activeRequestScope.ifBlank { "Execute registered capability: $tool" }
             val retrievedContext = runCatching {
                 OrionMemoryCapabilityExecutor.promptContext(svc, objective)
             }.getOrElse { failure ->
@@ -524,7 +524,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // A failed journal write is a hard stop before side effects.
         val dispatchStartedAt = System.currentTimeMillis()
         val dispatchTaskId = evidenceTaskId()
-        val dispatchIntent = 
+        val dispatchIntent = activeRequestScope.ifBlank { "Execute registered capability: $tool" }
         val executiveHandle = OrionExecutiveStore.beginToolDispatch(
             svc,
             OrionObjectiveGraph.resolveSessionId(svc),
