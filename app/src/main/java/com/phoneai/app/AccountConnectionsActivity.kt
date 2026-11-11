@@ -225,8 +225,8 @@ class AccountConnectionsActivity : Activity() {
                 val account = client.readAccount()
                 if (account?.isChatGptAccount != true) return@runCatching null
                 val models = client.availableModels()
-                val selectedModel = Prefs.model(applicationContext, Providers.get("codex"), false)
-                    .takeIf { models.isEmpty() || it in models } ?: models.firstOrNull().orEmpty()
+                val selectedModel = if (models.isEmpty()) "" else Prefs.model(applicationContext, Providers.get("codex"), false)
+                    .takeIf { it in models } ?: models.firstOrNull().orEmpty()
                 if (selectedModel.isNotBlank()) Prefs.setModel(applicationContext, Providers.get("codex"), false, selectedModel)
                 val thread = client.startThread(selectedModel.takeIf { it.isNotBlank() })
                 val answer = client.runTurnAndAwait(thread, "Reply with exactly: ORION_CODEX_AUTH_OK", selectedModel.takeIf { it.isNotBlank() })
