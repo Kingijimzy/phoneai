@@ -131,7 +131,7 @@ interface AgentUi {
 
 /** Converts persisted UI transcript rows into compact, provider-neutral model turns. */
 internal object ConversationContextPolicy {
-    fun recent(messages: List<Pair<String, String>>, maxTurns: Int = 40, maxChars: Int = Int.MAX_VALUE): List<Pair<String, String>> {
+    fun recent(messages: List<Pair<String, String>>, maxTurns: Int = Int.MAX_VALUE, maxChars: Int = Int.MAX_VALUE): List<Pair<String, String>> {
         val eligible = messages.mapNotNull { (kind, text) ->
             val role = when (kind.lowercase()) {
                 "me", "user" -> "user"
@@ -982,7 +982,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun chatReplyBody(command: String): String? {
         val key = MacroStore.norm(command)
         val msgs = JSONArray().put(msg("system", chatSystem(command)))
-        val from = maxOf(0, chatHist.length() - 40)
+        val from = 0
         for (i in from until chatHist.length()) msgs.put(chatHist.getJSONObject(i))
         msgs.put(msg("user", command))
         // Stream ordinary conversational replies into the live assistant bubble. Keep the
@@ -1036,7 +1036,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recoveredToolCall != null) return null
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", raw))
-        while (chatHist.length() > 80) chatHist.remove(0)
         // No reply cache: Orion answers each message fresh, with the whole conversation in mind.
         return raw
     }
@@ -1105,7 +1104,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 OrionObjectiveGraph.clear(svc)
             }
             chatHist.put(msg("user", command))
-            while (chatHist.length() > 80) chatHist.remove(0)
             svc.notifyModeSwitch(true)
             runInternal(command, reuseCommandBudget = false)
             reflectOnExchange(command)
@@ -1141,7 +1139,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val contextualResearchCommand = ResearchFollowUpPolicy.commandFor(command, previousUserRequest)
         if (contextualResearchCommand != command) {
             chatHist.put(msg("user", command))
-            while (chatHist.length() > 80) chatHist.remove(0)
             svc.notifyModeSwitch(true)
             runInternal(contextualResearchCommand, reuseCommandBudget = false)
             return
@@ -1162,7 +1159,7 @@ RESPONSE QUALITY AND FORMAT:
 """.trimIndent()
         val finalSystem = safeSystem + "\n\n" + responseQualityPolicy
         val messages = JSONArray().put(msg("system", finalSystem))
-        val from = maxOf(0, chatHist.length() - 32)
+        val from = 0
         for (i in from until chatHist.length()) messages.put(chatHist.getJSONObject(i))
         messages.put(msg("user", command))
         val runawayStream = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -1196,7 +1193,6 @@ RESPONSE QUALITY AND FORMAT:
             // Persist tool-routed user turns too. Previously ACTION returned before chatHist was
             // updated, so follow-ups such as "go research it" lost their subject and were reinterpreted.
             chatHist.put(msg("user", command))
-            while (chatHist.length() > 80) chatHist.remove(0)
             // The model judged this needs tools: switch to Command mode and run the guarded agent now.
             svc.notifyModeSwitch(true)
             runInternal(command, reuseCommandBudget = true)
@@ -1207,7 +1203,6 @@ RESPONSE QUALITY AND FORMAT:
             ?: "I'm here. What would you like to talk about?"
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", safeAnswer))
-        while (chatHist.length() > 80) chatHist.remove(0)
         reflectOnExchange(command)
         ui.say(safeAnswer)
     }
