@@ -68,8 +68,9 @@ internal class AntigravityRuntimeInstaller(context: Context) {
         return AntigravityCliProtocol.parseModelList(output.toString())
     }
 
-    fun runPrompt(workspaceHostPath: String, prompt: String, model: String? = null): String {
+    fun runPrompt(workspaceHostPath: String, prompt: String, model: String? = null, onSession: ((LinuxCommandSession) -> Unit)? = null): String {
         val session = openPromptSession(workspaceHostPath, prompt, model)
+        onSession?.invoke(session)
         val output = StringBuilder()
         val deadline = System.currentTimeMillis() + 300_000L
         try {
