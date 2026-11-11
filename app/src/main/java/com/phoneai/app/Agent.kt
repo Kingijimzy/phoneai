@@ -441,6 +441,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "type" -> svc.currentAppLabel()
             else -> ""
         }
+        AgentHooks.scopeWarning(activeRequestScope, tool, args, targetLabel)?.let { warning ->
+            ui.note("[WARNING]\\n$warning")
+        }
         val dispatchBlock = AgentDispatchPolicy.blockReason(
             request = activeRequestScope,
             tool = tool,
