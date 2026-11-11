@@ -40,9 +40,11 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
         // Result delivery and finalization are independently retryable and never re-run the model.
         if (existing.status == OrionWorkerJobStore.Status.COMPLETED) return deliverResult(existing)
         if (existing.status == OrionWorkerJobStore.Status.CANCEL_REQUESTED) {
-            // A restarted worker cannot prove that the previous provider thread stopped.
-            // Preserve the uncertain outcome for owner review instead of silently leaking
-            // an active slot or falsely acknowledging cancellation.
+            // WorkManager may recreate a Worker in the same process while its detached provider
+            // thread is still alive. Keep the durable slot pending until that thread exits.
+            if (OrionSpecialistProviderRuns.isActive(jobId)) return Result.retry()
+            // After a real process restart the process-local registry is empty; the provider
+            // outcome cannot be proven, so require owner review rather than replaying the call.
             store.needsReview(jobId, "worker_restarted_with_unacknowledged_cancellation")
             return Result.failure()
         }
@@ -169,9 +171,12 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
                 ))
             } catch (t: Exception) {
                 failure.set(t)
+            } finally {
+                OrionSpecialistProviderRuns.unregister(jobId, Thread.currentThread())
             }
         }, "orion-specialist-${jobId.take(8)}").apply { isDaemon = true }
 
+        OrionSpecialistProviderRuns.register(jobId, providerThread)
         try {
             providerThread.start()
             while (providerThread.isAlive) {
@@ -342,6 +347,34 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
         const val KEY_JOB_ID = "orion_specialist_job_id"
         const val KEY_TASK_ID = "orion_distributed_task_id"
     }
+}
+
+/**
+ * Process-local ownership marker for provider calls that outlive a cancelled WorkManager Worker.
+ * It is deliberately not durable: after process death no thread can still be executing, and
+ * the durable CANCEL_REQUESTED record is therefore moved to NEEDS_REVIEW on the next open.
+ */
+internal object OrionSpecialistProviderRuns {
+    private val lock = Any()
+    private val active = mutableMapOf<String, Thread>()
+
+    fun register(jobId: String, thread: Thread) = synchronized(lock) {
+        active[jobId] = thread
+    }
+
+    fun isActive(jobId: String): Boolean = synchronized(lock) {
+        val thread = active[jobId] ?: return@synchronized false
+        if (thread.isAlive) true else {
+            active.remove(jobId, thread)
+            false
+        }
+    }
+
+    fun unregister(jobId: String, thread: Thread) = synchronized(lock) {
+        active.remove(jobId, thread)
+    }
+
+    internal fun clearForTest() = synchronized(lock) { active.clear() }
 }
 
 /** Unique work prevents duplicate scheduler calls from creating duplicate provider execution. */
