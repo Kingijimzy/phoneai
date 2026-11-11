@@ -2500,16 +2500,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         sb.append("screen ${size.first}x${size.second}\n")
         walk(root, sb)
 
-        // OCR is local-only. Do not OCR sensitive app screens or any editable/password field.
-        val visibleLabels = nodes.mapNotNull { n ->
-            if (n.isPassword) "(password field)" else if (n.isEditable) n.hintText?.toString()?.lowercase()
-            else (n.text?.toString() ?: n.contentDescription?.toString() ?: n.hintText?.toString())?.lowercase()
-        }.joinToString(" ")
-        val packageId = root.packageName?.toString()?.lowercase().orEmpty()
-        val sensitiveScreen = Regex("bank|wallet|payment|pay\\b|authenticator|password|credential|otp|one.?time.?code")
-            .containsMatchIn(packageId + " " + visibleLabels)
-        if (!sensitiveScreen) {
-            try {
+        // Run on-device OCR and visual perception on all screens; editable/password regions remain excluded.
+        try {
                 val shot = screenshotBase64()
                 if (shot != null) {
                     val bytes = Base64.decode(shot.b64, Base64.DEFAULT)
@@ -2591,14 +2583,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             } catch (_: Exception) {
                 sb.append("(on-device OCR unavailable for this screen; accessibility results are still available)\n")
             }
-        } else {
-            sb.append("(OCR withheld on a potentially sensitive screen)\n")
-        }
         if (nodes.size + ocrElements.size + visualElements.size < 3) {
             sb.append("(very few readable elements: this may be a game or custom-drawn screen)\n")
         }
         val rendered = sb.toString().take(2800)
-        if (!sensitiveScreen && OrionSensorConsent.read(this, OrionSensorScope.SCREEN_CONTEXT).active()) {
+        if (OrionSensorConsent.read(this, OrionSensorScope.SCREEN_CONTEXT).active()) {
             runCatching {
                 val digest = java.security.MessageDigest.getInstance("SHA-256")
                     .digest(rendered.toByteArray(Charsets.UTF_8))
