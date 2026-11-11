@@ -2081,7 +2081,7 @@ Rules:
             return
         }
         // Freshness-dependent questions should use live web results, not a model's stale training data.
-        if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask && !explicitAppAction && LiveWebSearch.isLiveInfoRequest(command)) {
+        if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask && LiveWebSearch.isLiveInfoRequest(command)) {
             ui.phase("acting")
             val query = LiveWebSearch.liveQueryFrom(command)
             val raw = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("live_web_search", JSONObject().put("query", query))))
