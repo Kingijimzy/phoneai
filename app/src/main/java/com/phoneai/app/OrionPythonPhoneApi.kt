@@ -204,17 +204,10 @@ internal class OrionPythonPhoneApi(
 
     /** Executes explicit argv under the Android app UID; Android permissions and sandbox still apply. */
     fun shell(argvJson: String): String {
-        val root = File(context.filesDir, "orion-python/workspace")
-        when (workspace.rootStatus()) {
-            OrionPythonWorkspace.RootStatus.READY -> Unit
-            OrionPythonWorkspace.RootStatus.MISSING -> {
-                if (workspace.ensureRootForRepair() == null) return error("Python workspace could not be safely initialized")
-            }
-            OrionPythonWorkspace.RootStatus.UNSAFE -> return error("Python workspace path is suspicious or unsafe; refusing to execute even read-only commands")
-        }
+        val root = context.filesDir.canonicalFile
         val command = OrionPythonShellPolicy.parse(argvJson, root.absolutePath)
             ?: return error("command must be a non-empty JSON argv array")
-        val output = File(root, ".command-output-${SystemClock.elapsedRealtime()}.tmp")
+        val output = File(context.cacheDir, ".command-output-${SystemClock.elapsedRealtime()}.tmp")
         return try {
             val executable = File(command.executable)
             if (!executable.isFile || !executable.canExecute()) return error("Android executable is unavailable: ${executable.path.take(180)}")
