@@ -1640,34 +1640,50 @@ Rules:
         if (ownerTurn) reflectOnExchange(inputCommand)
     }
 
+    @Volatile private var ownerTurnCounter = 0
+
     /**
-     * Low-cost local reflection after a command exchange.
-     *
-     * Do not launch a second model request on the same live provider after every turn: that
-     * competes with the user's next message, consumes quota, and can create overlapping replies.
-     * Persist only explicit preferences and direct corrections with their owner-provided evidence.
+     * After an owner exchange Orion thinks about what it learned, using the model rather than word lists: durable facts,
+     * lessons from corrections or failures, and evidence-backed preferences (theory of mind). Explicit stated preferences
+     * are saved immediately by the local extractor. The model pass waits a few seconds and is dropped if Kingi has
+     * already sent another message, so it never competes with the live conversation for the provider.
      */
     private fun reflectOnExchange(command: String) {
         if (command.trim().length < 8 || stopped) return
         runCatching {
-            OrionTomPreferenceExtractor.extract(command).forEach { observation ->
-                OrionFactStore.tomObserve(
-                    svc, observation.dimension, observation.value,
-                    observation.confidence, observation.evidence, owner = true
-                )
+            OrionTomPreferenceExtractor.extract(command).forEach { o ->
+                OrionFactStore.tomObserve(svc, o.dimension, o.value, o.confidence, o.evidence, owner = true)
             }
         }
-        val correction = Regex(
-            "(?i)\\b(no[, ]|don't|do not|stop|I asked|I said|you should|you keep|that's wrong|that is wrong)\\b"
-        ).containsMatchIn(command)
-        if (correction) {
+        val turn = ++ownerTurnCounter
+        val lastReply = runCatching {
+            if (chatHist.length() > 0) chatHist.getJSONObject(chatHist.length() - 1).optString("content") else ""
+        }.getOrDefault("").take(700)
+        Thread {
             runCatching {
-                OrionLessons.learn(
-                    svc,
-                    "Owner correction: " + command.replace(Regex("\\s+"), " ").take(200)
-                )
+                Thread.sleep(4_000)
+                if (turn != ownerTurnCounter || stopped) return@runCatching
+                val msgs = JSONArray()
+                    .put(msg("system", "You are Orion's memory. Read one exchange between Kingi and Orion. Reply with ONLY compact JSON: " +
+                        "{\"facts\":[[subject,predicate,object]],\"lessons\":[string],\"tom\":[{\"dimension\":string,\"value\":string,\"confidence\":0-1,\"evidence\":string}]}. " +
+                        "facts = durable things Kingi stated about himself, his people, projects or plans (subject is usually \"Kingi\"); lessons = how Orion should behave " +
+                        "differently next time because Kingi corrected, was frustrated, or something failed (a short instruction to Orion); tom = what the exchange reveals about " +
+                        "HOW Kingi likes to work and be spoken to (detail, initiative, tone, pace, risk, format), only with concrete evidence from the exchange, never health, " +
+                        "religion, politics, sexuality or private mental states. Use [] when there is nothing. Never invent."))
+                    .put(msg("user", "Kingi: " + command.take(900) + "\nOrion: " + lastReply))
+                val raw = talkNim.chat(msgs, false, 650, 0.0)
+                val json = JSONObject(raw.substring(raw.indexOf('{'), raw.lastIndexOf('}') + 1))
+                json.optJSONArray("facts")?.let { f -> for (i in 0 until minOf(f.length(), 6)) {
+                    val t = f.optJSONArray(i) ?: continue
+                    if (t.length() >= 3) OrionFactStore.add(svc, t.optString(0), t.optString(1), t.optString(2))
+                } }
+                json.optJSONArray("lessons")?.let { l -> for (i in 0 until minOf(l.length(), 4)) OrionLessons.learn(svc, l.optString(i)) }
+                json.optJSONArray("tom")?.let { t -> for (i in 0 until minOf(t.length(), 5)) {
+                    val o = t.optJSONObject(i) ?: continue
+                    OrionFactStore.tomObserve(svc, o.optString("dimension"), o.optString("value"), o.optDouble("confidence", 0.0), o.optString("evidence"))
+                } }
             }
-        }
+        }.apply { isDaemon = true }.start()
     }
 
     /**
