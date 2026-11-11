@@ -476,7 +476,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         // Warn before execution, but never ask for confirmation or veto the requested shell command.
         val shellCommand = if (tool == "shell" || tool == "termux_command") args.optString("command") else ""
-        ShellPolicy.warning(shellCommand)?.let { warning -> ui.note("[WARNING]\\n$warning") }
+        ShellPolicy.warning(shellCommand)?.let { warning -> ui.note("[WARNING]\n$warning") }
         val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
         val mcpReadOperation = tool in setOf("mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt")
         val mcpScope = when {
