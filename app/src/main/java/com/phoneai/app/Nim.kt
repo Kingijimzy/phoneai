@@ -1002,7 +1002,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         // reasons by default; short probes (e.g. max_tokens=16) can spend the entire
         // budget reasoning and return choices[0].message.content="" (finish_reason=length).
         // Disable thinking for reliable direct chat/vision replies and provide a safe minimum.
-        val requestedOutput = maxOf(maxTokens, if (fastResponse) 2048 else 8192)
+        val requestedOutput = maxOf(maxTokens, if (fastResponse) 2048 else 32768)
         val tokens = when (p.id) {
             // Provider-specific thinking overhead is included, then clamped to the selected model's real output ceiling.
             "gemini" -> if (fastResponse) maxOf(requestedOutput * 2, 2048) else maxOf(requestedOutput * 2, 8192)
