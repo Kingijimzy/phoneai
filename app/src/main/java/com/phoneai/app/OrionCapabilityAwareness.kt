@@ -78,4 +78,13 @@ internal object OrionCapabilityAwareness {
         return if (parts.isEmpty()) "" else "SELF-DIAGNOSIS (local capability inventory): " + parts.joinToString("; ") +
             ". Configured providers are not necessarily live or healthy; verify them with an actual provider result. Missing a capability the task needs? Reuse a current tool or build/test a bounded extension rather than inventing availability."
     }
+
+    /** What can actually be done right now: configured providers, phone control, failing tools. Facts, not claims. */
+    fun availability(c: Context): String = runCatching {
+        val ready = Providers.all.filter { it.noKey || Prefs.hasKey(c, it.id) }.map { it.id }
+        val phone = PhoneAiService.instance != null
+        val failing = runCatching { OrionSelfModel.degraded(c).map { it.tool } }.getOrDefault(emptyList())
+        "providers_ready=${ready.take(6).joinToString().ifBlank { "none" }}; phone_control=${if (phone) "connected" else "unavailable (accessibility service not connected)"}" +
+            (if (failing.isNotEmpty()) "; failing_tools=${failing.take(4).joinToString()}" else "")
+    }.getOrDefault("")
 }

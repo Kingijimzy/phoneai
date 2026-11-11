@@ -1091,15 +1091,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         // Orion Chat is the front door: explicit repository, terminal/runtime and website tasks
         // must enter the same guarded Agent path instead of being answered as plain conversation.
-        val directActionRoute = OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
-            ConversationAutoRoutePolicy.requiresToolAgent(command)
-        val contextualActionRoute = intentResolution.kind in setOf(
-            OrionContextualIntentInterpreter.Kind.CONTINUE_OBJECTIVE,
-            OrionContextualIntentInterpreter.Kind.COMPLETE_REMAINING,
-            OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS,
-            OrionContextualIntentInterpreter.Kind.TEST_OBJECTIVE,
-            OrionContextualIntentInterpreter.Kind.AMBIGUOUS_REFERENCE
-        )
+        val directActionRoute = routeFor(command).needsTools
+        val contextualActionRoute = false
         if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
             directActionRoute || contextualActionRoute) {
             if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
@@ -1485,6 +1478,24 @@ Rules:
                 }
             }
         )
+    }
+
+    @Volatile private var routeCache: Pair<String, OrionRouter.Decision>? = null
+
+    /** One model judgment per message (cached for the turn); structural fallback only if the provider cannot answer. */
+    private fun routeFor(command: String): OrionRouter.Decision {
+        routeCache?.let { if (it.first == command) return it.second }
+        val decision = runCatching {
+            val user = OrionRouter.userMessage(
+                command, recentConversationTurns(), contextualActiveObjective(),
+                OrionCapabilityAwareness.availability(svc)
+            )
+            val raw = talkNim.chat(OrionRouter.toMessages(OrionRouter.SYSTEM, user), false, 90, 0.0, true)
+            OrionRouter.parse(raw)
+        }.getOrNull() ?: OrionRouter.fallback(command)
+        routeCache = command to decision
+        runCatching { AgentPolicy.log(svc, "router", decision.kind.name.lowercase(), null, "source=${decision.source}; plan=${decision.plan}") }
+        return decision
     }
 
     private fun contextualActiveObjective(): String = currentTask.ifBlank {
@@ -2153,7 +2164,7 @@ Rules:
         // A deterministic one-intent route must win over generic compound-action classification.
         // Otherwise "open YouTube Music and play ..." is incorrectly promoted to a graph task
         // and can be stranded by model-generated planning instead of reaching play_media.
-        val structuredTask = OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command) &&
+        val structuredTask = routeFor(command).plan &&
             !OrionCommandIntentPolicy.isCalculatorExecutionRequest(command) &&
             FastIntents.parse(command) == null
         if (resumeRequest) {
@@ -2416,7 +2427,7 @@ Rules:
         // Connected-account intent must be handled before the public repository-name shortcut.
         // This prevents a phrase like "my connected GitHub account ... PhoneAI repository" from
         // searching public GitHub and selecting an unrelated repository with the same name.
-        if (!resumeRequest && !browserActionTask && !structuredTask &&
+        if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask &&
             OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(command)) {
             val requestedName = OrionCommandIntentPolicy.requestedGitHubRepositoryName(command)
             ui.phase("acting")
@@ -2747,7 +2758,7 @@ Rules:
                 }
             }
             var proposedObjectiveGraph = OrionObjectiveGraph.load(svc)
-            val requiresSequentialGraph = Regex("(?i)\\b(?:depends on one another|in that order|sequential(?:ly)?)\\b").containsMatchIn(inputCommand)
+            val requiresSequentialGraph = routeFor(inputCommand).sequential
             val expectedGraphObjective = currentTask.ifBlank { inputCommand }.trim()
             var graphHasRequiredStructure = proposedObjectiveGraph != null &&
                 proposedObjectiveGraph.objective.equals(expectedGraphObjective, ignoreCase = true) &&
@@ -2756,7 +2767,7 @@ Rules:
             // Some providers return a valid ordered plan array but omit/mangle objective_graph.
             // Convert that already-visible plan into a deterministic graph instead of spending
             // repeated model turns asking for JSON the provider may never produce.
-            if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(inputCommand) && !graphHasRequiredStructure) {
+            if (routeFor(inputCommand).plan && !graphHasRequiredStructure) {
                 val plan = step.optJSONArray("plan")
                 val titles = plan?.let { arr -> (0 until minOf(arr.length(), 24)).map { arr.optString(it).trim() } }.orEmpty()
                 val fallback = OrionObjectiveGraph.fromPlan(
@@ -2771,7 +2782,7 @@ Rules:
                     if (graphHasRequiredStructure) ui.note("[TASK:PLAN] Saved a deterministic objective graph from the provider's ordered plan.")
                 }
             }
-            if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(inputCommand) && !graphHasRequiredStructure) {
+            if (routeFor(inputCommand).plan && !graphHasRequiredStructure) {
                 graphRepairAttempts++
                 if (graphRepairAttempts > 2) {
                     OrionTasksCapabilityExecutor.pauseRun(svc)
