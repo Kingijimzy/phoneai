@@ -73,7 +73,7 @@ object ShellRunner {
     fun runBuiltin(c: Context, command: String, timeoutSec: Long = 20, onOutput: (String) -> Unit = {}): String {
         val normalized = command.trim()
         if (normalized.isEmpty()) return "error: command is required"
-        if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
+        if (normalized.length > LinuxRuntimePolicy.MAX_COMMAND) return "error: command exceeds the ${LinuxRuntimePolicy.MAX_COMMAND} character runtime limit"
         if (normalized == "cd" || normalized.startsWith("cd ")) {
             return changeDirectory(c, normalized.removePrefix("cd").trim())
         }
@@ -102,7 +102,7 @@ object ShellRunner {
         }
         val normalized = command.trim()
         if (normalized.isEmpty()) return "error: command is required"
-        if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
+        if (normalized.length > LinuxRuntimePolicy.MAX_COMMAND) return "error: command exceeds the ${LinuxRuntimePolicy.MAX_COMMAND} character runtime limit"
         val effectiveTimeout = maxOf(timeoutSec, ShellExecutionRouting.commandTimeoutMs(normalized) / 1000L)
             .coerceIn(1L, 180L)
         val id = ids.incrementAndGet()
@@ -148,10 +148,7 @@ object ShellRunner {
         // Shell risk classification is advisory; it never prevents backend dispatch.
         val normalized = command.trim()
         if (normalized.isEmpty()) return "error: command is required"
-        if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
-        if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) {
-            return "error: blocked by Orion shell hard blocks (root/system wipe, raw block-device write, or fork bomb)"
-        }
+        if (normalized.length > LinuxRuntimePolicy.MAX_COMMAND) return "error: command exceeds the ${LinuxRuntimePolicy.MAX_COMMAND} character runtime limit"
         // Buffer complete lines so credentials split across process read chunks are redacted together.
         val pending = StringBuilder()
         val outputLock = Any()
