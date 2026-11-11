@@ -154,7 +154,7 @@ internal object AgentHooks {
   ) return true
   if (tool == "mcp_call") {
    val remote = args.optString("name")
-   if (Regex("(?i)\b(?:delete|remove|wipe|erase|truncate)\b").containsMatchIn(remote)) return true
+   if (Regex("(?i)(?:delete|remove|wipe|erase|truncate)").containsMatchIn(remote)) return true
   }
   return false
  }
