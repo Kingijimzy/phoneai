@@ -1044,10 +1044,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         // Orion Chat is the front door: explicit repository, terminal/runtime and website tasks
         // must enter the same guarded Agent path instead of being answered as plain conversation.
-        val directActionRoute = routeFor(command).needsTools
-        val contextualActionRoute = false
+        // Keep the Central Brain's native tool loop as the default execution path.
+        // The legacy JSON planner is reserved for explicit dependency-graph/task-management work;
+        // ordinary code, file, shell, research and phone requests go straight to real tool calls.
+        val directActionRoute = OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
+            routeFor(command).needsTools
+        val needsCentralPlanning = OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command)
         if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
-            directActionRoute || contextualActionRoute) {
+            (directActionRoute && needsCentralPlanning)) {
             if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
                 taskProofs.clear()
                 OrionObjectiveGraph.clear(svc)
@@ -1093,10 +1097,19 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return
         }
         val soulContext = OrionSessionContextProvider.forChat(svc, command)
-        val safeSystem = (chatSystem(command) + "\n\n" + soulContext + "\n\n" + intentResolution.contextBlock).replace(
-            "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Never bypass capability, scope, validation, or the action-specific confirmation and approval policy.",
-            "TALK MODE: You are Orion and manage capabilities automatically; never tell the user to switch modes or use Command Mode. Answer ordinary questions, explanations, greetings, and brainstorming directly. For current information (live sports scores, fixtures, standings, weather, news, prices, recent events, or explicit web lookups), call the most relevant registered native live-data tool when one is available; use exactly ACTION only when no suitable tool is exposed or the provider cannot use native tools, so the guarded planner can take over. If a name is ambiguous, use recent context and the most likely interpretation; in a football-score context, interpret \"United\" as Manchester United unless context suggests another team, and ask one short clarification only if the ambiguity materially changes the answer. If lookup fails, say current information could not be verified; never guess. For phone actions, or explicit memory/task save/recall requests, call the appropriate registered native tool directly when available; use ACTION only when no suitable native tool is available. Never claim an action or lookup succeeded without evidence."
-        )
+        val safeSystem = (chatSystem(command) + "\n\n" + soulContext + "\n\n" + intentResolution.contextBlock)
+            .replace(
+                "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Never bypass capability, scope, validation, or the action-specific confirmation and approval policy.",
+                "TALK MODE: You are Orion and manage capabilities automatically. For phone actions, memory, files, code, shell, research and other tasks, call the exact registered native tool directly when it is available. Do not emit ACTION merely to route a task to another planner. Inspect each real tool result and continue until the requested outcome is verified. Never claim an action succeeded without evidence."
+            )
+            .replace(
+                "If the user wants code, a script, a scraper, a file, a tool or an image created, reply with exactly the single word ACTION so it is saved, run and shown rather than pasted.",
+                "For code, scripts, files, tools and images, use the registered native tools directly: write or generate the requested artifact, save it to the requested workspace/location, execute and test when requested, inspect the actual result, repair failures, and report verified paths and outputs. Do not replace execution with a description or ACTION."
+            )
+            .replace(
+                "If the answer depends on anything current (news, prices, scores, weather, who holds a role today, recent releases, nearby places, the user's location), reply with exactly the single word ACTION so the research tools run instead of guessing.",
+                "For current facts, use the relevant registered native live-data or research tool and base the answer on its returned evidence; do not use ACTION when the appropriate native tool is available."
+            )
         val responseQualityPolicy = """
 RESPONSE QUALITY AND FORMAT:
 - Answer the actual question first. For current/live facts, use successful live-tool results, not model memory. Include the relevant date and timezone, competition/event, source links, and any important context the user reasonably needs.
