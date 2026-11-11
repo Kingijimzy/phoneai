@@ -30,8 +30,8 @@ class OrionVoiceExecutionPolicyTest {
         assertFalse(AgentHooks.requiresConfirmation("telegram_send", JSONObject().put("message", "Hello")))
         assertTrue(AgentHooks.requiresConfirmation("workspace_delete", JSONObject()))
         assertTrue(AgentHooks.requiresConfirmation("mcp_call", JSONObject().put("name", "delete_event")))
-        assertFalse(AgentHooks.requiresConfirmation("computer_settings", JSONObject().put("action", "restart")))
-        assertFalse(AgentHooks.requiresConfirmation("computer_settings", JSONObject().put("action", "shutdown")))
-        assertFalse(AgentHooks.requiresConfirmation("computer_settings", JSONObject().put("action", "wifi_toggle")))
+        assertTrue(AgentHooks.requiresConfirmation("computer_settings", JSONObject().put("action", "restart")))
+        assertTrue(AgentHooks.requiresConfirmation("computer_settings", JSONObject().put("action", "shutdown")))
+        assertTrue(AgentHooks.requiresConfirmation("computer_settings", JSONObject().put("action", "wifi_toggle")))
     }
 }
