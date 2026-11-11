@@ -485,7 +485,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                     .put("stop_reason", streamFinishReason)
                     .put("content", JSONArray().put(JSONObject().put("type", "text").put("text", answer.toString()))).toString()
                 p.id == "opencode-zen" -> JSONObject().put("output_text", answer.toString())
-                    .put("incomplete_details", if (streamFinishReason == "max_output_tokens") JSONObject().put("reason", "max_output_tokens") else JSONObject.NULL).toString()
+                    .put("incomplete_details", if (streamFinishReason.equals("max_output_tokens", true) ||
+                        streamFinishReason.equals("incomplete", true)) JSONObject().put("reason", "max_output_tokens") else JSONObject.NULL).toString()
                 else -> JSONObject().put("choices", JSONArray().put(JSONObject()
                     .put("message", JSONObject().put("content", answer.toString()))
                     .put("finish_reason", streamFinishReason.ifBlank { JSONObject.NULL }))).toString()
@@ -899,18 +900,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         ""
     }
 
-    private fun responseWasTruncated(p: Provider, body: String): Boolean {
-        val root = runCatching { JSONObject(body) }.getOrNull() ?: return false
-        val reason = when {
-            p.id == "gemini" -> root.optJSONArray("candidates")?.optJSONObject(0)?.optString("finishReason").orEmpty()
-            p.anthropicStyle -> root.optString("stop_reason")
-            p.id == "opencode-zen" -> root.optJSONObject("incomplete_details")?.optString("reason")
-                ?: root.optJSONObject("response")?.optJSONObject("incomplete_details")?.optString("reason").orEmpty()
-            else -> root.optJSONArray("choices")?.optJSONObject(0)?.optString("finish_reason").orEmpty()
-        }
-        return reason.equals("length", true) || reason.equals("max_tokens", true) ||
-            reason.equals("max_output_tokens", true) || reason.equals("MAX_TOKENS", true)
-    }
+    private fun responseWasTruncated(p: Provider, body: String): Boolean =
+        OrionResponseCompleteness.wasTruncated(p.id, body, p.anthropicStyle)
 
     /** A command begins at its explicit caller; the shared budget covers every fallback. */
     override fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, fastResponse: Boolean, onDelta: ((String) -> Unit)?): String {
