@@ -41,4 +41,12 @@ class OrionTurnDecisionParserTest {
         )
         assertNull(OrionTurnDecisionParser.parse("I should probably execute a tool now."))
     }
+    @Test fun parsesOnlyEvidenceBackedNonSensitiveTomUpdates() {
+        val decision = OrionTurnDecisionParser.parse("""{"decision":"reply","text":"I understand.","tom_updates":[{"dimension":"detail_level","value":"prefers concise answers by default","confidence":0.86,"evidence":"Repeated corrections asking for shorter answers."},{"dimension":"health_status","value":"has a condition","confidence":0.99,"evidence":"sensitive inference"},{"dimension":"initiative","value":"wants persistent follow-through","confidence":0.54,"evidence":"one ambiguous request"}]}""")
+        assertTrue(decision is OrionTurnDecision.Reply)
+        val updates = (decision as OrionTurnDecision.Reply).tomUpdates
+        assertEquals(1, updates.size)
+        assertEquals("detail_level", updates.single().dimension)
+    }
+
 }
