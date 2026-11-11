@@ -29,6 +29,19 @@ class OrionToolContractCodecTest {
             .getJSONArray("functionDeclarations").getJSONObject(0)
         assertEquals("inspect", gemini.getString("name"))
         assertTrue(gemini.getJSONObject("parameters").getJSONObject("properties").has("path"))
+        val responseTool = OrionToolContractCodec.responses(listOf(tool)).getJSONObject(0)
+        assertFalse(responseTool.getBoolean("strict"))
+    }
+
+    @Test fun modelsDynamicMcpArgumentsAsAnOpenJsonObject() {
+        val mcp = ToolRegistry.find("mcp_call") ?: error("mcp_call must be registered")
+        val arguments = OrionToolContractCodec.parameters(mcp)
+            .getJSONObject("properties").getJSONObject("arguments")
+        assertEquals("object", arguments.getString("type"))
+        assertFalse(arguments.has("additionalProperties"))
+        val extension = ToolRegistry.find("extension_run") ?: error("extension_run must be registered")
+        assertEquals("object", OrionToolContractCodec.parameters(extension)
+            .getJSONObject("properties").getJSONObject("input").getString("type"))
     }
 
     @Test fun derivesNestedArrayAndObjectArgumentSchemas() {
@@ -56,13 +69,14 @@ class OrionToolContractCodecTest {
 
     @Test fun selectsRelevantNativeToolsWithinProviderLimit() {
         val selected = ToolRegistry.nativeToolsFor("inspect MCP servers and list remote tools")
-        assertTrue(selected.size <= 128)
+        assertTrue(selected.size <= 20)
         assertTrue(selected.any { it.name == "mcp_status" })
         assertTrue(selected.any { it.name == "mcp_list_tools" })
         assertTrue(selected.any { it.name == "mcp_call" })
-        assertTrue(selected.any { it.name == "lookup_app" })
-        assertTrue(selected.any { it.name == "open_app" })
         assertTrue(selected.all { ToolRegistry.find(it.name) != null })
+        val phone = ToolRegistry.nativeToolsFor("open WhatsApp and read the screen")
+        assertTrue(phone.any { it.name == "lookup_app" })
+        assertTrue(phone.any { it.name == "open_app" })
         val resumed = ToolRegistry.nativeToolsFor("continue", setOf("browser_click_verify"))
         assertTrue(resumed.any { it.name == "browser_click_verify" })
     }
