@@ -299,7 +299,18 @@ internal object ToolRegistry {
      * currently documents at most 128 function definitions). Keep the native set relevant while
      * the full registry remains discoverable in the system prompt and planner.
      */
-    fun nativeToolsFor(request: String?, maxTools: Int = 120): List<ToolDefinition> {
+    private val nativeAlwaysIncluded = setOf(
+        "lookup_app", "open_app", "open_deep_link", "system_intent",
+        "read_screen", "validate_action", "verify_action", "verify_send",
+        "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "wait_for", "look", "play",
+        "mcp_status", "mcp_list_tools", "mcp_call", "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt"
+    )
+
+    fun nativeToolsFor(
+        request: String?,
+        priorToolNames: Set<String> = emptySet(),
+        maxTools: Int = 120
+    ): List<ToolDefinition> {
         val limit = maxTools.coerceIn(1, 128)
         val queryTokens = Regex("[a-zA-Z0-9_]{3,}")
             .findAll(request.orEmpty().lowercase())
@@ -318,7 +329,9 @@ internal object ToolRegistry {
             Triple(tool, score, index)
         }.sortedWith(compareByDescending<Triple<ToolDefinition, Int, Int>> { it.second }.thenBy { it.third })
         val selected = LinkedHashSet<String>()
-        all.filter { it.name in alwaysDetailed }.forEach { if (selected.size < limit) selected += it.name }
+        priorToolNames.filter { it in byName }.forEach { if (selected.size < limit) selected += it }
+        all.filter { it.name in nativeAlwaysIncluded || it.name in alwaysDetailed }
+            .forEach { if (selected.size < limit) selected += it.name }
         ranked.filter { it.second > 0 }.forEach { if (selected.size < limit) selected += it.first.name }
         all.forEach { if (selected.size < limit) selected += it.name }
         return all.filter { it.name in selected }
