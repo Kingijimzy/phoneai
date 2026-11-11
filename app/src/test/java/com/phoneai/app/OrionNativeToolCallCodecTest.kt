@@ -43,9 +43,24 @@ class OrionNativeToolCallCodecTest {
     @Test fun ignoresUnknownMalformedAndOversizedCalls() {
         val body = """{"choices":[{"message":{"tool_calls":[{"id":"x","function":{"name":"shell_root","arguments":"{}"}},{"id":"y","function":{"name":"python_exec","arguments":"not-json"}}]}}]}"""
         val calls = OrionNativeToolCallCodec.parse("openai", body, known).calls
-        assertEquals(1, calls.size)
-        assertFalse(calls.single().available)
-        assertEquals("shell_root", calls.single().name)
+        assertEquals(2, calls.size)
+        assertFalse(calls.first().available)
+        assertEquals("shell_root", calls.first().name)
+        assertNotNull(calls.last().validationError)
+    }
+
+    @Test fun preservesMultipleCallsInProviderOrder() {
+        val body = """{"choices":[{"message":{"tool_calls":[{"id":"a","function":{"name":"device_info","arguments":"{}"}},{"id":"b","function":{"name":"python_exec","arguments":"{\\"code\\":\\"print(3)\\"}"}}]}}]}"""
+        val calls = OrionNativeToolCallCodec.parse("openai", body, known).calls
+        assertEquals(2, calls.size)
+        assertEquals(listOf("device_info", "python_exec"), calls.map { it.name })
+    }
+
+    @Test fun malformedArgumentsBecomeAFeedbackCallInsteadOfBeingExecuted() {
+        val body = """{"choices":[{"message":{"tool_calls":[{"id":"bad","function":{"name":"python_exec","arguments":"not-json"}}]}}]}"""
+        val call = OrionNativeToolCallCodec.parse("openai", body, known).calls.single()
+        assertNotNull(call.validationError)
+        assertTrue(call.arguments.length() == 0)
     }
 
     @Test fun nonJsonResponseIsAnEmptyTurn() {
