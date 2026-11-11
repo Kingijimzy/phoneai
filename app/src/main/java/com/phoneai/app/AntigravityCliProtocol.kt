@@ -34,7 +34,7 @@ internal object AntigravityCliProtocol {
     fun parseModelList(output: String): List<String> = output.lineSequence()
         .map { it.trim() }
         .mapNotNull { line ->
-            Regex("^([a-zA-Z0-9][a-zA-Z0-9._-]{2,80})\\\\s+").find(line)?.groupValues?.get(1)
+            Regex("^([a-zA-Z0-9][a-zA-Z0-9._-]{2,80})\\s+").find(line)?.groupValues?.get(1)
         }
         .distinct()
         .toList()
