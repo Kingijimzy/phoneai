@@ -218,7 +218,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
 
     /** Finalize a cancellation only after the worker has observed the parent stop. */
     fun confirmCancellation(jobId: String, reason: String = "worker_acknowledged_cancellation"): Boolean =
-        transition(jobId, setOf(Status.CANCEL_REQUESTED)) {
+        transition(jobId, setOf(Status.RUNNING, Status.CANCEL_REQUESTED)) {
             it.copy(status = Status.CANCELLED, updatedAt = clock(),
                 lastError = AgentPrivacyFilter.safeCommand(reason).replace(Regex("\\s+"), " ").take(240))
         }
