@@ -220,16 +220,33 @@ class AccountConnectionsActivity : Activity() {
     private fun pollAccount() {
         if (!polling || isFinishing) return
         worker.execute {
-            val result = runCatching { codex?.readAccount() }.getOrNull()
+            val verification = runCatching {
+                val client = codex ?: error("Codex app-server session is not running")
+                val account = client.readAccount()
+                if (account?.isChatGptAccount != true) return@runCatching null
+                val models = client.availableModels()
+                val selectedModel = Prefs.model(applicationContext, Providers.get("codex"), false)
+                    .takeIf { models.isEmpty() || it in models } ?: models.firstOrNull().orEmpty()
+                if (selectedModel.isNotBlank()) Prefs.setModel(applicationContext, Providers.get("codex"), false, selectedModel)
+                val thread = client.startThread(selectedModel.takeIf { it.isNotBlank() })
+                val answer = client.runTurnAndAwait(thread, "Reply with exactly: ORION_CODEX_AUTH_OK", selectedModel.takeIf { it.isNotBlank() })
+                check(answer.contains("ORION_CODEX_AUTH_OK")) { "Codex account did not pass the model verification challenge." }
+                Prefs.setAccountConnected(applicationContext, "codex", true)
+                account to models
+            }
             runOnUiThread {
-                val account = result
-                if (account?.isChatGptAccount == true) {
+                val verified = verification.getOrNull()
+                if (verified != null) {
                     polling = false
-                    status.text = "ChatGPT account detected · plan: ${account.planType.ifBlank { "unspecified" }} · ${account.email ?: "email not supplied"}"
-                    code.text = if (account.hasSubscriptionEntitlement) "ACCOUNT AUTHENTICATED" else "ACCOUNT AUTHENTICATED · PLAN ENTITLEMENT NOT CONFIRMED"
+                    val account = verified.first
+                    status.text = "ChatGPT account verified · plan: ${account.planType.ifBlank { "unspecified" }} · ${account.email ?: "email not supplied"}"
+                    code.text = "ACCOUNT + MODEL VERIFIED"
                     connectButton.text = "CHECK ACCOUNT AGAIN"
                     connectButton.isEnabled = true
                     connectButton.setOnClickListener { startAccountPolling() }
+                } else if (verification.isFailure) {
+                    status.text = "Codex verification: ${verification.exceptionOrNull()?.message ?: "not ready"}"
+                    handler.postDelayed({ pollAccount() }, 5_000L)
                 } else {
                     status.text = "Waiting for ChatGPT device authorization…"
                     handler.postDelayed({ pollAccount() }, 4_000L)
