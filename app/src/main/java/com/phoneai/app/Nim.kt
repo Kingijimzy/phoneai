@@ -653,8 +653,23 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
     private fun anthropicBody(model: String, messages: JSONArray, tokens: Int, temperature: Double, tools: List<ToolDefinition> = emptyList()): String {
         val system = StringBuilder()
         val out = JSONArray()
+        fun appendMessage(role: String, content: Any) {
+            val last = if (out.length() > 0) out.optJSONObject(out.length() - 1) else null
+            if (last != null && last.optString("role") == role) {
+                val previous = last.opt("content")
+                if (previous is JSONArray && content is JSONArray) {
+                    for (i in 0 until content.length()) previous.put(content.get(i))
+                    return
+                }
+                if (previous is String && content is String) {
+                    last.put("content", previous + "\n" + content)
+                    return
+                }
+            }
+            out.put(JSONObject().put("role", role).put("content", content))
+        }
         for (i in 0 until messages.length()) {
-            val m = messages.getJSONObject(i)
+            val m = messages.optJSONObject(i) ?: continue
             val role = m.optString("role")
             val c = m.opt("content")
             if (role == "system") {
@@ -662,34 +677,46 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 system.append(c?.toString() ?: "")
                 continue
             }
+            if (role == "assistant" && m.optJSONArray("tool_calls") != null) {
+                val blocks = JSONArray()
+                if (!c.isNullOrBlank()) blocks.put(JSONObject().put("type", "text").put("text", c.toString()))
+                val calls = m.optJSONArray("tool_calls") ?: JSONArray()
+                for (j in 0 until calls.length()) {
+                    val call = calls.optJSONObject(j) ?: continue
+                    val fn = call.optJSONObject("function") ?: continue
+                    val args = runCatching { JSONObject(fn.optString("arguments", "{}")) }.getOrDefault(JSONObject())
+                    blocks.put(JSONObject().put("type", "tool_use")
+                        .put("id", call.optString("id")).put("name", fn.optString("name")).put("input", args))
+                }
+                appendMessage("assistant", blocks)
+                continue
+            }
+            if (role == "tool") {
+                val result = JSONArray().put(JSONObject()
+                    .put("type", "tool_result")
+                    .put("tool_use_id", m.optString("tool_call_id"))
+                    .put("content", c?.toString() ?: ""))
+                appendMessage("user", result)
+                continue
+            }
             val content: Any = if (c is JSONArray) {
                 val parts = JSONArray()
                 for (j in 0 until c.length()) {
-                    val part = c.getJSONObject(j)
+                    val part = c.optJSONObject(j) ?: continue
                     if (part.optString("type") == "image_url") {
-                        val url = part.getJSONObject("image_url").optString("url")
+                        val url = part.optJSONObject("image_url")?.optString("url").orEmpty()
                         val data = url.substringAfter("base64,", "")
-                        parts.put(
-                            JSONObject().put("type", "image").put(
-                                "source",
-                                JSONObject().put("type", "base64").put("media_type", "image/jpeg").put("data", data)
-                            )
-                        )
+                        parts.put(JSONObject().put("type", "image").put(
+                            "source", JSONObject().put("type", "base64")
+                                .put("media_type", "image/jpeg").put("data", data)
+                        ))
                     } else {
                         parts.put(JSONObject().put("type", "text").put("text", part.optString("text")))
                     }
                 }
                 parts
-            } else {
-                c?.toString() ?: ""
-            }
-            // Anthropic wants strictly alternating roles; merge neighbours with the same role.
-            val last = if (out.length() > 0) out.getJSONObject(out.length() - 1) else null
-            if (last != null && last.optString("role") == role && content is String && last.opt("content") is String) {
-                last.put("content", last.getString("content") + "\n" + content)
-            } else {
-                out.put(JSONObject().put("role", role).put("content", content))
-            }
+            } else c?.toString() ?: ""
+            appendMessage(if (role == "assistant") "assistant" else "user", content)
         }
         val o = JSONObject().put("model", model).put("max_tokens", tokens).put("messages", out)
         if (system.isNotEmpty()) o.put("system", system.toString())
