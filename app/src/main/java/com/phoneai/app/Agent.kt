@@ -1195,14 +1195,6 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             return
         }
         if (stopped) return
-            if (runawayStream.get()) {
-                ui.say("The model response entered a repetition loop. I stopped the stream and discarded the repeated answer instead of saving it.")
-                return
-            }
-            ui.say("I couldn't reach the AI just now. " + (e.message ?: "Please try again."))
-            return
-        }
-        if (stopped) return
         if (runawayStream.get() || HermesRepetitionGuard.isRunawayRepetition(answer)) {
             ui.say("The model response fell into a repetition loop. I discarded the repeated answer instead of saving it as conversation history. Please retry or switch models.")
             return
