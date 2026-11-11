@@ -54,6 +54,8 @@ internal object OrionCentralBrain {
         val sections = mutableListOf<String>()
         // Canonical identity is injected into every executive context, independent of provider or UI surface.
         sections += OrionPrimeDirective.contextBlock()
+        runCatching { OrionTomProfileStore.promptBlock(app) }.getOrNull()?.takeIf { it.isNotBlank() }?.let { sections += it }
+        runCatching { OrionMmagRetrieval.contextFor(app, request) }.getOrNull()?.takeIf { it.isNotBlank() }?.let { sections += it }
         val contextLoadDiagnostics = mutableListOf<String>()
         fun <T> observed(label: String, fallback: T, block: () -> T): T {
             return try {
