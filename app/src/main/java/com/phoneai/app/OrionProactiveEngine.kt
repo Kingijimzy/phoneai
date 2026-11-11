@@ -31,7 +31,7 @@ internal object OrionProactiveEngine {
         val dueAtMillis: Long? = null
     )
 
-    /** Evaluate everything and return at most one item to speak, or null. */
+    /** Evaluate everything and return at most one item to deliver, or null. No delivery is recorded here. */
     fun evaluate(
         context: Context,
         now: Long = System.currentTimeMillis()
@@ -148,11 +148,16 @@ internal object OrionProactiveEngine {
                 .thenBy { it.dueAtMillis ?: Long.MAX_VALUE })
             .firstOrNull() ?: return null
 
-        // 6. Record the interruption so throttling applies.
+        // Selection is side-effect free. The caller records delivery only after Android
+        // accepted a notification or the voice engine completed an interruption.
+        return best
+    }
+
+    /** Record a proactive interruption only after its delivery path confirms acceptance. */
+    fun markDelivered(context: Context, now: Long = System.currentTimeMillis()) {
+        val app = context.applicationContext
         Prefs.setLastProactiveSpokenAt(app, now)
         recordSpoken(app, now)
-
-        return best
     }
 
     /** Format a millisecond delta as a short human string. */
