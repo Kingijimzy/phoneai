@@ -1047,23 +1047,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // Keep the Central Brain's native tool loop as the default execution path.
         // The legacy JSON planner is reserved for explicit dependency-graph/task-management work;
         // ordinary code, file, shell, research and phone requests go straight to real tool calls.
-        val directActionRoute = OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
-            routeFor(command).needsTools
+        val directActionRoute =
+            intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
+                OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
+                routeFor(command).needsTools
+        // Historical recall, ordinary actions and multi-step objectives all use the same
+        // model-facing native-tool loop. The model chooses recall when conversation memory
+        // is needed; no special route hands the request to the legacy JSON planner.
         val activeModel = if (directActionRoute) commandNim else talkNim
-        // Ultron coordination is model-invoked through the same native tool loop.
-        // Historical lookup remains on the retrieval workflow; ordinary and multi-step
-        // objectives share one model-facing execution path.
-        if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP) {
-            if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
-                taskProofs.clear()
-                OrionObjectiveGraph.clear(svc)
-            }
-            chatHist.put(msg("user", command))
-            svc.notifyModeSwitch(true)
-            runInternal(command, reuseCommandBudget = false)
-            reflectOnExchange(command)
-            return
-        }
         activeModel.beginCommand()
         stopped = false
         setRequestScope(command)
