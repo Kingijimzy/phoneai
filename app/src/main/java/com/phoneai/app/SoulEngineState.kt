@@ -31,7 +31,7 @@ internal object SoulEngineState {
         val goal: String, val purpose: String, val mode: Mode, val watching: List<String>, val proposals: List<Proposal>,
         val lessons: List<Lesson>, val memoryNudges: List<MemoryNudge>, val memoryNudgeRules: MemoryNudgeRules,
         val lastTick: Long, val lastOutcome: String,
-        val watcherStatus: String, val watcherAction: String, val watcherAt: Long
+        val watcherStatus: String, val watcherAction: String, val watcherNextStep: String, val watcherAt: Long
     )
 
     private const val PREFS = "orion_soul_state_v1"
@@ -100,14 +100,15 @@ internal object SoulEngineState {
         Snapshot(safeText(o.optString("goal")), safeText(o.optString("purpose", OrionInnerLife.PRIME_DIRECTIVE), 360), runCatching { Mode.valueOf(o.optString("mode", "TALK")) }.getOrDefault(Mode.TALK),
             strings(o, "watching"), proposals(o), lessons(o), memoryNudges(o), memoryNudgeRules(o),
             o.optLong("lastTick"), safeText(o.optString("lastOutcome"), 100),
-            safeText(o.optString("watcherStatus"), 40), safeText(o.optString("watcherAction"), 100), o.optLong("watcherAt"))
+            safeText(o.optString("watcherStatus"), 40), safeText(o.optString("watcherAction"), 100), safeText(o.optString("watcherNextStep"), 260), o.optLong("watcherAt"))
     }
 
-    fun recordWatcherStatus(context: Context, status: String, action: String): Boolean = synchronized(lock) {
+    fun recordWatcherStatus(context: Context, status: String, action: String, nextStep: String = ""): Boolean = synchronized(lock) {
         val o = read(context)
         val now = System.currentTimeMillis()
         o.put("watcherStatus", safeText(status, 40))
             .put("watcherAction", safeText(action, 100))
+            .put("watcherNextStep", safeText(nextStep, 260))
             .put("watcherAt", now)
             .put("lastTick", now)
             .put("lastOutcome", "watcher:$status")
