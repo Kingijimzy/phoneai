@@ -188,14 +188,14 @@ internal object OrionCentralBrain {
             }
         }
         savedGraph?.let { graph ->
-            sections += OrionObjectiveGraph.prompt(graph) +
-                "\\nReady objective candidates: " + graph.ready().joinToString(" | ") { "${it.id}: ${it.title}" }
+            sections += "DURABLE OBJECTIVE GRAPH\\n" + OrionObjectiveGraph.prompt(graph) +
+                "\\nNext objective candidates: " + graph.ready().joinToString(" | ") { "${it.id}: ${it.title}" }
         }
 
         val discussion = runCatching { ChatHistoryStore.search(app, request, 4) }.getOrDefault(emptyList())
         if (discussion.isNotEmpty()) {
             sections += buildString {
-                appendLine("RELATED CONVERSATION EVIDENCE")
+                appendLine("PREVIOUS DISCUSSIONS FOR THIS OBJECTIVE — RELATED CONVERSATION EVIDENCE")
                 discussion.forEach { hit ->
                     appendLine("[session=${hit.sessionId} turn=${hit.turnId} role=${hit.role} time=${hit.timestamp}] ${hit.snippet.take(420)}")
                     if (hit.before.isNotBlank()) appendLine("preceding: ${hit.before.take(180)}")
@@ -207,7 +207,7 @@ internal object OrionCentralBrain {
         val decisions = runCatching { OrionDecisionHistoryStore.get(app).search(request, 4) }.getOrDefault(emptyList())
         if (decisions.isNotEmpty()) {
             sections += buildString {
-                appendLine("RELEVANT DECISION HISTORY")
+                appendLine("DECISIONS AND UNRESOLVED QUESTIONS — RELEVANT DECISION HISTORY")
                 decisions.forEach { d ->
                     appendLine("- [${d.status}] ${d.topic.take(80)}: ${d.statement.take(350)}; rationale=${d.rationale.take(240)}; source=${d.sourceRole}/${d.sourceSessionId ?: "unknown"}/${d.sourceTurnId ?: "unknown"}")
                 }
