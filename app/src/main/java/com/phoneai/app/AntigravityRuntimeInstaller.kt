@@ -48,9 +48,46 @@ internal class AntigravityRuntimeInstaller(context: Context) {
     }
 
     /** Starts a single headless request; requires a previously authenticated agy session. */
-    fun openPromptSession(workspaceHostPath: String, prompt: String): LinuxCommandSession {
-        val invocation = AntigravityCliProtocol.headlessPrompt(prompt)
+    fun openPromptSession(workspaceHostPath: String, prompt: String, model: String? = null): LinuxCommandSession {
+        val invocation = AntigravityCliProtocol.headlessPrompt(prompt, model)
         val config = runtime.interactiveLaunchConfig(workspaceHostPath)
         return LinuxCommandSession.start(config, listOf(VERSION_MARKER, *invocation.argv.drop(1).toTypedArray()))
+
+    fun listModels(workspaceHostPath: String): List<String> {
+        val config = runtime.interactiveLaunchConfig(workspaceHostPath)
+        val invocation = AntigravityCliProtocol.listModelsInvocation()
+        val session = LinuxCommandSession.start(config, listOf(VERSION_MARKER, *invocation.argv.drop(1).toTypedArray()))
+        val output = StringBuilder()
+        val deadline = System.currentTimeMillis() + 60_000L
+        while (session.isAlive() && System.currentTimeMillis() < deadline) {
+            session.readLine(500L)?.let { output.append(it).append('\\n') }
+        }
+        val exit = session.exitCodeOrNull()
+        session.close()
+        check(exit == 0) { "Antigravity model discovery failed (exit=${exit ?: "timeout"})." }
+        return AntigravityCliProtocol.parseModelList(output.toString())
+    }
+
+    fun runPrompt(workspaceHostPath: String, prompt: String, model: String? = null): String {
+        val session = openPromptSession(workspaceHostPath, prompt, model)
+        val output = StringBuilder()
+        val deadline = System.currentTimeMillis() + 300_000L
+        try {
+            while (session.isAlive() && System.currentTimeMillis() < deadline) {
+                val line = session.readLine(500L) ?: continue
+                val event = AntigravityCliProtocol.parseStreamEvent(line) ?: continue
+                if (AntigravityCliProtocol.isAuthenticationRequired(event)) {
+                    error("Antigravity requires Google-account sign-in.")
+                }
+                if (event.error.isNotBlank()) error("Antigravity: ${event.error}")
+                if (event.text.isNotBlank()) output.append(event.text)
+            }
+            check(!session.isAlive()) { "Antigravity model request timed out." }
+            check(session.exitCodeOrNull() == 0) { "Antigravity model request failed: ${session.stderrSnapshot().joinToString(" ").take(500)}" }
+            return output.toString().trim().also { check(it.isNotBlank()) { "Antigravity returned no model response." } }
+        } finally {
+            session.close()
+        }
+    }
     }
 }
