@@ -35,8 +35,9 @@ internal class OrionProactiveWorker(
         val inner = if (gate.open) runCatching { OrionInnerLife.tick(applicationContext) }.getOrDefault("") else ""
 
         return runCatching {
-            SoulEngineWatcher.run(applicationContext, allowUnpromptedInitiative = gate.open)
-            if (gate.open && (living.isNotBlank() || inner.isNotBlank())) OrionProactiveGate.recordAction(applicationContext)
+            val watcher = SoulEngineWatcher.run(applicationContext, allowUnpromptedInitiative = gate.open)
+            val initiativeOccurred = living.isNotBlank() || inner.isNotBlank() || watcher.action == "chronos_review_suggestion"
+            if (gate.open && initiativeOccurred) OrionProactiveGate.recordAction(applicationContext)
             Result.success()
         }.getOrElse {
             AgentPolicy.log(
