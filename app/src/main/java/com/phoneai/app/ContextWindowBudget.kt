@@ -14,7 +14,9 @@ internal object ContextWindowBudget {
     fun priority(section: String): Int {
         val s = section.lowercase()
         return when {
+            "orion grasp executive cycle" in s -> 108
             "task resume instructions" in s || "active objective" in s -> 110
+            "memory layers" in s -> 98
             "orion central brain" in s || "shared executive contract" in s -> 105
             "relevant persistent memory" in s || "long-term memory" in s || "things you have learned about how this user" in s -> 100
             "multimodal evidence index" in s -> 82
