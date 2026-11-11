@@ -131,7 +131,7 @@ interface AgentUi {
 
 /** Converts persisted UI transcript rows into compact, provider-neutral model turns. */
 internal object ConversationContextPolicy {
-    fun recent(messages: List<Pair<String, String>>, maxTurns: Int = 12, maxChars: Int = 4000): List<Pair<String, String>> {
+    fun recent(messages: List<Pair<String, String>>, maxTurns: Int = 40, maxChars: Int = Int.MAX_VALUE): List<Pair<String, String>> {
         val eligible = messages.mapNotNull { (kind, text) ->
             val role = when (kind.lowercase()) {
                 "me", "user" -> "user"
@@ -1036,7 +1036,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recoveredToolCall != null) return null
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", raw))
-        while (chatHist.length() > 28) chatHist.remove(0)
+        while (chatHist.length() > 80) chatHist.remove(0)
         // No reply cache: Orion answers each message fresh, with the whole conversation in mind.
         return raw
     }
@@ -1105,7 +1105,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 OrionObjectiveGraph.clear(svc)
             }
             chatHist.put(msg("user", command))
-            while (chatHist.length() > 12) chatHist.remove(0)
+            while (chatHist.length() > 80) chatHist.remove(0)
             svc.notifyModeSwitch(true)
             runInternal(command, reuseCommandBudget = false)
             reflectOnExchange(command)
@@ -1491,11 +1491,15 @@ Rules:
     private fun routeFor(command: String): OrionRouter.Decision {
         routeCache?.let { if (it.first == command) return it.second }
         val modelDecision = runCatching {
+            val environment = buildString {
+                appendLine(OrionCapabilityAwareness.availability(svc))
+                appendLine(OrionCentralBrain.contextFor(svc, command))
+                appendLine(ToolRegistry.promptSection())
+            }
             val user = OrionRouter.userMessage(
-                command, recentConversationTurns(), contextualActiveObjective(),
-                OrionCapabilityAwareness.availability(svc)
+                command, recentConversationTurns(), contextualActiveObjective(), environment
             )
-            val raw = talkNim.chat(OrionRouter.toMessages(OrionRouter.SYSTEM, user), false, 90, 0.0, true)
+            val raw = talkNim.chat(OrionRouter.toMessages(OrionRouter.SYSTEM, user), false, 180, 0.0)
             OrionRouter.parse(raw)
         }.getOrNull() ?: OrionRouter.fallback(command)
         // The model owns intent interpretation. Structural fallback is used only when
