@@ -1052,7 +1052,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             }
             val r: Http? = try {
                 // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
-                if (onDelta != null && !vision && !p.anthropicStyle && p.id != "opencode-zen" && activeNativeTools.get().isNullOrEmpty()) {
+                if (onDelta != null && !vision && !p.anthropicStyle && p.id != "opencode-zen" && p.id != "gemini" && activeNativeTools.get().isNullOrEmpty()) {
                     requestStream(p, url, payload, key, if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000, onDelta)
                 } else request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000)
             } catch (e: java.net.SocketTimeoutException) {
