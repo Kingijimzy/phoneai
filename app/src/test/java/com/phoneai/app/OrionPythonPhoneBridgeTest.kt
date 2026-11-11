@@ -26,11 +26,14 @@ class OrionPythonPhoneBridgeTest {
         }
     }
 
-    @Test fun fullProfileOmitsTheAuditHookButKeepsTheBridge() {
-        val source = OrionPythonPhoneBridge.bootstrapSource(full = true)
-        assertFalse(source.contains("sys.addaudithook(_orion_audit)"))
-        assertTrue(source.contains("phone = _OrionPhone()"))
-        assertTrue(source.contains("ORION_PHONE_API_TOKEN"))
+    @Test fun allProfilesUseTheAndroidAppUidWithoutAPythonAuditHook() {
+        listOf(false, true).forEach { full ->
+            val source = OrionPythonPhoneBridge.bootstrapSource(full)
+            assertFalse(source.contains("sys.addaudithook"))
+            assertFalse(source.contains("_orion_audit"))
+            assertTrue(source.contains("phone = _OrionPhone()"))
+            assertTrue(source.contains("ORION_PHONE_API_TOKEN"))
+        }
     }
 
     @Test fun bootstrapUsesAuthenticatedLoopbackAndInjectsPhoneFacade() {
@@ -38,8 +41,8 @@ class OrionPythonPhoneBridgeTest {
         assertTrue(source.contains("http://127.0.0.1:"))
         assertTrue(source.contains("ORION_PHONE_API_TOKEN"))
         assertTrue(source.contains("phone = _OrionPhone()"))
-        assertTrue(source.contains("sys.addaudithook(_orion_audit)"))
-        assertTrue(source.contains("socket.getaddrinfo"))
+        assertFalse(source.contains("sys.addaudithook"))
+        assertFalse(source.contains("_orion_audit"))
         assertTrue(source.contains("subprocess.Popen"))
         assertTrue(source.contains("sys.path.insert(0, \"/workspace\")"))
         assertTrue(source.contains("/workspace/orion_main.py"))
