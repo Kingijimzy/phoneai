@@ -443,6 +443,22 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recordDispatchBlocked(tool, args, "tool_pack_mapping_denied")
             return blocked
         }
+        // The only owner approval boundary: destructive deletion/wiping and Trading Desk writes.
+        // Approval is attached to this exact dispatch; ordinary tools never enter this prompt.
+        if (AgentHooks.requiresConfirmation(tool, args, targetLabel) && !args.optBoolean("confirmed")) {
+            val reason = if (AgentPolicy.packForTool(tool) == "trading_research") {
+                "Trading Desk write"
+            } else {
+                "destructive deletion/wiping"
+            }
+            if (!requestGateApproval("Confirm $reason for tool '$tool'?")) {
+                val denied = "error: $reason was not confirmed; no action was dispatched."
+                recordDispatchBlocked(tool, args, "owner_confirmation_declined")
+                taskProofs.record(tool, denied)
+                return denied
+            }
+            args.put("confirmed", true)
+        }
         val shellCommand = if (tool == "shell" || tool == "termux_command") args.optString("command") else ""
         if (shellCommand.isNotBlank() && args.optBoolean("confirmed")) ShellPolicy.confirm(shellCommand)
         if (shellCommand.isNotBlank() && ShellPolicy.classify(shellCommand) == ShellRisk.BLOCKED) {
