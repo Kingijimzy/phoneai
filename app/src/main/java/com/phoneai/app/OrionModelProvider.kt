@@ -17,6 +17,17 @@ import org.json.JSONArray
  * Cancellation, authentication errors, billing blocks, and general network-unavailable
  * conditions are never rotated through — they fail closed and are reported honestly.
  */
+internal data class OrionModelToolCall(
+    val id: String,
+    val name: String,
+    val arguments: org.json.JSONObject
+)
+
+internal data class OrionModelTurn(
+    val text: String,
+    val toolCalls: List<OrionModelToolCall> = emptyList()
+)
+
 internal interface OrionModelProvider {
     /** One bounded chat turn. Returns the assistant's reply text or throws AiException/RuntimeException. */
     fun chat(
@@ -27,6 +38,22 @@ internal interface OrionModelProvider {
         fastResponse: Boolean = false,
         onDelta: ((String) -> Unit)? = null
     ): String
+
+    /**
+     * Structured tool-capable turn. Implementations that do not support native calls remain
+     * text-compatible; production Nim overrides this and preserves provider-native call data.
+     */
+    fun chatTurn(
+        messages: JSONArray,
+        vision: Boolean,
+        maxTokens: Int = 400,
+        temperature: Double = 0.2,
+        fastResponse: Boolean = false,
+        tools: List<ToolDefinition> = emptyList(),
+        onDelta: ((String) -> Unit)? = null
+    ): OrionModelTurn = OrionModelTurn(
+        chat(messages, vision, maxTokens, temperature, fastResponse, onDelta)
+    )
 
     /** Probe whether a specific model on a provider can answer chat; empty string means OK. */
     fun testModel(provider: Provider, model: String, vision: Boolean): String
