@@ -1563,40 +1563,33 @@ Rules:
     }
 
     /**
-     * After every exchange Orion thinks about what it just learned, using the model rather than word lists:
-     * durable facts about Kingi go to the memory graph, and mistakes, corrections or better ways of working
-     * become lessons that are injected into every later prompt.
+     * Low-cost local reflection after a command exchange.
+     *
+     * Do not launch a second model request on the same live provider after every turn: that
+     * competes with the user's next message, consumes quota, and can create overlapping replies.
+     * Persist only explicit preferences and direct corrections with their owner-provided evidence.
      */
     private fun reflectOnExchange(command: String) {
         if (command.trim().length < 8 || stopped) return
-        val lastReply = runCatching {
-            val a = if (chatHist.length() > 0) chatHist.getJSONObject(chatHist.length() - 1) else null
-            a?.optString("content").orEmpty()
-        }.getOrDefault("").take(700)
-        Thread {
-            runCatching {
-                val msgs = JSONArray()
-                    .put(msg("system", "You are Orion's memory. Read one exchange between Kingi and Orion. Reply with ONLY compact JSON: " +
-                        "{\"facts\":[[subject,predicate,object]],\"lessons\":[string],\"tom\":[{\"dimension\":string,\"value\":string,\"confidence\":0-1,\"evidence\":string}]}. facts = durable things Kingi stated about himself, his people, " +
-                        "projects, preferences or plans (subject is usually \"Kingi\"); lessons = how Orion should behave differently next time because Kingi " +
-                        "corrected, was frustrated, or something failed (written as a short instruction to Orion). tom = what this exchange reveals about HOW Kingi likes to work and be spoken to (detail level, initiative he wants, tone, pace, risk appetite, format), only with concrete evidence from the exchange; never health, religion, politics, sexuality or private mental states. Use [] when there is nothing. Never invent."))
-                    .put(msg("user", "Kingi: " + command.take(900) + "\nOrion: " + lastReply))
-                val raw = talkNim.chat(msgs, false, 650, 0.0)
-                val json = JSONObject(raw.substring(raw.indexOf('{'), raw.lastIndexOf('}') + 1))
-                val facts = json.optJSONArray("facts")
-                if (facts != null) for (i in 0 until facts.length()) {
-                    val t = facts.optJSONArray(i) ?: continue
-                    if (t.length() >= 3) OrionFactStore.add(svc, t.optString(0), t.optString(1), t.optString(2))
-                }
-                val lessons = json.optJSONArray("lessons")
-                if (lessons != null) for (i in 0 until lessons.length()) OrionLessons.learn(svc, lessons.optString(i))
-                val tom = json.optJSONArray("tom")
-                if (tom != null) for (i in 0 until minOf(tom.length(), 5)) {
-                    val t = tom.optJSONObject(i) ?: continue
-                    OrionFactStore.tomObserve(svc, t.optString("dimension"), t.optString("value"), t.optDouble("confidence", 0.0), t.optString("evidence"))
-                }
+        runCatching {
+            OrionTomPreferenceExtractor.extract(command).forEach { observation ->
+                OrionFactStore.tomObserve(
+                    svc, observation.dimension, observation.value,
+                    observation.confidence, observation.evidence, owner = true
+                )
             }
-        }.apply { isDaemon = true }.start()
+        }
+        val correction = Regex(
+            "(?i)\\b(no[, ]|don't|do not|stop|I asked|I said|you should|you keep|that's wrong|that is wrong)\\b"
+        ).containsMatchIn(command)
+        if (correction) {
+            runCatching {
+                OrionLessons.learn(
+                    svc,
+                    "Owner correction: " + command.replace(Regex("\\s+"), " ").take(200)
+                )
+            }
+        }
     }
 
     /**
