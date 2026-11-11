@@ -33,7 +33,7 @@ internal data class TaskLifecycle(
     /** A failure during EXECUTE or VERIFY goes to RECOVER, which returns to PLAN. Recovery is bounded. */
     fun fail(): TaskLifecycle? {
         if (phase != Phase.EXECUTE && phase != Phase.VERIFY) return null
-        if (recoveries >= MAX_RECOVERIES) return copy(phase = Phase.RECORD, verified = false)
+        if (recoveries >= MAX_RECOVERIES) return copy(phase = Phase.BLOCKED, blockedFrom = phase, verified = false)
         return copy(phase = Phase.RECOVER, recoveries = recoveries + 1, verified = false)
     }
 
