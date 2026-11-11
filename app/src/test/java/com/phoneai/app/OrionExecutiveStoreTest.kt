@@ -65,4 +65,19 @@ class OrionExecutiveStoreTest {
         assertFalse(OrionExecutiveStore.canPreserveStepState(original, original.copy(argumentsDigest = "digest-2")))
     }
 
+    @Test fun interruptedActionsRequireReconciliationBeforeTheyCanBeResolved() {
+        assertFalse(OrionExecutiveStore.canResolveStepResult(
+            OrionExecutiveStore.StepStatus.PENDING, OrionExecutiveStore.StepStatus.VERIFIED, "receipt"
+        ))
+        assertFalse(OrionExecutiveStore.canResolveStepResult(
+            OrionExecutiveStore.StepStatus.RECONCILIATION_REQUIRED, OrionExecutiveStore.StepStatus.VERIFIED, ""
+        ))
+        assertTrue(OrionExecutiveStore.canResolveStepResult(
+            OrionExecutiveStore.StepStatus.RECONCILIATION_REQUIRED, OrionExecutiveStore.StepStatus.VERIFIED, "observed-state"
+        ))
+        assertTrue(OrionExecutiveStore.canResolveStepResult(
+            OrionExecutiveStore.StepStatus.RECONCILIATION_REQUIRED, OrionExecutiveStore.StepStatus.FAILED, ""
+        ))
+    }
+
 }
