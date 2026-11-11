@@ -1106,9 +1106,10 @@ RESPONSE QUALITY AND FORMAT:
         messages.put(msg("user", command))
         val runawayStream = java.util.concurrent.atomic.AtomicBoolean(false)
         val streamWatch = HermesRepetitionGuard.RunawayStreamWatch()
+        val nativeTools = ToolRegistry.nativeToolsFor(command)
         val answer = try {
             var turn = talkNim.chatTurn(
-                messages, false, 900, 0.7, tools = ToolRegistry.all
+                messages, false, 900, 0.7, tools = nativeTools
             )
             var toolRounds = 0
             while (turn.toolCalls.isNotEmpty() && !stopped && toolRounds < 4) {
@@ -1149,7 +1150,7 @@ RESPONSE QUALITY AND FORMAT:
                 }
                 if (!stopped) {
                     turn = talkNim.chatTurn(
-                        messages, false, 900, 0.7, tools = ToolRegistry.all
+                        messages, false, 900, 0.7, tools = nativeTools
                     )
                 }
             }
