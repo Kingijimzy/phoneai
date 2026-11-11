@@ -1215,7 +1215,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             ?: "I'm here. What would you like to talk about?"
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", safeAnswer))
-        reflectOnExchange(command)
+        if (!command.trimStart().startsWith("[ORION")) reflectOnExchange(command)
         ui.say(safeAnswer)
     }
 
@@ -1660,8 +1660,15 @@ Rules:
         if (ownerTurn) runCatching { svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit().putLong("owner_last_active", System.currentTimeMillis()).apply() }
         // Remember what Kingi tells Orion about himself automatically, without a tool call or a prompt.
         if (ownerTurn) runCatching { OrionFactExtractor.extract(inputCommand, Prefs.userName(svc)).forEach { (s, p, o) -> OrionFactStore.add(svc, s, p, o) } }
-        runInternal(inputCommand, reuseCommandBudget = false)
-        if (ownerTurn) reflectOnExchange(inputCommand)
+        // The public command/voice/autonomy entry now shares the same conversational
+        // brain and native-tool dispatcher as typed chat. Keep the legacy skill runner only
+        // for its explicit skill contract until skill execution is represented natively.
+        if (Regex("(?is)^\\\\s*run skill\\\\s+[a-z0-9._-]{2,48}\\\\s*:").containsMatchIn(inputCommand.trim())) {
+            runInternal(inputCommand, reuseCommandBudget = false)
+            if (ownerTurn) reflectOnExchange(inputCommand)
+        } else {
+            runConversation(inputCommand)
+        }
     }
 
     @Volatile private var ownerTurnCounter = 0
