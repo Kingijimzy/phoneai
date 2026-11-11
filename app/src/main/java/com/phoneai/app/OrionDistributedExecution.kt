@@ -120,17 +120,6 @@ internal class OrionDistributedTaskStore(context: Context, private val clock: ()
         rows.put(taskId, row); root.put("tasks", rows); write(root)
     }
 
-    /** Reconciles cancellation requests; running work is handled by the fenced coordinator. */
-    fun recoverQueued(): List<String> = synchronized(lock) {
-        val rows = read().optJSONObject("tasks") ?: return@synchronized emptyList()
-        rows.keys().asSequence().mapNotNull { id ->
-            val row = rows.optJSONObject(id) ?: return@mapNotNull null
-            if (row.optString("status") == "cancel_requested") {
-                row.put("status", "cancelled").put("updatedAt", clock()); id
-            } else null
-        }.toList().also { if (it.isNotEmpty()) { val root = read().put("tasks", rows); write(root) } }
-    }
-
     fun summary(): String = synchronized(lock) {
         val records = all()
         "delegated_tasks=${records.size}; queued=${records.count { it.status == "queued" }}; running=${records.count { it.status == "running" }}; recovery_required=${records.count { it.status == "cancel_requested" || it.status == "needs_review" }}; failed=${records.count { it.status == "failed" }}"
