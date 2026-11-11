@@ -31,8 +31,7 @@ internal object OrionToolContractCodec {
                 .put("type", "function")
                 .put("name", tool.name)
                 .put("description", tool.description.take(1000))
-                .put("parameters", parameters(tool))
-                .put("strict", true))
+                .put("parameters", parameters(tool)))
         }
     }
 
@@ -148,7 +147,7 @@ internal object OrionToolContractCodec {
         value.forEachIndexed { index, c ->
             if (quote != null) {
                 if (escaped) escaped = false
-                else if (c == '\\\\') escaped = true
+                else if (c.code == 92) escaped = true
                 else if (c == quote) quote = null
                 return@forEachIndexed
             }
