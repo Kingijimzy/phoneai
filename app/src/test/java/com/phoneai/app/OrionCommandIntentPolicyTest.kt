@@ -73,6 +73,13 @@ class OrionCommandIntentPolicyTest {
         ))
     }
 
+    @Test fun pythonScraperBuildAndTestWithUrlRoutesToPythonInsteadOfBrowserFirst() {
+        val request = "Code a python scrapper using python test it in this site https://gamehub.xiaoji.com/en/"
+        assertTrue(OrionCommandIntentPolicy.isPythonScraperBuildAndTest(request))
+        assertTrue(OrionCommandIntentPolicy.requiresPythonExecution(request))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+    }
+
     @Test fun codeOnlyAndNegatedExecutionRequestsStayNonExecuting() {
         assertFalse(OrionCommandIntentPolicy.requiresPythonExecution(
             "Write a Python calculator but do not execute it"
