@@ -1019,8 +1019,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         // Orion Chat is the front door: explicit repository, terminal/runtime and website tasks
         // must enter the same guarded Agent path instead of being answered as plain conversation.
-        val directActionRoute = OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
-            ConversationAutoRoutePolicy.requiresToolAgent(command)
         val contextualActionRoute = intentResolution.kind in setOf(
             OrionContextualIntentInterpreter.Kind.CONTINUE_OBJECTIVE,
             OrionContextualIntentInterpreter.Kind.COMPLETE_REMAINING,
@@ -1029,7 +1027,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             OrionContextualIntentInterpreter.Kind.AMBIGUOUS_REFERENCE
         )
         if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
-            directActionRoute || contextualActionRoute) {
+            contextualActionRoute) {
             if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
                 taskProofs.clear()
                 OrionObjectiveGraph.clear(svc)
