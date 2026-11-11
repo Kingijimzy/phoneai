@@ -172,13 +172,15 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
                 if (cancelled()) {
                     nim.cancel()
                     providerThread.join(5000)
-                    if (parentCancelled()) {
+                    if (parentCancelled() && !providerThread.isAlive) {
                         store.confirmCancellation(jobId, "parent_cancelled_during_provider_request")
                         OrionAgentDelegation.finish(applicationContext, manifest,
                             "cancelled: parent stopped; late output discarded", cancelled = true)
                         return Result.success()
                     }
-                    store.needsReview(jobId, "workmanager_stopped_during_provider_request")
+                    store.needsReview(jobId, if (providerThread.isAlive)
+                        "provider_thread_still_active_after_cancellation_timeout"
+                    else "workmanager_stopped_during_provider_request")
                     OrionAgentDelegation.finish(applicationContext, manifest,
                         "error: Android stopped the worker during a provider request; inspect before retrying", failed = true)
                     return Result.failure()
@@ -188,12 +190,14 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             nim.cancel()
             providerThread.interrupt()
             providerThread.join(5000)
-            if (parentCancelled()) {
+            if (parentCancelled() && !providerThread.isAlive) {
                 store.confirmCancellation(jobId, "parent_cancelled_during_interrupted_request")
                 OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: parent stopped", cancelled = true)
                 return Result.success()
             }
-            store.needsReview(jobId, "worker_interrupted_during_provider_request")
+            store.needsReview(jobId, if (providerThread.isAlive)
+                "provider_thread_still_active_after_interruption_timeout"
+            else "worker_interrupted_during_provider_request")
             OrionAgentDelegation.finish(applicationContext, manifest,
                 "error: worker interruption left provider outcome uncertain", failed = true)
             return Result.failure()
