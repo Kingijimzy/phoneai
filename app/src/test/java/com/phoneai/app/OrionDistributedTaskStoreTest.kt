@@ -41,6 +41,24 @@ class OrionDistributedTaskStoreTest {
         assertEquals("cancel_requested", store.get(task.taskId)?.status)
     }
 
+    @Test fun repeatedRunningCancellationCannotMarkTaskCancelledBeforeLeaseReconciliation() {
+        val store = OrionDistributedTaskStore(context())
+        val task = OrionTaskEnvelope.create("running task with repeated cancellation")
+        assertTrue(store.enqueue(task))
+        assertTrue(store.claim(task.taskId))
+
+        assertEquals(1, store.cancel(task.taskId, "first_request"))
+        assertEquals("cancel_requested", store.get(task.taskId)?.status)
+        assertEquals(1, store.cancel(task.taskId, "repeated_request"))
+        assertEquals("cancel_requested", store.get(task.taskId)?.status)
+        assertTrue(store.isCancellationRequested(task.taskId))
+
+        // Only lease-aware reconciliation may choose a terminal state.
+        assertTrue(store.reconcileCancellation(task.taskId, needsReview = false, reason = "lease_expired_no_owner_action"))
+        assertEquals("cancelled", store.get(task.taskId)?.status)
+        assertEquals(0, store.cancel(task.taskId, "too_late"))
+    }
+
     @Test fun completionIsIdempotentAndTerminalStatesDoNotReopen() {
         val store = OrionDistributedTaskStore(context())
         val task = OrionTaskEnvelope.create("complete objective")
