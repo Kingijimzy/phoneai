@@ -310,7 +310,7 @@ internal object ToolRegistry {
         "open_deep_link", "system_intent", "device_info", "look"
     )
     private val developerNativeTools = listOf(
-        "python_exec", "shell", "workspace_read", "workspace_write",
+        "python_exec", "shell", "workspace_read", "workspace_write", "workspace_list", "save_file",
         "project_create", "project_inspect", "project_list", "project_plan",
         "dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan"
     )
