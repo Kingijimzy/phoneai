@@ -187,24 +187,19 @@ class AccountConnectionsActivity : Activity() {
                 val exit = session.exitCodeOrNull()
                 if (exit == 0 && !isFinishing) {
                     runOnUiThread { antigravityOutput.append("\\nLogin command exited. Verifying with a real Antigravity model request…") }
-                    val probe = installer.openPromptSession(filesDir.absolutePath, "Reply with exactly: ORION_ANTIGRAVITY_AUTH_OK")
-                    val events = StringBuilder()
-                    while (probe.isAlive() && !isFinishing) {
-                        val eventLine = probe.readLine(1_000L) ?: continue
-                        val event = AntigravityCliProtocol.parseStreamEvent(eventLine)
-                        if (event != null) {
-                            events.append(event.text).append(' ')
-                            if (AntigravityCliProtocol.isAuthenticationRequired(event)) {
-                                throw IllegalStateException("Antigravity reports that Google authentication is still required.")
-                            }
-                        }
-                    }
-                    val result = events.toString()
-                    check(probe.exitCodeOrNull() == 0 && result.contains("ORION_ANTIGRAVITY_AUTH_OK")) {
+                    val result = installer.runPrompt(
+                        filesDir.absolutePath,
+                        "Reply with exactly: ORION_ANTIGRAVITY_AUTH_OK"
+                    )
+                    check(result.contains("ORION_ANTIGRAVITY_AUTH_OK")) {
                         "Antigravity did not return the expected authenticated model response."
                     }
-                    runOnUiThread { if (!isFinishing) antigravityOutput.text = "Google account authenticated · real model request verified." }
-                    probe.close()
+                    val models = runCatching { installer.listModels(filesDir.absolutePath) }.getOrDefault(emptyList())
+                    runOnUiThread {
+                        if (!isFinishing) antigravityOutput.text =
+                            "Google account authenticated · real model request verified.\\nAvailable models: " +
+                                models.take(20).joinToString(", ").ifBlank { "model list unavailable" }
+                    }
                 } else if (!isFinishing) {
                     runOnUiThread { antigravityOutput.append("\\nLogin process ended with exit code ${exit ?: "unknown"}.") }
                 }
