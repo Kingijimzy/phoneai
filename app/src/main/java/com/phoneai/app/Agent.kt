@@ -33,6 +33,11 @@ internal object OrionCommandIntentPolicy {
             executionVerb.containsMatchIn(command) &&
             !negativeExecution.containsMatchIn(command)
 
+    /** A scraper task must exercise Python's HTTP client, not silently substitute a WebView/search. */
+    fun browserToolBlockedBeforePython(command: String, tool: String): Boolean =
+        isPythonScraperBuildAndTest(command) &&
+            tool in setOf("browser_navigate", "browser_snapshot", "browser_find", "browser_extract", "web_search", "fetch_url")
+
     fun isCalculatorExecutionRequest(command: String): Boolean =
         requiresPythonExecution(command) && Regex("(?i)\\bcalculator\\b").containsMatchIn(command)
 
@@ -357,6 +362,12 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         runCatching { OrionEvidenceLedger.recordBlocked(svc, evidenceTaskId(), tool, category) }
     }
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
+        if (OrionCommandIntentPolicy.browserToolBlockedBeforePython(activeRequestScope, tool)) {
+            val blocked = "error: this request explicitly asks to build and test a Python scraper. Use the registered python_exec tool first with Python source in the 'code' argument and phone.http_get(url); do not substitute browser navigation or web search."
+            taskProofs.record(tool, blocked)
+            recordDispatchBlocked(tool, args, "python_scraper_requires_python_runtime")
+            return blocked
+        }
         OrionMasterControl.dispatchBlockReason(svc)?.let { reason ->
             taskProofs.record(tool, reason)
             recordDispatchBlocked(tool, args, "orion_master_power_off")
