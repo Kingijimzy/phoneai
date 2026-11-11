@@ -132,10 +132,9 @@ internal object OrionProactiveWork {
     fun refresh(context: Context) {
         runCatching {
             val app = context.applicationContext
-            if (!AgentPolicy.enabled(app, "orion_core") || !AgentPolicy.enabled(app, "proactive")) {
-                WorkManager.getInstance(app).cancelUniqueWork(UNIQUE_NAME)
-                return@runCatching
-            }
+            // Keep the durable heartbeat registered even when a pack is paused.
+            // The worker and Proactive Gate decide whether it may observe or deliver; a
+            // settings toggle must not destroy the recovery schedule itself.
             val interval = OrionProactivePolicy.intervalMinutes(Prefs.watchMinutes(app))
             val flex = minOf(OrionProactivePolicy.FLEX_MINUTES, interval - 1L)
             val request = PeriodicWorkRequestBuilder<OrionProactiveWorker>(
