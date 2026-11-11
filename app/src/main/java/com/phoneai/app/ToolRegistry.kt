@@ -295,9 +295,10 @@ internal object ToolRegistry {
     }
 
     /**
-     * Keep native tool payloads focused: OpenAI recommends starting with fewer than 20 functions
-     * and documents a hard limit of 128. The full registry remains discoverable in the system
-     * prompt and planner; this request receives only relevant definitions plus prior-call tools.
+     * Keep native tool payloads focused without starving multi-domain tasks. The default 48-tool
+     * window can expose complete common capability families while staying below the 128-function
+     * ceiling supported by compatible endpoints. Providers that reject native tools fall back
+     * to the same guarded text planner.
      */
     private val mcpNativeTools = listOf(
         "mcp_status", "mcp_list_tools", "mcp_call",
