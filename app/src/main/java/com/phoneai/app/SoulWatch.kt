@@ -41,10 +41,12 @@ internal object SoulEngineWatcher {
             else -> OrionSoulLifecycle.watcherTick(c)
         }
         // Reflection and inner-life work belong to the same watcher tick, not a parallel heartbeat.
-        if (coreEnabled && proactiveEnabled) {
-            runCatching { OrionLivingLoop.tick(c) }
-            runCatching { OrionInnerLife.tick(c) }
-        }
+        val reflectionResult = if (coreEnabled && proactiveEnabled) {
+            runCatching { OrionLivingLoop.tick(c) }.getOrDefault("")
+        } else ""
+        val innerLifeResult = if (coreEnabled && proactiveEnabled) {
+            runCatching { OrionInnerLife.tick(c) }.getOrDefault("")
+        } else ""
         val service = PhoneAiService.instance
         // Force a fresh durable schedule read before reporting scheduler health; a stale
         // process-global storage-error flag is not evidence that disk is currently healthy.
@@ -137,6 +139,8 @@ internal object SoulEngineWatcher {
         // Start with the local work already completed; Chronos may refine this action label below.
         var action = if (p3.probesRun > 0) "local_capability_audit+p3_probe" else "local_capability_audit"
         if (subagents.findings.isNotEmpty()) action += "+subagents"
+        if (reflectionResult.isNotBlank()) action += "+self_reflection"
+        if (innerLifeResult.isNotBlank()) action += "+inner_life"
 
         // Chronos may create one low-pressure, review-only suggestion from coarse focus duration.
         // It never dispatches an action and is gated by both owner switches and ambient-context consent.
@@ -170,6 +174,7 @@ internal object SoulEngineWatcher {
         runCatching { SoulEngineState.recordLesson(c, "watcher_tick", "Watcher action: $action; status=$status.", "observed") }
         runCatching { SoulEngineState.recordWatcherStatus(c, status, action) }
         AgentPolicy.log(c, "soul_watcher", action, null, "status=$status; limitations=${limitations.joinToString(",").ifBlank { "none" }}")
-        return TickResult(status, action, limitations, next + " " + p3.summary + " " + subagents.summary)
+        val internalWork = listOf(reflectionResult, innerLifeResult).filter { it.isNotBlank() }.joinToString("; ")
+        return TickResult(status, action, limitations, listOf(next, p3.summary, subagents.summary, internalWork).filter { it.isNotBlank() }.joinToString(" "))
     }
 }
