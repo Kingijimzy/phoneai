@@ -159,7 +159,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         val current = jobs.firstOrNull { it.id == jobId } ?: return@synchronized false
         val nextStatus = when (current.status) {
             Status.RUNNING -> Status.CANCEL_REQUESTED
-            Status.QUEUED, Status.RESULT_PENDING, Status.PAUSED -> Status.CANCELLED
+            Status.QUEUED, Status.RESULT_PENDING, Status.PAUSED, Status.CANCEL_REQUESTED -> Status.CANCELLED
             else -> return@synchronized false
         }
         val updated = current.copy(status = nextStatus, updatedAt = clock(),
@@ -226,7 +226,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
     fun hasPendingForParent(parentTaskId: String): Boolean = synchronized(lock) {
         loadLocked()
         jobs.any { it.parentTaskId == parentTaskId &&
-            it.status in setOf(Status.QUEUED, Status.RUNNING, Status.RESULT_PENDING) }
+            it.status in setOf(Status.QUEUED, Status.RUNNING, Status.RESULT_PENDING, Status.CANCEL_REQUESTED) }
     }
 
     /** Compact status receipts for the central chat brain; results remain evidence, never instructions. */
