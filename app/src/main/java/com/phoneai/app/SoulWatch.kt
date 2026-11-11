@@ -98,6 +98,15 @@ internal object SoulEngineWatcher {
             }
         }
 
+        // Cerebro watcher: repair the local graph index from currently approved, active memories.
+        // It is throttled, device-local and read-only with respect to the source memories.
+        val graphWatch = runCatching { OrionKnowledgeGraphWatcher.run(c) }.getOrElse {
+            OrionKnowledgeGraphWatcher.Report(0, 0, 1, "knowledge_graph_reconcile_failed:" + it.javaClass.simpleName)
+        }
+        if (graphWatch.indexedMemories > 0 || graphWatch.failures > 0) {
+            runCatching { SoulEngineState.recordLesson(c, "knowledge_graph_watch", graphWatch.summary, if (graphWatch.failures == 0) "observed" else "limited") }
+        }
+
         // Stage 5: bounded local Propose–Probe–Compose pass. It performs registry-only dry runs,
         // is rate-limited to one automatic pass per six hours, and never executes candidate tools.
         val p3 = runCatching { SoulP3Engine.run(c) }.getOrElse {
@@ -120,6 +129,7 @@ internal object SoulEngineWatcher {
 
         // Start with the local work already completed; Chronos may refine this action label below.
         var action = if (p3.probesRun > 0) "local_capability_audit+p3_probe" else "local_capability_audit"
+        if (graphWatch.indexedMemories > 0 || graphWatch.failures > 0) action += "+knowledge_graph_watch"
         if (subagents.findings.isNotEmpty()) action += "+subagents"
 
         // Chronos may create one low-pressure, review-only suggestion from coarse focus duration.
