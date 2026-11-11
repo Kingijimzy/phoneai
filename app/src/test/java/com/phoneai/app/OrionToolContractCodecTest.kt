@@ -38,6 +38,14 @@ class OrionToolContractCodecTest {
         assertEquals(0, schema.getJSONArray("required").length())
     }
 
+    @Test fun selectsRelevantNativeToolsWithinProviderLimit() {
+        val selected = ToolRegistry.nativeToolsFor("inspect MCP servers and list remote tools")
+        assertTrue(selected.size <= 128)
+        assertTrue(selected.any { it.name == "mcp_status" })
+        assertTrue(selected.any { it.name == "mcp_list_tools" })
+        assertTrue(selected.all { ToolRegistry.find(it.name) != null })
+    }
+
     @Test fun parsesActualRegistryContractsWithoutLosingNames() {
         val registered = ToolRegistry.all
         val openAiNames = OrionToolContractCodec.openAi(registered)
