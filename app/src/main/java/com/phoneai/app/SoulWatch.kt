@@ -200,9 +200,11 @@ internal object SoulEngineWatcher {
             else -> "Continue bounded checks; review Stage 5 probe/composition reports before adopting any planning guidance."
         }
         runCatching { SoulEngineState.recordLesson(c, "watcher_tick", "Watcher action: $action; status=$status.", "observed") }
-        runCatching { SoulEngineState.recordWatcherStatus(c, status, action) }
-        AgentPolicy.log(c, "soul_watcher", action, null, "status=$status; limitations=${limitations.joinToString(",").ifBlank { "none" }}")
         val internalWork = listOf(reflectionResult, innerLifeResult).filter { it.isNotBlank() }.joinToString("; ")
-        return TickResult(status, action, limitations, listOf(next, p3.summary, subagents.summary, internalWork, proactiveDetail).filter { it.isNotBlank() }.joinToString(" "))
+        val nextStep = listOf(next, p3.summary, subagents.summary, internalWork, proactiveDetail)
+            .filter { it.isNotBlank() }.joinToString(" ")
+        runCatching { SoulEngineState.recordWatcherStatus(c, status, action, nextStep) }
+        AgentPolicy.log(c, "soul_watcher", action, null, "status=$status; limitations=${limitations.joinToString(",").ifBlank { "none" }}")
+        return TickResult(status, action, limitations, nextStep)
     }
 }
