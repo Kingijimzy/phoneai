@@ -38,7 +38,8 @@ internal object LinuxRuntimePolicy {
     /**
      * Normalize model/worker supplied timeouts at the process boundary.
      * Values below the platform minimum become the minimum; long-running profiles are
-     * bounded by the PRoot supervisor's hard 180-second ceiling.
+     * bounded by the PRoot supervisor's hard 180-second ceiling. Keep this normalization
+     * centralized so model adapters, task resumes and direct shell callers cannot disagree.
      */
     fun normalizeProcessTimeout(requestedMs: Long): Long =
         requestedMs.coerceIn(MIN_PROCESS_TIMEOUT_MS, MAX_PROCESS_TIMEOUT_MS)
