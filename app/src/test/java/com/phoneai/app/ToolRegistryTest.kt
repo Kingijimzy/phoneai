@@ -245,3 +245,36 @@ class ToolRegistryPromptAvailabilityTest {
     }
 }
 
+
+
+class ToolRegistryNativeSelectionTest {
+    @Test fun currentRequestToolsCannotBeCrowdedOutByHistoricalToolNames() {
+        val stale = ToolRegistry.names().take(18).toSet()
+        val selected = ToolRegistry.nativeToolsFor("Open WhatsApp and inspect the screen", stale).map { it.name }.toSet()
+        assertTrue(selected.contains("open_app"))
+        assertTrue(selected.contains("read_screen"))
+    }
+
+    @Test fun recentToolContextUsesOnlyTheLatestAssistantCallGroup() {
+        val history = org.json.JSONArray()
+            .put(org.json.JSONObject().put("role", "assistant").put("tool_calls", org.json.JSONArray().put(
+                org.json.JSONObject().put("function", org.json.JSONObject().put("name", "mcp_list_tools"))
+            )))
+            .put(org.json.JSONObject().put("role", "tool").put("name", "mcp_list_tools"))
+            .put(org.json.JSONObject().put("role", "assistant").put("content", "Finished MCP inspection."))
+            .put(org.json.JSONObject().put("role", "user").put("content", "Now open WhatsApp."))
+        assertTrue(ToolRegistry.recentToolNames(history).isEmpty())
+
+        history.put(org.json.JSONObject().put("role", "assistant").put("tool_calls", org.json.JSONArray()
+            .put(org.json.JSONObject().put("function", org.json.JSONObject().put("name", "open_app")))
+            .put(org.json.JSONObject().put("function", org.json.JSONObject().put("name", "lookup_app")))))
+        assertEquals(setOf("open_app", "lookup_app"), ToolRegistry.recentToolNames(history))
+    }
+
+    @Test fun unknownHistoricalToolNamesAreIgnored() {
+        val history = org.json.JSONArray().put(org.json.JSONObject().put("role", "assistant").put("tool_calls", org.json.JSONArray()
+            .put(org.json.JSONObject().put("function", org.json.JSONObject().put("name", "invented_tool")))
+            .put(org.json.JSONObject().put("function", org.json.JSONObject().put("name", "device_info")))))
+        assertEquals(setOf("device_info"), ToolRegistry.recentToolNames(history))
+    }
+}
