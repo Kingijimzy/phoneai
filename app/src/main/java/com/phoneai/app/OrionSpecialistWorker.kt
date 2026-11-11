@@ -172,6 +172,34 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             } catch (t: Exception) {
                 failure.set(t)
             } finally {
+                // The WorkManager Worker may already have returned while this provider thread
+                // was still unwinding. Resolve its durable cancellation state from the thread
+                // that actually owns the provider call, before releasing the process-local slot.
+                runCatching {
+                    val latest = OrionWorkerJobStore(applicationContext).all()
+                        .firstOrNull { it.id == jobId }
+                    if (latest?.status == OrionWorkerJobStore.Status.CANCEL_REQUESTED) {
+                        if (parentCancelled()) {
+                            OrionWorkerJobStore(applicationContext).confirmCancellation(
+                                jobId, "provider_thread_exited_after_parent_cancellation"
+                            )
+                            OrionAgentDelegation.finish(
+                                applicationContext, manifest,
+                                "cancelled: provider thread exited after parent stop; late output discarded",
+                                cancelled = true
+                            )
+                        } else {
+                            OrionWorkerJobStore(applicationContext).needsReview(
+                                jobId, "provider_thread_exited_after_worker_cancellation_without_result_commit"
+                            )
+                            OrionAgentDelegation.finish(
+                                applicationContext, manifest,
+                                "error: provider thread exited after worker cancellation; inspect before retrying",
+                                failed = true
+                            )
+                        }
+                    }
+                }
                 OrionSpecialistProviderRuns.unregister(jobId, Thread.currentThread())
             }
         }, "orion-specialist-${jobId.take(8)}").apply { isDaemon = true }
