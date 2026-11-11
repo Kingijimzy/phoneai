@@ -905,8 +905,28 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 val input = JSONArray()
                 for (i in 0 until requestMessages.length()) {
                     val message = requestMessages.optJSONObject(i) ?: continue
-                    input.put(JSONObject().put("role", message.optString("role", "user"))
-                        .put("content", message.opt("content") ?: ""))
+                    val role = message.optString("role", "user")
+                    if (role == "tool") {
+                        input.put(JSONObject().put("type", "function_call_output")
+                            .put("call_id", message.optString("tool_call_id"))
+                            .put("output", message.opt("content")?.toString() ?: ""))
+                    } else if (role == "assistant" && message.optJSONArray("tool_calls") != null) {
+                        val calls = message.optJSONArray("tool_calls") ?: JSONArray()
+                        val assistantText = message.opt("content")?.toString().orEmpty()
+                        if (assistantText.isNotBlank()) input.put(JSONObject()
+                            .put("role", "assistant").put("content", assistantText))
+                        for (j in 0 until calls.length()) {
+                            val call = calls.optJSONObject(j) ?: continue
+                            val fn = call.optJSONObject("function") ?: continue
+                            input.put(JSONObject().put("type", "function_call")
+                                .put("call_id", call.optString("id"))
+                                .put("name", fn.optString("name"))
+                                .put("arguments", fn.optString("arguments", "{}")))
+                        }
+                    } else {
+                        input.put(JSONObject().put("role", if (role == "assistant") "assistant" else "user")
+                            .put("content", message.opt("content") ?: ""))
+                    }
                 }
                 val responseBody = JSONObject().put("model", model).put("input", input)
                     .put("max_output_tokens", boundedTokens).put("temperature", temperature)
