@@ -286,7 +286,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var runTools = 0
     @Volatile private var runFailed = 0
     @Volatile private var activeRequestScope: String = ""
-    @Volatile private var activeObjectiveId: String = ""
     @Volatile private var lastActionScope: String = ""
     @Volatile private var lastActionScopeAt: Long = 0L
 
@@ -336,40 +335,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recordDispatchBlocked(tool, args, "tool_loop_circuit_breaker")
             return blocked
         }
-        // Objective dependencies are enforced at the actual dispatch boundary, not trusted from planner prose.
-        val objectiveGraph = OrionObjectiveGraph.load(svc)
-        var executiveGraphStepId = ""
-        // task_add only records planner bookkeeping; it does not execute an objective capability.
-        // Keep dependency and capability gates on every real capability dispatch below.
-        if (objectiveGraph != null && OrionObjectiveGraph.requiresObjectiveDispatch(tool)) {
-            // Resolve only when the persisted graph identifies one safe objective. Never fall
-            // back to the first node: that can misattribute a side effect or bypass dependencies.
-            val objectiveId = OrionObjectiveGraph.resolveDispatchId(objectiveGraph, activeObjectiveId, tool)
-            if (objectiveId == null) {
-                val blocked = "error: this tool call is not attached to one unambiguous objective. Reconcile the objective graph and select an exact ready objective ID before retrying; no action was dispatched."
-                taskProofs.record(tool, blocked)
-                recordDispatchBlocked(tool, args, "objective_resolution_ambiguous")
-                return blocked
-            }
-            val dependencyBlock = OrionObjectiveGraph.canExecute(objectiveGraph, objectiveId)
-            if (dependencyBlock != null) {
-                val blocked = "error: $dependencyBlock No action was dispatched."
-                taskProofs.record(tool, blocked)
-                recordDispatchBlocked(tool, args, "objective_dependency_gate")
-                return blocked
-            }
-            if (!OrionObjectiveGraph.startExecution(svc, objectiveId)) {
-                val blocked = "error: Orion could not durably claim objective '$objectiveId'. No action was dispatched; recover the objective checkpoint before retrying."
-                taskProofs.record(tool, blocked)
-                recordDispatchBlocked(tool, args, "objective_claim_not_persisted")
-                return blocked
-            }
-            if (!activeObjectiveId.isNullOrBlank() && !activeObjectiveId.equals(objectiveId, true)) {
-                ui.note("[RECOVERY]\nBound invented objective '$activeObjectiveId' to '$objectiveId'.")
-            }
-            activeObjectiveId = objectiveId
-            executiveGraphStepId = objectiveId
-        }
+        // Objective graphs are context only. The native model tool loop is the sole
+        // capability dispatcher; stale/incomplete graph state must never veto a registered tool.
         // Cancellation is terminal for this dispatch attempt, including paths that would otherwise require one of the three irreversible-setting confirmations.
         if (stopped) {
             val cancelled = "error: task was stopped before capability checks; no action was dispatched."
@@ -562,7 +529,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             svc,
             OrionObjectiveGraph.resolveSessionId(svc),
             dispatchIntent,
-            executiveGraphStepId.ifBlank { "unscoped" },
+            "native_tool",
             tool,
             args,
             dispatchStartedAt
@@ -875,7 +842,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         lastScreenSnapshot = ""
         lastScreenBeforeAction = ""
         failedCallGuard.clear()
-        activeObjectiveId = ""
         OrionObjectiveGraph.clear(svc)
     }
 
