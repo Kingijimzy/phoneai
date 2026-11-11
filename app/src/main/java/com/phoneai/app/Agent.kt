@@ -3176,8 +3176,10 @@ Rules:
             val runId = match.groupValues[4].takeIf { it.isNotBlank() }
             val treeRef = match.groupValues[5].takeIf { it.isNotBlank() }
             val filePath = match.groupValues[6].takeIf { it.isNotBlank() }
-            val metadata = if (treeRef == null && filePath == null && suffix == "readme") "" else
-                research("github_public", JSONObject().put("owner", owner).put("repo", repository).put("section", "repo"))
+            val metadata = research(
+                "github_public",
+                JSONObject().put("owner", owner).put("repo", repository).put("section", "repo")
+            )
             val defaultBranch = Regex("(?m)^Default branch:\\s*([^\\s]+)")
                 .find(metadata)?.groupValues?.getOrNull(1)?.trim().orEmpty().ifBlank { "main" }
             val section = when {
@@ -3198,7 +3200,7 @@ Rules:
                     .put("path", filePath.orEmpty())
             )
             if (!fallback.startsWith("error:", true)) {
-                return "The connected GitHub read route could not serve this repository endpoint, so I recovered the public repository data through GitHub's read-only public API.\\n$fallback"
+                return "The connected GitHub read route could not serve this repository endpoint, so I recovered the public repository data through GitHub's read-only public API.\n$fallback"
             }
             // A missing README is a repository-content fact, not evidence that the repository
             // or the authenticated account is inaccessible. Continue with metadata and tree.
@@ -3209,7 +3211,7 @@ Rules:
                         .put("section", "tree").put("branch", defaultBranch)
                 )
                 if (!tree.startsWith("error:", true)) {
-                    return "This repository has no readable README. The authenticated repository lookup succeeded; here is its default branch and source tree instead.\\n$metadata\\n\\n$tree"
+                    return "This repository has no readable README. The authenticated repository lookup succeeded; here is its default branch and source tree instead.\n$metadata\n\n$tree"
                 }
             }
         }
