@@ -105,6 +105,16 @@ class SoulEngineStateTest {
         assertEquals(2, learnedAgain.evidenceCount)
     }
 
+    @Test fun watcherPurposeIsSavedSeparatelyFromTheActiveGoal() {
+        assertTrue(SoulEngineState.setGoal(context, "Finish the current Orion integration"))
+        assertTrue(SoulEngineState.ensurePurpose(context, "Help the owner complete authorized objectives and learn from verified outcomes."))
+        val restored = SoulEngineState.snapshot(context)
+        assertEquals("Finish the current Orion integration", restored.goal)
+        assertEquals("Help the owner complete authorized objectives and learn from verified outcomes.", restored.purpose)
+        assertTrue(SoulEngineState.ensurePurpose(context, "This replacement must not overwrite an existing purpose."))
+        assertEquals("Help the owner complete authorized objectives and learn from verified outcomes.", SoulEngineState.snapshot(context).purpose)
+    }
+
     @Test fun watcherStatusPersistsAcrossSnapshots() {
         assertTrue(SoulEngineState.recordWatcherStatus(context, "limited", "local_capability_audit"))
         val snapshot = SoulEngineState.snapshot(context)
