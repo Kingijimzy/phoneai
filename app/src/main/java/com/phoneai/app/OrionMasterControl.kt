@@ -28,6 +28,7 @@ internal object OrionMasterControl {
         if (!saved) return false
         OrionRuntime(app).start()
         OrionProactiveWork.refresh(app)
+        runCatching { PhoneAiService.instance?.startOrionAfterMasterStart() }
         return true
     }
 
