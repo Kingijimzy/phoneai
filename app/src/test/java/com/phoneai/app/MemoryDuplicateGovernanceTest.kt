@@ -49,6 +49,23 @@ class MemoryDuplicateGovernanceTest {
         ))
     }
 
+    @Test fun approvingContradictorySubjectSlotArchivesOldApprovedValueAcrossCategories() {
+        val old = MemoryStore.addOwnerConfirmed(context, "fact", "I live in Lagos")!!
+        val proposal = MemoryStore.add(context, "project", "I live in Abuja")!!
+
+        assertEquals("pending", proposal.reviewStatus)
+        assertEquals("approved", MemoryStore.all(context).first { it.id == old.id }.reviewStatus)
+
+        assertTrue(MemoryStore.setReviewStatus(context, proposal.id, "approved"))
+
+        val rows = MemoryStore.all(context)
+        assertEquals("superseded", rows.first { it.id == old.id }.reviewStatus)
+        assertEquals("approved", rows.first { it.id == proposal.id }.reviewStatus)
+        assertTrue(rows.first { it.id == proposal.id }.text.contains("(was: lagos"))
+        assertTrue(MemoryStore.promptBlock(context, "where do I live").contains("Abuja"))
+        assertTrue(!MemoryStore.promptBlock(context, "where do I live").contains("I live in Lagos"))
+    }
+
     @Test fun promptRecallUsesLocalEmbeddingForParaphrasedQuestion() {
         MemoryStore.addOwnerConfirmed(context, "fact", "User lives in Lagos Nigeria")
         val prompt = MemoryStore.promptBlock(context, "Which city is my home?", 6)
