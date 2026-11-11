@@ -82,8 +82,13 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             OrionAgentDelegation.Access.TRADING_ANALYSIS -> setOf("bybit_public_ticker")
             OrionAgentDelegation.Access.ANALYSIS_ONLY, OrionAgentDelegation.Access.TASK_PLANNING -> emptySet()
         }
+        val isBuiltInSpecialist = manifest.agentId in setOf("coder", "writer", "planner", "research", "coach") &&
+            AgentProfiles.find(manifest.agentId) != null
+        val isRegisteredCustomAnalysisSpecialist = AgentProfiles.custom(applicationContext).any {
+            it.id == manifest.agentId
+        } && manifest.access == OrionAgentDelegation.Access.ANALYSIS_ONLY && manifest.allowedTools.isEmpty()
         if (manifest.parentTaskId != existing.parentTaskId ||
-            manifest.access != expectedAccess || manifest.agentId !in setOf("coder", "writer", "planner", "research", "coach") ||
+            manifest.access != expectedAccess || (!isBuiltInSpecialist && !isRegisteredCustomAnalysisSpecialist) ||
             !permittedTools.containsAll(manifest.allowedTools) ||
             existing.kind != expectedKind || existing.conversationId.isNullOrBlank() ||
             !parentIsLive(existing.parentTaskId)) {
@@ -118,7 +123,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             return Result.retry()
         }
 
-        val agent = AgentProfiles.find(manifest.agentId) ?: run {
+        val agent = AgentProfiles.resolveFor(applicationContext, manifest.agentId) ?: run {
             store.cancel(jobId, "canonical_specialist_profile_missing")
             return Result.failure()
         }
