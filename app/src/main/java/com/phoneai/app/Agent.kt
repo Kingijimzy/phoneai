@@ -100,6 +100,18 @@ internal object OrionCommandIntentPolicy {
  * Voice is an interaction surface, not a reduced-capability assistant.
  * Action-shaped utterances enter the same guarded command/task lifecycle as chat.
  */
+internal object OrionProgressCuePolicy {
+    private val potentiallySlowTools = setOf(
+        "browser_open", "browser_search", "browser_click", "browser_type",
+        "python", "python_exec", "shell", "terminal", "read_screen",
+        "routine_run", "routine_resume", "image_generate", "web_search",
+        "github_search", "github_clone", "file_download"
+    )
+
+    fun shouldAnnounce(toolNames: List<String>): Boolean =
+        toolNames.any { it.lowercase() in potentiallySlowTools }
+}
+
 internal object OrionVoiceExecutionPolicy {
     private val contextualActionKinds = setOf(
         OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP,
@@ -123,6 +135,8 @@ internal object OrionVoiceExecutionPolicy {
 interface AgentUi {
     fun say(text: String)
     fun status(text: String)
+    /** One concise cue before a potentially slow operation; default remains visual-only. */
+    fun progress(text: String) { status(text) }
     fun note(text: String)
     fun stream(text: String) {}
 
@@ -990,7 +1004,12 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 ui.say("This selected model can chat, but its current connection does not expose Orion's native tools. No action was dispatched. Switch to a native-tool-capable provider or connect the account tool bridge.")
                 return
             }
+            var progressCueSent = false
             while (turn.toolCalls.isNotEmpty() && !stopped && toolRounds < OrionNativeToolDispatcher.MAX_ROUNDS_PER_COMMAND) {
+                if (!progressCueSent && OrionProgressCuePolicy.shouldAnnounce(turn.toolCalls.map { it.name })) {
+                    ui.progress("I'm working through that now.")
+                    progressCueSent = true
+                }
                 toolRounds++
                 val callEnvelope = JSONArray()
                 turn.toolCalls.forEach { call ->
