@@ -14,7 +14,7 @@ import java.util.UUID
  * Message bodies stay on-device; tool payloads and secrets are deliberately not stored here.
  */
 class OrionConversationRepository private constructor(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 5) {
+    SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 6) {
 
     data class ChatEvent(
         val id: String, val sessionId: String, val messageId: String?, val type: String,
