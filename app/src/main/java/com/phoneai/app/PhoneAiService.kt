@@ -980,7 +980,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             refreshMode()
             worker.execute {
                 try {
-                    agent.run(command)
+                    OrionCoordinator.run(this, OrionCoordinator.Surface.COMMAND, command) { agent.run(command) }
                 } catch (e: Exception) {
                     say("I couldn't complete that request. " + (e.message ?: e.javaClass.simpleName).take(180))
                 } finally {
@@ -1902,7 +1902,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             val explicitCommand = afterWake(t)?.takeIf { it.isNotBlank() }
             worker.execute {
                 try {
-                    if (explicitCommand != null) agent.run(explicitCommand)
+                    if (explicitCommand != null) OrionCoordinator.run(this, OrionCoordinator.Surface.VOICE, explicitCommand) { agent.run(explicitCommand) }
                     else agent.runLiveConversation(t)
                 } catch (e: Exception) {
                     say("I couldn't reach the AI just now. Please try again.")
@@ -1932,7 +1932,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             refreshMode()
             worker.execute {
                 try {
-                    agent.runConversation(t)
+                    OrionCoordinator.run(this, OrionCoordinator.Surface.CHAT, t) { agent.runConversation(t) }
                 } catch (e: Exception) {
                     say("I couldn't reach the AI just now. " + (e.message ?: "Please try again."))
                 }
@@ -1972,7 +1972,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (panel != null) showThinkingIndicator()
         worker.execute {
             try {
-                agent.run(t)
+                OrionCoordinator.run(this, OrionCoordinator.Surface.COMMAND, t) { agent.run(t) }
             } catch (e: Exception) {
                 say("Error: ${e.message}")
             } finally {
@@ -2000,7 +2000,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val goal = AutonomyGoalStore.claimNextDue(this, System.currentTimeMillis()) ?: run { runInitiative(); return }
         running = true
         try {
-            agent.run(goal.prompt)
+            OrionCoordinator.run(this, OrionCoordinator.Surface.AUTONOMY, goal.prompt) { agent.run("[ORION AUTONOMY GOAL — set earlier, not typed by Kingi] " + goal.prompt) }
             AutonomyGoalStore.recordResult(this, goal.id, "submitted_to_agent")
         } catch (e: Exception) {
             AutonomyGoalStore.recordResult(this, goal.id, "dispatch_error: " + (e.message ?: "failed"))
@@ -2022,12 +2022,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         OrionProactiveGate.recordAction(this)
         running = true
         try {
-            agent.run(
+            val initiativePrompt = (
                 "[ORION INITIATIVE — Kingi did not ask for this; you are acting on your own judgment] Review your mood, lessons, " +
                     "memory and recent failures. Decide whether there is something worth doing now for Kingi or for yourself " +
                     "(finish unfinished work, fix a tool that keeps failing, build a missing capability, check something he cares about). " +
                     "If yes, do it with your tools and report briefly what you did. If not, reply with one short line saying nothing is needed."
+
             )
+            OrionCoordinator.run(this, OrionCoordinator.Surface.INITIATIVE, initiativePrompt) { agent.run(initiativePrompt) }
         } catch (_: Exception) {
         } finally {
             main.post { finishRun() }

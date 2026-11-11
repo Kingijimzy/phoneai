@@ -928,7 +928,7 @@ class AgentChatActivity : Activity() {
             var trades: List<TradeProposals.Trade> = emptyList()
             var strategies: List<StrategySpec> = emptyList()
             var papers: List<DeskProposals.Paper> = emptyList()
-            val reply = try { AgentRunner.runFull(this, agent, history, text, image).also { trades = it.trades; strategies = it.strategies; papers = it.papers }.text }
+            val reply = try { (OrionCoordinator.run(this, if (agent.id == "coach") OrionCoordinator.Surface.TRADING else OrionCoordinator.Surface.SPECIALIST, text) { AgentRunner.runFull(this, agent, history, text, image).also { trades = it.trades; strategies = it.strategies; papers = it.papers }.text } ?: "Orion is shut down. Start the brain from the Soul Engine command center first.") }
                 catch (e: Exception) { "I couldn't answer: " + (e.message ?: e.javaClass.simpleName).take(220) }
             runOnUiThread {
                 val finalReply = reply.ifBlank { "No answer came back. Check your AI provider in Settings." }
