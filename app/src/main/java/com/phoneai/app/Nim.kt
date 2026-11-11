@@ -489,7 +489,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                         streamFinishReason.equals("incomplete", true)) JSONObject().put("reason", "max_output_tokens") else JSONObject.NULL).toString()
                 else -> JSONObject().put("choices", JSONArray().put(JSONObject()
                     .put("message", JSONObject().put("content", answer.toString()))
-                    .put("finish_reason", streamFinishReason.ifBlank { JSONObject.NULL }))).toString()
+                    .put("finish_reason", if (streamFinishReason.isBlank()) JSONObject.NULL else streamFinishReason))).toString()
             }
             return Http(200, synthetic, -1)
         } finally {
