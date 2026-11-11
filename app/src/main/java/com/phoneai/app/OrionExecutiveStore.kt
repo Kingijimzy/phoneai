@@ -17,6 +17,8 @@ internal object OrionExecutiveStore {
     }
 
     enum class StepStatus { PENDING, READY, RUNNING, RECONCILIATION_REQUIRED, VERIFIED, FAILED, SKIPPED }
+    enum class DispatchOutcome { VERIFIED, EXECUTED_UNVERIFIED, FAILED, RECONCILIATION_REQUIRED }
+    private val processEpoch = System.currentTimeMillis().toString(36) + "-" + System.nanoTime().toString(36)
 
     data class Objective(
         val id: String,
@@ -43,7 +45,7 @@ internal object OrionExecutiveStore {
         val evidenceRef: String
     )
 
-    private class Db(context: Context) : SQLiteOpenHelper(context, "orion_executive.db", null, 1) {
+    private class Db(context: Context) : SQLiteOpenHelper(context, "orion_executive.db", null, 2) {
         override fun onConfigure(db: SQLiteDatabase) {
             super.onConfigure(db)
             // SQLite foreign-key declarations are inert unless every connection enables them.
@@ -66,8 +68,23 @@ internal object OrionExecutiveStore {
                 FOREIGN KEY(objective_id) REFERENCES objectives(id) ON DELETE CASCADE,
                 UNIQUE(objective_id, ordinal))""")
             db.execSQL("CREATE INDEX idx_steps_objective ON objective_steps(objective_id, ordinal)")
+            createDispatchAttempts(db)
         }
-        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+            if (oldVersion < 2) createDispatchAttempts(db)
+        }
+        private fun createDispatchAttempts(db: SQLiteDatabase) {
+            db.execSQL("""CREATE TABLE IF NOT EXISTS dispatch_attempts(
+                attempt_id TEXT PRIMARY KEY NOT NULL, objective_id TEXT NOT NULL,
+                graph_step_id TEXT NOT NULL DEFAULT '', capability TEXT NOT NULL,
+                arguments_digest TEXT NOT NULL, process_epoch TEXT NOT NULL,
+                outcome TEXT NOT NULL, evidence_ref TEXT NOT NULL DEFAULT '',
+                summary TEXT NOT NULL DEFAULT '', started_at INTEGER NOT NULL,
+                finished_at INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY(objective_id) REFERENCES objectives(id) ON DELETE CASCADE)""")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_dispatch_objective ON dispatch_attempts(objective_id, started_at DESC)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_dispatch_recovery ON dispatch_attempts(outcome, process_epoch)")
+        }
     }
 
     private val terminal = setOf(Phase.COMPLETED, Phase.FAILED)
@@ -306,6 +323,94 @@ internal object OrionExecutiveStore {
                     StepStatus.RUNNING.name, StepStatus.RECONCILIATION_REQUIRED.name))
             db.rawQuery("SELECT changes()", null).use { it.moveToFirst() && it.getInt(0) == 1 }
         }.getOrDefault(false)
+    }
+
+    /**
+     * Begin a durable per-tool attempt before entering the backend. The attempt is tied to the
+     * current process epoch so a later process can quarantine stale RUNNING attempts.
+     */
+    fun beginDispatchAttempt(
+        context: Context,
+        objectiveId: String,
+        intent: String,
+        graphStepId: String,
+        capability: String,
+        argumentsDigest: String,
+        startedAt: Long
+    ): String? {
+        val cleanObjective = objectiveId.trim().take(120)
+        val cleanIntent = intent.trim().take(2_000)
+        val cleanCapability = capability.trim().take(100)
+        if (cleanObjective.isBlank() || cleanIntent.isBlank() || cleanCapability.isBlank() ||
+            !argumentsDigest.matches(Regex("^[a-fA-F0-9]{64}$"))) return null
+        return runCatching {
+            val db = Db(context.applicationContext).writableDatabase
+            db.beginTransaction()
+            try {
+                // Only attempts owned by a previous process are uncertain; concurrent attempts
+                // in this process are left untouched.
+                db.execSQL("""UPDATE dispatch_attempts SET outcome=?,finished_at=?
+                    WHERE outcome=? AND process_epoch<>?""",
+                    arrayOf(DispatchOutcome.RECONCILIATION_REQUIRED.name, System.currentTimeMillis(),
+                        "RUNNING", processEpoch))
+                db.execSQL("INSERT OR IGNORE INTO objectives(id,intent,phase,revision,plan_revision,recovery_cursor,blocker,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                    arrayOf(cleanObjective, cleanIntent, Phase.GROUND.name, 0, 0, "", "", startedAt, startedAt))
+                val existing = get(db, cleanObjective)
+                if (existing == null || existing.intent != cleanIntent) return null
+                val attemptId = digest("$cleanObjective|$graphStepId|$cleanCapability|$argumentsDigest|$startedAt|$processEpoch").take(32)
+                db.execSQL("""INSERT INTO dispatch_attempts
+                    (attempt_id,objective_id,graph_step_id,capability,arguments_digest,process_epoch,outcome,evidence_ref,summary,started_at,finished_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                    arrayOf(attemptId, cleanObjective, graphStepId.take(120), cleanCapability,
+                        argumentsDigest.lowercase(), processEpoch, "RUNNING", "", "", startedAt, 0))
+                db.setTransactionSuccessful()
+                attemptId
+            } finally { db.endTransaction() }
+        }.getOrNull()
+    }
+
+    /** Resolve a dispatch attempt only after its evidence event has been durably written. */
+    fun finishDispatchAttempt(
+        context: Context,
+        attemptId: String,
+        outcome: DispatchOutcome,
+        evidenceRef: String,
+        summary: String
+    ): Boolean {
+        if (attemptId.isBlank() || outcome == DispatchOutcome.RECONCILIATION_REQUIRED ||
+            (outcome == DispatchOutcome.VERIFIED && evidenceRef.isBlank())) return false
+        return runCatching {
+            val db = Db(context.applicationContext).writableDatabase
+            db.execSQL("""UPDATE dispatch_attempts SET outcome=?,evidence_ref=?,summary=?,finished_at=?
+                WHERE attempt_id=? AND outcome=? AND process_epoch=?""",
+                arrayOf(outcome.name, evidenceRef.take(160), summary.take(320),
+                    System.currentTimeMillis(), attemptId, "RUNNING", processEpoch))
+            db.rawQuery("SELECT changes()", null).use { it.moveToFirst() && it.getInt(0) == 1 }
+        }.getOrDefault(false)
+    }
+
+    data class DispatchAttempt(
+        val id: String, val objectiveId: String, val graphStepId: String, val capability: String,
+        val outcome: String, val evidenceRef: String, val summary: String, val startedAt: Long
+    )
+
+    fun dispatchAttempts(context: Context, objectiveId: String): List<DispatchAttempt> = runCatching {
+        Db(context.applicationContext).readableDatabase.use { db ->
+            db.rawQuery("""SELECT attempt_id,objective_id,graph_step_id,capability,outcome,evidence_ref,summary,started_at
+                FROM dispatch_attempts WHERE objective_id=? ORDER BY started_at""", arrayOf(objectiveId)).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(DispatchAttempt(cursor.getString(0),cursor.getString(1),
+                        cursor.getString(2),cursor.getString(3),cursor.getString(4),cursor.getString(5),
+                        cursor.getString(6),cursor.getLong(7)))
+                }
+            }
+        }
+    }.getOrDefault(emptyList())
+
+    internal fun dispatchOutcomeFor(trustedVerification: Boolean, failed: Boolean): DispatchOutcome = when {
+        failed -> DispatchOutcome.FAILED
+        trustedVerification -> DispatchOutcome.VERIFIED
+        else -> DispatchOutcome.EXECUTED_UNVERIFIED
     }
 
     fun contextBlock(context: Context): String = runCatching {
