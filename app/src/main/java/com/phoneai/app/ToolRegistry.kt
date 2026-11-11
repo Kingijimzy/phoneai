@@ -317,7 +317,7 @@ internal object ToolRegistry {
     fun nativeToolsFor(
         request: String?,
         priorToolNames: Set<String> = emptySet(),
-        maxTools: Int = 18
+        maxTools: Int = 48
     ): List<ToolDefinition> {
         val limit = maxTools.coerceIn(1, 128)
         val query = request.orEmpty().lowercase()
