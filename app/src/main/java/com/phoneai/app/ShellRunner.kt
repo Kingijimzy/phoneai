@@ -34,30 +34,24 @@ object ShellRunner {
     }
 
     private fun currentDirectory(c: Context): File {
-        val root = workspace(c).canonicalFile
+        val defaultDirectory = c.filesDir.canonicalFile
         val saved = c.getSharedPreferences("orion_builtin_shell", Context.MODE_PRIVATE)
-            .getString("cwd", root.path) ?: root.path
+            .getString("cwd", defaultDirectory.path) ?: defaultDirectory.path
         val candidate = runCatching { File(saved).canonicalFile }.getOrNull()
-        return if (candidate != null && candidate.isDirectory &&
-            (candidate.path == root.path || candidate.path.startsWith(root.path + File.separator))) candidate else root
+        return candidate?.takeIf { it.isDirectory } ?: defaultDirectory
     }
 
     private fun changeDirectory(c: Context, raw: String): String {
-        val root = workspace(c).canonicalFile
+        val defaultDirectory = c.filesDir.canonicalFile
         val current = currentDirectory(c)
         val arg = raw.trim().removeSurrounding("\"").removeSurrounding("'")
-        if (arg.isBlank() || arg == "~") {
-            c.getSharedPreferences("orion_builtin_shell", Context.MODE_PRIVATE).edit().putString("cwd", root.path).apply()
-            return "cwd: workspace/"
-        }
-        val candidate = runCatching { (if (File(arg).isAbsolute) File(arg) else File(current, arg)).canonicalFile }.getOrNull()
-            ?: return "error: invalid directory"
-        if (candidate.path != root.path && !candidate.path.startsWith(root.path + File.separator))
-            return "error: directory must remain inside Orion's private workspace"
-        if (!candidate.isDirectory) return "error: no such workspace directory"
+        val target = if (arg.isBlank() || arg == "~") defaultDirectory.path else arg
+        val candidate = runCatching {
+            (if (File(target).isAbsolute) File(target) else File(current, target)).canonicalFile
+        }.getOrNull() ?: return "error: invalid directory"
+        if (!candidate.isDirectory) return "error: no such directory"
         c.getSharedPreferences("orion_builtin_shell", Context.MODE_PRIVATE).edit().putString("cwd", candidate.path).apply()
-        val relative = candidate.relativeTo(root).path
-        return "cwd: workspace/" + if (relative == ".") "" else relative
+        return "cwd: ${candidate.path}"
     }
 
     /** Resolves a path inside the workspace, refusing anything that escapes it. */
@@ -78,9 +72,7 @@ object ShellRunner {
             return changeDirectory(c, normalized.removePrefix("cd").trim())
         }
         if (normalized == "pwd") {
-            val root = workspace(c).canonicalFile
-            val relative = currentDirectory(c).relativeTo(root).path
-            return "workspace/" + if (relative == ".") "" else relative
+            return currentDirectory(c).absolutePath
         }
         BuiltinCommands.run(c, normalized)?.let { return ShellPolicy.clip(it) }
         return try {
