@@ -1249,12 +1249,12 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             .putLong("owner_last_active", System.currentTimeMillis()).apply()
         indexMemoryObservation(command, "standard voice")
         talkNim.beginCommand()
-        // Route actionable voice requests through the exact same planner, checkpoint,
-        // capability registry, owner policy, confirmation and evidence gates as chat.
+        // Voice actions enter the same conversational brain and native-tool loop as typed chat.
+        // Do not send voice requests through the legacy JSON-planner execution path.
         if (OrionVoiceExecutionPolicy.shouldRouteToCommand(
                 command, recentConversationTurns(), contextualActiveObjective()
             )) {
-            runInternal(command, reuseCommandBudget = false)
+            runConversation(command)
             return
         }
         stopped = false
