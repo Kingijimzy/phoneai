@@ -130,6 +130,13 @@ class OrionCommandIntentPolicyTest {
         assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
     }
 
+    @Test fun simplePythonCalculatorUsesTheDirectNativeExecutionPath() {
+        val request = "Write a Python calculator, save it as a file, execute it and test it."
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+        assertFalse("A simple coding task must not be sent through the structured objective planner",
+            OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
+    }
+
     @Test fun investigationRequestsSkipTheChatOnlyActionClassifier() {
         assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(
             "I want you to investigate my PhoneAI project, understand its condition and identify its weaknesses."
