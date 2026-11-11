@@ -13,8 +13,8 @@ internal object OrionNativeToolCallCodec {
     data class Call(val id: String, val name: String, val arguments: JSONObject, val available: Boolean, val validationError: String? = null)
     data class Turn(val text: String, val calls: List<Call>)
 
-    private const val MAX_CALLS = 8
-    private const val MAX_ARGUMENT_CHARS = 32_000
+    private const val MAX_CALLS = 32
+    private const val MAX_ARGUMENT_CHARS = 256_000
 
     fun parse(providerId: String, body: String, isKnownTool: (String) -> Boolean): Turn {
         val root = runCatching { JSONObject(body) }.getOrNull() ?: return Turn("", emptyList())
@@ -29,7 +29,7 @@ internal object OrionNativeToolCallCodec {
                 is JSONObject -> rawArguments
                 is String -> {
                     if (rawArguments.length > MAX_ARGUMENT_CHARS) {
-                        calls.add(Call(callId, name, JSONObject(), available, "arguments exceed the 32 KB limit"))
+                        calls.add(Call(callId, name, JSONObject(), available, "arguments exceed the 256 KB limit"))
                         return
                     }
                     runCatching { JSONObject(rawArguments) }.getOrNull()
@@ -40,8 +40,8 @@ internal object OrionNativeToolCallCodec {
                 calls.add(Call(callId, name, JSONObject(), available, "arguments must be a valid JSON object"))
                 return
             }
-            if (args.length() > 64) {
-                calls.add(Call(callId, name, JSONObject(), available, "arguments exceed the 64-field limit"))
+            if (args.length() > 128) {
+                calls.add(Call(callId, name, JSONObject(), available, "arguments exceed the 128-field limit"))
                 return
             }
             calls.add(Call(callId, name, JSONObject(args.toString()), available))
