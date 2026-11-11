@@ -1150,6 +1150,7 @@ RESPONSE QUALITY AND FORMAT:
             // The model judged this needs tools: switch to Command mode and run the guarded agent now.
             svc.notifyModeSwitch(true)
             runInternal(command, reuseCommandBudget = true)
+            reflectOnExchange(command)
             return
         }
         val safeAnswer = answer.takeIf { it.isNotBlank() }
@@ -1157,6 +1158,7 @@ RESPONSE QUALITY AND FORMAT:
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", safeAnswer))
         while (chatHist.length() > 12) chatHist.remove(0)
+        reflectOnExchange(command)
         ui.say(safeAnswer)
     }
 
@@ -1170,6 +1172,8 @@ RESPONSE QUALITY AND FORMAT:
     private fun runLiveConversationBody(input: String) {
         val command = input.trim()
         if (command.isEmpty()) return
+        svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit()
+            .putLong("owner_last_active", System.currentTimeMillis()).apply()
         indexMemoryObservation(command, "standard voice")
         talkNim.beginCommand()
         // Route actionable voice requests through the exact same planner, checkpoint,
@@ -1218,6 +1222,7 @@ RESPONSE QUALITY AND FORMAT:
             ?: "I couldn't get a response just now. Please try saying that once more."
         liveHistory.put(msg("assistant", safeAnswer))
         while (liveHistory.length() > 9) liveHistory.remove(1)
+        reflectOnExchange(command)
         // Voice conversation shares the same durable episodic memory as typed chat.
         // The raw audio is not stored; only the recognized text and final reply are indexed.
         runCatching {
