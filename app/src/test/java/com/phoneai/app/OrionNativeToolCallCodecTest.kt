@@ -50,7 +50,7 @@ class OrionNativeToolCallCodecTest {
     }
 
     @Test fun preservesMultipleCallsInProviderOrder() {
-        val body = """{"choices":[{"message":{"tool_calls":[{"id":"a","function":{"name":"device_info","arguments":"{}"}},{"id":"b","function":{"name":"python_exec","arguments":"{\\"code\\":\\"print(3)\\"}"}}]}}]}"""
+        val body = """{"choices":[{"message":{"tool_calls":[{"id":"a","function":{"name":"device_info","arguments":"{}"}},{"id":"b","function":{"name":"python_exec","arguments":"{\"code\":\"print(3)\"}"}}]}}]}"""
         val calls = OrionNativeToolCallCodec.parse("openai", body, known).calls
         assertEquals(2, calls.size)
         assertEquals(listOf("device_info", "python_exec"), calls.map { it.name })
