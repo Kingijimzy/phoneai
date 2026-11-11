@@ -29,8 +29,7 @@ internal class OrionProactiveWorker(
         // durable runtime instead of racing a second direct watcher execution.
         val liveService = PhoneAiService.instance
         if (liveService != null) {
-            liveService.requestSoulWatch("workmanager_fallback")
-            return Result.success()
+            return if (liveService.requestSoulWatch("workmanager_fallback")) Result.success() else Result.retry()
         }
 
         // After process death, perform only the bounded local watcher fallback. It records
