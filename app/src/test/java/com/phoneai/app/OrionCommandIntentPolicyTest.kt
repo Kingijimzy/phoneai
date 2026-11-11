@@ -31,6 +31,12 @@ class OrionCommandIntentPolicyTest {
         ))
     }
 
+    @Test fun naturalHealthCheckRequestEntersGuardedExecutionPath() {
+        val request = "check whether everything is working perfectly"
+        assertTrue(OrionSelfDiagnostics.isExplicitRequest(request))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+    }
+
     @Test fun capabilityQuestionIsNotMistakenForAnAction() {
         assertFalse(OrionCommandIntentPolicy.requiresDirectActionRouting(
             "List the phone actions and memory tools you can actually execute right now."
