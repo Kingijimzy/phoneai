@@ -81,6 +81,7 @@ internal object OrionCentralBrain {
         addObservedSection("notification_context") { OrionNotificationListener.contextSummary() }
         // Provider readiness is a local status snapshot, not a live health check; actual calls still prove availability.
         addObservedSection("provider_readiness") { Nim.status(app).take(1_400) }
+        addObservedSection("capability_awareness") { OrionCapabilityAwareness.promptBlock(app) }
         addObservedSection("device_context") { OrionDeviceContextProvider.summary(app) }
         addObservedSection("location_context") { OrionLocationContextProvider.summary(app) }
         addObservedSection("app_usage_context") { OrionAppUsageContextProvider.summary(app) }
