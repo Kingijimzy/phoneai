@@ -5,7 +5,7 @@ import org.json.JSONObject
 
 /** Deterministic routing for intents where a chat-only answer would silently skip a requested action. */
 internal object OrionCommandIntentPolicy {
-    // Python scraper/crawler creation plus a test/run request must route to Python first.
+    // Python authoring and execution requests must enter the guarded tool path even when the user does not say run/execute.
     // Otherwise a URL in the same sentence can pull the model router into browser navigation.
     private val pythonCodeMention = Regex(
         "(?i)\\bpython\\b.{0,120}\\b(?:code|script|program|calculator|scraper|scrapper|scraping|crawler|automation)\\b|\\b(?:code|script|program|calculator|scraper|scrapper|scraping|crawler|automation)\\b.{0,120}\\bpython\\b"
