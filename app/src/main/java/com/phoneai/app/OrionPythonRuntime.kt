@@ -27,15 +27,9 @@ internal object OrionPythonRuntime {
 
         if (stopped()) return "error: Python execution cancelled before launch."
         val app = context.applicationContext
-        val workspace = OrionPythonWorkspace(app)
-        val workspaceRoot = when (workspace.rootStatus()) {
-            OrionPythonWorkspace.RootStatus.READY -> File(app.filesDir, "orion-python/workspace")
-            OrionPythonWorkspace.RootStatus.MISSING -> {
-                if (workspace.ensureRootForRepair() == null) return "error: Python workspace could not be safely initialized."
-                File(app.filesDir, "orion-python/workspace")
-            }
-            OrionPythonWorkspace.RootStatus.UNSAFE -> return "error: Python workspace path is unsafe; refusing execution."
-        }
+        val workspaceRoot = File(app.filesDir, "orion-python/workspace")
+        if (!workspaceRoot.exists()) workspaceRoot.mkdirs()
+        if (!workspaceRoot.isDirectory) return "error: Python workspace directory is unavailable."
         val scriptFile = File(workspaceRoot, SCRIPT_NAME)
         try {
             scriptFile.writeText(code, Charsets.UTF_8)
