@@ -2071,7 +2071,7 @@ Rules:
             return
         }
         // Explicit web-search requests use a public search endpoint directly instead of consuming model quota.
-        if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask && !explicitAppAction &&
+        if (KEYWORD_SHORTCUTS && !resumeRequest && !browserActionTask && !structuredTask &&
             !Regex("(?i)\\b(chrome|google chrome)\\b").containsMatchIn(command) && LiveWebSearch.isSearchRequest(command)) {
             ui.phase("acting")
             val answer = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("live_web_search", JSONObject().put("query", LiveWebSearch.queryFrom(command))))).let { raw -> if (raw.startsWith("Web search results for")) summarizeSearch(command, raw) else raw }
@@ -2322,7 +2322,7 @@ Rules:
                     if (graphHasRequiredStructure) ui.note("[TASK:PLAN] Saved a deterministic objective graph from the provider's ordered plan.")
                 }
             }
-            if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(inputCommand) && !graphHasRequiredStructure) {
+            if (modelRequestedGraph && !graphHasRequiredStructure) {
                 graphRepairAttempts++
                 if (graphRepairAttempts > 2) {
                     OrionTasksCapabilityExecutor.pauseRun(svc)
