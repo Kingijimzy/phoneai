@@ -301,7 +301,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             if (p.anthropicStyle) {
                 conn.setRequestProperty("x-api-key", key)
                 conn.setRequestProperty("anthropic-version", "2023-06-01")
-            } else if (p.id != "gemini") {
+            } else if (!(p.id == "gemini" && url.contains(":generateContent"))) {
                 conn.setRequestProperty("Authorization", "Bearer $key")
             }
             conn.setRequestProperty("Accept", "application/json")
@@ -740,7 +740,14 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         val callNames = HashMap<String, String>()
         fun appendContent(role: String, parts: JSONArray) {
             if (parts.length() == 0) return
-            contents.put(JSONObject().put("role", role).put("parts", parts))
+            val previous = if (contents.length() > 0) contents.optJSONObject(contents.length() - 1) else null
+            if (previous != null && previous.optString("role") == role) {
+                val existing = previous.optJSONArray("parts") ?: JSONArray()
+                for (index in 0 until parts.length()) existing.put(parts.get(index))
+                previous.put("parts", existing)
+            } else {
+                contents.put(JSONObject().put("role", role).put("parts", parts))
+            }
         }
         for (i in 0 until messages.length()) {
             val message = messages.optJSONObject(i) ?: continue
@@ -762,17 +769,18 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                     val id = call.optString("id")
                     callNames[id] = name
                     val args = runCatching { JSONObject(fn.optString("arguments", "{}")) }.getOrDefault(JSONObject())
-                    parts.put(JSONObject().put("functionCall", JSONObject().put("name", name).put("args", args)))
+                    parts.put(JSONObject().put("functionCall", JSONObject().put("name", name).put("args", args).put("id", id)))
                 }
                 appendContent("model", parts)
                 continue
             }
             if (role == "tool") {
                 val id = message.optString("tool_call_id")
-                val name = callNames[id].orEmpty()
-                val parts = JSONArray().put(JSONObject().put("functionResponse",
-                    JSONObject().put("name", name).put("response",
-                        JSONObject().put("content", content?.toString().orEmpty()))))
+                val name = message.optString("name").ifBlank { callNames[id].orEmpty() }
+                val response = JSONObject().put("name", name)
+                    .put("response", JSONObject().put("content", content?.toString().orEmpty()))
+                if (id.isNotBlank()) response.put("id", id)
+                val parts = JSONArray().put(JSONObject().put("functionResponse", response))
                 appendContent("user", parts)
                 continue
             }
