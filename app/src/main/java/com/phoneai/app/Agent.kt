@@ -1047,7 +1047,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val directActionRoute =
             intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
                 OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
-                routeFor(command).needsTools
+                ConversationAutoRoutePolicy.requiresToolAgent(command)
         // Historical recall, ordinary actions and multi-step objectives all use the same
         // model-facing native-tool loop. The model chooses recall when conversation memory
         // is needed; no special route hands the request to the legacy JSON planner.
