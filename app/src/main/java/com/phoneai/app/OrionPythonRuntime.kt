@@ -15,7 +15,7 @@ import java.io.File
  */
 internal object OrionPythonRuntime {
     private const val SCRIPT_NAME = "orion_main.py"
-    private const val MAX_OUTPUT_CHARS = 24_000
+    private const val MAX_OUTPUT_CHARS = 96_000
     private const val EXECUTION_TIMEOUT_MS = LinuxRuntimePolicy.MAX_PROCESS_TIMEOUT_MS
     private const val FULL_EXECUTION_TIMEOUT_MS = LinuxRuntimePolicy.MAX_PROCESS_TIMEOUT_MS
 
@@ -57,7 +57,7 @@ internal object OrionPythonRuntime {
             // as needed; do not run a separate apk update that doubles downloads.
             val install = installer.execute(
                 manifest, "apk add --no-cache python3 || { rc=\$?; echo \"CPYTHON_INSTALL_DIAGNOSTICS\"; echo \"--- filesystem ---\"; df -h / /var/cache/apk 2>&1; echo \"--- inodes ---\"; df -i / 2>&1; echo \"--- package state ---\"; apk info -e python3 2>&1; echo \"--- repositories ---\"; cat /etc/apk/repositories 2>&1; exit \$rc; }",
-                180_000L, onOutput = onOutput, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
+                LinuxRuntimePolicy.MAX_PROCESS_TIMEOUT_MS, onOutput, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
             )
             if (!install.startsWith("exit=0")) return runBundled(app, workspaceRoot, code, "CPython install in the Linux runtime failed: " + install.take(160).replace("\n", " "))
             val verified = installer.execute(manifest, "python3 --version && python3 -c 'import sys, platform; print(sys.executable); print(platform.machine()); print(sys.prefix)'", 12_000L, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped)
@@ -83,7 +83,7 @@ internal object OrionPythonRuntime {
         val result = try {
             val full = OrionOwnerDialSettings.read(app).pythonProfile == OrionPythonProfile.FULL
             val bootstrap = OrionPythonPhoneBridge.bootstrapCommand(full)
-            val limits = if (full) "ulimit -c 0; ulimit -t 3500; ulimit -f 1048576; ulimit -n 1024; ulimit -u 512" else "ulimit -c 0; ulimit -t 90; ulimit -f 4096; ulimit -n 64; ulimit -u 32"
+            val limits = if (full) "ulimit -c 0; ulimit -t 3500; ulimit -f 2097152; ulimit -n 2048; ulimit -u 1024" else "ulimit -c 0; ulimit -t 300; ulimit -f 65536; ulimit -n 256; ulimit -u 128"
             installer.execute(
                 manifest,
                 "$limits; cd /workspace && exec python3 -I -c '$bootstrap'",
