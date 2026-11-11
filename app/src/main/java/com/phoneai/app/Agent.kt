@@ -1670,8 +1670,11 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             return true
         }
         val cleared = RoutineReplayCheckpointStore.clear(svc)
-        routineStatus("Routine '$name' replayed ${steps.length()} recorded gestures. The overall goal is not independently confirmed, so check the target app before assuming it completed." +
-            if (cleared) "" else " I couldn't clear the final recovery checkpoint.")
+        if (!cleared) {
+            routineStatus("Recorded gestures ran for routine '$name', but the final recovery checkpoint could not be cleared. Treat the replay as unresolved and inspect the target app before another attempt.")
+            return true
+        }
+        routineStatus("Routine '$name' replayed ${steps.length()} recorded gestures. The overall goal is not independently confirmed, so check the target app before assuming it completed.")
         return true
     }
 
