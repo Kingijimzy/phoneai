@@ -24,8 +24,13 @@ class ProviderFallbackPolicyTest {
         assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 425", 425)))
     }
 
-    @Test fun billingAuthenticationAndUnclassifiedFailuresNeverRotate() {
-        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("OpenRouter: out of credit (402).", 402)))
+    @Test fun creditExhaustionCanUseAnAlreadyEligibleBackup() {
+        // Nim filters backups through configured-provider and paid-opt-in policy before this decision.
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("OpenRouter: out of credit (402).", 402)))
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("OpenRouter: out of credit (402).", 402), false))
+    }
+
+    @Test fun authenticationAndUnclassifiedFailuresNeverRotate() {
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("API key rejected (401)", 401)))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 403", 403)))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 400", 400)))
