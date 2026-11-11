@@ -109,7 +109,7 @@ object OrionLivingLoop {
             append("SELF-AWARENESS (from your own recent history):")
             if (broken.isNotEmpty()) {
                 append("\nCurrently failing tools — avoid or work around: ").append(broken.joinToString("; ") { "${it.tool} (${it.consecutive}x: ${it.lastReason})" })
-                append("\nSELF-REPAIR: you may fix these yourself. Diagnose with a read-only call, then build the missing piece — a script via python_exec/shell for anything touching files, network or the phone, or extension_create + extension_test (tested drafts activate automatically) for pure data transforms — run it, and call the original goal again. Do not just report the failure.")
+                append("\nSELF-REPAIR: diagnose with fresh read-only evidence, then choose a different registered capability or prepare a minimal draft fix. Run real tests in the appropriate sandbox; keep generated extensions disabled until exact-source verification and owner approval. Do not claim the original tool is repaired until the failed path passes a new end-to-end check.")
             }
             if (lessons.isNotEmpty()) append("\nLessons you have learned: ").append(lessons.joinToString(" | "))
         }
