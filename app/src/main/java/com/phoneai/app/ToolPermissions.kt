@@ -14,7 +14,7 @@ internal object ToolPermissionPolicy {
 
     fun levelLabel(level: String) = when (level) {
         "careful" -> "Careful: default ALLOW; use explicit DENY for tools you want disabled"
-        "autonomous" -> "Autonomous: act without asking; only restart, shutdown and Wi-Fi toggles require confirmation"
+        "autonomous" -> "Autonomous: act without asking; restart, shutdown and Wi-Fi toggles produce warnings only"
         "read_only" -> "Read-only: look and answer, never change anything"
         else -> "Balanced: default behaviour"
     }
