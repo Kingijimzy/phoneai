@@ -37,6 +37,24 @@ class OrionCommandIntentPolicyTest {
         assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
     }
 
+    @Test fun progressUpdateExplainsHealthCheckInsteadOfEmptyAcknowledgement() {
+        val line = OrionProgressMessagePolicy.messageFor("check whether everything is working perfectly", null)
+        assertTrue(line.contains("local runtime"))
+        assertTrue(line.contains("read-only"))
+        assertTrue(!line.equals("On it.", ignoreCase = true))
+    }
+
+    @Test fun progressUpdateSummarizesIntentAndChosenRouteWithoutDumpingPrivatePlan() {
+        val line = OrionProgressMessagePolicy.messageFor(
+            "Build and test the project",
+            "INTENT: build and verify the project\\nROUTE: inspect the project files and run the test suite"
+        )
+        assertTrue(line.contains("build and verify the project"))
+        assertTrue(line.contains("inspect the project files"))
+        assertTrue(!line.contains("SMARTER:"))
+        assertTrue(!line.contains("ASK:"))
+    }
+
     @Test fun capabilityQuestionIsNotMistakenForAnAction() {
         assertFalse(OrionCommandIntentPolicy.requiresDirectActionRouting(
             "List the phone actions and memory tools you can actually execute right now."
