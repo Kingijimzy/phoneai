@@ -197,11 +197,11 @@ object MemoryStore {
         val memory = list.firstOrNull { it.id == id } ?: return@synchronized false
         val oldStatus = memory.reviewStatus
         val superseded = if (status == "approved") {
-            MemoryRanking.findSuperseded(
-                list.filter { it.id != id && it.reviewStatus == "approved" },
-                memory.category,
-                memory.text
-            )
+            val approvedOthers = list.filter { it.id != id && it.reviewStatus == "approved" }
+            // Subject-slot conflicts (for example, a new home city) must be arbitrated
+            // even when the proposal was filed under a different category.
+            OrionMemoryConsolidation.conflicting(approvedOthers, memory.text, "approved")
+                ?: MemoryRanking.findSuperseded(approvedOthers, memory.category, memory.text)
         } else null
         val oldSuperseded = superseded?.let { copyOf(it) }
         val oldSupersededUpdated = superseded?.updated
