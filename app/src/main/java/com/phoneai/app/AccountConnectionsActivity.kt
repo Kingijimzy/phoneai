@@ -195,6 +195,13 @@ class AccountConnectionsActivity : Activity() {
                         "Antigravity did not return the expected authenticated model response."
                     }
                     val models = runCatching { installer.listModels(filesDir.absolutePath) }.getOrDefault(emptyList())
+                    if (models.isNotEmpty()) {
+                        Prefs.saveCachedModels(applicationContext, "antigravity", models)
+                        val provider = Providers.get("antigravity")
+                        val current = Prefs.model(applicationContext, provider, false)
+                        if (current !in models) Prefs.setModel(applicationContext, provider, false, models.first())
+                    }
+                    Prefs.setAccountConnected(applicationContext, "antigravity", true)
                     runOnUiThread {
                         if (!isFinishing) antigravityOutput.text =
                             "Google account authenticated · real model request verified.\\nAvailable models: " +
