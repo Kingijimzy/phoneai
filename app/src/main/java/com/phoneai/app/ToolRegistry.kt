@@ -272,6 +272,7 @@ internal object ToolRegistry {
         "macro_save", "macro_run", "macro_list", "macro_delete",
         "voice_speak", "voice_listen", "document_extract",
         "python_exec", "image_generate", "shell", "workspace_read", "workspace_write",
+        "mcp_status", "mcp_list_tools",
         "browser_navigate", "browser_snapshot", "fetch_url", "web_search", "live_web_search"
     )
 
