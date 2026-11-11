@@ -613,15 +613,22 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recordDispatchBlocked(tool, args, "executive_dispatch_journal_unavailable")
             return blocked
         }
+        // Normalize the one legacy Python argument alias at the dispatch boundary.
+        // The registered contract is python_exec {code}; some model turns emitted {script},
+        // which previously reached the runtime as an empty program ("Python code is required").
+        val executionArgs = if (tool == "python_exec" &&
+            args.optString("code").isBlank() && args.optString("script").isNotBlank()) {
+            JSONObject(args.toString()).put("code", args.optString("script"))
+        } else args
         val dispatchAction = {
             OrionExecutionLoop.dispatch(tool, stopped) {
                 if (tool in nativeUiActions) {
                     val validationArgs = JSONObject(args.toString()).put("tool", tool)
                     val validation = validateAction(validationArgs)
                     if (validation.startsWith("INVALID:")) "error: preflight blocked action. $validation"
-                    else exec(tool, args)
+                    else exec(tool, executionArgs)
                 } else {
-                    exec(tool, args)
+                    exec(tool, executionArgs)
                 }
             }
         }
