@@ -55,7 +55,7 @@ internal object OrionNativeToolCallCodec {
                     val part = parts.optJSONObject(i) ?: continue
                     if (part.has("text")) text.append(part.optString("text"))
                     val call = part.optJSONObject("functionCall") ?: continue
-                    add("gemini-${i + 1}", call.optString("name"), call.opt("args"))
+                    add(call.optString("id").ifBlank { "gemini-${i + 1}" }, call.optString("name"), call.opt("args"))
                 }
             }
             providerId == "opencode-zen" -> {
