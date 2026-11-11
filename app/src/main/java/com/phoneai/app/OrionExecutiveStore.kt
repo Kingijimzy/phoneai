@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import org.json.JSONArray
 import org.json.JSONObject
+import java.security.MessageDigest
 
 /**
  * Durable executive ledger. The language model proposes intent and plans; this store enforces
@@ -86,6 +87,11 @@ internal object OrionExecutiveStore {
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_dispatch_recovery ON dispatch_attempts(outcome, process_epoch)")
         }
     }
+
+    private fun digest(value: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+            .joinToString("") { byte -> "%02x".format(byte) }
 
     private val terminal = setOf(Phase.COMPLETED, Phase.FAILED)
     private val allowed = mapOf(
