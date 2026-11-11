@@ -73,6 +73,7 @@ internal object OrionCommandIntentPolicy {
             requiresStructuredTaskPlanning(command) ||
             AgentHooks.isPhoneActionRequest(command) ||
             requiresPythonExecution(command) ||
+            OrionSelfDiagnostics.isExplicitRequest(command) ||
             isConnectedGitHubAccountRequest(command) ||
             TaskScopePolicy.modeFor(command) == TaskMode.RESEARCH
 
