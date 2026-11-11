@@ -63,8 +63,8 @@ class LinuxRuntimePolicyTest {
         assertEquals(250L, LinuxRuntimePolicy.normalizeProcessTimeout(249L))
         assertEquals(250L, LinuxRuntimePolicy.normalizeProcessTimeout(250L))
         assertEquals(100_000L, LinuxRuntimePolicy.normalizeProcessTimeout(100_000L))
-        assertEquals(180_000L, LinuxRuntimePolicy.normalizeProcessTimeout(300_000L))
-        assertEquals(180_000L, LinuxRuntimePolicy.normalizeProcessTimeout(Long.MAX_VALUE))
+        assertEquals(300_000L, LinuxRuntimePolicy.normalizeProcessTimeout(300_000L))
+        assertEquals(1_800_000L, LinuxRuntimePolicy.normalizeProcessTimeout(Long.MAX_VALUE))
     }
 
     @Test fun prootArgumentsAreFixedAndBounded() {
