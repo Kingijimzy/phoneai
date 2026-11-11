@@ -1153,6 +1153,10 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             var turn = activeModel.chatTurn(
                 messages, false, 32768, 0.7, tools = nativeTools
             )
+            if (directActionRoute && !turn.toolCallingAvailable) {
+                ui.say("This selected model can chat, but its current connection does not expose Orion's native tools. No action was dispatched. Switch to a native-tool-capable provider or connect the account tool bridge.")
+                return
+            }
             while (turn.toolCalls.isNotEmpty() && !stopped && toolRounds < OrionNativeToolDispatcher.MAX_ROUNDS_PER_COMMAND) {
                 toolRounds++
                 val callEnvelope = JSONArray()
@@ -1186,6 +1190,11 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                     turn = activeModel.chatTurn(
                         messages, false, 32768, 0.7, tools = nativeTools
                     )
+                    if (!turn.toolCallingAvailable) {
+                        preserveToolTranscript("The provider lost native tool capability after partial execution. Inspect completed tool results before continuing; do not repeat side effects.")
+                        ui.say("The selected model stopped supporting Orion tool calls after partial execution. I preserved the completed results; no further actions were dispatched.")
+                        return
+                    }
                 }
             }
             if (stopped) {
