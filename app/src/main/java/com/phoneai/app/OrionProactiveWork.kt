@@ -51,8 +51,14 @@ internal object OrionProactiveGate {
     data class Decision(
         val candidate: OrionProactiveEngine.ProactiveItem?,
         val allowDelivery: Boolean,
-        val reason: String
+        val reason: String,
+        val allowStandingOrders: Boolean = false
     )
+
+    fun shouldRunStandingOrders(notificationsEnabled: Boolean, quietHours: Boolean, batteryPercent: Int, charging: Boolean, lowBatteryThreshold: Int): Boolean {
+        if (!notificationsEnabled || quietHours) return false
+        return !(batteryPercent >= 0 && lowBatteryThreshold > 0 && batteryPercent <= lowBatteryThreshold && !charging)
+    }
 
     fun shouldDeliver(candidate: OrionProactiveEngine.ProactiveItem?, notificationsEnabled: Boolean, quietHours: Boolean, batteryPercent: Int, charging: Boolean, lowBatteryThreshold: Int): Boolean {
         if (candidate == null || !notificationsEnabled || quietHours) return false
@@ -73,10 +79,9 @@ internal object OrionProactiveGate {
         val quietEnd = Prefs.quietPeriodEndHour(app)
         val quiet = if (quietStart < quietEnd) hour in quietStart until quietEnd
             else hour >= quietStart || hour < quietEnd
-        if (quiet) return Decision(null, false, "owner_quiet_hours")
+        if (quiet) return Decision(null, false, "owner_quiet_hours", false)
 
         val candidate = runCatching { OrionProactiveEngine.evaluate(app, now) }.getOrNull()
-            ?: return Decision(null, false, "no_eligible_candidate")
         val notificationsEnabled = runCatching {
             (app.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager)
                 ?.areNotificationsEnabled() == true
@@ -85,14 +90,22 @@ internal object OrionProactiveGate {
         val battery = Regex("battery=(\\d+)%").find(device)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: -1
         val charging = device.contains("charging=true", ignoreCase = true)
         val threshold = Prefs.proactiveBatteryLowThreshold(app)
+        val allowStandingOrders = shouldRunStandingOrders(notificationsEnabled, quiet, battery, charging, threshold)
+        if (candidate == null) {
+            val reason = when {
+                !notificationsEnabled -> "android_notifications_disabled"
+                battery >= 0 && threshold > 0 && battery <= threshold && !charging -> "low_battery_defer"
+                else -> "no_eligible_candidate"
+            }
+            return Decision(null, false, reason, allowStandingOrders)
+        }
         val allowed = shouldDeliver(candidate, notificationsEnabled, quiet, battery, charging, threshold)
         val reason = when {
-            quiet -> "owner_quiet_hours"
             !notificationsEnabled -> "android_notifications_disabled"
             battery >= 0 && threshold > 0 && battery <= threshold && !charging && candidate.urgency < 2 -> "low_battery_defer_nonurgent"
             else -> "delivery_allowed"
         }
-        return Decision(candidate, allowed, reason)
+        return Decision(candidate, allowed, reason, allowStandingOrders)
     }
 }
 
