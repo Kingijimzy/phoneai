@@ -281,7 +281,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         }
     }
 
-    private val commandRequestBudget = sharedBudget ?: CommandRequestBudget(maxRequests = 15)
+    private val commandRequestBudget = sharedBudget ?: CommandRequestBudget(maxRequests = 60)
 
     /** Starts a fresh request budget and identical-failure counter for one user command. */
     /** AI requests used by the current command (for the cost line). */
@@ -309,7 +309,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
 
     private fun request(p: Provider, method: String, url: String, body: String?, key: String, readMs0: Int = 45000): Http {
         if (!commandRequestBudget.tryReserve()) {
-            throw AiException("Stopped before sending another request: this command reached Orion's 15-request budget. No additional HTTP request was made.")
+            throw AiException("Stopped before sending another request: this command reached Orion's 60-request safety budget. No additional HTTP request was made.")
         }
         // Count every network attempt here, including model catalogues and requests that fail to connect.
         noteHit(p.id)
@@ -321,7 +321,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         }
         try {
             conn.requestMethod = method
-            conn.connectTimeout = 15000
+            conn.connectTimeout = 30000
             conn.readTimeout = if (p.noKey) 180000 else readMs
             if (p.anthropicStyle) {
                 conn.setRequestProperty("x-api-key", key)
@@ -1002,10 +1002,12 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         // reasons by default; short probes (e.g. max_tokens=16) can spend the entire
         // budget reasoning and return choices[0].message.content="" (finish_reason=length).
         // Disable thinking for reliable direct chat/vision replies and provide a safe minimum.
+        val requestedOutput = maxOf(maxTokens, if (fastResponse) 2048 else 8192)
         val tokens = when (p.id) {
-            "gemini" -> if (fastResponse) maxOf(maxTokens * 2, 256) else maxOf(maxTokens * 4, 1024)
-            "nvidia" -> if (fastResponse) maxOf(maxTokens, 256) else maxOf(maxTokens, 1024)
-            else -> maxTokens
+            // Provider-specific thinking overhead is included, then clamped to the selected model's real output ceiling.
+            "gemini" -> if (fastResponse) maxOf(requestedOutput * 2, 2048) else maxOf(requestedOutput * 2, 8192)
+            "nvidia" -> requestedOutput
+            else -> requestedOutput
         }
         val initialModel = selectedModel(p, vision)
         val queue = mutableListOf(initialModel)
@@ -1019,9 +1021,9 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         // or empty reply, even when another provider is saved. Otherwise hasBackup forced this
         // limit to 1 and the alternate model was queued but never actually attempted.
         // Fast/background turns still stay bounded; the next saved provider is tried afterward.
-        val maxAttempts = if (fastResponse || Prefs.quotaSaver(ctx) || hasBackup) 2 else 3
+        val maxAttempts = if (fastResponse) 3 else if (Prefs.quotaSaver(ctx)) 3 else 5
         val start = System.currentTimeMillis()
-        val totalTimeoutMs = if (fastResponse) 10000L else if (p.id == "nvidia") 40000L else 27000L
+        val totalTimeoutMs = if (fastResponse) 30000L else 180000L
         while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < totalTimeoutMs) {
             if (cancelled) throw RuntimeException("Stopped.")
             val model = queue.removeAt(0)
@@ -1108,8 +1110,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             val r: Http? = try {
                 // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
                 if (onDelta != null && !vision && !p.anthropicStyle && p.id != "opencode-zen" && p.id != "gemini" && activeNativeTools.get().isNullOrEmpty()) {
-                    requestStream(p, url, payload, key, if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000, onDelta)
-                } else request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000)
+                    requestStream(p, url, payload, key, if (fastResponse) 30000 else 180000, onDelta)
+                } else request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 30000 else 180000)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
