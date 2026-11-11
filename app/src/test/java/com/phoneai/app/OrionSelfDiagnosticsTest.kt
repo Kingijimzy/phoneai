@@ -26,6 +26,13 @@ class OrionSelfDiagnosticsTest {
         OrionWorkerJobStore.simulateProcessRestartForTest(context)
     }
 
+    @Test fun naturalHealthCheckPhrasingIsRecognizedAsExplicitDiagnostic() {
+        assertTrue(OrionSelfDiagnostics.isExplicitRequest("Check whether everything is working perfectly"))
+        assertTrue(OrionSelfDiagnostics.isExplicitRequest("Can you check if all tools are operational?"))
+        assertTrue(OrionSelfDiagnostics.isExplicitRequest("Run a full system health check"))
+        assertTrue(!OrionSelfDiagnostics.isExplicitRequest("How do health checks work?"))
+    }
+
     @Test fun diagnosticsCountsActualDurableQueuedWork() {
         val store = OrionWorkerJobStore(context)
         store.enqueue("parent-diagnostic", "Inspect a safe project issue", idempotencyKey = "diag-queue")!!
