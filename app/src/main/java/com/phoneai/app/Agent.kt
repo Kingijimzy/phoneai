@@ -474,7 +474,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recordDispatchBlocked(tool, args, "tool_pack_mapping_denied")
             return blocked
         }
-        // Shell risk is surfaced as a warning by ShellRunner; it is never an execution veto.
+        // Warn before execution, but never ask for confirmation or veto the requested shell command.
+        val shellCommand = if (tool == "shell" || tool == "termux_command") args.optString("command") else ""
+        ShellPolicy.warning(shellCommand)?.let { warning -> ui.note("[WARNING]\\n$warning") }
         val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
         val mcpReadOperation = tool in setOf("mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt")
         val mcpScope = when {
