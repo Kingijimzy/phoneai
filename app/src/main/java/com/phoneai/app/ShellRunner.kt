@@ -12,7 +12,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-/** Runs commands in Orion's private workspace (built-in shell) or in the user's Termux (full Linux tools). */
+/** Runs Android app-UID shell commands, Termux commands, and Alpine/PRoot Linux commands. */
 object ShellRunner {
     private const val TERMUX_PKG = "com.termux"
     private const val TERMUX_HOME = "/data/data/com.termux/files/home"
