@@ -16,6 +16,10 @@ internal class AntigravityRuntimeInstaller(context: Context) {
             bash /tmp/orion-agy-install.sh --skip-aliases --skip-path
             test -x /root/.local/bin/agy
             /root/.local/bin/agy --version
+            mkdir -p /root/.gemini/antigravity-cli
+            if [ ! -f /root/.gemini/antigravity-cli/settings.json ]; then
+              printf '{"trustedWorkspaces":["/workspace"]}\n' > /root/.gemini/antigravity-cli/settings.json
+            fi
             rm -f /tmp/orion-agy-install.sh
         """
     }
