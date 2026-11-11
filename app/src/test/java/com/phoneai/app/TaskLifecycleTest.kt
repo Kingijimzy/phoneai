@@ -39,8 +39,10 @@ class TaskLifecycleTest {
             t = t.advance()!!
         }
         t = t.fail()!!
-        assertEquals("the failure after the recovery budget ends the task", Phase.RECORD, t.phase)
+        assertEquals("the failure after the recovery budget pauses the task without making it terminal", Phase.BLOCKED, t.phase)
+        assertEquals(Phase.EXECUTE, t.blockedFrom)
         assertFalse(t.verified)
+        assertEquals(Phase.PLAN, t.resume()!!.phase)
     }
 
     @Test fun failIsOnlyValidDuringExecuteOrVerify() {
