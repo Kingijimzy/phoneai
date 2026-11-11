@@ -10,7 +10,7 @@ import org.json.JSONObject
  * ToolRegistry lookup, argument validation, objective checks, ToolGate and the shared executor.
  */
 internal object OrionNativeToolCallCodec {
-    data class Call(val id: String, val name: String, val arguments: JSONObject, val available: Boolean)
+    data class Call(val id: String, val name: String, val arguments: JSONObject, val available: Boolean, val validationError: String? = null)
     data class Turn(val text: String, val calls: List<Call>)
 
     private const val MAX_CALLS = 8
@@ -23,16 +23,28 @@ internal object OrionNativeToolCallCodec {
 
         fun add(id: String, name: String, rawArguments: Any?) {
             if (calls.size >= MAX_CALLS || name.isBlank()) return
+            val callId = id.take(160).ifBlank { "native-${calls.size + 1}" }
+            val available = isKnownTool(name)
             val args = when (rawArguments) {
                 is JSONObject -> rawArguments
                 is String -> {
-                    if (rawArguments.length > MAX_ARGUMENT_CHARS) return
+                    if (rawArguments.length > MAX_ARGUMENT_CHARS) {
+                        calls.add(Call(callId, name, JSONObject(), available, "arguments exceed the 32 KB limit"))
+                        return
+                    }
                     runCatching { JSONObject(rawArguments) }.getOrNull()
                 }
                 else -> null
-            } ?: return
-            if (args.length() > 64) return
-            calls.add(Call(id.take(160), name, JSONObject(args.toString()), isKnownTool(name)))
+            }
+            if (args == null) {
+                calls.add(Call(callId, name, JSONObject(), available, "arguments must be a valid JSON object"))
+                return
+            }
+            if (args.length() > 64) {
+                calls.add(Call(callId, name, JSONObject(), available, "arguments exceed the 64-field limit"))
+                return
+            }
+            calls.add(Call(callId, name, JSONObject(args.toString()), available))
         }
 
         when {
