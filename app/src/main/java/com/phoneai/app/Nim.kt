@@ -23,9 +23,6 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         /** provider id -> time (ms) until which it is skipped (rate limited or bad key) */
         val cooldown = ConcurrentHashMap<String, Long>()
 
-        /** provider id -> time of the last request (used to space requests out) */
-        private val lastCall = ConcurrentHashMap<String, Long>()
-
         /** provider id -> times of requests in the last minute (so we slow down BEFORE a limit is hit) */
         private val hits = ConcurrentHashMap<String, java.util.concurrent.ConcurrentLinkedDeque<Long>>()
         /** Latest provider-reported quota headers, when that API exposes them. */
@@ -231,30 +228,6 @@ internal class Nim internal constructor(private val ctx: Context, private val co
     )
 
     internal class Http(val code: Int, val body: String, val retryAfter: Int = -1)
-
-    private fun pause(ms: Long) {
-        var left = ms
-        while (left > 0 && !cancelled) {
-            val s = minOf(left, 250L)
-            Thread.sleep(s)
-            left -= s
-        }
-    }
-
-    /** Spaces out requests so free tiers (a few per minute) are not hit in a burst. */
-    private fun pace(p: Provider) {
-        val gap = when (p.id) {
-            "gemini" -> 4500L
-            "groq", "cerebras", "mistral" -> 2200L
-            "openrouter" -> 3000L
-            "nvidia" -> 2500L
-            "local" -> 0L
-            else -> 800L
-        }
-        val wait = (lastCall[p.id] ?: 0L) + gap - System.currentTimeMillis()
-        if (wait > 0) pause(wait)
-        lastCall[p.id] = System.currentTimeMillis()
-    }
 
     /** Called with a short progress message, from the worker thread. */
     @Volatile
@@ -1021,7 +994,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         // or empty reply, even when another provider is saved. Otherwise hasBackup forced this
         // limit to 1 and the alternate model was queued but never actually attempted.
         // Fast/background turns still stay bounded; the next saved provider is tried afterward.
-        val maxAttempts = if (fastResponse) 3 else if (Prefs.quotaSaver(ctx)) 3 else 5
+        val maxAttempts = if (fastResponse) 3 else 5
         val start = System.currentTimeMillis()
         val totalTimeoutMs = if (fastResponse) 30000L else 600000L
         while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < totalTimeoutMs) {
@@ -1043,7 +1016,6 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             }
             attempts++
             onStatus?.invoke(p.label + ": preparing " + model.substringAfterLast('/') + "...")
-            pace(p)
             if (cancelled) throw RuntimeException("Stopped.")
             onStatus?.invoke(p.label + ": waiting for " + model.substringAfterLast('/') + " response...")
             val url: String
