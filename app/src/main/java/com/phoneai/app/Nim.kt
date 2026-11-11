@@ -254,7 +254,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         }
     }
 
-    private val commandRequestBudget = sharedBudget ?: CommandRequestBudget(maxRequests = 400)
+    private val commandRequestBudget = sharedBudget ?: CommandRequestBudget(maxRequests = 1000)
 
     /** Starts a fresh request budget and identical-failure counter for one user command. */
     /** AI requests used by the current command (for the cost line). */
@@ -282,7 +282,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
 
     private fun request(p: Provider, method: String, url: String, body: String?, key: String, readMs0: Int = 45000): Http {
         if (!commandRequestBudget.tryReserve()) {
-            throw AiException("Stopped before sending another request: this command reached Orion's 400-request safety ceiling. No additional HTTP request was made.")
+            throw AiException("Stopped before sending another request: this command reached Orion's 1000-request safety ceiling. No additional HTTP request was made.")
         }
         // Count every network attempt here, including model catalogues and requests that fail to connect.
         noteHit(p.id)
@@ -919,7 +919,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         }
 
         val now = System.currentTimeMillis()
-        // Auto-switch may try eligible saved providers in order, but the shared 400-request
+        // Auto-switch may try eligible saved providers in order, but the shared 1000-request
         // command budget is the hard cap across model discovery, retries, and provider fallback.
         val backups = if (Prefs.autoSwitch(ctx)) {
             Providers.all
