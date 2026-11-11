@@ -36,8 +36,12 @@ internal object OrionPythonRuntime {
             }
             OrionPythonWorkspace.RootStatus.UNSAFE -> return "error: Python workspace path is unsafe; refusing execution."
         }
-        val saved = workspace.write(SCRIPT_NAME, code)
-        if (!saved.startsWith("saved ")) return saved
+        val scriptFile = File(workspaceRoot, SCRIPT_NAME)
+        try {
+            scriptFile.writeText(code, Charsets.UTF_8)
+        } catch (failure: Exception) {
+            return "error: could not stage Python source (${failure.javaClass.simpleName})."
+        }
 
         val installer = LinuxRuntimeInstaller(app)
         val manifest = LinuxRuntimePolicy.productionManifest
