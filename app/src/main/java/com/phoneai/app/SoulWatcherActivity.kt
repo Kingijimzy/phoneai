@@ -129,7 +129,7 @@ class SoulWatcherActivity : Activity() {
         val schedules = runCatching { StandingOrders.all(this) }.getOrDefault(emptyList())
         val scheduleStorageError = runCatching { StandingOrders.storageError() }.getOrNull()
         val scheduleState = if (scheduleStorageError != null) "unavailable" else "${schedules.count { it.enabled && it.consecutiveFailures < StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES }} active / ${schedules.count { !it.enabled || it.consecutiveFailures >= StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES }} paused/limited"
-        detailView.text = "Last check: $time\nLast action: ${snapshot?.watcherAction?.ifBlank { "none recorded" } ?: "state unavailable"}\nAccessibility service: ${if (service) "connected" else "not connected"}\nSchedules: $scheduleState\nPending proposals: ${snapshot?.proposals?.count { it.status == SoulEngineState.ProposalStatus.PENDING } ?: 0}"
+        detailView.text = "Purpose: ${snapshot?.purpose?.ifBlank { OrionInnerLife.PRIME_DIRECTIVE } ?: OrionInnerLife.PRIME_DIRECTIVE}\nLast check: $time\nLast action: ${snapshot?.watcherAction?.ifBlank { "none recorded" } ?: "state unavailable"}\nAccessibility service: ${if (service) "connected" else "not connected"}\nSchedules: $scheduleState\nPending proposals: ${snapshot?.proposals?.count { it.status == SoulEngineState.ProposalStatus.PENDING } ?: 0}"
     }
 
     private fun submitCommand() {
