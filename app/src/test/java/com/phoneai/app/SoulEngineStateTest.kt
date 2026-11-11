@@ -115,6 +115,13 @@ class SoulEngineStateTest {
         assertEquals("Help the owner complete authorized objectives and learn from verified outcomes.", SoulEngineState.snapshot(context).purpose)
     }
 
+    @Test fun persistedPurposeIsUsedByTheInnerLifePrompt() {
+        assertTrue(SoulEngineState.setPurpose(context, "Keep evidence ahead of assumptions and finish verified objectives."))
+        val prompt = OrionInnerLife.promptBlock(context)
+        assertTrue(prompt.contains("PRIME DIRECTIVE: Keep evidence ahead of assumptions and finish verified objectives."))
+        assertFalse(prompt.contains(OrionInnerLife.PRIME_DIRECTIVE))
+    }
+
     @Test fun watcherStatusPersistsAcrossSnapshots() {
         assertTrue(SoulEngineState.recordWatcherStatus(context, "limited", "local_capability_audit", "Review the capability board and retry the accessibility check."))
         val snapshot = SoulEngineState.snapshot(context)
