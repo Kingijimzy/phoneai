@@ -285,3 +285,33 @@ internal object OrionTasksCapabilityExecutor {
         else -> "error: tasks executor does not implement '$tool'."
     }
 }
+
+
+/** Pure policy for safe, bounded specialist replacement; the caller must persist cancellation first. */
+internal object OrionSpecialistReassignmentPolicy {
+    private val backgroundAgents = setOf("coder", "writer", "planner", "research", "coach")
+    private val replaceableStates = setOf(
+        OrionWorkerJobStore.Status.QUEUED,
+        OrionWorkerJobStore.Status.RUNNING,
+        OrionWorkerJobStore.Status.RESULT_PENDING,
+        OrionWorkerJobStore.Status.PAUSED
+    )
+
+    fun rejection(
+        currentAgentId: String,
+        targetAgentId: String,
+        status: OrionWorkerJobStore.Status
+    ): String? {
+        val target = targetAgentId.trim().lowercase()
+        if (target !in backgroundAgents || AgentProfiles.find(target) == null) {
+            return "replacement must be one of the registered background specialists: " + backgroundAgents.sorted().joinToString(", ")
+        }
+        if (currentAgentId.isNotBlank() && currentAgentId.equals(target, ignoreCase = true)) {
+            return "the requested specialist is already assigned; choose a different role or inspect the existing job"
+        }
+        if (status !in replaceableStates) {
+            return "job state ${status.name.lowercase()} is terminal or cannot be safely reassigned"
+        }
+        return null
+    }
+}
