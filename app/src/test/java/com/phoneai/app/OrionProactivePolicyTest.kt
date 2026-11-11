@@ -21,4 +21,15 @@ class OrionProactivePolicyTest {
         assertTrue(OrionProactivePolicy.intervalMinutes(60) == 60L)
         assertTrue(OrionProactivePolicy.intervalMinutes(999) == 120L)
     }
+    @Test fun proactiveGateDefersLowUrgencyInterruptionsAndHonorsAndroidAndQuietHours() {
+        val low = OrionProactiveEngine.ProactiveItem("task", "Review notes", "A task is due.", 1)
+        val urgent = OrionProactiveEngine.ProactiveItem("calendar", "Urgent event", "Starting now.", 2)
+        assertFalse(OrionProactiveGate.shouldDeliver(low, true, true, 80, false, 20))
+        assertFalse(OrionProactiveGate.shouldDeliver(low, false, false, 80, false, 20))
+        assertFalse(OrionProactiveGate.shouldDeliver(low, true, false, 10, false, 20))
+        assertTrue(OrionProactiveGate.shouldDeliver(urgent, true, false, 10, false, 20))
+        assertTrue(OrionProactiveGate.shouldDeliver(low, true, false, 10, true, 20))
+        assertFalse(OrionProactiveGate.shouldDeliver(null, true, false, 80, true, 20))
+    }
+
 }
