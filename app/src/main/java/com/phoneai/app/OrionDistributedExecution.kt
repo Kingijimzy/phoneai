@@ -89,7 +89,8 @@ internal class OrionDistributedTaskStore(context: Context, private val clock: ()
         (listOf(taskId) + descendants).forEach { id ->
             val row = rows.optJSONObject(id) ?: return@forEach
             if (row.optString("status") !in TERMINAL) {
-                row.put("status", if (row.optString("status") == "running") "cancel_requested" else "cancelled")
+                val status = row.optString("status")
+                row.put("status", if (status == "running" || status == "cancel_requested") "cancel_requested" else "cancelled")
                     .put("cancelReason", reason.take(120)).put("updatedAt", clock())
                 rows.put(id, row); changed++
             }
