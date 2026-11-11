@@ -136,7 +136,7 @@ internal class OrionDevAgent(
         }
         return DevResult(
             action = "run_python_code",
-            evidence = result.take(8_000),
+            evidence = (warning ?: "") + result.take(8_000),
             summary = "Python code executed in the sandbox. Output above is execution evidence, not proof of compilation or test success."
         )
     }
@@ -150,13 +150,7 @@ internal class OrionDevAgent(
         if (stopped()) {
             return DevResult(action = "run_shell_command", blocker = "shell command cancelled before launch.", summary = "No shell command was executed.")
         }
-        if (ShellPolicy.classify(command) == ShellRisk.BLOCKED) {
-            return DevResult(
-                action = "run_shell_command",
-                blocker = "blocked by Orion shell hard blocks",
-                summary = "Shell command was not executed: $command"
-            )
-        }
+        val warning = ShellPolicy.warning(command)
         val result = ShellRunner.runBuiltin(context, command)
         if (result.startsWith("error:") || result.contains("blocked", ignoreCase = true)) {
             return DevResult(
