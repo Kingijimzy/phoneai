@@ -155,6 +155,21 @@ class OrionWorkerJobStoreTest {
         assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW, store.all().single().status)
     }
 
+    @Test fun acknowledgedRunningCancellationBecomesTerminalAndReleasesActiveSlot() {
+        val store = OrionWorkerJobStore(context)
+        val running = store.enqueue("parent-1", "Cancel this running analysis")!!
+        val waiting = store.enqueue("parent-1", "Run after cancellation")!!
+        assertNotNull(store.claim(running.id) { true })
+
+        assertEquals(1, store.cancelParent("parent-1", "parent_stopped"))
+        assertEquals(OrionWorkerJobStore.Status.CANCEL_REQUESTED, store.all().first { it.id == running.id }.status)
+        assertFalse(store.hasPendingForParent("different-parent"))
+        assertTrue(store.confirmCancellation(running.id, "worker_observed_parent_stop"))
+        assertEquals(OrionWorkerJobStore.Status.CANCELLED, store.all().first { it.id == running.id }.status)
+        assertFalse(store.hasPendingForParent("parent-1"))
+        assertNotNull(store.claim(waiting.id) { true })
+    }
+
     @Test fun processDeathAfterCancellationRequestRequiresReview() {
         val store = OrionWorkerJobStore(context)
         val job = store.enqueue("parent-1", "Cancelled analysis")!!
