@@ -9,7 +9,7 @@ internal data class OrionOwnerDials(
     val autoActivateVerifiedExtensions: Boolean = false,
     val pythonProfile: OrionPythonProfile = OrionPythonProfile.GUARDED,
     val recoveryMaxAttempts: Int = 3,
-    val recoveryBackoffSeconds: Int = 30
+    val recoveryBackoffSeconds: Int = 1
 )
 
 internal object OrionOwnerDialSettings {
@@ -24,7 +24,7 @@ internal object OrionOwnerDialSettings {
             autoActivateVerifiedExtensions = p.getBoolean("auto_activate_verified_extensions", false),
             pythonProfile = profile,
             recoveryMaxAttempts = p.getInt("recovery_max_attempts", 3).coerceIn(0, 4),
-            recoveryBackoffSeconds = p.getInt("recovery_backoff_seconds", 30).coerceIn(15, 300)
+            recoveryBackoffSeconds = p.getInt("recovery_backoff_seconds", 1).coerceIn(1, 60)
         )
     }
 
@@ -33,7 +33,7 @@ internal object OrionOwnerDialSettings {
             .putBoolean("auto_activate_verified_extensions", value.autoActivateVerifiedExtensions)
             .putString("python_profile", value.pythonProfile.name)
             .putInt("recovery_max_attempts", value.recoveryMaxAttempts.coerceIn(0, 4))
-            .putInt("recovery_backoff_seconds", value.recoveryBackoffSeconds.coerceIn(15, 300))
+            .putInt("recovery_backoff_seconds", value.recoveryBackoffSeconds.coerceIn(1, 60))
             .apply()
     }
 
