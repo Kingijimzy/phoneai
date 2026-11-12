@@ -138,7 +138,8 @@ class LiveCallVisualView(context: Context) : View(context) {
         val h = height.toFloat()
         if (w <= 0f || h <= 0f) return
         val now = System.currentTimeMillis()
-        val t = if (reducedMotion) 0f else now / 1000f
+        // Use a monotonic, session-relative clock; epoch seconds lose sub-minute Float precision.
+        val t = if (reducedMotion) 0f else SystemClock.elapsedRealtime() / 1000f
         updatePowerPolicy()
         paint.color = android.graphics.Color.BLACK
         canvas.drawColor(android.graphics.Color.BLACK)
