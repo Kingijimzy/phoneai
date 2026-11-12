@@ -7,6 +7,8 @@ class OrionApp : Application() {
     override fun onCreate() {
         super.onCreate()
         runCatching { Prefs.loadCustomProviders(this) }
+        // Re-register persisted reminders after process recreation; boot recovery remains in the receiver.
+        runCatching { TaskReminder.restoreAll(this) }
         // Start the background heartbeat whenever the app process starts, not only after the accessibility service connects.
         if (OrionMasterControl.isEnabled(this)) runCatching { OrionProactiveWork.ensureScheduled(this) }
         // The managed website API server is a child of Orion's PRoot runtime. Reattach it
