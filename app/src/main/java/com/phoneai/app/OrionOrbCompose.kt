@@ -28,8 +28,15 @@ fun OrionOrb(
     var t by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
         val start = System.nanoTime()
+        var lastDraw = 0L
         while (true) {
-            androidx.compose.runtime.withFrameNanos { t = (it - start) / 1_000_000_000f }
+            androidx.compose.runtime.withFrameNanos { frame ->
+                // Cap the 3,000-point Canvas at ~30 fps; live-call and compact views use the same budget.
+                if (frame - lastDraw >= 34_000_000L) {
+                    t = (frame - start) / 1_000_000_000f
+                    lastDraw = frame
+                }
+            }
         }
     }
     Canvas(modifier.semantics { contentDescription = "Orion" }) {
