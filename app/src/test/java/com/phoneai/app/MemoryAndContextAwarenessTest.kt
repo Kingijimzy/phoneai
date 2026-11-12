@@ -5,7 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class MemoryAutoIndexerTest {
+class MemoryAndContextAwarenessTest {
     @Test fun extractsOnlyExplicitPreferencesRoutinesProjectsAndGoals() {
         assertEquals("preference", MemoryAutoIndexer.extract("I prefer concise answers with clear examples")?.category)
         assertEquals("routine", MemoryAutoIndexer.extract("I usually review forex charts before the London session")?.category)
