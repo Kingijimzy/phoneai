@@ -224,8 +224,6 @@ object McpConnector {
             negotiatedProtocolVersion = initResult?.optString("protocolVersion")
                 ?.takeIf { it in setOf("2025-03-26", "2025-06-18", "2025-11-25") }
                 ?: "2025-03-26"
-                ?.takeIf { it in setOf("2025-03-26", "2025-06-18", "2025-11-25") }
-                ?: "2025-03-26"
             post(c, JSONObject().put("jsonrpc", "2.0").put("method", "notifications/initialized"))
             val response = post(c, JSONObject().put("jsonrpc", "2.0").put("id", 2)
                 .put("method", "tools/list").put("params", JSONObject()))
