@@ -15,7 +15,8 @@ internal object OrionContextualIntentInterpreter {
         CORRECT_PREVIOUS,
         TEST_OBJECTIVE,
         AMBIGUOUS_REFERENCE,
-        HISTORICAL_LOOKUP
+        HISTORICAL_LOOKUP,
+        STATUS_CHECK
     }
 
     data class Resolution(
