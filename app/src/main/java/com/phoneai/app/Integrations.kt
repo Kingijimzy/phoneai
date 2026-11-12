@@ -1,5 +1,15 @@
 package com.phoneai.app
 
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -24,10 +34,16 @@ object TelegramBridge {
     private const val UPDATE_OFFSET = "last_update_offset"
     private const val KEY_ALIAS = "com.phoneai.telegram.bot-token.v1"
     private val tokenPattern = Regex("^[0-9]{5,}:[A-Za-z0-9_-]{20,}$")
-    private val chatPattern = Regex("^(?:-?[0-9]{1,25}|@[A-Za-z0-9_]{5,32})$")
+    private val pollLock = Any()
+    private val approvalLock = Any()
+    private class PendingApproval {
+        val latch = CountDownLatch(1)
+        val approved = AtomicBoolean(false)
+    }
+    @Volatile private var pendingApproval: PendingApproval? = null
 
     fun isConfigured(context: Context): Boolean =
-        decryptToken(context) != null && chatId(context).isNotBlank()
+        decryptToken(context) != null && chatId(context).toLongOrNull()?.let { it > 0L } == true
 
     fun chatId(context: Context): String =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(CHAT, "") ?: ""
@@ -36,8 +52,35 @@ object TelegramBridge {
         val cleanToken = token.trim()
         val cleanChat = chat.trim()
         if (!tokenPattern.matches(cleanToken)) return "Invalid BotFather token format. Token was not saved."
-        if (!chatPattern.matches(cleanChat)) return "Chat ID must be a numeric chat ID or @channel username."
+        val ownerId = cleanChat.toLongOrNull()
+        if (ownerId == null || ownerId <= 0L) return "Enter your positive numeric private Telegram chat ID. Group chats and channel usernames are not accepted for owner control."
         return try {
+            val identity = request(cleanToken, "getMe", emptyMap())
+            val bot = identity.optJSONObject("result")?.optString("username").orEmpty()
+            request(cleanToken, "getChat", mapOf("chat_id" to cleanChat))
+
+            // Discard messages which arrived before setup. Old chat text must never become
+            // a new Orion command just because the owner connected the bot later.
+            var nextOffset = 0L
+            var batches = 0
+            var batchSize = 0
+            do {
+                val result = request(cleanToken, "getUpdates", mapOf(
+                    "offset" to nextOffset.toString(),
+                    "limit" to "100",
+                    "timeout" to "0",
+                    "allowed_updates" to "[\\"message\\"]"
+                ))
+                val updates = result.optJSONArray("result") ?: JSONArray()
+                batchSize = updates.length()
+                for (i in 0 until batchSize) {
+                    val update = updates.optJSONObject(i) ?: continue
+                    nextOffset = maxOf(nextOffset, update.optLong("update_id", -1L) + 1L)
+                }
+                batches++
+            } while (batchSize == 100 && batches < 20)
+            if (batchSize == 100) return "Too many pending Telegram updates to initialise safely. Clear the bot's pending chat updates and try again."
+
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.ENCRYPT_MODE, secretKey())
             val encrypted = cipher.doFinal(cleanToken.toByteArray(Charsets.UTF_8))
@@ -45,131 +88,235 @@ object TelegramBridge {
                 .putString(TOKEN, Base64.encodeToString(encrypted, Base64.NO_WRAP))
                 .putString(IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
                 .putString(CHAT, cleanChat)
+                .putLong(UPDATE_OFFSET, nextOffset)
                 .commit()
-            if (ok) "Telegram settings saved securely on this device." else "Could not save Telegram settings."
+            if (ok) "Telegram bot @" + bot.ifBlank { "connected" } + " verified and saved securely. Only your configured private chat can control Orion."
+            else "Could not save Telegram settings."
         } catch (e: Exception) {
-            "Could not encrypt Telegram token: ${e.message ?: "keystore error"}"
+            "Could not verify or save Telegram settings (" + e.javaClass.simpleName + "). Open the bot and send /start, then retry."
         }
     }
 
     fun clear(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()
+        runCatching { TelegramListenerService.stop(context) }
     }
 
     fun status(context: Context): String {
-        val token = decryptToken(context) ?: return "Telegram is not configured. Add a BotFather token and chat ID in PhoneAI settings."
+        val token = decryptToken(context) ?: return "Telegram is not configured. Add a BotFather token and private chat ID in PhoneAI settings."
         val target = chatId(context)
-        if (target.isBlank()) return "Telegram token is saved, but no target chat is configured."
+        if (target.toLongOrNull()?.let { it > 0L } != true) return "Telegram token is saved, but the private owner chat ID is missing or invalid."
         return try {
             val obj = request(token, "getMe", emptyMap())
             val bot = obj.optJSONObject("result") ?: return "Telegram API did not return bot details."
-            "Telegram connected: @${bot.optString("username", "unknown")} (bot ID ${bot.optString("id", "unknown")}). Saved target: $target. Sending still requires confirmation."
+            val listener = if (TelegramListenerService.isEnabled(context)) "background listener active" else "bot connected; background listener is stopped"
+            "Telegram connected: @" + bot.optString("username", "unknown") + "; " + listener + ". Inbound control is restricted to the saved private owner chat."
         } catch (e: Exception) {
-            "Telegram check failed (${e.javaClass.simpleName}). Token remains stored encrypted."
+            "Telegram check failed (" + e.javaClass.simpleName + "). Token remains stored encrypted."
         }
     }
 
-    /** Polls the saved numeric chat and replies to ordinary text messages. Phone actions are never run from Telegram. */
-    fun checkUpdates(context: Context): String {
-        val token = decryptToken(context) ?: return "error: Telegram is not configured."
+    /** Polls only the saved private owner chat and dispatches owner text through Orion's shared coordinator. */
+    fun checkUpdates(context: Context): String = synchronized(pollLock) {
+        val token = decryptToken(context) ?: return@synchronized "error: Telegram is not configured."
         val target = chatId(context)
-        if (!target.matches(Regex("^-?[0-9]{1,25}$"))) return "Incoming checks require a numeric saved chat ID, not a @channel username."
-        return try {
+        val owner = target.toLongOrNull()?.takeIf { it > 0L }
+            ?: return@synchronized "error: incoming control requires a positive numeric private owner chat ID."
+        try {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val offset = prefs.getLong(UPDATE_OFFSET, 0L)
-            val result = request(token, "getUpdates", mapOf("offset" to offset.toString(), "limit" to "10", "timeout" to "0"))
-            val updates = result.optJSONArray("result") ?: return "Telegram returned no update list."
+            val result = request(token, "getUpdates", mapOf(
+                "offset" to offset.toString(),
+                "limit" to "100",
+                "timeout" to "0",
+                "allowed_updates" to "[\\"message\\"]"
+            ))
+            val updates = result.optJSONArray("result") ?: return@synchronized "Telegram returned no update list."
             var newest = offset
             var seen = 0
-            var replied = 0
-            val notes = mutableListOf<String>()
+            var ignored = 0
             for (i in 0 until updates.length()) {
                 val update = updates.optJSONObject(i) ?: continue
                 val updateId = update.optLong("update_id", -1L)
-                if (updateId >= newest) newest = updateId + 1
-                val msg = update.optJSONObject("message") ?: update.optJSONObject("edited_message") ?: continue
-                val chat = msg.optJSONObject("chat") ?: continue
-                if (chat.optString("id") != target) continue
-                val text = msg.optString("text", "").trim()
-                if (text.isBlank()) continue
-                seen++
-                val reply = localTelegramReply(text) ?: try {
-                    val history = JSONArray()
-                        .put(JSONObject().put("role", "system").put("content", "You are Orion, a concise helpful assistant replying to the user in Telegram. Answer directly and naturally. You may answer questions, but NEVER claim to have executed phone actions, sent other messages, browsed, or changed settings. Never execute device-control commands from Telegram; tell the user to use the Orion app for those actions."))
-                        .put(JSONObject().put("role", "user").put("content", text.take(5000)))
-                    Nim(context).chat(history, false, 140, 0.35, fastResponse = true).trim().ifBlank { "I received your message, but my AI provider returned an empty reply. Check Orion AI provider settings." }
-                } catch (e: Exception) {
-                    "I received your message, but could not generate a reply (" + e.javaClass.simpleName + "). Check Orion AI provider and quota in the app."
+                if (updateId >= 0L) {
+                    newest = maxOf(newest, updateId + 1L)
+                    // Checkpoint before side effects to prevent a process restart replaying a command.
+                    if (!prefs.edit().putLong(UPDATE_OFFSET, newest).commit()) {
+                        return@synchronized "error: Telegram update checkpoint could not be saved; no further update was dispatched."
+                    }
                 }
-                val sent = sendTo(context, token, target, reply.take(3500))
-                if (sent) replied++ else notes.add("Telegram rejected a reply for one message.")
+                val msg = update.optJSONObject("message") ?: continue
+                val chat = msg.optJSONObject("chat") ?: continue
+                val from = msg.optJSONObject("from") ?: continue
+                val incomingChat = chat.optLong("id", Long.MIN_VALUE)
+                val sender = from.optLong("id", Long.MIN_VALUE)
+                val fromBot = from.optBoolean("is_bot", true)
+                val text = msg.optString("text", "").trim()
+                if (incomingChat != owner || sender != owner || fromBot || text.isBlank()) {
+                    ignored++
+                    continue
+                }
+                seen++
+
+                val awaiting = synchronized(approvalLock) { pendingApproval }
+                if (awaiting != null) {
+                    when (text.uppercase()) {
+                        "YES", "/YES", "APPROVE" -> {
+                            awaiting.approved.set(true)
+                            synchronized(approvalLock) { if (pendingApproval === awaiting) pendingApproval = null }
+                            awaiting.latch.countDown()
+                            send(context, "Confirmation received. Orion is continuing the destructive action you were warned about.")
+                        }
+                        "NO", "/NO", "CANCEL" -> {
+                            awaiting.approved.set(false)
+                            synchronized(approvalLock) { if (pendingApproval === awaiting) pendingApproval = null }
+                            awaiting.latch.countDown()
+                            send(context, "Cancelled. Orion will not delete or wipe the selected data.")
+                        }
+                        else -> send(context, "A destructive action is waiting for your decision. Reply YES or NO first, then send your next instruction.")
+                    }
+                    continue
+                }
+
+                if (text.equals("/start", true) || text.equals("/help", true)) {
+                    send(context, "Orion Telegram control is connected. Send me an instruction in this private chat. I will run it through the same central coordinator as the app and report the result. Delete/wipe operations require your explicit confirmation.")
+                    continue
+                }
+                val service = PhoneAiService.instance
+                if (service == null || !OrionMasterControl.isEnabled(context)) {
+                    send(context, "Orion received your message, but the Orion service is not running. Start Orion on the phone, then send the instruction again.")
+                    continue
+                }
+                service.executeSharedToolRequest(text, source = "Telegram") { answer ->
+                    Thread({
+                        val safe = answer.trim().ifBlank { "The task finished without a final response. Check Orion's activity timeline." }
+                        send(context, "Orion result:\\n" + safe.take(12_000))
+                        notifyTaskResult(context, safe)
+                    }, "OrionTelegramReply").apply { isDaemon = true; start() }
+                }
             }
-            if (newest > offset) prefs.edit().putLong(UPDATE_OFFSET, newest).commit()
-            when {
-                seen == 0 -> "No new messages from the saved chat."
-                replied == seen -> "Processed " + seen + " Telegram message(s) and sent " + replied + " repl" + (if (replied == 1) "y." else "ies.")
-                else -> "Received " + seen + " message(s); sent " + replied + " repl" + (if (replied == 1) "y. " else "ies. ") + notes.joinToString(" ")
-            }
-        } catch (e: Exception) { "Telegram inbox/reply failed (" + e.javaClass.simpleName + "). Check the saved chat ID and bot connection." }
+            "Telegram poll complete: " + seen + " authenticated owner message(s) accepted; " + ignored + " unrelated or unsupported update(s) ignored."
+        } catch (e: Exception) {
+            "Telegram inbox/control failed (" + e.javaClass.simpleName + "). Check the saved chat ID and bot connection."
+        }
     }
 
-    /** Small commands handled locally without using an AI provider. */
-    private fun localTelegramReply(text: String): String? {
-        val s = text.trim().lowercase()
-        return when (s) {
-            "/start", "/start@orionzai_bot", "/help", "/help@orionzai_bot" -> "Hello! I am Orion. Send me a question and I will answer. For phone actions, open the Orion app. Commands: /start, /help, /time, /date."
-            "/time", "/time@orionzai_bot" -> "Local phone time: " + java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(java.util.Date())
-            "/date", "/date@orionzai_bot" -> "Today is " + java.text.SimpleDateFormat("EEEE, d MMMM yyyy", java.util.Locale.getDefault()).format(java.util.Date())
-            "/status", "/status@orionzai_bot" -> "Orion Telegram responder is online when the background listener is running. AI replies require a working provider; /help lists local commands."
-            "/ping", "/ping@orionzai_bot" -> "Pong. Orion's Telegram command handler is responding."
-            else -> {
-                val calc = Regex("^/calc\\s+(-?\\d+(?:\\.\\d+)?)\\s*([+*/-])\\s*(-?\\d+(?:\\.\\d+)?)$").matchEntire(s)
-                if (s.startsWith("/calc")) {
-                    if (calc == null) "Usage: /calc 12 * 3 (supports +, -, *, /)"
-                    else {
-                        val x = calc.groupValues[1].toDouble()
-                        val op = calc.groupValues[2]
-                        val y = calc.groupValues[3].toDouble()
-                        when (op) {
-                            "+" -> "Result: " + (x + y)
-                            "-" -> "Result: " + (x - y)
-                            "*" -> "Result: " + (x * y)
-                            "/" -> if (y == 0.0) "Cannot divide by zero." else "Result: " + (x / y)
-                            else -> "Unsupported operation."
-                        }
-                    }
-                } else null
+    /** The owner must answer YES or NO in the authenticated private chat; timeout means deny. */
+    fun askApproval(context: Context, question: String): Boolean {
+        if (!isConfigured(context) || !TelegramListenerService.isEnabled(context)) return false
+        val pending = PendingApproval()
+        synchronized(approvalLock) {
+            if (pendingApproval != null) return false
+            pendingApproval = pending
+        }
+        val warning = "⚠️ ORION DESTRUCTIVE ACTION WARNING\\n" + question +
+            "\\n\\nReply YES to proceed or NO to cancel. This request expires in 90 seconds."
+        notifyProactive(context, "Orion needs your decision", question)
+        if (send(context, warning).startsWith("error", ignoreCase = true)) {
+            synchronized(approvalLock) { if (pendingApproval === pending) pendingApproval = null }
+            return false
+        }
+        val completed = try { pending.latch.await(90, TimeUnit.SECONDS) } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+        synchronized(approvalLock) { if (pendingApproval === pending) pendingApproval = null }
+        if (!completed) send(context, "Approval timed out. Orion cancelled the destructive action; no data was deleted or wiped.")
+        return completed && pending.approved.get()
+    }
+
+    fun sendProactive(context: Context, message: String): Boolean {
+        if (!TelegramListenerService.isEnabled(context) || !isConfigured(context)) return false
+        return !send(context, message).startsWith("error", ignoreCase = true)
+    }
+
+    fun notifyProactive(context: Context, title: String, message: String): Boolean =
+        postLocalNotification(context, title, message)
+
+    /** Deduplicated watcher alert; local notification and Telegram delivery retry independently. */
+    fun notifyFinding(context: Context, key: String, title: String, message: String) {
+        if (key.isBlank() || message.isBlank()) return
+        val cleanKey = key.replace(Regex("[^A-Za-z0-9_.-]"), "_").take(64)
+        val fingerprint = java.security.MessageDigest.getInstance("SHA-256")
+            .digest((title + "\\n" + message).toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        val prefs = context.getSharedPreferences("orion_telegram_outreach", Context.MODE_PRIVATE)
+        val localKey = "local_finding_" + cleanKey
+        if (prefs.getString(localKey, "") != fingerprint && notifyProactive(context, title, message)) {
+            prefs.edit().putString(localKey, fingerprint).commit()
+        }
+        val telegramKey = "telegram_finding_" + cleanKey
+        if (TelegramListenerService.isEnabled(context) && isConfigured(context) &&
+            prefs.getString(telegramKey, "") != fingerprint &&
+            sendProactive(context, title + "\\n" + message.take(3200))) {
+            prefs.edit().putString(telegramKey, fingerprint).commit()
+        }
+    }
+
+    fun send(context: Context, message: String): String {
+        val token = decryptToken(context) ?: return "error: Telegram is not configured."
+        val target = chatId(context)
+        if (target.toLongOrNull()?.let { it > 0L } != true) return "error: no private Telegram owner chat is configured."
+        val body = message.trim()
+        if (body.isEmpty()) return "error: message is empty."
+        if (body.length > 16_000) return "error: message is too long (maximum 16000 characters)."
+        return try {
+            val parts = body.chunked(3500)
+            for (part in parts) {
+                val result = request(token, "sendMessage", mapOf("chat_id" to target, "text" to part))
+                if (!result.optBoolean("ok")) return "error: Telegram rejected the message."
             }
+            "Telegram message sent to the saved private owner chat."
+        } catch (e: Exception) {
+            "error: Telegram send failed (" + e.javaClass.simpleName + ")."
         }
     }
 
     private fun sendTo(context: Context, token: String, target: String, message: String): Boolean {
         val body = message.trim().take(3500)
         if (body.isEmpty()) return false
-        val result = request(token, "sendMessage", mapOf("chat_id" to target, "text" to body))
-        return result.optBoolean("ok")
+        return request(token, "sendMessage", mapOf("chat_id" to target, "text" to body)).optBoolean("ok")
     }
-    /** Sends only to the saved target. Caller must obtain explicit user approval before calling. */
-    fun send(context: Context, message: String): String {
-        val token = decryptToken(context) ?: return "error: Telegram is not configured."
-        val target = chatId(context)
-        if (target.isBlank()) return "error: no Telegram target chat is configured."
-        val body = message.trim()
-        if (body.isEmpty()) return "error: message is empty."
-        if (body.length > 3500) return "error: message is too long (maximum 3500 characters)."
+
+    private fun notifyTaskResult(context: Context, result: String) {
+        postLocalNotification(context, "Orion finished your Telegram request", result)
+    }
+
+    private fun postLocalNotification(context: Context, title: String, result: String): Boolean {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return false
+        if (!androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+        val channel = "orion_telegram_task_results"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(NotificationChannel(channel, "Orion task results and proactive alerts", NotificationManager.IMPORTANCE_DEFAULT))
+        }
+        val open = PendingIntent.getActivity(
+            context, 7319, android.content.Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val summary = result.replace(Regex("\\\\s+"), " ").take(220)
+        val notification = NotificationCompat.Builder(context, channel)
+            .setSmallIcon(android.R.drawable.stat_notify_chat)
+            .setContentTitle(title.take(100))
+            .setContentText(summary)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(summary))
+            .setAutoCancel(true)
+            .setContentIntent(open)
+            .build()
         return try {
-            val result = request(token, "sendMessage", mapOf("chat_id" to target, "text" to body))
-            if (result.optBoolean("ok")) "Telegram message sent to the saved target." else "error: Telegram rejected the message."
-        } catch (e: Exception) {
-            "error: Telegram send failed (${e.javaClass.simpleName})."
+            manager.notify((System.currentTimeMillis() % Int.MAX_VALUE).toInt(), notification)
+            true
+        } catch (_: SecurityException) {
+            false
         }
     }
 
     private fun request(token: String, method: String, params: Map<String, String>): JSONObject {
-        if (method !in setOf("getMe", "sendMessage", "getUpdates")) throw IllegalArgumentException("Unsupported Telegram method.")
+        if (method !in setOf("getMe", "getChat", "sendMessage", "getUpdates")) throw IllegalArgumentException("Unsupported Telegram method.")
         val conn = (URL("https://api.telegram.org/bot$token/$method").openConnection() as HttpURLConnection)
         conn.connectTimeout = 8000
-        conn.readTimeout = 8000
+        conn.readTimeout = if (method == "getUpdates") 12000 else 8000
         conn.instanceFollowRedirects = false
         conn.setRequestProperty("Accept", "application/json")
         conn.setRequestProperty("User-Agent", "PhoneAI-Telegram-Bridge")
@@ -234,7 +381,6 @@ object TelegramBridge {
         return generator.generateKey()
     }
 }
-
 object IntegrationStatus {
     fun summary(context: Context): String = listOf(
         "GitHub public API: available (read-only; public repositories only)",
