@@ -95,7 +95,11 @@ class AgentChatActivity : Activity() {
     private val tick = object : Runnable { override fun run() { if (resumed) { refreshDesk(); startWake(); ticker.postDelayed(this, 20_000L) } } }
 
     private fun voiceOut(): Voice = voice ?: Voice(applicationContext).also { v ->
-        v.onSpeaking = { on -> speakingNow = on; postUiIfAlive { setLive(if (on) CompanionView.Activity.SPEAKING else CompanionView.Activity.IDLE) } }
+        v.onSpeaking = { on ->
+            speakingNow = on
+            if (!on) postUiIfAlive { orb?.speechAmplitude = 0f }
+            postUiIfAlive { setLive(if (on) CompanionView.Activity.SPEAKING else CompanionView.Activity.IDLE) }
+        }
         v.onLevel = { l -> postUiIfAlive { orb?.level = l; holo?.mic(l) } }
         v.onAudioAmplitude = { level -> postUiIfAlive { orb?.speechAmplitude = level } }
         v.onWord = { postUiIfAlive { orb?.pulseMouth() } }
