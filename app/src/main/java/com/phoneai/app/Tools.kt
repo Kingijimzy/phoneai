@@ -594,6 +594,32 @@ class Tools(
         }
     }
 
+    /** Opens a WhatsApp chat with a prefilled message. Sending remains an explicit in-app action. */
+    fun whatsappCompose(phoneRaw: String, message: String): String {
+        val phone = phoneRaw.trim()
+        val digits = phone.removePrefix("+")
+        if (!digits.matches(Regex("^[1-9][0-9]{7,14}$"))) {
+            return "error: phone must be an international number in E.164 format, for example +2348012345678"
+        }
+        val text = message.trim()
+        if (text.isBlank()) return "error: WhatsApp message cannot be empty"
+        if (text.length > 1000) return "error: WhatsApp prefilled message is limited to 1000 characters"
+        val uri = Uri.parse("https://wa.me/" + digits + "?text=" + Uri.encode(text))
+        val candidates = listOf("com.whatsapp", "com.whatsapp.w4b")
+        for (packageName in candidates) {
+            try {
+                svc.startActivity(Intent(Intent.ACTION_VIEW, uri).setPackage(packageName)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return "WhatsApp chat opened for +$digits with the message prefilled. It has NOT been sent; review and tap Send in WhatsApp."
+            } catch (_: android.content.ActivityNotFoundException) {
+                // Try the next official WhatsApp package.
+            } catch (e: Exception) {
+                return "error: WhatsApp handoff failed (" + e.javaClass.simpleName + ")"
+            }
+        }
+        return "error: WhatsApp or WhatsApp Business is not installed or cannot handle the chat link"
+    }
+
     fun resolveContact(name: String): String {
         val q = name.trim()
         if (q.isBlank()) return "error: contact name is required"
