@@ -27,23 +27,23 @@ class OrionCapabilityReportActivity : Activity() {
     private fun card() = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(12), dp(14), dp(12))
         background = GradientDrawable().apply {
-            setColor(0xFF171717.toInt()); cornerRadius = dp(15).toFloat()
-            setStroke(dp(1), 0xFF353535.toInt())
+            setColor(Theme.PANEL); cornerRadius = dp(15).toFloat()
+            setStroke(dp(1), Theme.LINE)
         }
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) }
     }
     private fun addLine(parent: LinearLayout, title: String, detail: String, good: Boolean? = null) {
-        parent.addView(label(title, 14f, 0xFFF0F0F0.toInt(), true))
+        parent.addView(label(title, 14f, Theme.TEXT, true))
         parent.addView(label(detail, 12f, when (good) {
-            true -> 0xFF9ED6A2.toInt()
-            false -> 0xFFFFC078.toInt()
-            null -> 0xFFAAAAAA.toInt()
+            true -> Theme.OK
+            false -> Theme.WARN
+            null -> Theme.MUTED
         }))
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = 0xFF090909.toInt(); window.navigationBarColor = 0xFF090909.toInt()
-        val scroll = ScrollView(this).apply { setBackgroundColor(0xFF090909.toInt()) }
+        window.statusBarColor = Theme.BG; window.navigationBarColor = Theme.BG
+        val scroll = ScrollView(this).apply { setBackgroundColor(Theme.BG) }
         page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(24), dp(18), dp(30))
         }
@@ -55,9 +55,9 @@ class OrionCapabilityReportActivity : Activity() {
     }
     private fun render() {
         page.removeAllViews()
-        page.addView(label("ORION / DIAGNOSTICS", 10f, 0xFFAAAAAA.toInt(), true))
-        page.addView(label("Capability report", 27f, 0xFFF3F3F3.toInt(), true))
-        page.addView(label("A local snapshot of what is configured and available. Orion does not mark a feature successful just because its screen or code exists.", 13f, 0xFFAAAAAA.toInt()))
+        page.addView(label("ORION / DIAGNOSTICS", 10f, Theme.MUTED, true))
+        page.addView(label("Capability report", 27f, Theme.TEXT, true))
+        page.addView(label("A local snapshot of what is configured and available. Orion does not mark a feature successful just because its screen or code exists.", 13f, Theme.MUTED))
 
         val service = PhoneAiService.instance
         val accessibilityReady = service != null && runCatching { service.serviceInfo != null }.getOrDefault(false)
@@ -89,17 +89,17 @@ class OrionCapabilityReportActivity : Activity() {
             OrionCapabilityAudit.Status.BLOCKED -> "BLOCKED — core capability unavailable"
         }
         val statusColor = when (report.status) {
-            OrionCapabilityAudit.Status.READY -> 0xFF9ED6A2.toInt()
-            OrionCapabilityAudit.Status.LIMITED -> 0xFFFFC078.toInt()
-            OrionCapabilityAudit.Status.BLOCKED -> 0xFFFF8585.toInt()
+            OrionCapabilityAudit.Status.READY -> Theme.OK
+            OrionCapabilityAudit.Status.LIMITED -> Theme.WARN
+            OrionCapabilityAudit.Status.BLOCKED -> Theme.DANGER
         }
         hero.addView(label(status, 16f, statusColor, true))
-        hero.addView(label("Checked locally at " + now, 11f, 0xFF999999.toInt()))
-        hero.addView(label("This is not a success-rate score. READY does not prove every provider, voice engine, screen, or external action works.", 12f, 0xFFCCCCCC.toInt()))
+        hero.addView(label("Checked locally at " + now, 11f, Theme.MUTED))
+        hero.addView(label("This is not a success-rate score. READY does not prove every provider, voice engine, screen, or external action works.", 12f, Theme.TEXT_SECONDARY))
         page.addView(hero)
 
         val core = card()
-        core.addView(label("CORE READINESS", 10f, 0xFFAAAAAA.toInt(), true))
+        core.addView(label("CORE READINESS", 10f, Theme.MUTED, true))
         addLine(core, "Agent service", if (accessibilityReady) "Accessibility service is connected." else "Not connected. Phone-control and service-driven features are unavailable.", accessibilityReady)
         addLine(core, "Screen access consent", if (disclosureAccepted) "Disclosure accepted in Orion settings." else "Not accepted. Orion must not assume permission to inspect the screen.", disclosureAccepted)
         addLine(core, "Current screen", if (windowReady) "An active accessibility window is readable right now." else "No active accessibility window was readable during this check. Some apps may still block access.", windowReady)
@@ -110,7 +110,7 @@ class OrionCapabilityReportActivity : Activity() {
         // Show the real routing configuration and transcript availability, without implying
         // that a saved provider key or selected model has passed a live network test.
         val contextCard = card()
-        contextCard.addView(label("CONVERSATION & ROUTING", 10f, 0xFFAAAAAA.toInt(), true))
+        contextCard.addView(label("CONVERSATION & ROUTING", 10f, Theme.MUTED, true))
         val executionMode = runCatching { Prefs.executionMode(this) }.getOrDefault("UNKNOWN")
         val modeDescription = when (executionMode) {
             "PLAN" -> "Plan mode: prepare and reason about actions; execution is restricted by mode policy."
@@ -154,7 +154,7 @@ class OrionCapabilityReportActivity : Activity() {
         page.addView(contextCard)
 
         val integrations = card()
-        integrations.addView(label("INTEGRATIONS", 10f, 0xFFAAAAAA.toInt(), true))
+        integrations.addView(label("INTEGRATIONS", 10f, Theme.MUTED, true))
         addLine(integrations, "AI provider keys", providerKeys.toString() + " of " + Providers.all.size + " providers have a saved key. This does not validate the key, model, credits, quota, or network.", providerKeys > 0)
         addLine(integrations, "Service credentials", savedServices.toString() + " credential(s) saved in the local connection store. Saved is not the same as provider-verified.", null)
         addLine(integrations, "Speech recognition", if (speechAvailable) "Android reports a recognizer is available; microphone capture and transcription still need a real test." else "Android reports no speech recognizer available.", speechAvailable)
@@ -216,17 +216,17 @@ class OrionCapabilityReportActivity : Activity() {
             )
         }.getOrNull()
         val toolsCard = card()
-        toolsCard.addView(label("TOOL-BY-TOOL AVAILABILITY", 10f, 0xFFAAAAAA.toInt(), true))
+        toolsCard.addView(label("TOOL-BY-TOOL AVAILABILITY", 10f, Theme.MUTED, true))
         toolsCard.addView(label(
             "Eligible means registered, pack enabled and known prerequisites satisfied. It does NOT mean the backend has been live-tested or that an action will succeed.",
-            12f, 0xFFAAAAAA.toInt()
+            12f, Theme.MUTED
         ))
         if (inventory == null) {
-            toolsCard.addView(label("Tool availability could not be calculated.", 12f, 0xFFFFC078.toInt()))
+            toolsCard.addView(label("Tool availability could not be calculated.", 12f, Theme.WARN))
         } else {
             toolsCard.addView(label(
                 "${inventory.availableCount} of ${inventory.registeredCount} tools eligible to attempt · ${inventory.registeredCount - inventory.availableCount} blocked",
-                13f, 0xFFF0F0F0.toInt(), true
+                13f, Theme.TEXT, true
             ))
             inventory.tools.sortedWith(compareBy<OrionCapabilityDiscovery.ToolFact> { !it.available }.thenBy { it.name })
                 .forEach { tool ->
@@ -238,7 +238,7 @@ class OrionCapabilityReportActivity : Activity() {
                     )
                 }
             if (inventory.blockers.isNotEmpty()) {
-                toolsCard.addView(label("Runtime notes: " + inventory.blockers.joinToString("; "), 11f, 0xFFFFC078.toInt()))
+                toolsCard.addView(label("Runtime notes: " + inventory.blockers.joinToString("; "), 11f, Theme.WARN))
             }
         }
         page.addView(toolsCard)
@@ -247,41 +247,41 @@ class OrionCapabilityReportActivity : Activity() {
         val shared = runCatching { OrionCapabilityHub.snapshot(this, service) }.getOrNull()
         if (shared != null) {
             val sharedCard = card()
-            sharedCard.addView(label("CONNECTED CAPABILITY HUB", 10f, 0xFFAAAAAA.toInt(), true))
-            sharedCard.addView(label("${shared.registeredTools} registered tools · ${shared.availableTools} eligible under current policy", 12f, 0xFFCCCCCC.toInt()))
+            sharedCard.addView(label("CONNECTED CAPABILITY HUB", 10f, Theme.MUTED, true))
+            sharedCard.addView(label("${shared.registeredTools} registered tools · ${shared.availableTools} eligible under current policy", 12f, Theme.TEXT_SECONDARY))
             shared.capabilities.forEach { capability ->
                 val good = capability.state == OrionCapabilityHub.State.READY
                 val color = when (capability.state) {
-                    OrionCapabilityHub.State.READY -> 0xFF9ED6A2.toInt()
-                    OrionCapabilityHub.State.LIMITED -> 0xFFFFC078.toInt()
-                    OrionCapabilityHub.State.DISABLED, OrionCapabilityHub.State.SETUP_REQUIRED -> 0xFFFF8585.toInt()
-                    OrionCapabilityHub.State.UNKNOWN -> 0xFFAAAAAA.toInt()
+                    OrionCapabilityHub.State.READY -> Theme.OK
+                    OrionCapabilityHub.State.LIMITED -> Theme.WARN
+                    OrionCapabilityHub.State.DISABLED, OrionCapabilityHub.State.SETUP_REQUIRED -> Theme.DANGER
+                    OrionCapabilityHub.State.UNKNOWN -> Theme.MUTED
                 }
                 sharedCard.addView(label("${OrionCapabilityHub.stateLabel(capability.state)} · ${capability.name}", 13f, color, true))
-                sharedCard.addView(label(capability.detail, 11f, 0xFFBBBBBB.toInt()))
+                sharedCard.addView(label(capability.detail, 11f, Theme.TEXT_SECONDARY))
             }
             if (shared.integrationStates.isNotEmpty()) {
-                sharedCard.addView(label("Connection metadata only: " + shared.integrationStates.entries.joinToString("; ") { "${it.key}=${it.value}" }, 10f, 0xFFAAAAAA.toInt()))
+                sharedCard.addView(label("Connection metadata only: " + shared.integrationStates.entries.joinToString("; ") { "${it.key}=${it.value}" }, 10f, Theme.MUTED))
             }
             page.addView(sharedCard)
         }
 
         val limits = card()
-        limits.addView(label("WHAT NEEDS ATTENTION", 10f, 0xFFAAAAAA.toInt(), true))
+        limits.addView(label("WHAT NEEDS ATTENTION", 10f, Theme.MUTED, true))
         val messages = report.limitations.mapNotNull { limitationText(it) }.toMutableList()
         if (providerKeys == 0) messages += "No AI provider key is saved; online model responses may be unavailable."
         if (savedServices == 0) messages += "No external-service credentials are saved."
         if (!speechAvailable) messages += "Install or enable a speech-recognition service before testing voice input."
         if (messages.isEmpty()) messages += "No core blocker was detected. Run real chat, voice, screen-action, and provider tests before treating the app as fully verified."
-        messages.distinct().forEach { limits.addView(label("• " + it, 12f, 0xFFE0E0E0.toInt())) }
+        messages.distinct().forEach { limits.addView(label("• " + it, 12f, Theme.TEXT)) }
         page.addView(limits)
 
         val activityCard = card()
-        activityCard.addView(label("RECENT TOOL ACTIVITY", 10f, 0xFFAAAAAA.toInt(), true))
-        activityCard.addView(label("Local audit history records tool names and generic outcomes only; it does not store tool arguments or prove the user's goal was achieved.", 12f, 0xFFAAAAAA.toInt()))
+        activityCard.addView(label("RECENT TOOL ACTIVITY", 10f, Theme.MUTED, true))
+        activityCard.addView(label("Local audit history records tool names and generic outcomes only; it does not store tool arguments or prove the user's goal was achieved.", 12f, Theme.MUTED))
         val recentEvents = runCatching { ActionLogStore.all(this).take(8) }.getOrDefault(emptyList())
         if (recentEvents.isEmpty()) {
-            activityCard.addView(label("No tool attempts are recorded yet.", 12f, 0xFFAAAAAA.toInt()))
+            activityCard.addView(label("No tool attempts are recorded yet.", 12f, Theme.MUTED))
         } else {
             recentEvents.forEach { event ->
                 val stamp = runCatching {

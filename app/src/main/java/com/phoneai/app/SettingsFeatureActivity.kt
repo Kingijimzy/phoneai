@@ -32,23 +32,23 @@ class SettingsFeatureActivity : Activity() {
             setPadding(0, dp(2), 0, dp(2))
         }
     private fun surface() = GradientDrawable().apply {
-        setColor(0xFF171717.toInt()); cornerRadius = dp(15).toFloat()
-        setStroke(dp(1), 0xFF383838.toInt())
+        setColor(Theme.PANEL); cornerRadius = dp(15).toFloat()
+        setStroke(dp(1), Theme.LINE)
     }
     private fun card(title: String, detail: String, actionLabel: String, action: () -> Unit) {
         val block = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(13), dp(14), dp(13))
             background = surface()
         }
-        block.addView(label(title, 16f, 0xFFF1F1F1.toInt(), true))
-        block.addView(label(detail, 12f, 0xFFAAAAAA.toInt()).apply { setPadding(0, dp(5), 0, dp(11)) })
+        block.addView(label(title, 16f, Theme.TEXT, true))
+        block.addView(label(detail, 12f, Theme.MUTED).apply { setPadding(0, dp(5), 0, dp(11)) })
         val button = TextView(this).apply {
             text = "$actionLabel  ›"; textSize = 13f; gravity = Gravity.CENTER
-            setTextColor(0xFFF0F0F0.toInt()); typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Theme.TEXT); typeface = Typeface.DEFAULT_BOLD
             setPadding(dp(13), dp(10), dp(13), dp(10))
             background = GradientDrawable().apply {
-                setColor(0xFF292929.toInt()); cornerRadius = dp(10).toFloat()
-                setStroke(dp(1), 0xFF505050.toInt())
+                setColor(Theme.PANEL3); cornerRadius = dp(10).toFloat()
+                setStroke(dp(1), Theme.LINE_STRONG)
             }
             isClickable = true; isFocusable = true
             setOnClickListener { runCatching(action).onFailure {
@@ -65,9 +65,9 @@ class SettingsFeatureActivity : Activity() {
         super.onCreate(savedInstanceState)
         section = (intent.getStringExtra(EXTRA_SECTION) ?: "providers").lowercase()
         if (section !in VALID) section = "providers"
-        window.statusBarColor = 0xFF090909.toInt()
-        window.navigationBarColor = 0xFF090909.toInt()
-        val scroll = ScrollView(this).apply { setBackgroundColor(0xFF090909.toInt()); isFillViewport = true }
+        window.statusBarColor = Theme.BG
+        window.navigationBarColor = Theme.BG
+        val scroll = ScrollView(this).apply { setBackgroundColor(Theme.BG); isFillViewport = true }
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(17), dp(22), dp(17), dp(30))
@@ -87,14 +87,14 @@ class SettingsFeatureActivity : Activity() {
             else -> Triple("Screen recording", "Start an Android-approved capture session and review recording access.", "CAPTURE")
         }
         root.addView(TextView(this).apply {
-            text = "‹   Back"; textSize = 14f; setTextColor(0xFFD6D6D6.toInt())
+            text = "‹   Back"; textSize = 14f; setTextColor(Theme.TEXT_SECONDARY)
             setPadding(0, dp(3), 0, dp(16)); isClickable = true
             setOnClickListener { finish() }
         })
-        root.addView(label("ORION  /  SETTINGS", 10f, 0xFFAAAAAA.toInt(), true))
-        root.addView(label(heading.first, 27f, 0xFFF4F4F4.toInt(), true).apply { setPadding(0, dp(7), 0, dp(5)) })
-        root.addView(label(heading.second, 13f, 0xFFAAAAAA.toInt()).apply { setPadding(0, 0, 0, dp(12)) })
-        root.addView(label(heading.third, 10f, 0xFFBDBDBD.toInt(), true).apply { letterSpacing = .12f })
+        root.addView(label("ORION  /  SETTINGS", 10f, Theme.MUTED, true))
+        root.addView(label(heading.first, 27f, Theme.TEXT, true).apply { setPadding(0, dp(7), 0, dp(5)) })
+        root.addView(label(heading.second, 13f, Theme.MUTED).apply { setPadding(0, 0, 0, dp(12)) })
+        root.addView(label(heading.third, 10f, Theme.TEXT_SECONDARY, true).apply { letterSpacing = .12f })
         when(section) {
             "providers" -> {
                 card("Provider connections", "Connect, replace or verify API credentials. Connection status and token management live in the capability board.", "Open connections") {
@@ -145,6 +145,6 @@ class SettingsFeatureActivity : Activity() {
                 }
             }
         }
-        root.addView(label("Each action opens its real owner screen or Android's own settings. If a destination is unavailable, Orion reports the failure instead of silently redirecting.", 11f, 0xFF858585.toInt()).apply { setPadding(0, dp(18), 0, 0) })
+        root.addView(label("Each action opens its real owner screen or Android's own settings. If a destination is unavailable, Orion reports the failure instead of silently redirecting.", 11f, Theme.MUTED).apply { setPadding(0, dp(18), 0, 0) })
     }
 }

@@ -12,8 +12,20 @@ class MarkdownTest {
         assertEquals("• first\n• second", Markdown.normalizeLines("- first\n* second"))
     }
 
-    @Test fun normalizesOrderedListsWithoutKeepingNumberMarkers() {
-        assertEquals("• first\n• second\n• third", Markdown.normalizeLines("1. first\n2) second\n   3. third"))
+    @Test fun orderedListsKeepTheirNumbers() {
+        assertEquals("1. first\n2. second\n3. third", Markdown.normalizeLines("1. first\n2) second\n3. third"))
+    }
+
+    @Test fun nestedBulletsKeepIndentation() {
+        assertEquals("• parent\n    ◦ child", Markdown.normalizeLines("- parent\n  - child"))
+    }
+
+    @Test fun quotesAndRulesAreRendered() {
+        assertEquals("▎ quoted\n────────────", Markdown.normalizeLines("> quoted\n---"))
+    }
+
+    @Test fun rulesAreNotMistakenForBullets() {
+        assertEquals("────────────", Markdown.normalizeLines("* * *"))
     }
 
     @Test fun preservesHeadingsAndOrdinaryParagraphs() {

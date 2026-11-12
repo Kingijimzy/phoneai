@@ -31,39 +31,39 @@ class KnowledgeGraphActivity : Activity() {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(14), dp(12), dp(14), dp(12))
         background = GradientDrawable().apply {
-            setColor(0xFF171717.toInt()); cornerRadius = dp(15).toFloat()
-            setStroke(dp(1), 0xFF353535.toInt())
+            setColor(Theme.PANEL); cornerRadius = dp(15).toFloat()
+            setStroke(dp(1), Theme.LINE)
         }
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) }
     }
     private fun button(caption: String, action: () -> Unit) = TextView(this).apply {
         text = caption; textSize = 13f; typeface = Typeface.DEFAULT_BOLD
-        setTextColor(0xFFEAEAEA.toInt()); gravity = Gravity.CENTER
+        setTextColor(Theme.TEXT); gravity = Gravity.CENTER
         setPadding(dp(12), dp(10), dp(12), dp(10))
         background = GradientDrawable().apply {
-            setColor(0xFF252525.toInt()); cornerRadius = dp(11).toFloat()
-            setStroke(dp(1), 0xFF454545.toInt())
+            setColor(Theme.PANEL2); cornerRadius = dp(11).toFloat()
+            setStroke(dp(1), Theme.LINE_STRONG)
         }
         isClickable = true; isFocusable = true; setOnClickListener { action() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = 0xFF090909.toInt(); window.navigationBarColor = 0xFF090909.toInt()
-        val scroll = ScrollView(this).apply { setBackgroundColor(0xFF090909.toInt()); isFillViewport = true }
+        window.statusBarColor = Theme.BG; window.navigationBarColor = Theme.BG
+        val scroll = ScrollView(this).apply { setBackgroundColor(Theme.BG); isFillViewport = true }
         host = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(22), dp(18), dp(28)) }
         scroll.addView(host); setContentView(scroll)
-        host.addView(label("ORION / LOCAL KNOWLEDGE", 10f, 0xFFAAAAAA.toInt(), true))
-        host.addView(label("Knowledge graph", 28f, 0xFFF2F2F2.toInt(), true))
-        host.addView(label("Search and inspect entity → relationship → entity facts stored locally on this phone. These facts are reviewable and do not retrain the base model.", 12f, 0xFFAAAAAA.toInt()))
+        host.addView(label("ORION / LOCAL KNOWLEDGE", 10f, Theme.MUTED, true))
+        host.addView(label("Knowledge graph", 28f, Theme.TEXT, true))
+        host.addView(label("Search and inspect entity → relationship → entity facts stored locally on this phone. These facts are reviewable and do not retrain the base model.", 12f, Theme.MUTED))
         query = EditText(this).apply {
             hint = "Search people, projects, preferences…"
-            setSingleLine(true); setTextColor(0xFFF0F0F0.toInt()); setHintTextColor(0xFF858585.toInt())
-            background = GradientDrawable().apply { setColor(0xFF202020.toInt()); cornerRadius = dp(12).toFloat(); setStroke(dp(1), 0xFF444444.toInt()) }
+            setSingleLine(true); imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH; setOnEditorActionListener { v, _, _ -> v.clearFocus(); (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(v.windowToken, 0); true }; setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED)
+            background = GradientDrawable().apply { setColor(Theme.PANEL2); cornerRadius = dp(12).toFloat(); setStroke(dp(1), Theme.LINE_STRONG) }
             setPadding(dp(13), dp(10), dp(13), dp(10))
         }
         host.addView(query, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
-        count = label("", 11f, 0xFFAAAAAA.toInt())
+        count = label("", 11f, Theme.MUTED)
         host.addView(count)
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(button("Teach graph") { teachGraph() }, LinearLayout.LayoutParams(0, -2, 1f))
@@ -89,16 +89,16 @@ class KnowledgeGraphActivity : Activity() {
             else GraphPolicy.related(facts, q, 50)
         if (visible.isEmpty()) {
             host.addView(panel().apply {
-                addView(label(if (facts.isEmpty()) "Your graph is empty" else "No matching relationships", 15f, 0xFFEAEAEA.toInt(), true))
-                addView(label("Use Teach graph to add a statement. Orion stores only facts that pass its local extraction rules.", 12f, 0xFFAAAAAA.toInt()))
+                addView(label(if (facts.isEmpty()) "Your graph is empty" else "No matching relationships", 15f, Theme.TEXT, true))
+                addView(label("Use Teach graph to add a statement. Orion stores only facts that pass its local extraction rules.", 12f, Theme.MUTED))
             })
         } else {
             visible.forEach { fact ->
                 host.addView(panel().apply {
-                    addView(label(fact.a, 11f, 0xFFAAAAAA.toInt()))
-                    addView(label(fact.rel.uppercase(), 10f, 0xFFBDBDBD.toInt(), true))
-                    addView(label(fact.b, 16f, 0xFFF0F0F0.toInt(), true))
-                    addView(label("Observed " + fact.count + " time(s)", 10f, 0xFF858585.toInt()))
+                    addView(label(fact.a, 11f, Theme.MUTED))
+                    addView(label(fact.rel.uppercase(), 10f, Theme.TEXT_SECONDARY, true))
+                    addView(label(fact.b, 16f, Theme.TEXT, true))
+                    addView(label("Observed " + fact.count + " time(s)", 10f, Theme.MUTED))
                 })
             }
         }
@@ -108,7 +108,7 @@ class KnowledgeGraphActivity : Activity() {
         val input = EditText(this).apply {
             hint = "Example: I prefer dark themes"
             minLines = 2; maxLines = 4
-            setTextColor(0xFFEEEEEE.toInt()); setHintTextColor(0xFF888888.toInt())
+            setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED)
         }
         AlertDialog.Builder(this).setTitle("Teach local knowledge graph").setMessage("Enter a factual statement. Questions and credential-like text are not stored.")
             .setView(input).setNegativeButton("Cancel", null)
