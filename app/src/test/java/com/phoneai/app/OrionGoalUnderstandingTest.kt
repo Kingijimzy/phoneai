@@ -56,6 +56,14 @@ class OrionGoalUnderstandingTest {
         assertFalse(goal.shouldAct)
     }
 
+    @Test fun factualQuestionAboutNamedWebsiteIsResearchAndRequiresEvidence() {
+        val goal = OrionGoalUnderstanding.understand("What is the file size of Hitman Absolution APK on ApkVision site")
+        assertEquals(OrionGoalUnderstanding.Kind.RESEARCH, goal.kind)
+        assertTrue(goal.shouldAct)
+        assertTrue(goal.verification.contains("evidence"))
+        assertEquals("ApkVision", goal.target)
+    }
+
     @Test fun promptSummaryDoesNotEmbedRawUserInput() {
         val line = OrionGoalUnderstanding.promptLine("connect my GitHub account")
         assertTrue(line.contains("ACCOUNT_CONNECT"))

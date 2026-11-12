@@ -15,7 +15,8 @@ internal object OrionContextualIntentInterpreter {
         CORRECT_PREVIOUS,
         TEST_OBJECTIVE,
         AMBIGUOUS_REFERENCE,
-        HISTORICAL_LOOKUP
+        HISTORICAL_LOOKUP,
+        STATUS_CHECK
     }
 
     data class Resolution(
@@ -44,6 +45,8 @@ internal object OrionContextualIntentInterpreter {
     private val broadCorrection = Regex(
         """(?i)^\s*(?:please\s+)?(?:fix|repair|improve|correct|update|integrate)\s+(?:everything|all of it|the whole thing|the entire thing|the whole platform|the entire platform)\b"""
     )
+    private val statusCheck = Regex("(?i)^\\s*(?:hey[, ]+)?(?:where did we (?:stop|leave off|get to)|where were we|what were we doing|what were we working on|what was i working on)[?!. ]*$")
+    private val testExistingWork = Regex("(?is)^\\s*(?:please\\s+)?(?:try|test|run|execute|verify|validate)\\s+(?:it|that|the code|the script|the program|the scraper|the file)\\b.*")
     private val testRequest = Regex(
         """(?i)^\s*(?:please\s+)?(?:test|verify|validate|audit|check)\s+(?:everything|it all|all of it|the rest|the remaining work|the outstanding work|all remaining work)\b[.! ]*$"""
     )
@@ -73,7 +76,7 @@ internal object OrionContextualIntentInterpreter {
 
     private fun isFollowUpOnly(value: String): Boolean =
         continuation.matches(value) || followUpOnly.matches(value) ||
-            standaloneContextual.matches(value) || broadCorrection.containsMatchIn(value) || testRequest.matches(value) ||
+            standaloneContextual.matches(value) || broadCorrection.containsMatchIn(value) || testRequest.matches(value) || testExistingWork.matches(value) || statusCheck.matches(value) ||
             historicalReference.containsMatchIn(value) ||
             (value.length < 48 && (completeRemaining.containsMatchIn(value) || correction.containsMatchIn(value)))
 
@@ -92,10 +95,11 @@ internal object OrionContextualIntentInterpreter {
         val isContinue = continuation.matches(raw) || (namedTargetMatchesActive && objective.isNotBlank())
         val isComplete = completeRemaining.containsMatchIn(raw)
         val isCorrection = correction.containsMatchIn(raw) || broadCorrection.containsMatchIn(raw)
-        val isTest = testRequest.containsMatchIn(raw)
+        val isTest = testRequest.containsMatchIn(raw) || testExistingWork.matches(raw)
+        val isStatusCheck = statusCheck.matches(raw)
         val isReferenceOnly = followUpOnly.matches(raw) || standaloneContextual.matches(raw)
         val isHistorical = explicitHistoricalLookup.containsMatchIn(raw)
-        val contextual = isContinue || isComplete || isCorrection || isTest || isReferenceOnly || isHistorical || historicalReference.containsMatchIn(raw)
+        val contextual = isContinue || isComplete || isCorrection || isTest || isStatusCheck || isReferenceOnly || isHistorical || historicalReference.containsMatchIn(raw)
 
         // A historical search names its own target. Never replace it with the latest active task.
         if (isHistorical) {
@@ -129,6 +133,7 @@ HISTORICAL CONVERSATION LOOKUP:
         }
 
         val kind = when {
+            isStatusCheck -> Kind.STATUS_CHECK
             isContinue -> Kind.CONTINUE_OBJECTIVE
             isComplete -> Kind.COMPLETE_REMAINING
             isCorrection -> Kind.CORRECT_PREVIOUS
@@ -136,6 +141,7 @@ HISTORICAL CONVERSATION LOOKUP:
             else -> Kind.CONTINUE_OBJECTIVE
         }
         val label = when (kind) {
+            Kind.STATUS_CHECK -> "report current progress, completed work, blockers and the next unfinished step without restarting the task"
             Kind.CONTINUE_OBJECTIVE -> "continue the existing objective"
             Kind.COMPLETE_REMAINING -> "finish all remaining parts of the existing objective"
             Kind.CORRECT_PREVIOUS -> "apply the user's correction to the existing objective"
@@ -156,6 +162,7 @@ ${recentExchange(recentTurns)}
 - Use assistant messages to resolve conversational references, but never treat an assistant claim as proof that an action succeeded.
 - This is a follow-up to the existing objective, not an unrelated new command.
 - Preserve prior requirements and completed/failed/blocked work. Do not restart completed steps or silently discard outstanding steps.
+- For a progress/status question, report what is actually completed, what is still running, what failed or is blocked, and the next unfinished step. Do not begin the next step unless the user also asked you to continue.
 - Reconcile existing task checkpoints and prior execution evidence before deciding what remains.
 - Select capabilities only after understanding the objective and required outcome. Words such as "test", "weather", "Python", "Telegram", "GitHub", "browser", or "task" may describe the subject of work; they are not, by themselves, authorization or a command to invoke that capability.
 - If the reference cannot be tied to the objective with confidence, ask one focused clarification. Never guess a target for a consequential action.
