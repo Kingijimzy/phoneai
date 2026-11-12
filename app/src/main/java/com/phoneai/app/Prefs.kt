@@ -456,7 +456,7 @@ object Prefs {
     fun offlineVoiceOnly(c: Context): Boolean = sp(c).getBoolean("offline_voice_only", true)
     fun setOfflineVoiceOnly(c: Context, v: Boolean) = sp(c).edit().putBoolean("offline_voice_only", v).apply()
 
-    /** Use the installed English Piper neural voice instead of Android TTS. */
+    /** Enable model-aware routing for assistant requests. */
     fun modelRouting(c: Context): Boolean = sp(c).getBoolean("model_routing", true)
     fun setModelRouting(c: Context, v: Boolean) = sp(c).edit().putBoolean("model_routing", v).apply()
     /** The shared living orb is the default identity; other companion skins remain selectable. */
