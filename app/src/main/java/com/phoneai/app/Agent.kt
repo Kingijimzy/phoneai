@@ -219,12 +219,13 @@ internal object IrreversibleActionConfirmationPolicy {
         }
         if (normalized == "python_exec") {
             val code = payload.optString("code").ifBlank { payload.optString("script") }
-            val embeddedShell = Regex("""(?is)\bphone\.shell\s*\(\s*['"]([^'"]+)['"]""")
-                .find(code)?.groupValues?.getOrNull(1).orEmpty()
+            val embeddedShellHasDestructiveCall = Regex("""(?is)\bphone\.shell\s*\(\s*['"]([^'"]+)['"]""")
+                .findAll(code)
+                .any { match -> destructiveShell.containsMatchIn(match.groupValues[1]) }
             if (code.isNotBlank() && (
                     destructivePython.containsMatchIn(code) ||
                     destructiveShell.containsMatchIn(code) ||
-                    destructiveShell.containsMatchIn(embeddedShell)
+                    embeddedShellHasDestructiveCall
                 )) {
                 return "Orion is about to run Python code that deletes or wipes data. This may permanently remove files or storage."
             }
