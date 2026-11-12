@@ -32,7 +32,7 @@ internal data class DeviceRoute(val operation: DeviceOperation, val backend: Dev
 internal object DeviceOperationRoutePolicy {
     fun choose(operation: DeviceOperation, nativeCanExecute: Boolean, shizukuReady: Boolean): DeviceRoute = when {
         nativeCanExecute -> DeviceRoute(operation, DeviceBackend.NATIVE_ANDROID, "native Android API is available")
-        shizukuReady -> DeviceRoute(operation, DeviceBackend.SHIZUKU_USER_SERVICE, "Shizuku UserService is connected")
+        shizukuReady -> DeviceRoute(operation, DeviceBackend.SHIZUKU_USER_SERVICE, "Shizuku permission is granted; UserService binds on demand")
         operation.requiresWrite -> DeviceRoute(operation, DeviceBackend.ACCESSIBILITY_HANDOFF, "settings access is unavailable; user-facing Settings handoff is required")
         else -> DeviceRoute(operation, DeviceBackend.UNAVAILABLE, "no compatible backend is available")
     }
