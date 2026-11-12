@@ -50,6 +50,41 @@ class IrreversibleActionConfirmationPolicyTest {
         ))
     }
 
+    @Test fun destructiveShellVariantsAreFlaggedWithoutFlaggingReadOnlyCommands() {
+        listOf(
+            "find /sdcard/Download -type f -delete",
+            "unlink /sdcard/Download/old.txt",
+            "rmdir /sdcard/Download/old-folder",
+            "truncate -s 0 /sdcard/Download/log.txt",
+            "blkdiscard /dev/block/sda",
+            "fastboot erase userdata",
+            "dd if=/dev/zero of=/dev/block/by-name/userdata"
+        ).forEach { command ->
+            assertNotNull(command, IrreversibleActionConfirmationPolicy.destructiveAction("shell", JSONObject().put("command", command)))
+        }
+        assertNull(IrreversibleActionConfirmationPolicy.destructiveAction("shell", JSONObject().put("command", "find /sdcard/Download -type f -print")))
+        assertNull(IrreversibleActionConfirmationPolicy.destructiveAction("shell", JSONObject().put("command", "ls -la /sdcard/Download")))
+        val remote = JSONObject().put("name", "run_command").put("arguments", JSONObject().put("command", "rm -rf /workspace/cache"))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction("mcp_call", remote))
+    }
+
+    @Test fun pythonAndRemoteHttpDeletesRequireConfirmation() {
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
+            "python_exec", JSONObject().put("code", """import os
+os.remove('/sdcard/old.txt')""")
+        ))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
+            "python_exec", JSONObject().put("code", """import shutil
+shutil.rmtree('/sdcard/cache')""")
+        ))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
+            "web_api", JSONObject().put("method", "DELETE").put("url", "https://example.com/item/1")
+        ))
+        assertNull(IrreversibleActionConfirmationPolicy.destructiveAction(
+            "web_api", JSONObject().put("method", "GET").put("url", "https://example.com/item/1")
+        ))
+    }
+
     @Test fun nestedMcpDestructiveOperationIsFlagged() {
         val args = JSONObject()
             .put("name", "workspace_delete")
