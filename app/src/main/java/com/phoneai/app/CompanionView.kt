@@ -112,12 +112,11 @@ internal class CompanionView(context: Context) : View(context) {
         super.onDetachedFromWindow()
     }
 
+    /** The companion's base identity is achromatic; mood is communicated subtly. */
     private fun colour(): Int = when (mood) {
-        CompanionMood.Mood.CALM -> Theme.CYAN
-        CompanionMood.Mood.HAPPY -> Color.rgb(80, 200, 120)
-        CompanionMood.Mood.EXCITED -> Color.rgb(255, 196, 61)
-        CompanionMood.Mood.WORRIED -> Color.rgb(255, 140, 66)
-        CompanionMood.Mood.ALERT -> Color.rgb(255, 82, 82)
+        CompanionMood.Mood.CALM, CompanionMood.Mood.HAPPY, CompanionMood.Mood.EXCITED -> Theme.SILVER
+        CompanionMood.Mood.WORRIED -> Theme.WARN
+        CompanionMood.Mood.ALERT -> Theme.DANGER
     }
 
     override fun onMeasure(w: Int, h: Int) {

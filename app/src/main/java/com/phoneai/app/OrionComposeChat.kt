@@ -314,8 +314,11 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
         OrionActivityStatus.FAILED -> Color(0xFFE09B9B)
         else -> Color(0xFFAAAAAA)
     }
-    val terminalOutput = event.evidence.lastOrNull { it.contains("Python terminal", true) || it.contains("TASK:OUTPUT", true) }
-        ?: event.summary
+    val displayTitle = OrionActivityPresentation.title(event)
+    val displaySummary = OrionActivityPresentation.summary(event)
+    val safeEvidence = OrionActivityPresentation.evidence(event.evidence)
+    val terminalOutput = safeEvidence.lastOrNull { it.contains("Python terminal", true) || it.contains("TASK:OUTPUT", true) }
+        ?: displaySummary
     val pulse = rememberInfiniteTransition(label = "task-stream-pulse")
     val alpha by pulse.animateFloat(
         initialValue = if (active) 0.35f else 1f,
@@ -361,7 +364,7 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
                 Box(Modifier.weight(1f).fillMaxHeight().background(accent))
             }
         }
-        val steps = OrionActivityTimeline.progressSteps(event.evidence)
+        val steps = OrionActivityTimeline.progressSteps(safeEvidence)
         if (steps.size > 1) {
             val shown = if (expanded) steps.takeLast(14) else steps.takeLast(4)
             val finished = steps.count { it.state == "DONE" }

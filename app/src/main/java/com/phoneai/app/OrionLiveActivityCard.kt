@@ -33,7 +33,7 @@ internal class OrionLiveActivityCard(
             gravity = Gravity.CENTER_VERTICAL
         }
         val title = TextView(context).apply {
-            text = event.title
+            text = OrionActivityPresentation.title(event)
             textSize = 13f
             setTextColor(0xFFF0F0F0.toInt())
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
@@ -52,7 +52,7 @@ internal class OrionLiveActivityCard(
         addView(heading)
 
         val summary = TextView(context).apply {
-            text = event.summary.ifBlank { kindLabel(event.kind) }
+            text = OrionActivityPresentation.summary(event)
             textSize = 12f
             setTextColor(0xFFB8B8B8.toInt())
             setPadding(0, dp(5), 0, 0)
@@ -64,7 +64,7 @@ internal class OrionLiveActivityCard(
             text = buildString {
                 append(kindLabel(event.kind).uppercase())
                 elapsed?.let { append("  ·  ").append(it) }
-                event.agentId?.let { append("  ·  ").append(it) }
+                if (event.agentId != null) append("  ·  SPECIALIST")
             }
             textSize = 9f
             letterSpacing = .07f
@@ -78,8 +78,9 @@ internal class OrionLiveActivityCard(
             visibility = View.GONE
             setPadding(0, dp(9), 0, 0)
         }
-        if (event.evidence.isNotEmpty()) {
-            event.evidence.take(8).forEach { item ->
+        val safeEvidence = OrionActivityPresentation.evidence(event.evidence)
+        if (safeEvidence.isNotEmpty()) {
+            safeEvidence.forEach { item ->
                 details.addView(TextView(context).apply {
                     text = "• $item"
                     textSize = 11f
@@ -119,7 +120,7 @@ internal class OrionLiveActivityCard(
     }
 
     private fun statusLabel(status: OrionActivityStatus) = when (status) {
-        OrionActivityStatus.ACTIVE -> "ACTIVE"
+        OrionActivityStatus.ACTIVE -> "RUNNING"
         OrionActivityStatus.WAITING -> "WAITING"
         OrionActivityStatus.SUCCEEDED -> "DONE"
         OrionActivityStatus.FAILED -> "FAILED"
