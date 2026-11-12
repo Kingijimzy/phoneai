@@ -141,7 +141,13 @@ internal object SoulEngineWatcher {
                     chronosSuggestion
                 )
             }.getOrDefault(false)
-            if (proposed && OrionChronosAwareness.markSuggestionShown(c)) action = "chronos_review_suggestion"
+            if (proposed && OrionChronosAwareness.markSuggestionShown(c)) {
+                action = "chronos_review_suggestion"
+                // A low-pressure, consent-gated initiative reaches both the local notification
+                // surface and the configured Telegram owner chat when continuous replies are on.
+                TelegramBridge.notifyProactive(c, "Orion suggestion", chronosSuggestion)
+                TelegramBridge.sendProactive(c, "Orion suggestion: " + chronosSuggestion)
+            }
         }
 
         // External reads/notifications only happen for explicitly configured standing orders
