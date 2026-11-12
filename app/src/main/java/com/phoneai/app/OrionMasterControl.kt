@@ -28,6 +28,7 @@ internal object OrionMasterControl {
         if (!saved) return false
         val runtime = OrionRuntime(app)
         runtime.start()
+        runCatching { OrionUnifiedExecutionCoordinator.reconcileAndSchedule(app) }
         OrionProactiveWork.refresh(app)
         OrionDeviceHealthWork.ensureScheduled(app)
         if (runtime.pendingItems().isNotEmpty()) OrionRecoveryWork.schedule(app)
@@ -46,6 +47,7 @@ internal object OrionMasterControl {
         if (!saved) return false
 
         // Stop the central brain and every independently running Orion automation.
+        runCatching { OrionUnifiedExecutionCoordinator.cancelAll(app, "orion_master_shutdown") }
         OrionRuntime(app).stop()
         runCatching {
             val work = WorkManager.getInstance(app)
