@@ -828,7 +828,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "For phone actions (open apps, tap, send, search, inspect the screen, media control), call the exact registered native tool directly. Inspect its result and verify the outcome. Use the registered native tool directly. Android OS permissions and external authentication remain authoritative; risk notices are advisory and do not require duplicate approval. Never emit an ACTION marker or route the request to a second planner. " +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
-            "\n\n" + ToolRegistry.promptSection(q, ToolGate.statusFor(svc)) + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCapabilityAwareness.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCoordinator.summary().let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
+            "\n\n" + ToolRegistry.promptSection(q, ToolGate.statusFor(svc)) + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCapabilityAwareness.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCoordinator.summary().let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc), svc)
     }
 
     /**
@@ -1136,7 +1136,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 "Respond like a thoughtful human conversational partner: concise, direct, natural spoken language, usually 1-3 sentences. " +
                 "No markdown, lists, emoji, robotic disclaimers, or repetitive greetings. Ask a single useful follow-up only when needed. " +
                 "Never pretend an action happened. User name: $name. " +
-                CharacterProfile.systemInstruction(Prefs.characterProfile(svc)) +
+                CharacterProfile.systemInstruction(Prefs.characterProfile(svc), svc) +
                 "\n\n" + OrionSessionContextProvider.forLiveVoice(svc, command) +
                 "\n\nLIVE VOICE BOUNDARY: this path is conversation-only. The executive context informs continuity and factual context but does not expose or authorize tools, phone actions, shell commands, external writes, or background execution. If the user requests an action, explain that the main chat can execute it; do not claim it was routed or performed."
             liveHistory.put(msg("system", prompt))
