@@ -19,6 +19,13 @@ class OrionVoiceOutputPolicyTest {
         assertEquals("I created the calculator and tested it.", OrionVoiceOutputPolicy.forSpeech(answer))
     }
 
+    @Test fun punctuationInsideCodeCannotLeakIntoSpeech() {
+        assertEquals(
+            "The result is ready.",
+            OrionVoiceOutputPolicy.forSpeech("The result is ready. \`\`\`python\\nprint(\\\"hello.world\\\")\\n\`\`\`")
+        )
+    }
+
     @Test fun suppressesCodeOnlyOutput() {
         val answer = "```kotlin\nfun add(a: Int, b: Int) = a + b\n```"
         assertNull(OrionVoiceOutputPolicy.forSpeech(answer))
