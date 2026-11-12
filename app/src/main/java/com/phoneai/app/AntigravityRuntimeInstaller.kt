@@ -30,7 +30,7 @@ internal class AntigravityRuntimeInstaller(context: Context) {
             | .permissions = ((.permissions // {}) + {"deny": (((.permissions.deny // []) + ["command(sudo)","command(rm -rf)","read_file(/root/.ssh)","write_file(/root/.ssh)"]) | unique)})' "$settings" > "$settings.orion-tmp"
           mv "$settings.orion-tmp" "$settings"
         else
-          printf '%s\\n' '{"trustedWorkspaces":["/workspace"],"toolPermission":"proceed-in-sandbox","enableTerminalSandbox":true,"permissions":{"deny":["command(sudo)","command(rm -rf)","read_file(/root/.ssh)","write_file(/root/.ssh)"]}}' > "$settings"
+          printf '%s\n' '{"trustedWorkspaces":["/workspace"],"toolPermission":"proceed-in-sandbox","enableTerminalSandbox":true,"permissions":{"deny":["command(sudo)","command(rm -rf)","read_file(/root/.ssh)","write_file(/root/.ssh)"]}}' > "$settings"
         fi
     """.trimIndent()
 
