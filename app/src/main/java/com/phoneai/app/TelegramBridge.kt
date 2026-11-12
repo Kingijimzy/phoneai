@@ -141,7 +141,7 @@ internal object TelegramBridge {
                 Thread({
                     val safe = result.trim().ifBlank { "The task finished without a final response. Check Orion's activity timeline." }
                     send(app, "Orion result:\n" + safe.take(12_000))
-                    notifyTaskResult(app, text, safe)
+                    notifyTaskResult(app, safe)
                 }, "OrionTelegramReply").apply { isDaemon = true; start() }
             }
         }
@@ -149,14 +149,28 @@ internal object TelegramBridge {
         "Telegram poll complete: " + accepted + " owner message(s) accepted; " + ignored + " unrelated or unsupported update(s) ignored."
     }
 
+    fun sendProactive(context: Context, message: String): Boolean {
+        if (!TelegramListenerService.isEnabled(context) || !isConfigured(context)) return false
+        return !send(context, message).startsWith("error", ignoreCase = true)
+    }
+
+    fun notifyProactive(context: Context, title: String, message: String) {
+        postLocalNotification(context, title, message)
+    }
+
     /** Post a local completion notification without retaining the full task text. */
-    private fun notifyTaskResult(context: Context, request: String, result: String) {
+    private fun notifyTaskResult(context: Context, result: String) {
+        postLocalNotification(context, "Orion finished your Telegram request", result)
+    }
+
+    private fun postLocalNotification(context: Context, title: String, result: String) {
         if (Build.VERSION.SDK_INT >= 33 &&
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        if (!androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()) return
         val channel = "orion_telegram_task_results"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(NotificationChannel(channel, "Orion task results", NotificationManager.IMPORTANCE_DEFAULT))
+            manager.createNotificationChannel(NotificationChannel(channel, "Orion task results and proactive alerts", NotificationManager.IMPORTANCE_DEFAULT))
         }
         val open = PendingIntent.getActivity(
             context, 7319, android.content.Intent(context, MainActivity::class.java),
@@ -165,7 +179,7 @@ internal object TelegramBridge {
         val summary = result.replace(Regex("\\s+"), " ").take(220)
         val notification = NotificationCompat.Builder(context, channel)
             .setSmallIcon(android.R.drawable.stat_notify_chat)
-            .setContentTitle("Orion finished your Telegram request")
+            .setContentTitle(title.take(100))
             .setContentText(summary)
             .setStyle(NotificationCompat.BigTextStyle().bigText(summary))
             .setAutoCancel(true)
