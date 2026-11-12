@@ -405,7 +405,7 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
             Text(
                 when (event.status) {
                     OrionActivityStatus.ACTIVE -> "RUNNING"
-                    OrionActivityStatus.WAITING -> "WARNING"
+                    OrionActivityStatus.WAITING -> if (event.kind == OrionActivityKind.CODING) "VERIFYING" else "WAITING"
                     OrionActivityStatus.SUCCEEDED -> "DONE"
                     OrionActivityStatus.FAILED -> "FAILED"
                     OrionActivityStatus.CANCELLED -> "STOPPED"
@@ -430,26 +430,47 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
             }
         }
         val steps = OrionActivityTimeline.progressSteps(safeEvidence)
-        if (steps.size > 1) {
+        if (steps.isNotEmpty()) {
             val shown = if (expanded) steps.takeLast(14) else steps.takeLast(4)
             val finished = steps.count { it.state == "DONE" }
+            val verifying = steps.count { it.state == "VERIFYING" || it.state == "WAITING" }
             Text(
-                "$finished of ${steps.size} steps done" + (event.elapsedMs?.let { "  ·  " + OrionActivityTimeline.elapsedLabel(0L, it) } ?: ""),
-                color = OrionUiPalette.muted, fontSize = 9.sp, modifier = Modifier.padding(start = 13.dp, top = 5.dp)
+                "WHAT ORION DID  ·  $finished/${steps.size} steps completed" +
+                    (if (verifying > 0) "  ·  $verifying to verify" else "") +
+                    (event.elapsedMs?.let { "  ·  " + OrionActivityTimeline.elapsedLabel(0L, it) } ?: ""),
+                color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 13.dp, top = 6.dp)
             )
             shown.forEach { step ->
                 val mark = when (step.state) {
-                    "DONE" -> "✓"; "FAILED" -> "✕"; "WAITING" -> "…"; "RUNNING" -> "▸"; else -> "•"
+                    "DONE" -> "✓"; "FAILED" -> "✕"; "WAITING", "VERIFYING" -> "…"
+                    "CANCELLED" -> "■"; "INTERRUPTED" -> "Ⅱ"; else -> "▸"
                 }
                 val tint = when (step.state) {
-                    "DONE" -> OrionUiPalette.success; "FAILED" -> OrionUiPalette.danger; "WAITING" -> OrionUiPalette.warning
+                    "DONE" -> OrionUiPalette.success; "FAILED" -> OrionUiPalette.danger
+                    "WAITING", "VERIFYING" -> OrionUiPalette.warning
                     "RUNNING" -> OrionUiPalette.text; else -> OrionUiPalette.muted
                 }
-                Row(Modifier.padding(start = 13.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(mark, color = tint.copy(alpha = if (step.state == "RUNNING") alpha else 1f), fontSize = 10.sp, modifier = Modifier.width(14.dp))
-                    Text(step.title, color = tint, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Column(Modifier.padding(start = 13.dp, top = 4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(mark, color = tint.copy(alpha = if (step.state == "RUNNING") alpha else 1f),
+                            fontSize = 10.sp, modifier = Modifier.width(14.dp))
+                        Text(step.title, color = tint, fontSize = 10.sp, fontWeight = FontWeight.Medium,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.weight(1f))
+                        Text(step.state, color = tint, fontSize = 8.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    if (step.detail.isNotBlank()) {
+                        Text(step.detail, color = OrionUiPalette.muted, fontSize = 9.sp, lineHeight = 12.sp,
+                            maxLines = if (expanded) 3 else 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 14.dp, top = 1.dp))
+                    }
                 }
             }
+        } else if (displaySummary.isNotBlank()) {
+            Text(displaySummary, color = OrionUiPalette.muted, fontSize = 9.sp,
+                maxLines = if (expanded) 4 else 2, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 13.dp, top = 4.dp))
         }
         val terminalEvidence = event.typedEvidence.filterIsInstance<OrionActivityEvidence.Terminal>().lastOrNull()
         if (terminalEvidence != null) {

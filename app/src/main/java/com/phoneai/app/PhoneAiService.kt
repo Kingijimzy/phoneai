@@ -1331,6 +1331,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun addLine(kind: String, text: String) {
         val box = logBox ?: return
+        if (kind == "note" && addFloatingActivityNote(box, text)) return
         val t = TextView(this)
         t.text = if (kind == "note") text else Markdown.render(text)
         t.textSize = if (kind == "note") 10f else 14f
@@ -1381,6 +1382,97 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
     }
 
+    /** Task and tool notes get a readable expandable card in the accessibility overlay. */
+    private fun addFloatingActivityNote(box: LinearLayout, raw: String): Boolean {
+        val value = raw.trim()
+        val header = value.lineSequence().firstOrNull().orEmpty()
+        val match = Regex("^\\[([A-Z_]+)(?::([A-Z_]+))?]").find(header) ?: return false
+        val category = match.groupValues[1]
+        val phase = match.groupValues.getOrElse(2) { "" }
+        if (category !in setOf("TASK", "SHELL", "BROWSER", "WARNING", "SPECIALIST")) return false
+
+        val failed = phase in setOf("FAILED", "ERROR")
+        val completed = phase in setOf("COMPLETE", "DONE")
+        val verifying = phase in setOf("RESULT", "OUTPUT")
+        val waiting = phase in setOf("APPROVAL", "WARNING")
+        val state = when {
+            failed -> "FAILED"
+            completed -> "DONE"
+            verifying -> "RESULT · VERIFY"
+            waiting -> "WAITING"
+            phase in setOf("RUNNING", "PLAN") -> "RUNNING"
+            else -> "UPDATE"
+        }
+        val categoryLabel = when (category) {
+            "SHELL" -> "CODE / TERMINAL"
+            "BROWSER" -> "BROWSER"
+            "SPECIALIST" -> "SPECIALIST"
+            "WARNING" -> "WARNING"
+            else -> if (phase == "COMPLETE") "TASK RESULT" else "TASK UPDATE"
+        }
+        val accent = when {
+            failed -> Theme.WARN
+            waiting || verifying -> 0xFFE0C58A.toInt()
+            completed -> 0xFFB8CDBD.toInt()
+            else -> Theme.SILVER
+        }
+        val body = value.substringAfter("\n", "").replace("\u2063", "\n")
+        val lines = body.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.toList()
+        val command = lines.firstOrNull { it.startsWith("$ ") }.orEmpty()
+        val meaningful = lines.firstOrNull { !it.startsWith("$ ") && it !in setOf("CODE", "OUT") }.orEmpty()
+        val preview = (command.ifBlank { meaningful.ifBlank { body.replace(Regex("\\s+"), " ") } }).take(180)
+        val detailText = body.take(2600).ifBlank { "No additional execution detail was attached." }
+
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(11), dp(9), dp(11), dp(9))
+            background = rounded(Theme.PANEL2, dp(12).toFloat(), Theme.LINE)
+            isClickable = true
+            isFocusable = true
+            contentDescription = "$categoryLabel. $state. $preview. Tap for execution details."
+        }
+        val heading = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val categoryView = label(categoryLabel, 9f, Theme.MUTED).apply { typeface = Typeface.DEFAULT_BOLD }
+        heading.addView(categoryView, LinearLayout.LayoutParams(0, WRAP, 1f))
+        val stateView = label(state, 9f, accent).apply { typeface = Typeface.DEFAULT_BOLD }
+        heading.addView(stateView)
+        card.addView(heading)
+        card.addView(label(preview.ifBlank { categoryLabel }, 11f, Theme.TEXT).apply {
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dp(5), 0, 0)
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        })
+        val details = TextView(this).apply {
+            text = detailText
+            textSize = 9f
+            setTextColor(Theme.MUTED)
+            typeface = Typeface.MONOSPACE
+            setLineSpacing(dp(1).toFloat(), 1f)
+            visibility = View.GONE
+            setPadding(0, dp(7), 0, 0)
+            maxLines = 10
+            setTextIsSelectable(true)
+        }
+        card.addView(details)
+        card.setOnClickListener {
+            val show = details.visibility != View.VISIBLE
+            details.visibility = if (show) View.VISIBLE else View.GONE
+            card.contentDescription = if (show) "Collapse $categoryLabel details" else "$categoryLabel. $state. $preview. Tap for execution details."
+        }
+        box.addView(card, LinearLayout.LayoutParams(MATCH, WRAP).apply {
+            setMargins(0, dp(5), 0, dp(5))
+        })
+        card.alpha = 0f
+        card.translationY = dp(5).toFloat()
+        card.animate().alpha(1f).translationY(0f).setDuration(180L).start()
+        logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
+        return true
+    }
+
     private fun showThinkingIndicator() {
         hideThinkingIndicator()
         val box = logBox ?: return
@@ -1418,7 +1510,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     private fun openPanel() {
-        if (panel != null || running) return
+        // The accessibility floating page can be reopened while Orion is executing.
+        if (panel != null) return
         stopOfflineWakeDetector()
         wakeGen++
         hideBubble()
@@ -1462,7 +1555,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val title = label(Prefs.orionEntityName(this).uppercase(), 16f, Theme.TEXT)
         title.typeface = Typeface.DEFAULT_BOLD
         titleCol.addView(title)
-        val st = label("PERSONAL COMPANION  ·  READY", 10f, Theme.SILVER)
+        val st = label(if (running) "ORION  ·  WORKING" else "PERSONAL COMPANION  ·  READY", 10f, Theme.SILVER)
         titleCol.addView(st)
         val tagline = label("Think with you. Act with permission.", 10f, Theme.MUTED)
         titleCol.addView(tagline)
@@ -1684,11 +1777,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         t.maxLines = 3
         t.setPadding(dp(8), 0, dp(8), 0)
         t.setOnClickListener {
-            if (!running && !listening) {
-                hideStrip()
-                hideBubble()
-                openPanel()
-            }
+            hideStrip()
+            hideBubble()
+            openPanel()
         }
         row.addView(t, LinearLayout.LayoutParams(0, WRAP, 1f))
         val stop = pill("Stop", Theme.DANGER, 0xFFFFFFFF.toInt()) { stopAll() }

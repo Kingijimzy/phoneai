@@ -172,6 +172,16 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         "vision", "-vl", "vila", "pixtral", "llava", "paligemma", "multimodal", "nemotron-nano-12b-v2-vl",
         "llama-4", "gemma-3", "gemini", "claude", "gpt-4o", "gpt-4.1"
     )
+
+    /** A custom endpoint model catalogue is refreshed after an HTTP model failure, not speculatively. */
+    private fun invalidateModelCatalogue(p: Provider) {
+        val key = Prefs.key(ctx, p.id)
+        if (key.isBlank()) return
+        val fingerprint = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(key.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        modelCatalogCache.remove(p.id + ":" + fingerprint)
+    }
     private val preferred = listOf(
         "deepseek-v4.1-flash", "deepseek-ai/deepseek-v4.1-flash",
         "llama-3.3-nemotron", "llama-3.3-70b", "llama-3.1-nemotron", "llama-3.1-70b",
@@ -179,8 +189,9 @@ internal class Nim internal constructor(private val ctx: Context, private val co
     )
     private val fallbacks: Map<String, Pair<List<String>, List<String>>> = mapOf(
         "gemini" to Pair(
-            listOf("gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"),
-            listOf("gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite")
+            // Prefer supported current model families rather than retired 2.5 IDs that return 404.
+            listOf("gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-flash-lite-latest"),
+            listOf("gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-flash-lite-latest")
         ),
         "groq" to Pair(
             listOf("openai/gpt-oss-120b", "openai/gpt-oss-20b"),
@@ -617,7 +628,9 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         // Normally quota-saver mode avoids the extra /models request. NVIDIA's catalog
         // retires model IDs frequently (410 Gone), so discover IDs currently exposed to this
         // key after a model failure even in quota-saver mode rather than retrying retired IDs.
-        val ids = if (Prefs.quotaSaver(ctx) && p.id != "nvidia") emptyList() else try {
+        val shouldDiscover = ProviderModelCapabilityPolicy.shouldDiscoverAfterFailure(p.id, Prefs.quotaSaver(ctx))
+        val ids = if (!shouldDiscover) emptyList() else try {
+            if (p.id.startsWith("custom_")) invalidateModelCatalogue(p)
             allModels(p)
         } catch (e: Exception) {
             emptyList()
@@ -651,11 +664,11 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 out.addAll(if (vision) fb.second else fb.first)
             }
             else -> {
-                val vis = ok.filter { isVision(it) }
+                val compatible = if (vision) ok.filter { isVision(it) } else ProviderModelCapabilityPolicy.textCandidates(ok)
                 if (vision) {
-                    out.addAll(vis)
+                    out.addAll(compatible)
                 } else {
-                    val txt = ok.filter { it !in vis }
+                    val txt = compatible
                     for (pref in preferred) {
                         for (id in txt) {
                             if (id.lowercase().contains(pref) && id !in out) out.add(id)
@@ -975,7 +988,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
     private fun chatOne(
         p: Provider, messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double,
         hasBackup: Boolean, fastResponse: Boolean = false, onDelta: ((String) -> Unit)? = null,
-        continuationDepth: Int = 0
+        continuationDepth: Int = 0, payloadRecoveryDepth: Int = 0
     ): String {
         val key = Prefs.key(ctx, p.id)
         // Gemini needs room for its internal thinking. NVIDIA Nemotron 3.5 Super VL
@@ -1130,8 +1143,22 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
             if (r.code == 413) {
                 lastHttpStatus = 413
+                if (!vision && payloadRecoveryDepth < 2) {
+                    val compacted = OrionProviderPayloadRecovery.compact(requestMessages, payloadRecoveryDepth + 1)
+                    val beforeSize = requestMessages.toString().length
+                    if (compacted.toString().length < (beforeSize * 0.82).toInt()) {
+                        onStatus?.invoke("${p.label}: request was too large; trimming older conversation context and retrying the same model…")
+                        return chatOne(
+                            p, compacted, false, maxTokens, temperature, hasBackup,
+                            fastResponse, onDelta, continuationDepth, payloadRecoveryDepth + 1
+                        )
+                    }
+                }
                 cooldown[p.id] = System.currentTimeMillis() + 5000L
-                throw AiException("${p.label}: request payload was too large (HTTP 413). Orion will try another eligible provider if Auto-switch is enabled; this does not necessarily mean your account reached a usage limit.", 413)
+                throw AiException(
+                    "${p.label}: request payload is still too large (HTTP 413) after bounded context recovery. Orion preserved your latest request and will try another eligible provider if Auto-switch is enabled.",
+                    413
+                )
             }
             if (r.code == 429) {
                 val wait = if (r.retryAfter in 1..60) r.retryAfter else 60
@@ -1230,7 +1257,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                         "Continue exactly where your previous response stopped. Do not repeat earlier text, restart the answer, or change the task. Finish the response completely and do not claim completion for work not performed."))
                 val remainder = chatOne(
                     p, continuation, vision, maxTokens, temperature, hasBackup,
-                    fastResponse, onDelta, continuationDepth + 1
+                    fastResponse, onDelta, continuationDepth + 1, payloadRecoveryDepth
                 )
                 return content + remainder
             }

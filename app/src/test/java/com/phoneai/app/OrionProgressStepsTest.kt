@@ -15,7 +15,7 @@ class OrionProgressStepsTest {
         val steps = OrionActivityTimeline.progressSteps(listOf(
             "DONE · tool=save_file; outcome=completed", "FAILED · tool=python_exec; outcome=failed; category=x"
         ))
-        assertEquals(listOf("Save file" to "DONE", "Python exec" to "FAILED"), steps.map { it.title to it.state })
+        assertEquals(listOf("Save file" to "VERIFYING", "Python exec" to "FAILED"), steps.map { it.title to it.state })
     }
 
     @Test fun emptyEvidenceGivesNoSteps() { assertEquals(0, OrionActivityTimeline.progressSteps(emptyList()).size) }

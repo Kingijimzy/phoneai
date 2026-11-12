@@ -146,6 +146,32 @@ class OrionActivityTimelineTest {
         assertEquals(OrionActivityStatus.INTERRUPTED, interrupted.status)
     }
 
+    @Test fun progressStepsKeepDetailsForSingleStepTask() {
+        val steps = OrionActivityTimeline.progressSteps(listOf(
+            "WAITING · Save file: scraper.py was written to Downloads/Orion; 1,248 bytes"
+        ))
+        assertEquals(1, steps.size)
+        assertEquals("Save file", steps.single().title)
+        assertEquals("scraper.py was written to Downloads/Orion; 1,248 bytes", steps.single().detail)
+        assertEquals("WAITING", steps.single().state)
+    }
+
+    @Test fun toolOutcomeMarkersMapToReadableActionsAndCorrectStates() {
+        val steps = OrionActivityTimeline.progressSteps(listOf(
+            "FAILED · workspace_read failed: tool=workspace_read; outcome=failed",
+            "WAITING · python_exec: tool=python_exec; outcome=result"
+        ))
+        assertEquals(2, steps.size)
+        assertEquals("Workspace read", steps[0].title)
+        assertEquals("FAILED", steps[0].state)
+        assertEquals("VERIFYING", steps[1].state)
+    }
+
+    @Test fun shellResultIsNotDisplayedAsVerifiedCompletion() {
+        val result = OrionActivityTimeline.fromLegacyNote("task-1", "[SHELL:RESULT]\n$ python scraper.py\noutput ok", 50)!!
+        assertEquals(OrionActivityStatus.WAITING, result.status)
+    }
+
     @Test fun unrelatedNotesAreNotPresentedAsExecutionEvidence() {
         assertNull(OrionActivityTimeline.fromLegacyNote("task-1", "ordinary assistant note", 10))
     }
