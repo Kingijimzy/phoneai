@@ -134,7 +134,7 @@ internal object DeviceOperationRouter {
             appendLine("Connectivity: Wi-Fi/Bluetooth settings panels; airplane-mode state read-only")
             appendLine("Notification reading/replies: " + if (notificationAccess) "NotificationListener granted" else "NotificationListener access not granted")
             appendLine("Orion notification posting: " + if (postNotifications) "allowed" else "Android 13+ notification permission not granted; background health alerts cannot be shown")
-            appendLine("Applications: PackageManager launchable inventory and existing open_app/deep-link tools")
+            appendLine("Applications: PackageManager launchable inventory, open_app/deep links, and WhatsApp prefilled-chat handoff (manual Send)")
             appendLine("Files: existing MediaStore Downloads and SAF document tools")
             appendLine("System info: battery, network, storage, memory, Android build")
             appendLine("Brightness/timeout writes: " + if (canWrite) "native Android API" else if (shizuku.ready) "Shizuku UserService fallback" else "Settings access needed")
