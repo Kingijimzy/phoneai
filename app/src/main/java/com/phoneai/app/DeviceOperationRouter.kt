@@ -69,8 +69,9 @@ internal object DeviceOperationRouter {
         }
     }
 
-    private fun executeNative(context: Context, operation: DeviceOperation, argument: String): String = try {
-        when (operation) {
+    private fun executeNative(context: Context, operation: DeviceOperation, argument: String): String {
+        return try {
+            when (operation) {
             DeviceOperation.READ_BATTERY -> {
                 val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
                     ?: return "error: battery state unavailable"
@@ -108,10 +109,11 @@ internal object DeviceOperationRouter {
                     "verified: screen timeout=" + value + " ms"
                 else "error: screen-timeout update could not be verified"
             }
+            }
+        } catch (failure: SecurityException) {
+            "error: Android denied this operation; route requires a different granted backend"
+        } catch (failure: Exception) {
+            "error: device operation failed (" + failure.javaClass.simpleName + ")"
         }
-    } catch (failure: SecurityException) {
-        "error: Android denied this operation; route requires a different granted backend"
-    } catch (failure: Exception) {
-        "error: device operation failed (" + failure.javaClass.simpleName + ")"
     }
 }
