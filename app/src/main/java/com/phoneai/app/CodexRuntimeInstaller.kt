@@ -19,7 +19,7 @@ internal class CodexRuntimeInstaller(context: Context) {
 
         private val installCommand = """
             set -eu
-            apk add --no-cache curl tar coreutils bubblewrap-static
+            apk add --no-cache curl tar coreutils
             mkdir -p /tmp/orion-codex-$VERSION /usr/local/bin
             curl -fL --retry 3 --connect-timeout 20 '$ARCHIVE_URL' -o /tmp/orion-codex-$VERSION/app-server.tar.gz
             echo '$SHA256  /tmp/orion-codex-$VERSION/app-server.tar.gz' | sha256sum -c -
@@ -34,13 +34,6 @@ internal class CodexRuntimeInstaller(context: Context) {
               done
             ' sh {} +
             test -x '$GUEST_BINARY'
-            if ! command -v bwrap >/dev/null 2>&1; then
-              bwrap_static="${'$'}(command -v bwrap.static || true)"
-              test -n "${'$'}bwrap_static" || { echo 'bubblewrap-static did not install bwrap.static on this Alpine architecture' >&2; exit 42; }
-              ln -sf "${'$'}bwrap_static" /usr/local/bin/bwrap
-            fi
-            command -v bwrap >/dev/null
-            bwrap --version
             '$GUEST_BINARY' --help >/dev/null
             rm -rf /tmp/orion-codex-$VERSION
         """.trimIndent()
@@ -66,17 +59,6 @@ internal class CodexRuntimeInstaller(context: Context) {
                     shouldStop = shouldStop
                 )
                 check(result.startsWith("exit=0")) { result.takeLast(4_000) }
-            }
-            // Ensure sandbox dependency exists even when reusing an earlier Codex installation.
-            val sandbox = runtime.execute(
-                LinuxRuntimePolicy.productionManifest,
-                CodexSandboxSetupPolicy.ensureCommand,
-                timeoutMs = 120_000L,
-                onOutput = onOutput,
-                shouldStop = shouldStop
-            )
-            check(sandbox.startsWith("exit=0")) {
-                "Codex sandbox dependency setup failed: " + sandbox.takeLast(2_000)
             }
         }
 
