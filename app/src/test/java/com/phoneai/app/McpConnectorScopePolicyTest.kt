@@ -18,6 +18,15 @@ class McpConnectorScopePolicyTest {
         assertEquals("system", McpConnector.scopeForTool("shell_command"))
     }
 
+    @Test fun apiAnythingWebsiteToolsAreClassifiedByTheirActualEffect() {
+        listOf("call_operation", "call_batch", "list_operations", "list_sites", "find_sites",
+            "site_status", "get_job", "get_result").forEach {
+            assertEquals(it, "read", McpConnector.scopeForTool(it))
+        }
+        assertEquals("write", McpConnector.scopeForTool("learn_site"))
+        assertEquals("write", McpConnector.scopeForTool("call_write_operation"))
+    }
+
     @Test fun unclassifiedToolsUseTheExplicitOtherScope() {
         assertEquals("other", McpConnector.scopeForTool("custom_magic_tool"))
     }
