@@ -39,7 +39,8 @@ internal class OrionPythonCapabilityExecutor(
             }
             "workspace_list" -> OrionPythonWorkspace(context).list()
             "extension_list" -> listExtensions()
-            "extension_policy" -> extensionPolicy()\n            "extension_auto_activation" -> setExtensionAutoActivation(args)
+            "extension_policy" -> extensionPolicy()
+            "extension_auto_activation" -> setExtensionAutoActivation(args)
             "extension_history" -> extensionHistory(args)
             "extension_rollback" -> rollbackExtension(args)
             "extension_create" -> createDraft(args)
