@@ -55,6 +55,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -144,6 +152,31 @@ private fun HomePage(
     val entityName = Prefs.orionEntityName(context)
     val setupNeeded = status.contains("0 AI provider", true)
     val controlOff = status.contains("not enabled", true)
+    val activePresence = status.contains("listen", true) || status.contains("think", true) ||
+        status.contains("speak", true) || status.contains("work", true) || status.contains("act", true)
+    val presenceColor by animateColorAsState(
+        targetValue = when {
+            status.contains("error", true) || status.contains("approval", true) -> OrionUiPalette.warning
+            activePresence -> Silver
+            setupNeeded || controlOff -> Muted
+            else -> OrionUiPalette.success
+        },
+        animationSpec = tween(320),
+        label = "home-presence-color"
+    )
+    val presenceTransition = rememberInfiniteTransition(label = "home-presence")
+    val presenceAlpha by presenceTransition.animateFloat(
+        initialValue = if (activePresence) 0.18f else 0f,
+        targetValue = if (activePresence) 0.68f else 0f,
+        animationSpec = infiniteRepeatable(tween(1100), repeatMode = RepeatMode.Reverse),
+        label = "home-presence-alpha"
+    )
+    val presenceScale by presenceTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(tween(1100), repeatMode = RepeatMode.Reverse),
+        label = "home-presence-scale"
+    )
     Column(
         Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState())
             .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 20.dp),
