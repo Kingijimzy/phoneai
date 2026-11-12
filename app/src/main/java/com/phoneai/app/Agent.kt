@@ -170,31 +170,56 @@ internal object ConversationContextPolicy {
     }
 }
 
-/** Shared policy for the only owner confirmations retained by Orion. */
+/** Destructive data changes are the only actions that require owner confirmation. */
 internal object IrreversibleActionConfirmationPolicy {
-    private val computerSettings = Regex("(?i)\\bcomputer(?:_|\\s+)settings?\\b")
-    private val action = Regex(
-        "(?i)\\b(?:restart|reboot|shutdown|poweroff|wifi|toggle(?:\\s+(?:the\\s+)?)?wi-?fi|turn(?:ing)?\\s+wi-?fi\\s+(?:on|off))\\b"
+    private val destructiveShell = Regex(
+        "(?i)(?:^|[;&|]\\s*)(?:sudo\\s+)?(?:rm|shred|srm|wipe|wipefs|mkfs(?:\\.[a-z0-9]+)?|dd)\\b"
+    )
+    private val destructiveRequest = Regex(
+        "(?i)\\b(delete|wipe|erase|shred|format|factory\\s+reset|empty\\s+(?:the\\s+)?trash|clear\\b.{0,30}\\b(data|storage|history|cache|memory|files?)\\b|remove\\b.{0,30}\\b(files?|folders?|directories|projects?|memories|tasks?|apps?)\\b|uninstall)\\b"
+    )
+    private val destructiveNegation = Regex(
+        "(?i)\\b(?:don['’]?t|do not|never|avoid|without)\\b.{0,60}\\b(delete|wipe|erase|shred|format|remove|uninstall)\\b"
     )
 
-    fun requiresConfirmation(actionDescription: String): Boolean =
-        computerSettings.containsMatchIn(actionDescription) && action.containsMatchIn(actionDescription)
-
-    fun computerSettingAction(tool: String, args: JSONObject): String? {
-        val targetTool = if (tool == "mcp_call") args.optString("name") else tool
-        if (!targetTool.equals("computer_settings", ignoreCase = true)) return null
-        val payload = args.optJSONObject("arguments") ?: args
-        val requested = payload.optString("action").ifBlank { payload.optString("setting") }
-            .ifBlank { payload.optString("operation") }
-            .lowercase().replace('-', '_').replace(' ', '_')
-        return when (requested) {
-            "restart", "reboot" -> "restart"
-            "shutdown", "poweroff", "power_off" -> "shutdown"
-            "wifi", "toggle_wifi", "wifi_toggle", "turn_wifi_on", "turn_wifi_off",
-            "enable_wifi", "disable_wifi", "wifi_on", "wifi_off" -> "toggle Wi-Fi"
-            else -> null
-        }
+    fun destructiveRequestDescription(request: String): String? {
+        if (destructiveNegation.containsMatchIn(request)) return null
+        return destructiveRequest.find(request)?.value
     }
+
+    /** Returns a human-readable warning for an explicitly destructive registered action. */
+    fun destructiveAction(tool: String, args: JSONObject): String? {
+        val targetTool = if (tool == "mcp_call") args.optString("name") else tool
+        val payload = args.optJSONObject("arguments") ?: args
+        val detail = listOf("path", "file", "name", "id", "target", "command")
+            .map { payload.optString(it).trim() }
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+            .take(500)
+        val normalized = targetTool.lowercase()
+        val destructiveTools = setOf(
+            "workspace_delete", "task_delete", "trash_empty", "forget", "fact_forget", "macro_delete",
+            "goal_remove", "project_delete", "backup_delete", "memory_delete",
+            "memory_clear", "chat_history_clear", "delete_file", "wipe_data"
+        )
+        if (normalized in destructiveTools) {
+            return "Orion is about to run $targetTool" + (if (detail.isBlank()) "" else " on $detail") + ". This may permanently delete or wipe data."
+        }
+        if (normalized == "standing_order" && payload.optString("action").equals("remove", ignoreCase = true)) {
+            return "Orion is about to remove the standing order '" + payload.optString("kind").take(80) + "'."
+        }
+        if (normalized in setOf("shell", "termux_command")) {
+            val command = payload.optString("command").trim()
+            if (command.isNotBlank() && destructiveShell.containsMatchIn(command)) {
+                return "Orion is about to run a destructive shell command: " + command.take(240) + ". This may permanently delete or wipe data."
+            }
+        }
+        return null
+    }
+
+    /** Computer settings are ordinary operations under the owner's direct-execution policy. */
+    fun requiresConfirmation(actionDescription: String): Boolean = false
+    fun computerSettingAction(tool: String, args: JSONObject): String? = null
 }
 /** The brain: asks the AI what to do, runs the tool it picks, repeats. */
 class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
@@ -305,6 +330,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var runTools = 0
     @Volatile private var runFailed = 0
     @Volatile private var activeRequestScope: String = ""
+    @Volatile private var destructiveApprovalGranted: Boolean = false
     @Volatile private var lastActionScope: String = ""
     @Volatile private var lastActionScopeAt: Long = 0L
 
@@ -312,6 +338,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun setRequestScope(command: String) {
         val scope = TaskScopePolicy.scopeFor(command, lastActionScope, System.currentTimeMillis() - lastActionScopeAt)
         activeRequestScope = scope
+        destructiveApprovalGranted = false
         if (TaskScopePolicy.modeFor(scope) != TaskMode.CHAT) { lastActionScope = scope; lastActionScopeAt = System.currentTimeMillis() }
     }
     // Last locally perceived screen, used for post-action comparison without another model call.
@@ -490,13 +517,25 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
             GatePolicy.Verdict.ALLOW -> Unit
         }
-        IrreversibleActionConfirmationPolicy.computerSettingAction(tool, args)?.let { action ->
-            if (!requestGateApproval("Confirm computer_settings action: $action?")) {
-                val denied = "error: the irreversible computer setting was not confirmed; no action was dispatched."
-                recordDispatchBlocked(tool, args, "irreversible_computer_setting_not_confirmed")
+        val directDestructiveWarning = IrreversibleActionConfirmationPolicy.destructiveAction(tool, args)
+        val taskDestructiveIntent = IrreversibleActionConfirmationPolicy.destructiveRequestDescription(activeRequestScope)
+        val requestScopedWarning = if (
+            !destructiveApprovalGranted &&
+            ToolRegistry.access(tool) == ToolAccess.WRITE &&
+            taskDestructiveIntent != null
+        ) {
+            "Your request includes '$taskDestructiveIntent'. Orion is about to perform the requested destructive task. This may permanently delete or wipe data."
+        } else null
+        val destructiveWarning = if (destructiveApprovalGranted) null else directDestructiveWarning ?: requestScopedWarning
+        destructiveWarning?.let { warning ->
+            ui.note("[WARNING] $warning")
+            if (!ui.ask("$warning\n\nDo you want Orion to continue?")) {
+                val denied = "error: destructive action was cancelled; no deletion or wipe was performed."
+                recordDispatchBlocked(tool, args, "destructive_action_not_confirmed")
                 taskProofs.record(tool, denied)
                 return denied
             }
+            destructiveApprovalGranted = true
         }
         val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url", "open_deep_link")
         val actionTools = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url", "open_deep_link", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll", "browser_tabs", "system_intent", "open_file")

@@ -141,7 +141,13 @@ internal object SoulEngineWatcher {
                     chronosSuggestion
                 )
             }.getOrDefault(false)
-            if (proposed && OrionChronosAwareness.markSuggestionShown(c)) action = "chronos_review_suggestion"
+            if (proposed && OrionChronosAwareness.markSuggestionShown(c)) {
+                action = "chronos_review_suggestion"
+                // A low-pressure, consent-gated initiative reaches both the local notification
+                // surface and the configured Telegram owner chat when continuous replies are on.
+                TelegramBridge.notifyProactive(c, "Orion suggestion", chronosSuggestion)
+                TelegramBridge.sendProactive(c, "Orion suggestion: " + chronosSuggestion)
+            }
         }
 
         // External reads/notifications only happen for explicitly configured standing orders
@@ -157,6 +163,12 @@ internal object SoulEngineWatcher {
             status == "paused" -> "Enable Orion Core explicitly to resume Soul planning."
             limitations.isNotEmpty() -> "Review the Capability board; watcher will not grant permissions or enable packs."
             else -> "Continue bounded checks; review Stage 5 probe/composition reports before adopting any planning guidance."
+        }
+        if (limitations.isNotEmpty()) {
+            val issueSummary = "Orion's watcher found " + limitations.size + " issue(s): " +
+                limitations.take(6).joinToString("; ").take(900) +
+                ". Orion has not bypassed permissions or changed settings. Review the Capability board and activity timeline."
+            TelegramBridge.notifyFinding(c, "soul_watcher_limitations", "Orion found capability issues", issueSummary)
         }
         runCatching { SoulEngineState.recordLesson(c, "watcher_tick", "Watcher action: $action; status=$status.", "observed") }
         runCatching { SoulEngineState.recordWatcherStatus(c, status, action) }

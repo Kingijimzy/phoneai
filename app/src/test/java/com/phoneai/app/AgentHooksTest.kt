@@ -33,11 +33,13 @@ class AgentHooksTest {
   assertNull(AgentHooks.scopeBlockReason("Write and send this message to Amma","click_text",JSONObject().put("text","Send")))
   assertNull(AgentHooks.scopeBlockReason("Prepare and send the reply to Amma","click_text",JSONObject().put("text","Send")))
  }
- @Test fun onlyRestartShutdownAndWifiToggleRequireConfirmation(){
-  assertTrue(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","restart")))
-  assertTrue(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","shutdown")))
-  assertTrue(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","wifi_toggle")))
-  assertFalse(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")))
+ @Test fun onlyDestructiveDataOperationsRequireConfirmation(){
+  assertFalse(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","restart")))
+  assertFalse(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","shutdown")))
+  assertFalse(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","wifi_toggle")))
+  assertTrue(AgentHooks.requiresConfirmation("task_delete",JSONObject().put("id","task-1")))
+  assertTrue(AgentHooks.requiresConfirmation("workspace_delete",JSONObject().put("path","Downloads/report.txt")))
+  assertTrue(AgentHooks.requiresConfirmation("shell",JSONObject().put("command","rm -rf /sdcard/old")))
   assertFalse(AgentHooks.requiresConfirmation("notification_action",JSONObject().put("action","reply")))
   assertFalse(AgentHooks.requiresConfirmation("type",JSONObject().put("text","Hello"),"WhatsApp message"))
   assertFalse(AgentHooks.requiresConfirmation("telegram_send",JSONObject().put("message","Hello")))

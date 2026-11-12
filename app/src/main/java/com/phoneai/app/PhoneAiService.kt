@@ -180,6 +180,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     @Volatile
     private var running = false
 
+    /** Entry surface for the active shared task; used only to return destructive confirmations to Telegram. */
+    @Volatile
+    private var activeRequestSource: String = "app"
+
     @Volatile
     private var speaking = false
 
@@ -1012,11 +1016,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             phase = "thinking"
             refreshMode()
             worker.execute {
+                val previousSource = activeRequestSource
+                activeRequestSource = source
                 try {
                     OrionCoordinator.run(this, OrionCoordinator.Surface.COMMAND, command) { agent.run(command) }
                 } catch (e: Exception) {
                     say("I couldn't complete that request. " + (e.message ?: e.javaClass.simpleName).take(180))
                 } finally {
+                    activeRequestSource = previousSource
                     val result = transcript.lastOrNull { it.first == "ai" }?.second
                         ?: "The request finished without a final response. Check the task transcript."
                     main.post {
@@ -2461,6 +2468,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     override fun ask(question: String): Boolean {
+        if (activeRequestSource.equals("Telegram", ignoreCase = true)) {
+            val approved = TelegramBridge.askApproval(this, question)
+            recordChatEvent("approval", if (approved) "approved" else "denied",
+                if (approved) "Destructive action confirmed through the authenticated Telegram owner chat"
+                else "Destructive action was not confirmed through Telegram")
+            return approved
+        }
         val latch = CountDownLatch(1)
         val answer = AtomicBoolean(false)
         main.post {

@@ -1,43 +1,59 @@
 package com.phoneai.app
 
 import org.json.JSONObject
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class IrreversibleActionConfirmationPolicyTest {
-    @Test fun onlyRestartShutdownAndWifiChangesAreClassifiedAsComputerSettingActions() {
-        assertEquals("restart", IrreversibleActionConfirmationPolicy.computerSettingAction(
-            "computer_settings", JSONObject().put("action", "reboot")
+    @Test fun destructiveDataToolsRequireConfirmation() {
+        listOf("workspace_delete", "task_delete", "trash_empty", "forget", "fact_forget", "macro_delete", "goal_remove", "project_delete", "wipe_data")
+            .forEach { tool ->
+                assertNotNull("$tool must require confirmation",
+                    IrreversibleActionConfirmationPolicy.destructiveAction(tool, JSONObject().put("path", "Downloads/report.txt")))
+            }
+    }
+
+    @Test fun ordinaryToolsAndComputerSettingsRemainUnblocked() {
+        listOf("telegram_send", "notification_action", "mcp_call", "sms", "open_app", "computer_settings", "python_exec")
+            .forEach { tool ->
+                assertNull("$tool must not be treated as destructive by default",
+                    IrreversibleActionConfirmationPolicy.destructiveAction(tool, JSONObject().put("action", "restart")))
+            }
+        assertFalse(IrreversibleActionConfirmationPolicy.requiresConfirmation("Restart computer or change Wi-Fi"))
+    }
+
+    @Test fun explicitDeleteAndWipeRequestsAreClassifiedButNegationsAreNot() {
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Delete the old report file"))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Clear app data for this app"))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Factory reset the phone"))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Remove all files in Downloads"))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Clear chat history"))
+        assertNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Do not delete the report"))
+        assertNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Keep the files without removing anything"))
+    }
+
+    @Test fun destructiveShellCommandsAreFlaggedButNormalCommandsAreNot() {
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
+            "shell", JSONObject().put("command", "rm -rf /sdcard/Downloads/old")
         ))
-        assertEquals("shutdown", IrreversibleActionConfirmationPolicy.computerSettingAction(
-            "computer_settings", JSONObject().put("operation", "power_off")
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
+            "termux_command", JSONObject().put("command", "sudo wipefs /dev/block/sda")
         ))
-        assertEquals("toggle Wi-Fi", IrreversibleActionConfirmationPolicy.computerSettingAction(
-            "computer_settings", JSONObject().put("setting", "disable_wifi")
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
+            "standing_order", JSONObject().put("action", "remove").put("kind", "github_notifications")
         ))
-        assertNull(IrreversibleActionConfirmationPolicy.computerSettingAction(
-            "computer_settings", JSONObject().put("action", "open_settings")
-        ))
-        assertNull(IrreversibleActionConfirmationPolicy.computerSettingAction(
-            "open_app", JSONObject().put("name", "Settings")
+        assertNull(IrreversibleActionConfirmationPolicy.destructiveAction(
+            "shell", JSONObject().put("command", "ls -la /sdcard/Downloads")
         ))
     }
 
-    @Test fun nestedMcpComputerSettingActionsUseTheSameConfirmationRule() {
+    @Test fun nestedMcpDestructiveOperationIsFlagged() {
         val args = JSONObject()
-            .put("name", "computer_settings")
-            .put("arguments", JSONObject().put("action", "toggle_wifi"))
-        assertEquals("toggle Wi-Fi", IrreversibleActionConfirmationPolicy.computerSettingAction("mcp_call", args))
-    }
-
-    @Test fun confirmationSurfaceMatchesOnlyTheThreeIrreversibleSettings() {
-        assertTrue(IrreversibleActionConfirmationPolicy.requiresConfirmation("Confirm computer_settings action: restart?"))
-        assertTrue(IrreversibleActionConfirmationPolicy.requiresConfirmation("Confirm computer_settings action: shutdown?"))
-        assertTrue(IrreversibleActionConfirmationPolicy.requiresConfirmation("Confirm computer_settings action: toggle Wi-Fi?"))
-        assertFalse(IrreversibleActionConfirmationPolicy.requiresConfirmation("Confirm computer_settings action: open settings?"))
-        assertFalse(IrreversibleActionConfirmationPolicy.requiresConfirmation("Confirm browser action: restart?"))
+            .put("name", "workspace_delete")
+            .put("arguments", JSONObject().put("path", "project/cache"))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction("mcp_call", args))
     }
 }

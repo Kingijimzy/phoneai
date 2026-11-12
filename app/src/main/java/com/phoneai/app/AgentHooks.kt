@@ -145,9 +145,9 @@ internal object AgentHooks {
    (tool=="notification_action" && args.optString("action").equals("reply",true))
   return if(riskyTarget||riskyTool) "Potentially consequential action for '$tool'${if(label.isBlank())"" else " ('$label')" }; continuing without an Orion confirmation gate." else null
  }
- /** Classifies computer settings so dispatch can display a warning; it does not request approval. */
+ /** True only for registered destructive data operations; ordinary settings never prompt. */
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean =
-  IrreversibleActionConfirmationPolicy.computerSettingAction(tool,args) != null
+  IrreversibleActionConfirmationPolicy.destructiveAction(tool,args) != null
  fun goalAuditUnavailableVerdict(): String = "CONTINUE: independent goal audit unavailable; task completion cannot be confirmed."
 
  fun completionDecision(request:String,proofs:List<Proof>):GateDecision =

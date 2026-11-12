@@ -43,15 +43,15 @@ class GatePolicyTest {
         assertNull(GatePolicy.hardBlockReason("vault_get", org.json.JSONObject().put("name", "ApiKeyVault")))
     }
 
-    @Test fun onlyThreeIrreversibleComputerActionsMatchConfirmationPolicy() {
-        listOf("computer_settings restart", "computer_settings shutdown",
-            "computer_settings toggle Wi-Fi", "computer_settings turn WiFi off",
-            "Remote MCP Tool: computer_settings; arguments: {action:wifi}")
-            .forEach { assertTrue(it, IrreversibleActionConfirmationPolicy.requiresConfirmation(it)) }
+    @Test fun onlyDeleteAndWipeOperationsMatchConfirmationPolicy() {
+        listOf("delete old files", "wipe app data", "empty the trash", "factory reset the phone",
+            "remove project files", "clear chat history")
+            .forEach { assertNotNull(it, IrreversibleActionConfirmationPolicy.destructiveRequestDescription(it)) }
         listOf("restart app", "shutdown service", "toggle Wi-Fi settings screen",
             "send telegram message", "reply to notification", "write remote file",
-            "delete memory", "make payment", "run shell command")
-            .forEach { assertFalse(it, IrreversibleActionConfirmationPolicy.requiresConfirmation(it)) }
+            "make payment", "run shell command", "do not delete the backup")
+            .forEach { assertNull(it, IrreversibleActionConfirmationPolicy.destructiveRequestDescription(it)) }
+        assertFalse(IrreversibleActionConfirmationPolicy.requiresConfirmation("computer_settings restart"))
     }
 
     @Test fun tradingResearchOrderRestrictionRemains() {
