@@ -824,7 +824,9 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                     val id = call.optString("id")
                     callNames[id] = name
                     val args = runCatching { JSONObject(fn.optString("arguments", "{}")) }.getOrDefault(JSONObject())
-                    parts.put(JSONObject().put("functionCall", JSONObject().put("name", name).put("args", args).put("id", id)))
+                    val functionCall = JSONObject().put("name", name).put("args", args).put("id", id)
+                    call.optString("thought_signature").ifBlank { call.optString("thoughtSignature") }.takeIf { it.isNotBlank() }?.let { functionCall.put("thoughtSignature", it) }
+                    parts.put(JSONObject().put("functionCall", functionCall))
                 }
                 appendContent("model", parts)
                 continue
@@ -1280,7 +1282,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 OrionNativeToolCallCodec.parse(p.id, r.body) { name -> ToolRegistry.find(name) != null }
             } else OrionNativeToolCallCodec.Turn(extract(p, r.body), emptyList())
             if (parsedTurn.calls.isNotEmpty()) {
-                nativeToolCalls.set(parsedTurn.calls.map { OrionModelToolCall(it.id, it.name, it.arguments, it.available, it.validationError) })
+                nativeToolCalls.set(parsedTurn.calls.map { OrionModelToolCall(it.id, it.name, it.arguments, it.available, it.validationError, it.thoughtSignature) })
             }
             val content = parsedTurn.text
             if (truncated) {
