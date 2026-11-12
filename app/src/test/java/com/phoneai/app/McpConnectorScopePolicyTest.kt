@@ -18,6 +18,20 @@ class McpConnectorScopePolicyTest {
         assertEquals("system", McpConnector.scopeForTool("shell_command"))
     }
 
+    @Test fun roamiesDesktopCapabilitiesUseTheirActualEffectScopes() {
+        listOf("take_screenshot", "list_windows", "read_window", "read_file", "list_files",
+            "search_files", "fetch_url", "see_photo", "list_commitments", "show_list").forEach {
+            assertEquals("read", McpConnector.scopeForTool(it))
+        }
+        assertEquals("communication", McpConnector.scopeForTool("act_in_app"))
+        listOf("write_file", "remember_commitment", "update_commitment", "forget_fact").forEach {
+            assertEquals("write", McpConnector.scopeForTool(it))
+        }
+        listOf("run_command", "open").forEach {
+            assertEquals("system", McpConnector.scopeForTool(it))
+        }
+    }
+
     @Test fun unclassifiedToolsUseTheExplicitOtherScope() {
         assertEquals("other", McpConnector.scopeForTool("custom_magic_tool"))
     }
