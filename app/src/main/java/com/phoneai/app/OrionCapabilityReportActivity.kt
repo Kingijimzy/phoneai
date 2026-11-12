@@ -100,7 +100,6 @@ class OrionCapabilityReportActivity : Activity() {
         val core = card()
         core.addView(label("CORE READINESS", 10f, Theme.MUTED, true))
         addLine(core, "Agent service", if (accessibilityReady) "Accessibility service is connected." else "Not connected. Phone-control and service-driven features are unavailable.", accessibilityReady)
-        addLine(core, "Screen access consent", if (disclosureAccepted) "Disclosure accepted in Orion settings." else "Not accepted. Orion must not assume permission to inspect the screen.", disclosureAccepted)
         addLine(core, "Current screen", if (windowReady) "An active accessibility window is readable right now." else "No active accessibility window was readable during this check. Some apps may still block access.", windowReady)
         addLine(core, "Registered tools", registeredTools.toString() + " registered · " + readTools + " read-only · " + writeTools + " non-read-only. Registration does not guarantee success.", registeredTools > 0)
         addLine(core, "Capability packs", implementedPacks.toString() + " implemented in source · " + enabledPacks + " enabled in settings. Disabled packs are not automatically enabled.", enabledPacks > 0)
