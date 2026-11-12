@@ -722,7 +722,7 @@ class SettingsActivity : Activity() {
             textSize = 12f
             setTextColor(Theme.MUTED)
         }, 6)
-        switchRow(s3, "Deeper voice", Prefs.deepVoice(this)) { Prefs.setDeepVoice(this, it) }
+        switchRow(s3, "Lower pitch on Android TTS fallback only", Prefs.deepVoice(this)) { Prefs.setDeepVoice(this, it) }
         switchRow(s3, "Offline-only speech input (no network fallback)", Prefs.offlineSpeechOnly(this)) {
             Prefs.setOfflineSpeechOnly(this, it)
             Toast.makeText(
