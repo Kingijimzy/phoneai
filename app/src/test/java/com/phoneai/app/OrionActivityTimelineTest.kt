@@ -7,6 +7,24 @@ class OrionActivityTimelineTest {
     private fun event(id: String, at: Long, status: OrionActivityStatus = OrionActivityStatus.ACTIVE) =
         OrionActivityEvent(id, "task-1", OrionActivityKind.TOOL, status, "Run tool", "Working", at)
 
+    @Test fun activityPresentationHidesInternalNotificationCheckpointsAndDuplicateTraceLines() {
+        val raw = "work=presence_event; key=notification:android:29907810; checkpoint=source=system; attempt=0\\n" +
+            "DONE=work=presence_event; key=notification:android:29907810; content_not_retained"
+        val event = OrionActivityEvent(
+            eventId = "notification-event",
+            taskId = "task-1",
+            kind = OrionActivityKind.TOOL,
+            status = OrionActivityStatus.SUCCEEDED,
+            title = "work=presence_event; key=notification:android:29907810",
+            summary = raw,
+            timestampMs = 10,
+            evidence = listOf(raw, "System notification content was not retained.")
+        )
+        assertEquals("System notification", OrionActivityPresentation.title(event))
+        assertEquals("This step completed.", OrionActivityPresentation.summary(event))
+        assertEquals(listOf("System notification content was not retained."), OrionActivityPresentation.evidence(event.evidence))
+    }
+
     @Test fun replayOrdersEventsByTimestampAndDeduplicatesStableIds() {
         val timeline = OrionActivityTimeline()
         timeline.replay(listOf(event("later", 200), event("first", 100), event("first", 100)))
