@@ -64,6 +64,8 @@ class IrreversibleActionConfirmationPolicyTest {
         }
         assertNull(IrreversibleActionConfirmationPolicy.destructiveAction("shell", JSONObject().put("command", "find /sdcard/Download -type f -print")))
         assertNull(IrreversibleActionConfirmationPolicy.destructiveAction("shell", JSONObject().put("command", "ls -la /sdcard/Download")))
+        val remote = JSONObject().put("name", "run_command").put("arguments", JSONObject().put("command", "rm -rf /workspace/cache"))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction("mcp_call", remote))
     }
 
     @Test fun pythonAndRemoteHttpDeletesRequireConfirmation() {
