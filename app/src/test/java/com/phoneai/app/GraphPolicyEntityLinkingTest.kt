@@ -36,6 +36,19 @@ class GraphPolicyEntityLinkingTest {
         assertEquals(20L, facts.single().lastAt)
     }
 
+    @Test fun autoIndexedOwnerMemoryPrefixesBecomeQueryableRelationships() {
+        val facts = listOf(
+            "Owner said: my name is Kingi Jimzy",
+            "User preference: forex and crypto trading",
+            "Ongoing project: Orion mobile assistant",
+            "User goal: build a reliable coding agent"
+        ).flatMap(GraphPolicy::extract)
+        assertTrue(facts.contains(Triple("user", "name", "kingi jimzy")))
+        assertTrue(facts.contains(Triple("user", "prefers", "forex and crypto trading")))
+        assertTrue(facts.contains(Triple("user", "works on", "orion mobile assistant")))
+        assertTrue(facts.contains(Triple("user", "wants", "build a reliable coding agent")))
+    }
+
     @Test fun repeatedNonExclusivePreferencesRemainSeparateFacts() {
         var facts = GraphPolicy.merge(emptyList(), "user", "likes", "football", 1L)
         facts = GraphPolicy.merge(facts, "user", "likes", "music", 2L)
