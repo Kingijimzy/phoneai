@@ -523,7 +523,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         ) {
             "Your request includes '$taskDestructiveIntent'. Orion is about to perform the requested destructive task. This may permanently delete or wipe data."
         } else null
-        val destructiveWarning = directDestructiveWarning ?: requestScopedWarning
+        val destructiveWarning = if (destructiveApprovalGranted) null else directDestructiveWarning ?: requestScopedWarning
         destructiveWarning?.let { warning ->
             ui.note("[WARNING] $warning")
             if (!ui.ask("$warning\n\nDo you want Orion to continue?")) {
