@@ -372,6 +372,19 @@ class ConversationGroundingPromptRegressionTest {
         assertTrue(prompt.contains("withhold the disputed figure/link"))
     }
 
+    @Test fun alarmsAndTimersMustUseNativeBackgroundToolsInsteadOfClockUiAutomation() {
+        val alarm = ToolRegistry.find("alarm")!!.promptLine.lowercase()
+        val timer = ToolRegistry.find("timer")!!.promptLine.lowercase()
+        val systemIntent = ToolRegistry.find("system_intent")!!.promptLine.lowercase()
+        assertTrue(alarm.contains("extra_skip_ui=true"))
+        assertTrue(alarm.contains("instead of opening clock"))
+        assertTrue(timer.contains("extra_skip_ui=true"))
+        assertTrue(timer.contains("instead of opening clock"))
+        assertTrue(systemIntent.contains("use the dedicated alarm tool"))
+        assertTrue(systemIntent.contains("never open clock or automate its screen"))
+        assertTrue(ToolRegistry.promptSection().contains("NATIVE BACKGROUND ACTION RULE"))
+    }
+
     @Test fun skillAndDocumentRequestsUseAvailableCreationPaths() {
         val prompt = ToolRegistry.promptSection().lowercase()
         assertTrue(prompt.contains("do not answer that skill creation is contradictory or impossible"))
