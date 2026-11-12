@@ -68,9 +68,8 @@ class Tools(
         }
         roots.forEach { walk(it, 0) }
         val found = roots.flatMap { it.findAccessibilityNodeInfosByText(text) } + matches
-        val n = found.firstOrNull { it.isVisibleToUser && (it.text?.toString()?.trim()?.lowercase() == query) }
-            ?: found.firstOrNull { it.isVisibleToUser }
-            ?: found.firstOrNull()
+        val n = found.firstOrNull { it.isVisibleToUser && !it.isPassword && (it.text?.toString()?.trim()?.lowercase() == query) }
+            ?: found.firstOrNull { it.isVisibleToUser && !it.isPassword }
             ?: run {
                 val seen = ArrayList<String>()
                 fun labels(node: AccessibilityNodeInfo?, depth: Int) {
