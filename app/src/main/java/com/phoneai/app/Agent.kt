@@ -219,7 +219,7 @@ internal object IrreversibleActionConfirmationPolicy {
         }
         if (normalized == "python_exec") {
             val code = payload.optString("code").ifBlank { payload.optString("script") }
-            val embeddedShell = Regex("""(?is)\\bphone\\.shell\\s*\\(\\s*['"]([^'"]+)['"]""")
+            val embeddedShell = Regex("""(?is)\bphone\.shell\s*\(\s*['"]([^'"]+)['"]""")
                 .find(code)?.groupValues?.getOrNull(1).orEmpty()
             if (code.isNotBlank() && (
                     destructivePython.containsMatchIn(code) ||
