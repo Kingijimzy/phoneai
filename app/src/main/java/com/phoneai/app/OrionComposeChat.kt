@@ -548,6 +548,10 @@ internal fun OrionComposeChatScreen(
     lines: List<OrionChatLine>,
     activityEvents: List<OrionActivityEvent> = emptyList(),
     status: String,
+    orbMode: OrbView.Mode = OrbView.Mode.IDLE,
+    orbMicLevel: Float = 0f,
+    orbSpeechAmplitude: Float = 0f,
+    orbWordPulse: Float = 0f,
     companionLook: Int,
     onCompanionLookChanged: (Int) -> Unit,
     chatTitle: String,
@@ -678,32 +682,17 @@ internal fun OrionComposeChatScreen(
             ) { Icon(Icons.Rounded.ArrowBack, null, tint = ChatCopy, modifier = Modifier.size(18.dp)) }
             Spacer(Modifier.width(10.dp))
             AndroidView(
-                factory = { context -> CompanionView(context) },
-                modifier = Modifier.size(44.dp).semantics {
-                    contentDescription = "Orion companion. Tap to change character."
+                factory = { context -> OrionLivingOrbView(context) },
+                modifier = Modifier.size(48.dp).semantics {
+                    contentDescription = "Orion living orb. Tap to start voice chat."
                     role = Role.Button
                 },
                 update = { view ->
-                    view.character = companionLook
-                    view.activity = companionActivity
-                    view.onCharacterChanged = onCompanionLookChanged
-                    val event = latestActivityEvent
-                    val eventKey = event?.let { "${it.eventId}:${it.status}" } ?: "no-activity-event"
-                    if (view.tag != eventKey) {
-                        view.tag = eventKey
-                        val recent = event != null && System.currentTimeMillis() - event.timestampMs in 0L..15_000L
-                        if (recent) {
-                            when (event!!.status) {
-                                OrionActivityStatus.WAITING -> { view.setMood(CompanionMood.Mood.WORRIED); view.react(CompanionLife.Reaction.ALARM) }
-                                OrionActivityStatus.FAILED -> { view.setMood(CompanionMood.Mood.ALERT); view.react(CompanionLife.Reaction.ALARM) }
-                                OrionActivityStatus.SUCCEEDED -> { view.setMood(CompanionMood.Mood.HAPPY); view.react(CompanionLife.Reaction.CELEBRATE) }
-                                OrionActivityStatus.CANCELLED, OrionActivityStatus.INTERRUPTED -> { view.setMood(CompanionMood.Mood.CALM); view.react(CompanionLife.Reaction.FLINCH) }
-                                OrionActivityStatus.ACTIVE -> view.setMood(CompanionMood.Mood.CALM)
-                            }
-                        } else {
-                            view.setMood(CompanionMood.Mood.CALM)
-                        }
-                    }
+                    view.mode = orbMode
+                    view.micLevel = orbMicLevel
+                    view.speechAmplitude = orbSpeechAmplitude
+                    view.wordPulse = orbWordPulse
+                    view.setOnClickListener { onVoice() }
                 }
             )
             Spacer(Modifier.width(10.dp))
