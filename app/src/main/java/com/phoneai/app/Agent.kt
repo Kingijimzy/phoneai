@@ -192,12 +192,12 @@ internal object IrreversibleActionConfirmationPolicy {
             "memory_clear", "chat_history_clear", "delete_file", "wipe_data"
         )
         if (normalized in destructiveTools) {
-            return "Orion is about to run $targetTool\${if (detail.isBlank()) "" else " on $detail"}. This may permanently delete or wipe data."
+            return "Orion is about to run $targetTool" + (if (detail.isBlank()) "" else " on $detail") + ". This may permanently delete or wipe data."
         }
         if (normalized in setOf("shell", "termux_command")) {
             val command = payload.optString("command").trim()
             if (command.isNotBlank() && destructiveShell.containsMatchIn(command)) {
-                return "Orion is about to run a destructive shell command: \${command.take(240)}. This may permanently delete or wipe data."
+                return "Orion is about to run a destructive shell command: " + command.take(240) + ". This may permanently delete or wipe data."
             }
         }
         return null
@@ -503,7 +503,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         IrreversibleActionConfirmationPolicy.destructiveAction(tool, args)?.let { warning ->
             ui.note("[WARNING] $warning")
-            if (!ui.ask("$warning\\n\\nDo you want Orion to continue?")) {
+            if (!ui.ask("$warning\n\nDo you want Orion to continue?")) {
                 val denied = "error: destructive action was cancelled; no deletion or wipe was performed."
                 recordDispatchBlocked(tool, args, "destructive_action_not_confirmed")
                 taskProofs.record(tool, denied)
