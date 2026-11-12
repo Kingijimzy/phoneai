@@ -12,7 +12,11 @@ internal object ProviderModelCapabilityPolicy {
     fun textCandidates(models: List<String>): List<String> =
         models.filterNot { model -> visionOnlyMarkers.any { model.contains(it, ignoreCase = true) } }
 
-    /** Catalogue refresh occurs after a failed model request, not speculatively before every request. */
+    /**
+     * Refresh volatile provider catalogues after model failures even in quota-saver mode.
+     * Gemini model identifiers are retired independently of the saved key, so retrying
+     * hard-coded IDs after a 404 is less reliable than asking the key's live /models endpoint.
+     */
     fun shouldDiscoverAfterFailure(providerId: String, quotaSaverEnabled: Boolean): Boolean =
-        !quotaSaverEnabled || providerId == "nvidia" || providerId.startsWith("custom_")
+        !quotaSaverEnabled || providerId == "nvidia" || providerId == "gemini" || providerId.startsWith("custom_")
 }
