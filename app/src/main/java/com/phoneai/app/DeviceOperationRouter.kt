@@ -118,6 +118,7 @@ internal object DeviceOperationRouter {
                 val apps = pm.queryIntentActivities(intent, 0).map { it.loadLabel(pm).toString() }.distinct().sorted()
                 apps.take(100).joinToString("\n").ifBlank { "No launchable apps found." }
             }
+            DeviceOperation.CAPABILITIES -> "error: capability inventory must be handled before native dispatch"
             DeviceOperation.SET_BRIGHTNESS -> {
                 val value = argument.toIntOrNull()?.takeIf { it in 0..255 }
                     ?: return "error: brightness must be an integer from 0 to 255"
