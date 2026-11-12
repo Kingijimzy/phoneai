@@ -98,8 +98,16 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             current = current.cause
         }
         val message = messages.joinToString(" ").lowercase()
-        return message.contains("400") &&
-            (message.contains("tool") || message.contains("function"))
+        val explicitUnsupported = listOf(
+            "does not support tools", "doesn't support tools",
+            "does not support tool calling", "doesn't support tool calling",
+            "tool calling is not supported", "tool calls are not supported",
+            "function calling is not supported", "tools are not supported",
+            "tool use is not supported", "tool_choice is not supported",
+            "unsupported tool type", "unknown parameter: tools",
+            "unrecognized request argument: tools", "tools is not supported"
+        )
+        return message.contains("400") && explicitUnsupported.any { message.contains(it) }
     }
 
     override fun chatTurn(
@@ -120,6 +128,15 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 OrionModelTurn(text, nativeToolCalls.get().orEmpty())
             } catch (failure: Exception) {
                 if (tools.isEmpty() || cancelled || !nativeToolsRejected(failure)) throw failure
+                val priorToolResults = (0 until messages.length()).any { index ->
+                    messages.optJSONObject(index)?.optString("role") == "tool"
+                }
+                if (priorToolResults) {
+                    throw AiException(
+                        "The selected provider rejected a follow-up tool-call request after earlier tool results. Those completed results are preserved; no further actions were dispatched. Provider detail: ${failure.message.orEmpty().take(500)}",
+                        400
+                    )
+                }
                 if (!Prefs.autoSwitch(ctx)) {
                     throw AiException(
                         "The selected provider/model rejected Orion tool calling. Auto-switch is off, so Orion did not change models or dispatch a chat-only substitute. Choose a tool-capable model or enable Auto-switch.",
