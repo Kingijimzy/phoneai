@@ -435,7 +435,7 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
             val finished = steps.count { it.state == "DONE" }
             val verifying = steps.count { it.state == "VERIFYING" || it.state == "WAITING" }
             Text(
-                "WHAT ORION DID  ·  $finished/${steps.size} verified steps" +
+                "WHAT ORION DID  ·  $finished/${steps.size} steps completed" +
                     (if (verifying > 0) "  ·  $verifying to verify" else "") +
                     (event.elapsedMs?.let { "  ·  " + OrionActivityTimeline.elapsedLabel(0L, it) } ?: ""),
                 color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
