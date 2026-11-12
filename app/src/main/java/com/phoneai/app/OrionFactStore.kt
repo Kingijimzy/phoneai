@@ -68,7 +68,9 @@ internal object OrionFactStore {
     fun addOwnerFact(c: Context, s: String, p: String, o: String): String {
         val (a, b, d) = Triple(norm(s), norm(p), norm(o))
         if (a.isBlank() || b.isBlank() || d.isBlank()) return "error: owner fact needs subject, predicate and object"
-        val subject = if (a.equals(norm(Prefs.userName(c)), true)) "user" else a
+        // OrionFactExtractor emits the configured owner name as subject; normalize it
+        // to the canonical owner node so "my ..." queries can retrieve the relationship.
+        val subject = "user"
         val memory = MemoryStore.addOwnerConfirmed(c, "fact", "$subject — $b — $d")
             ?: return "error: owner fact could not be saved"
         return "remembered: $a — $b — $d (memory #${memory.id})"
