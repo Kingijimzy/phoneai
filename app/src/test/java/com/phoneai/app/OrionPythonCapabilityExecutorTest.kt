@@ -60,6 +60,36 @@ class OrionPythonCapabilityExecutorTest {
         "extension_enable", JSONObject().put("id", "live_helper"), { true }, { false }
     ).orEmpty()
 
+
+    @Test fun autoActivationPolicyDefaultsOnAndCanBeDisabledByOwner() {
+        assertTrue(ExtensionAutonomySettings.autoActivationEnabled(context))
+        val policy = executor.execute("extension_policy", JSONObject(), { true }, { false }).orEmpty()
+        assertTrue(policy.contains("ON"))
+
+        val changed = executor.execute(
+            "extension_auto_activation", JSONObject().put("enabled", false), { true }, { false }
+        ).orEmpty()
+        assertTrue(changed.contains("OFF"))
+        assertFalse(ExtensionAutonomySettings.autoActivationEnabled(context))
+    }
+
+    @Test fun disabledAutoActivationLeavesDraftDisabledUntilExplicitEnable() {
+        ExtensionAutonomySettings.setAutoActivationEnabled(context, false)
+        val v1 = source(1)
+        assertTrue(create(v1).contains("draft"))
+        val tested = test(v1)
+        assertTrue(tested.contains("SANDBOX TEST PASSED"))
+        assertFalse(tested.contains("AUTO-ACTIVATED"))
+        assertTrue(executor.execute(
+            "extension_run", JSONObject().put("id", "live_helper"), { true }, { false }
+        ).orEmpty().startsWith("error:"))
+
+        assertTrue(enable().contains("enabled"))
+        assertTrue(executor.execute(
+            "extension_run", JSONObject().put("id", "live_helper"), { true }, { false }
+        ).orEmpty().contains("EXTENSION RESULT"))
+    }
+
     @Test fun exactTestedSourceIsLoadedForEveryLiveInvocation() {
         val v1 = source(1)
         assertTrue(create(v1).contains("disabled extension draft"))
