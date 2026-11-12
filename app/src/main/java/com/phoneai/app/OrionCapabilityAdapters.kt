@@ -39,7 +39,7 @@ internal object OrionCapabilityAdapters {
             "verify_send", "click", "click_text", "point_at", "sketch_screen", "wait_for", "tap", "long_press", "swipe",
             "swipe_path", "scroll", "type", "key", "look", "play", "record_screen",
             "chronos_awareness", "calendar_events", "voice_speak", "voice_listen",
-            "routine_run", "routine_resume"
+            "routine_run", "routine_resume", "device_operation"
         ),
         Backend.SKILLS to setOf("skills_list"),
         Backend.INTEGRATIONS to setOf("integration_status", "service_status", "connect_service",
