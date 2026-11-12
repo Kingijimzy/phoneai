@@ -31,7 +31,16 @@ import androidx.compose.ui.unit.sp
 
 /** Empty-chat home: the glass orb, a greeting, a big question and tappable suggestion chips over a night-to-indigo wash. */
 @Composable
-internal fun OrionHome(commandMode: Boolean, onSend: (String) -> Unit, modifier: Modifier = Modifier) {
+internal fun OrionHome(
+    commandMode: Boolean,
+    onSend: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    orbMode: OrbView.Mode = OrbView.Mode.IDLE,
+    orbMicLevel: Float = 0f,
+    orbSpeechAmplitude: Float = 0f,
+    orbWordPulse: Float = 0f,
+    onVoice: () -> Unit = {}
+) {
     val name = Prefs.userName(LocalContext.current).substringBefore(' ').ifBlank { "there" }
     val chips = if (commandMode) listOf("Check my battery and storage", "Summarise my notifications", "Build me a small tool", "What can you do?")
     else listOf("Tell me a fun fact", "Help me think something through", "Explain it simply", "Plan my next step")
@@ -40,7 +49,13 @@ internal fun OrionHome(commandMode: Boolean, onSend: (String) -> Unit, modifier:
     ) {
         Column(Modifier.fillMaxSize().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.weight(1f))
-            OrionOrb(Modifier.size(250.dp))
+            OrionOrb(
+                Modifier.size(250.dp).clickable { onVoice() },
+                level = orbMicLevel,
+                mode = orbMode,
+                speechAmplitude = orbSpeechAmplitude,
+                wordPulse = orbWordPulse
+            )
             Spacer(Modifier.height(6.dp))
             Text("Hello $name", color = Color(0xFF9AA0AD), fontSize = 15.sp)
             Spacer(Modifier.height(6.dp))
