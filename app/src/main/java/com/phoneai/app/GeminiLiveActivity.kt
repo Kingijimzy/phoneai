@@ -175,6 +175,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         }
         orionVoice = Voice(this).apply {
             onSpeaking = { speaking ->
+                session?.setLocalSpeechActive(speaking)
                 if (::visual.isInitialized) {
                     visual.speechAmplitude = if (speaking) visual.speechAmplitude else 0f
                     visual.mode = if (speaking) OrbView.Mode.SPEAKING
