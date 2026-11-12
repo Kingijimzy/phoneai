@@ -16,7 +16,14 @@ import androidx.compose.ui.semantics.semantics
 
 /** The shared animated silver point-cloud orb for Compose screens. */
 @Composable
-fun OrionOrb(modifier: Modifier, level: Float = 0f, busy: Boolean = false) {
+fun OrionOrb(
+    modifier: Modifier,
+    level: Float = 0f,
+    busy: Boolean = false,
+    mode: OrbView.Mode = if (busy) OrbView.Mode.THINKING else OrbView.Mode.IDLE,
+    speechAmplitude: Float = 0f,
+    wordPulse: Float = 0f
+) {
     val painter = remember { OrionOrbPainter() }
     var t by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
@@ -27,6 +34,13 @@ fun OrionOrb(modifier: Modifier, level: Float = 0f, busy: Boolean = false) {
     }
     Canvas(modifier.semantics { contentDescription = "Orion" }) {
         val frame = t
-        drawIntoCanvas { c -> painter.draw(c.nativeCanvas, size.width / 2f, size.height / 2f, minOf(size.width, size.height) * .36f, frame, level, busy) }
+        drawIntoCanvas { c ->
+            painter.draw(
+                c.nativeCanvas, size.width / 2f, size.height / 2f,
+                minOf(size.width, size.height) * .36f, frame,
+                level = level, busy = busy, mode = mode,
+                speechAmplitude = speechAmplitude, wordPulse = wordPulse
+            )
+        }
     }
 }
