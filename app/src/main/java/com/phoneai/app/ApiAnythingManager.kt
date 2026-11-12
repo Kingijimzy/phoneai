@@ -72,7 +72,7 @@ internal object ApiAnythingManager {
                     workspace.absolutePath, app.applicationInfo.dataDir,
                     java.io.File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath
                 ),
-                listOf("/bin/sh", "-lc", "export API_ANYTHING_BROWSER=chromium; exec api-anything serve --host $HOST --port $PORT --allow-writes")
+                listOf("/bin/sh", "-lc", "export API_ANYTHING_LOCAL_ONLY=1 API_ANYTHING_BROWSER=chromium; exec api-anything serve --host $HOST --port $PORT --allow-writes")
             )
             server = session
             val deadline = System.currentTimeMillis() + 60_000L
@@ -147,7 +147,7 @@ internal object ApiAnythingManager {
                 if (!probe.startsWith("exit=0")) return@synchronized
                 val session = LinuxCommandSession.start(
                     runtime.interactiveLaunchConfig(workspace.absolutePath, app.applicationInfo.dataDir),
-                    listOf("/bin/sh", "-lc", "export API_ANYTHING_BROWSER=chromium; exec api-anything serve --host $HOST --port $PORT --allow-writes")
+                    listOf("/bin/sh", "-lc", "export API_ANYTHING_LOCAL_ONLY=1 API_ANYTHING_BROWSER=chromium; exec api-anything serve --host $HOST --port $PORT --allow-writes")
                 )
                 server = session
                 val deadline = System.currentTimeMillis() + 30_000L
@@ -210,7 +210,7 @@ internal object ApiAnythingManager {
         apk add --no-cache nodejs npm chromium
         node -e 'const [a,b]=process.versions.node.split(".").map(Number);if(a<22||(a===22&&b<13)){console.error("API Anything requires Node.js >=22.13.0; found "+process.versions.node);process.exit(2)}'
         npm install --global api-anything@$VERSION
-        export API_ANYTHING_BROWSER=chromium
+        export API_ANYTHING_LOCAL_ONLY=1 API_ANYTHING_BROWSER=chromium
         api-anything setup --local-only --no-share
         api-anything --version
         chromium --version
