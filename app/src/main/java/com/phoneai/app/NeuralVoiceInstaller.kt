@@ -52,6 +52,7 @@ object NeuralVoiceInstaller {
             model.isFile && model.length() > 30_000_000L &&
             voices.isFile && voices.length() > 1_000_000L &&
             tokens.isFile && tokens.length() > 100L &&
+            File(dir, "LICENSE").isFile && File(dir, "LICENSE").length() > 1_000L &&
             hasEspeakData(dir)
     }
 
@@ -92,6 +93,7 @@ object NeuralVoiceInstaller {
                 val model = File(stage, "model.int8.onnx")
                 val voices = File(stage, "voices.bin")
                 val tokens = File(stage, "tokens.txt")
+                val license = File(stage, "LICENSE")
                 if (!model.isFile || model.length() < 30_000_000L) {
                     throw IOException("The Kokoro INT8 ONNX model is missing or incomplete.")
                 }
@@ -100,6 +102,9 @@ object NeuralVoiceInstaller {
                 }
                 if (!tokens.isFile || tokens.length() < 100L) {
                     throw IOException("Kokoro's token vocabulary is missing or incomplete.")
+                }
+                if (!license.isFile || license.length() < 1_000L) {
+                    throw IOException("The Kokoro model license notice is missing from the downloaded package.")
                 }
                 if (!hasEspeakData(stage)) {
                     throw IOException("Kokoro's pronunciation data is missing or incomplete.")
@@ -205,6 +210,7 @@ object NeuralVoiceInstaller {
         var modelExtracted = false
         var voicesExtracted = false
         var tokensExtracted = false
+        var licenseExtracted = false
         var espeakBytes = 0L
         TarArchiveInputStream(
             BZip2CompressorInputStream(BufferedInputStream(FileInputStream(archive)))
@@ -235,6 +241,8 @@ object NeuralVoiceInstaller {
                         File(destination, "voices.bin")
                     base.equals("tokens.txt", ignoreCase = true) ->
                         File(destination, "tokens.txt")
+                    base.equals("LICENSE", ignoreCase = true) ->
+                        File(destination, "LICENSE")
                     else -> null
                 } ?: continue
 
@@ -254,11 +262,12 @@ object NeuralVoiceInstaller {
                     "model.int8.onnx" -> modelExtracted = true
                     "voices.bin" -> voicesExtracted = true
                     "tokens.txt" -> tokensExtracted = true
+                    "LICENSE" -> licenseExtracted = true
                 }
             }
         }
-        if (!modelExtracted || !voicesExtracted || !tokensExtracted || espeakBytes <= 0L) {
-            throw IOException("The official Kokoro archive did not contain the expected model, voices, tokens and pronunciation data.")
+        if (!modelExtracted || !voicesExtracted || !tokensExtracted || !licenseExtracted || espeakBytes <= 0L) {
+            throw IOException("The official Kokoro archive did not contain the expected model, voices, tokens, license and pronunciation data.")
         }
     }
 }
