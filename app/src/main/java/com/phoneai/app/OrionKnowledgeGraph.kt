@@ -88,6 +88,18 @@ internal object OrionKnowledgeGraph {
                 putNode(db, id, "entity", label)
                 if (putEdge(db, memoryNode, id, "mentions_${entity.kind.name.lowercase()}", memory)) inserted++
                 id
+            }.toMutableList()
+
+            // Give the canonical "user" subject a searchable owner-name alias.
+            if (facts.any { it.first == "user" }) {
+                val ownerName = Prefs.userName(context).trim()
+                if (ownerName.isNotBlank()) {
+                    val ownerLabel = normalize(ownerName)
+                    val ownerId = "entity:person:$ownerLabel"
+                    putNode(db, ownerId, "entity", ownerLabel)
+                    if (putEdge(db, memoryNode, ownerId, "owner_alias", memory)) inserted++
+                    entityIds += ownerId
+                }
             }
 
             // Co-occurrence links connect entities mentioned in the same approved memory.
