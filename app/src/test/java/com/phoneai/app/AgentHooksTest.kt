@@ -93,6 +93,18 @@ class AgentHooksTest {
   assertEquals("Ready",snapshot)
   assertEquals(4,calls)
  }
+ @Test fun screenAnnotationLanguageRoutesToPhoneControlInsteadOfChatOrAppLaunch() {
+  listOf(
+   "Circle Orion app that on my screen",
+   "Circle the WhatsApp icon on my screen",
+   "Highlight the settings button on the display",
+   "Point at the Orion app on my screen"
+  ).forEach { request ->
+   assertTrue("$request must enter the screen-control route", AgentHooks.isPhoneActionRequest(request))
+  }
+  assertFalse("A normal discussion of circles is not a phone action", AgentHooks.isPhoneActionRequest("Explain how circles are used in geometry"))
+ }
+
  @Test fun actionWordsInsideNormalSentencesDoNotBecomeCommands() {
   assertFalse(AgentHooks.isPhoneActionRequest("I want to write a poem"))
   assertFalse(AgentHooks.isPhoneActionRequest("Explain how to open a file"))
