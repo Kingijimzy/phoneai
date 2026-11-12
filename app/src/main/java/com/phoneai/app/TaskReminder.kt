@@ -11,7 +11,7 @@ import android.os.Build
 import java.util.Date
 
 internal object TaskReminderPolicy {
-    fun isTerminal(status: String): Boolean = status.trim().lowercase() in setOf("done", "completed", "cancelled", "canceled")
+    fun isTerminal(status: String): Boolean = status.trim().lowercase() in setOf("done", "completed", "failed", "cancelled", "canceled")
 }
 
 /** Schedules local deadline reminders; no server or paid service is needed. */
