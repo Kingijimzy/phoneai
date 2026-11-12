@@ -367,8 +367,11 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
         OrionActivityStatus.FAILED -> OrionUiPalette.danger
         else -> OrionUiPalette.muted
     }
-    val terminalOutput = event.evidence.lastOrNull { it.contains("Python terminal", true) || it.contains("TASK:OUTPUT", true) }
-        ?: event.summary
+    val displayTitle = OrionActivityPresentation.title(event)
+    val displaySummary = OrionActivityPresentation.summary(event)
+    val safeEvidence = OrionActivityPresentation.evidence(event.evidence)
+    val terminalOutput = safeEvidence.lastOrNull { it.contains("Python terminal", true) || it.contains("TASK:OUTPUT", true) }
+        ?: displaySummary
     val pulse = rememberInfiniteTransition(label = "task-stream-pulse")
     val alpha by pulse.animateFloat(
         initialValue = if (active) 0.35f else 1f,
@@ -382,10 +385,10 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
             .border(1.dp, OrionUiPalette.border, RoundedCornerShape(9.dp))
             .semantics {
                 contentDescription = buildString {
-                    append(event.title)
+                    append(displayTitle)
                     append(", ")
                     append(event.status.name.lowercase())
-                    if (event.summary.isNotBlank()) append(". " + event.summary)
+                    if (displaySummary.isNotBlank()) append(". " + displaySummary)
                     append(if (expanded) ". Hide task details" else ". Show task details")
                 }
                 role = Role.Button
@@ -396,7 +399,7 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(6.dp).clip(CircleShape).background(accent.copy(alpha = if (active) alpha else 1f)))
             Spacer(Modifier.width(7.dp))
-            Text(event.title, color = OrionUiPalette.text, fontSize = 11.sp,
+            Text(displayTitle, color = OrionUiPalette.text, fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f))
             Text(
@@ -426,7 +429,7 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
                 Box(Modifier.weight(1f).fillMaxHeight().background(accent))
             }
         }
-        val steps = OrionActivityTimeline.progressSteps(event.evidence)
+        val steps = OrionActivityTimeline.progressSteps(safeEvidence)
         if (steps.size > 1) {
             val shown = if (expanded) steps.takeLast(14) else steps.takeLast(4)
             val finished = steps.count { it.state == "DONE" }
@@ -478,16 +481,15 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
                 maxLines = if (expanded) 6 else 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 13.dp, top = 3.dp)
             )
-        } else if (event.summary.isNotBlank()) {
-            Text(event.summary, color = OrionUiPalette.muted, fontSize = 9.sp,
+        } else if (displaySummary.isNotBlank()) {
+            Text(displaySummary, color = OrionUiPalette.muted, fontSize = 9.sp,
                 maxLines = if (expanded) 4 else 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 13.dp, top = 2.dp))
         }
         if (expanded) {
-            event.evidence.takeLast(10).forEach { line ->
-                Text(line, color = OrionUiPalette.muted, fontSize = 8.sp, lineHeight = 11.sp)
+            safeEvidence.takeLast(8).forEach { line ->
+                Text(line, color = OrionUiPalette.muted, fontSize = 9.sp, lineHeight = 12.sp)
             }
-            Text("Task ${event.taskId}", color = OrionUiPalette.muted, fontSize = 8.sp)
         }
     }
 }
