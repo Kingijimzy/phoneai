@@ -200,8 +200,13 @@ internal object IrreversibleActionConfirmationPolicy {
 class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     /** Talk uses the ordinary selected chat provider; command planning may use a separate override. */
     private val sharedRequestBudget = CommandRequestBudget(maxRequests = 100_000, maxRequestsProvider = { OrionAutonomySettings.read(svc).maxAiRequests })
-    private val talkNim = Nim(svc, sharedBudget = sharedRequestBudget).also { n -> n.onStatus = { s -> ui.status(s) } }
-    private val commandNim = Nim(svc, commandMode = true, sharedBudget = sharedRequestBudget).also { n -> n.onStatus = { s -> ui.status(s) } }
+    // Route every production chat and command request through the account-aware adapter.
+    // Direct Nim calls sent agy:// and codex:// account providers into URL(...), causing
+    // MalformedURLException instead of invoking their official native clients.
+    private val talkFallback = Nim(svc, sharedBudget = sharedRequestBudget).also { n -> n.onStatus = { s -> ui.status(s) } }
+    private val commandFallback = Nim(svc, commandMode = true, sharedBudget = sharedRequestBudget).also { n -> n.onStatus = { s -> ui.status(s) } }
+    private val talkNim: OrionModelProvider = AccountAwareModelProvider(svc, talkFallback, commandMode = false)
+    private val commandNim: OrionModelProvider = AccountAwareModelProvider(svc, commandFallback, commandMode = true)
     private val lastPythonOutputAt = java.util.concurrent.atomic.AtomicLong(0L)
     private val pythonOutputBuffer = StringBuilder()
     private val tools = Tools(svc, { tool, args -> executeWithRecoveryGuard(tool, args) }) { chunk ->
