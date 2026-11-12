@@ -107,6 +107,18 @@ class OrionContextualIntentInterpreterTest {
         assertEquals("Audit all PhoneAI executors and repair failures.", result.resolvedObjective)
     }
 
+    @Test fun whereWereWeReportsTheExistingObjectiveInsteadOfStartingOver() {
+        val objective = "Fix Orion provider routing and verify the Android build."
+        val result = OrionContextualIntentInterpreter.resolve(
+            "Hey, where did we stop?",
+            listOf("user" to objective, "assistant" to "The provider routing fix is pushed; build is pending."),
+            objective
+        )
+        assertEquals(OrionContextualIntentInterpreter.Kind.STATUS_CHECK, result.kind)
+        assertEquals(objective, result.resolvedObjective)
+        assertTrue(result.contextBlock.contains("without restarting the task"))
+    }
+
     @Test fun naturalTryItOnASiteFollowUpResumesThePriorCodingObjective() {
         val objective = "Write a Python scraper, save it in the workspace and test it."
         val result = OrionContextualIntentInterpreter.resolve(
