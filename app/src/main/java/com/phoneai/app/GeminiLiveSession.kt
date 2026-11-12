@@ -39,7 +39,7 @@ internal class GeminiLiveSession(
         /** Partial ASR text is display-only and must never trigger a device action. */
         fun onInterimTranscript(text: String) {}
         fun onInputLevel(level: Float)
-        /** Real PCM output RMS while the live model's audio is played locally. */
+        /** Output reset signal; actual playback RMS is supplied by Orion's local Voice engine. */
         fun onOutputLevel(level: Float) {}
         /** Stop local Kokoro speech when the live model reports a user interruption. */
         fun onOutputInterrupted() {}
