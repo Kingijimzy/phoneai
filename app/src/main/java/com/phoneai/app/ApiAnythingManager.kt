@@ -29,8 +29,8 @@ internal object ApiAnythingManager {
         return when {
             alive && !connected -> "API Anything is running locally, but Orion is connected to a different MCP server. Stop API Anything or switch the MCP endpoint back to API Anything."
             healthy -> "API Anything is running locally. Its MCP tools are connected to Orion. Health is verified; website write operations are exposed and remain subject to Orion's MCP scopes."
-            enabled && !alive -> "API Anything is enabled but its local server is not running. Orion will try to restart it when the app process starts; use Start / repair to start it now."
             lastError.isNotBlank() -> "API Anything: $lastState. Last error: $lastError"
+            enabled && !alive -> "API Anything is enabled but its local server is not running. Orion will try to restart it when the app process starts; use Start / repair to start it now."
             else -> "API Anything is not running. Install it into Orion's Alpine runtime to enable website discovery, learning, operation reuse and upstream self-repair."
         }
     }
@@ -123,11 +123,14 @@ internal object ApiAnythingManager {
             "API Anything $VERSION installed and running. Orion verified its local health endpoint and discovered its MCP tools. Website discovery, operation learning, reads and self-repair are now available through Orion's shared tool runtime."
         }
     }.onFailure { failure ->
+        val app = context.applicationContext
         synchronized(this) {
             lastError = (failure.message ?: failure.javaClass.simpleName).replace('\n', ' ').take(700)
             lastState = "Setup failed"
             stopLocked()
         }
+        // Do not leave a paired endpoint pointing at a server that failed to start.
+        McpConnector.clearManagedLocal(app, ENDPOINT)
     }
 
     /** Restarts the managed server after Android recreates the application process. */
@@ -158,10 +161,12 @@ internal object ApiAnythingManager {
                     val line = session.readLine(500L) ?: continue
                     if (line.trim().startsWith("{") && line.contains("\"mcp\"")) break
                 }
-                if (!session.isAlive() || !healthCheck()) {
+                val catalogue = if (session.isAlive() && healthCheck()) McpConnector.listTools(app) else ""
+                if (!session.isAlive() || !healthVerifiedAfter(catalogue)) {
                     stopLocked()
                     healthVerified = false
-                    lastError = "Managed server did not recover after process recreation."
+                    lastError = if (!session.isAlive()) "Managed server did not recover after process recreation."
+                        else "Managed server recovered but MCP tool discovery failed: " + catalogue.take(400)
                     lastState = "Recovery failed"
                 } else {
                     healthVerified = true
@@ -180,6 +185,9 @@ internal object ApiAnythingManager {
         }
         McpConnector.clearManagedLocal(context.applicationContext, ENDPOINT)
     }
+
+    private fun healthVerifiedAfter(catalogue: String): Boolean =
+        catalogue.startsWith("MCP tools")
 
     private fun isInstalled(runtime: LinuxRuntimeInstaller, workspace: String): Boolean {
         val probe = runtime.execute(
