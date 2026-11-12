@@ -107,7 +107,7 @@ internal object OrionShizukuBridge {
         val op = operation.trim()
         val allowed = setOf(
             "read_brightness", "read_screen_timeout", "read_airplane_mode", "read_battery",
-            "list_user_apps", "set_brightness", "set_screen_timeout"
+            "list_user_packages", "set_brightness", "set_screen_timeout"
         )
         if (op !in allowed) return "error: operation is not in Orion's Shizuku allowlist"
         val current = state()
