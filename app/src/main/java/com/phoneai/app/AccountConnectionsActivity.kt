@@ -91,6 +91,8 @@ class AccountConnectionsActivity : Activity() {
             setTextColor(Theme.MUTED)
             setPadding(0, dp(8), 0, dp(8))
             setTextIsSelectable(true)
+            maxLines = 7
+            movementMethod = android.text.method.ScrollingMovementMethod.getInstance()
         }
         antigravityOutput.background = android.graphics.drawable.GradientDrawable().apply {
             setColor(Theme.PANEL)
@@ -134,7 +136,7 @@ class AccountConnectionsActivity : Activity() {
 
     private fun appendAntigravityLog(line: String) {
         if (!::antigravityOutput.isInitialized || isFinishing || isDestroyed) return
-        val combined = (antigravityOutput.text.toString() + "\\n" + line).takeLast(9_000)
+        val combined = (antigravityOutput.text.toString() + "\n" + line).takeLast(9_000)
         antigravityOutput.text = combined
     }
 
@@ -204,7 +206,7 @@ class AccountConnectionsActivity : Activity() {
                 }
                 val exit = session.exitCodeOrNull()
                 if (exit == 0 && !isFinishing) {
-                    runOnUiThread { antigravityOutput.append("\nLogin command exited. Verifying with a real Antigravity model request…") }
+                    runOnUiThread { appendAntigravityLog("Login command exited. Verifying with a real Antigravity model request…") }
                     val result = installer.runPrompt(
                         filesDir.absolutePath,
                         "Reply with exactly: ORION_ANTIGRAVITY_AUTH_OK"
