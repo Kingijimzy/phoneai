@@ -240,6 +240,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             scheduler.onServiceReady()
             scheduleRuntimeDrain()
             OrionProactiveWork.ensureScheduled(this)
+            OrionDeviceHealthWork.ensureScheduled(this)
             main.removeCallbacks(autonomyTick)
             main.postDelayed(autonomyTick, 5 * 60_000L)
             requestContinuousWatcherObservation("service_connected")
