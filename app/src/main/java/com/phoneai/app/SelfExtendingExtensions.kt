@@ -95,8 +95,11 @@ internal data class ExtensionTestReport(
 )
 
 /**
- * Implementations must run untrusted code in a real isolated sandbox, not the app process.
- * Capabilities are deliberately passed as a narrow list, never as Android Context or shell.
+ * Implementations must enforce the restricted execution contract. The current generated-extension
+ * runtime is an in-process AST-validated interpreter with a cooperative two-second deadline; it is
+ * NOT OS process isolation. It therefore remains capability-free: no Android Context, filesystem,
+ * network, shell, or device bridge is passed to generated code. Full CPython extensions stay blocked
+ * until an OS-enforced isolated worker exists.
  */
 internal interface ExtensionSandbox {
     fun test(extension: GeneratedExtension, testCases: List<JSONObject>): ExtensionTestReport
