@@ -36,22 +36,22 @@ class TerminalActivity : Activity() {
     @Volatile private var terminalStarting = false
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun chip(caption: String, action: () -> Unit) = TextView(this).apply {
-        text = caption; textSize = 13f; typeface = Typeface.DEFAULT_BOLD; setTextColor(0xFFE4E4E4.toInt()); gravity = Gravity.CENTER
+        text = caption; textSize = 13f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Theme.TEXT); gravity = Gravity.CENTER
         setPadding(dp(12), dp(10), dp(12), dp(10))
-        background = GradientDrawable().apply { setColor(0xFF242424.toInt()); cornerRadius = dp(11).toFloat(); setStroke(dp(1), 0xFF444444.toInt()) }
+        background = GradientDrawable().apply { setColor(Theme.PANEL2); cornerRadius = dp(11).toFloat(); setStroke(dp(1), Theme.LINE_STRONG) }
         isClickable = true; isFocusable = true; setOnClickListener { action() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = 0xFF090909.toInt(); window.navigationBarColor = 0xFF090909.toInt()
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(0xFF090909.toInt()); setPadding(dp(14), dp(24), dp(14), dp(12)) }
+        window.statusBarColor = Theme.BG; window.navigationBarColor = Theme.BG
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Theme.BG); setPadding(dp(14), dp(24), dp(14), dp(12)) }
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        top.addView(TextView(this).apply { text = "Terminal"; textSize = 24f; typeface = Typeface.DEFAULT_BOLD; setTextColor(0xFFF2F2F2.toInt()); layoutParams = LinearLayout.LayoutParams(0, -2, 1f) })
+        top.addView(TextView(this).apply { text = "Terminal"; textSize = 24f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Theme.TEXT); layoutParams = LinearLayout.LayoutParams(0, -2, 1f) })
         backendBtn = chip("Built-in") { switchBackend() }
         top.addView(backendBtn); root.addView(top)
-        out = TextView(this).apply { typeface = Typeface.MONOSPACE; textSize = 12f; setTextColor(0xFFCFE8CF.toInt()); setTextIsSelectable(true); setPadding(dp(10), dp(10), dp(10), dp(10)) }
-        scroll = ScrollView(this).apply { background = GradientDrawable().apply { setColor(0xFF0E0E0E.toInt()); cornerRadius = dp(12).toFloat(); setStroke(dp(1), 0xFF2E2E2E.toInt()) } }
+        out = TextView(this).apply { typeface = Typeface.MONOSPACE; textSize = 12f; setTextColor(Theme.TEXT_SECONDARY); setTextIsSelectable(true); setPadding(dp(10), dp(10), dp(10), dp(10)) }
+        scroll = ScrollView(this).apply { background = GradientDrawable().apply { setColor(Theme.BG); cornerRadius = dp(12).toFloat(); setStroke(dp(1), Theme.LINE) } }
         scroll.addView(out)
         terminalView = TerminalView(this, null).apply { visibility = android.view.View.GONE; isFocusable = true; isFocusableInTouchMode = true }
         val terminalFrame = FrameLayout(this)
@@ -62,11 +62,11 @@ class TerminalActivity : Activity() {
         commandRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         input = EditText(this).apply {
             hint = "Command (e.g. ls, python3, node)"; typeface = Typeface.MONOSPACE; textSize = 15f
-            setTextColor(0xFFF0F0F0.toInt()); setHintTextColor(0xFF777777.toInt())
+            setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or InputType.TYPE_TEXT_FLAG_MULTI_LINE
             maxLines = 3; imeOptions = EditorInfo.IME_ACTION_SEND
             setPadding(dp(12), dp(10), dp(12), dp(10))
-            background = GradientDrawable().apply { setColor(0xFF151515.toInt()); cornerRadius = dp(12).toFloat(); setStroke(dp(1), 0xFF444444.toInt()) }
+            background = GradientDrawable().apply { setColor(Theme.PANEL); cornerRadius = dp(12).toFloat(); setStroke(dp(1), Theme.LINE_STRONG) }
         }
         commandRow.addView(input, LinearLayout.LayoutParams(0, -2, 1f))
         runBtn = chip("Run") { runInput() }
