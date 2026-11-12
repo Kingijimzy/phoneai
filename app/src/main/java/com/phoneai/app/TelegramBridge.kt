@@ -211,6 +211,28 @@ internal object TelegramBridge {
         postLocalNotification(context, title, message)
     }
 
+    /** Deduplicated watcher alert: local notification is independent from optional Telegram delivery. */
+    fun notifyFinding(context: Context, key: String, title: String, message: String) {
+        if (key.isBlank() || message.isBlank()) return
+        val cleanKey = key.replace(Regex("[^A-Za-z0-9_.-]"), "_").take(64)
+        val fingerprint = java.security.MessageDigest.getInstance("SHA-256")
+            .digest((title + "\\n" + message).toByteArray(StandardCharsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        val prefs = context.getSharedPreferences("orion_telegram_outreach", Context.MODE_PRIVATE)
+        val localKey = "local_finding_" + cleanKey
+        if (prefs.getString(localKey, "") != fingerprint) {
+            notifyProactive(context, title, message)
+            prefs.edit().putString(localKey, fingerprint).commit()
+        }
+        val telegramKey = "telegram_finding_" + cleanKey
+        if (TelegramListenerService.isEnabled(context) && isConfigured(context) &&
+            prefs.getString(telegramKey, "") != fingerprint) {
+            if (sendProactive(context, title + "\\n" + message.take(3200))) {
+                prefs.edit().putString(telegramKey, fingerprint).commit()
+            }
+        }
+    }
+
     /** Post a local completion notification without retaining the full task text. */
     private fun notifyTaskResult(context: Context, result: String) {
         postLocalNotification(context, "Orion finished your Telegram request", result)
