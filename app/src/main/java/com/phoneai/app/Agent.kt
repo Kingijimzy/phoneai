@@ -342,7 +342,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var runTools = 0
     @Volatile private var runFailed = 0
     @Volatile private var activeRequestScope: String = ""
-    @Volatile private var destructiveApprovalGranted: Boolean = false
     @Volatile private var lastActionScope: String = ""
     @Volatile private var lastActionScopeAt: Long = 0L
 
@@ -350,7 +349,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun setRequestScope(command: String) {
         val scope = TaskScopePolicy.scopeFor(command, lastActionScope, System.currentTimeMillis() - lastActionScopeAt)
         activeRequestScope = scope
-        destructiveApprovalGranted = false
         if (TaskScopePolicy.modeFor(scope) != TaskMode.CHAT) { lastActionScope = scope; lastActionScopeAt = System.currentTimeMillis() }
     }
     // Last locally perceived screen, used for post-action comparison without another model call.
@@ -529,16 +527,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
             GatePolicy.Verdict.ALLOW -> Unit
         }
-        val directDestructiveWarning = IrreversibleActionConfirmationPolicy.destructiveAction(tool, args)
-        val taskDestructiveIntent = IrreversibleActionConfirmationPolicy.destructiveRequestDescription(activeRequestScope)
-        val requestScopedWarning = if (
-            !destructiveApprovalGranted &&
-            ToolRegistry.access(tool) == ToolAccess.WRITE &&
-            taskDestructiveIntent != null
-        ) {
-            "Your request includes '$taskDestructiveIntent'. Orion is about to perform the requested destructive task. This may permanently delete or wipe data."
-        } else null
-        val destructiveWarning = if (destructiveApprovalGranted) null else directDestructiveWarning ?: requestScopedWarning
+        // Confirm only the exact destructive operation about to execute. A destructive
+        // word elsewhere in the user's multi-step request must not gate unrelated actions,
+        // and approval for one deletion must never authorize a later deletion in the same task.
+        val destructiveWarning = IrreversibleActionConfirmationPolicy.destructiveAction(tool, args)
         destructiveWarning?.let { warning ->
             ui.note("[WARNING] $warning")
             if (!ui.ask("$warning\n\nDo you want Orion to continue?")) {
@@ -547,7 +539,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 taskProofs.record(tool, denied)
                 return denied
             }
-            destructiveApprovalGranted = true
         }
         val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url", "open_deep_link")
         val actionTools = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url", "open_deep_link", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll", "browser_tabs", "system_intent", "open_file")
