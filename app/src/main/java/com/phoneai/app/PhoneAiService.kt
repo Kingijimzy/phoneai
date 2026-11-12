@@ -1318,10 +1318,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun addLine(kind: String, text: String) {
         val box = logBox ?: return
         val t = TextView(this)
-        t.text = text
-        t.textSize = if (kind == "note") 11f else 15f
+        t.text = if (kind == "note") text else Markdown.render(text)
+        t.textSize = if (kind == "note") 10f else 14f
         t.setLineSpacing(dp(2).toFloat(), 1.02f)
-        t.maxWidth = (screenSize().first * 0.82f).toInt()
+        t.maxWidth = (screenSize().first * 0.86f).toInt()
         val lp = LinearLayout.LayoutParams(WRAP, WRAP)
         lp.setMargins(0, dp(5), 0, dp(5))
         when (kind) {
@@ -1594,8 +1594,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
         // Keep the command surface compact enough to reveal the app underneath. Full chat
         // remains a separate destination for long conversations, files and history.
-        val panelHeight = (size.second * 0.62f).toInt().coerceAtLeast(dp(360))
-            .coerceAtMost((size.second * 0.68f).toInt())
+        val panelHeight = (size.second * 0.56f).toInt().coerceAtLeast(dp(320))
+            .coerceAtMost((size.second * 0.60f).toInt())
         val lp = WindowManager.LayoutParams(
             size.first - dp(16), panelHeight, OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
         )
