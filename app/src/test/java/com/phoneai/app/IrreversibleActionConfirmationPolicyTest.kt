@@ -43,6 +43,12 @@ class IrreversibleActionConfirmationPolicyTest {
             "termux_command", JSONObject().put("command", "sudo wipefs /dev/block/sda")
         ))
         assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
+            "dev_shell", JSONObject().put("command", "rm -rf /workspace/cache")
+        ))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
+            "python_exec", JSONObject().put("code", """phone.shell("rm -rf /workspace/cache")""")
+        ))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
             "standing_order", JSONObject().put("action", "remove").put("kind", "github_notifications")
         ))
         assertNull(IrreversibleActionConfirmationPolicy.destructiveAction(
