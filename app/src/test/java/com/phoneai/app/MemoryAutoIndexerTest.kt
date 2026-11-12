@@ -23,6 +23,14 @@ class MemoryAutoIndexerTest {
         assertEquals("project", MemoryAutoIndexer.extract("I'm learning programming")?.category)
     }
 
+    @Test fun capturesFavouriteFactsInAFormTheGraphCanParse() {
+        val favourite = MemoryAutoIndexer.extract("My favourite team is Arsenal")
+        assertNotNull(favourite)
+        assertEquals("fact", favourite!!.category)
+        assertTrue(GraphPolicy.extract(favourite.text).contains(Triple("user", "favourite team", "arsenal")))
+        assertEquals("preference", MemoryAutoIndexer.extract("I love football")?.category)
+    }
+
     @Test fun questionsAndSensitiveContentAreNotAutomaticallyStored() {
         assertNull(MemoryAutoIndexer.extract("Do you remember that I trade forex?"))
         assertNull(MemoryAutoIndexer.extract("My password is hunter2"))
