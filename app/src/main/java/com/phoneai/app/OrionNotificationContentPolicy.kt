@@ -4,7 +4,7 @@ package com.phoneai.app
 internal object OrionNotificationContentPolicy {
     private val sensitivePackageTokens = setOf("bank", "finance", "wallet", "payment", "pay", "authenticator", "password", "credential")
     private val sensitiveText = Regex(
-        """\b(otp|one[- ]time (password|code)|verification code|security code|passcode|password reset|login code|transaction (alert|receipt)|bank transfer|card (number|payment)|cvv|pin code)\b""",
+        """\b(otp|one[- ]time (password|code)|verification code|security code|passcode|password|new login|new sign[- ]in|authentication|2fa|two[- ]factor|recovery code|backup code|passkey|transaction (alert|receipt)|bank transfer|card (number|payment)|cvv|pin code|payment received|money received|wallet balance)\b""",
         RegexOption.IGNORE_CASE
     )
 
