@@ -20,6 +20,12 @@ internal class OrionRecoveryWorker(
     params: WorkerParameters
 ) : Worker(appContext, params) {
     override fun doWork(): Result {
+        // One recovery wake repairs both execution ledgers, not only the local runtime queue.
+        // The coordinator uses stable unique WorkManager names and never replays an ambiguous lease.
+        if (OrionMasterControl.isEnabled(applicationContext)) {
+            runCatching { OrionUnifiedExecutionCoordinator.reconcileAndSchedule(applicationContext) }
+                .onFailure { return Result.retry() }
+        }
         val pending = runCatching { OrionRuntime(applicationContext).pendingItems() }
             .getOrElse { return Result.retry() }
         if (pending.isEmpty()) return Result.success()
