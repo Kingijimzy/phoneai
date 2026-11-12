@@ -56,13 +56,15 @@ internal object OrionDeviceCapabilityExecutor {
         "verify_action" -> verifyAction(args)
         "verify_send" -> verifySend(args)
         "click" -> {
+            val mismatch = expectedPackageError(args, service)
             val id = args.optInt("id", -1)
-            if (id < 0 || service.nodeInfo(id) == null) "error: target ID is stale or missing. Run read_screen and choose a current ID."
+            if (mismatch != null) mismatch
+            else if (id < 0 || service.nodeInfo(id) == null) "error: target ID is stale or missing. Run read_screen and choose a current ID."
             else service.clickId(id)
         }
-        "click_text" -> tools.clickText(args.optString("text"))
-        "point_at" -> service.pointAt(args.optInt("id", -1), args.optLong("duration_ms", 2400L))
-        "sketch_screen" -> service.sketchScreen(
+        "click_text" -> expectedPackageError(args, service) ?: tools.clickText(args.optString("text"))
+        "point_at" -> expectedPackageError(args, service) ?: service.pointAt(args.optInt("id", -1), args.optLong("duration_ms", 2400L))
+        "sketch_screen" -> if (expectedPackageError(args, service) != null) expectedPackageError(args, service)!! else service.sketchScreen(
             id = args.optInt("id", -1),
             shape = args.optString("shape", "circle"),
             labelText = args.optString("label"),
