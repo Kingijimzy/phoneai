@@ -58,7 +58,8 @@ internal class AccountAwareModelProvider(
         check(!cancelled) { "Account model request was cancelled." }
         val prompt = transcript(messages)
         require(prompt.isNotBlank()) { "No text content was supplied to the account model." }
-        val model = Prefs.model(app, provider, false).takeIf { it.isNotBlank() }
+        val model = (if (commandMode && !vision) Prefs.commandModelId(app) else null)
+            ?: Prefs.model(app, provider, false).takeIf { it.isNotBlank() }
         val answer = synchronized(lock) {
             check(!cancelled) { "Account model request was cancelled." }
             when (provider.id) {
