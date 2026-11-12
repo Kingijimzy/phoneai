@@ -57,7 +57,9 @@ internal object OrionUnifiedExecutionCoordinator {
         val app = context.applicationContext
         val record = runCatching { OrionDistributedTaskStore(app).get(taskId) }.getOrNull() ?: return false
         if (record.status !in setOf("queued", "retry_wait")) return record.status == "running" || record.status == "completed"
-        return enqueueWork(app, "orion-task-$taskId", OrionSpecialistWorker.KEY_TASK_ID, taskId)
+        val scheduled = enqueueWork(app, "orion-task-$taskId", OrionSpecialistWorker.KEY_TASK_ID, taskId)
+        if (!scheduled && OrionMasterControl.isEnabled(app)) OrionRecoveryWork.schedule(app)
+        return scheduled
     }
 
     fun dispatchDroneTask(context: Context, taskId: String): OrionCoordinatedResult =
@@ -73,7 +75,9 @@ internal object OrionUnifiedExecutionCoordinator {
             OrionWorkerJobStore.Status.RESULT_PENDING,
             OrionWorkerJobStore.Status.COMPLETED
         )
-        return enqueueWork(app, "orion-specialist-$jobId", OrionSpecialistWorker.KEY_JOB_ID, jobId)
+        val scheduled = enqueueWork(app, "orion-specialist-$jobId", OrionSpecialistWorker.KEY_JOB_ID, jobId)
+        if (!scheduled && OrionMasterControl.isEnabled(app)) OrionRecoveryWork.schedule(app)
+        return scheduled
     }
 
     fun cancelLegacyJob(context: Context, jobId: String, reason: String = "cancelled_by_owner"): Boolean {
