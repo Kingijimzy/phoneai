@@ -1181,7 +1181,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 if (payloadRecoveryDepth < 3) {
                     val compacted = OrionProviderPayloadRecovery.compact(requestMessages, payloadRecoveryDepth + 1)
                     val beforeSize = requestMessages.toString().length
-                    if (compacted.toString().length < (beforeSize * 0.94).toInt()) {
+                    if (compacted.toString().length < (beforeSize * 0.94).toInt() || activeNativeTools.get()?.isNotEmpty() == true) {
                         onStatus?.invoke("${p.label}: request was too large; trimming older conversation context and retrying the same model…")
                         return chatOne(
                             p, compacted, false, maxTokens, temperature, hasBackup,
