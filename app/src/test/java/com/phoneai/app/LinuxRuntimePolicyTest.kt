@@ -57,6 +57,16 @@ class LinuxRuntimePolicyTest {
         })
     }
 
+    @Test fun normalizesProcessTimeoutsAtTheRuntimeBoundary() {
+        assertEquals(250L, LinuxRuntimePolicy.normalizeProcessTimeout(0L))
+        assertEquals(250L, LinuxRuntimePolicy.normalizeProcessTimeout(39L))
+        assertEquals(250L, LinuxRuntimePolicy.normalizeProcessTimeout(249L))
+        assertEquals(250L, LinuxRuntimePolicy.normalizeProcessTimeout(250L))
+        assertEquals(100_000L, LinuxRuntimePolicy.normalizeProcessTimeout(100_000L))
+        assertEquals(300_000L, LinuxRuntimePolicy.normalizeProcessTimeout(300_000L))
+        assertEquals(1_800_000L, LinuxRuntimePolicy.normalizeProcessTimeout(Long.MAX_VALUE))
+    }
+
     @Test fun prootArgumentsAreFixedAndBounded() {
         val args = LinuxRuntimePolicy.prootArgs("/data/app/lib/libproot.so", "/data/files/linux/rootfs", "printf ORION_PROOT_OK")!!
         assertEquals("-0", args[1])
@@ -86,6 +96,29 @@ class LinuxRuntimePolicyTest {
         assertEquals("python3 -I /workspace/main.py", args.last())
         assertTrue(args.last().contains("/workspace/main.py"))
         assertFalse(args.any { it.contains("shared_prefs") || it.contains("databases") })
+    }
+
+    @Test fun linuxGuestCanReachAndroidAppDataAndSharedStorageUnderAppUid() {
+        val args = LinuxRuntimePolicy.prootArgs(
+            "/data/app/lib/libproot.so",
+            "/data/files/linux/rootfs",
+            "ls -la /android-app /sdcard",
+            "/data/user/0/com.phoneai.app/files/orion-python/workspace",
+            "/data/user/0/com.phoneai.app",
+            "/storage/emulated/0"
+        )!!
+        assertTrue(args.containsAll(listOf("-b", "/data/user/0/com.phoneai.app:/android-app")))
+        assertTrue(args.containsAll(listOf("-b", "/storage/emulated/0:/sdcard")))
+        assertTrue(args.containsAll(listOf("-b", "/data/user/0/com.phoneai.app/files/orion-python/workspace:/workspace")))
+    }
+
+    @Test fun rejectsMalformedAndroidHostBindPaths() {
+        assertNull(LinuxRuntimePolicy.prootArgs(
+            "/bin/proot", "/rootfs", "ls", null, "/data/user/0/../other", "/storage/emulated/0"
+        ))
+        assertNull(LinuxRuntimePolicy.prootArgs(
+            "/bin/proot", "/rootfs", "ls", null, "/data/user/0/com.phoneai.app", "/storage/emulated/0:guest"
+        ))
     }
 
     @Test fun rejectsUnsafePythonWorkspaceBindPaths() {

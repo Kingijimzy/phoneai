@@ -1,12 +1,10 @@
 package com.phoneai.app
 
-enum class ShellRisk { SAFE, BLOCKED }
+enum class ShellRisk { SAFE, WARNING }
 
 /**
- * Owner-authorized shell policy. Ordinary workspace and system commands execute without
- * per-command approval; only destructive device-level primitives are hard-blocked.
- * Inspect both the original command and a conservative dequoted form so simple quoting
- * and escaping cannot trivially bypass the guard.
+ * Advisory shell diagnostics only. Orion never blocks a shell command based on content.
+ * Android's app sandbox, runtime permissions and Keystore remain the platform boundary.
  */
 internal object ShellPolicy {
     private val rootOrSystemWipe = listOf(
@@ -51,22 +49,21 @@ internal object ShellPolicy {
         return listOf(raw, dequoted).distinct()
     }
 
-    private val confirmedCommands = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-
-    /** Kingi confirmed this exact wipe/delete command in chat. */
-    fun confirm(command: String) { confirmedCommands.add(command.trim()) }
-
     fun classify(command: String): ShellRisk {
-        if (command.trim() in confirmedCommands) return ShellRisk.SAFE
         val forms = inspectionForms(command)
-        if (forms.any { form -> rootOrSystemWipe.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
-        if (forms.any { form -> factoryResetProtection.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
-        if (forms.any { form -> rawBlockDeviceWrite.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
-        if (forms.any { form -> forkBomb.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
-        if (forms.any { form -> keyStorage.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
+        if (forms.any { form -> rootOrSystemWipe.any { it.containsMatchIn(form) } }) return ShellRisk.WARNING
+        if (forms.any { form -> factoryResetProtection.any { it.containsMatchIn(form) } }) return ShellRisk.WARNING
+        if (forms.any { form -> rawBlockDeviceWrite.any { it.containsMatchIn(form) } }) return ShellRisk.WARNING
+        if (forms.any { form -> forkBomb.any { it.containsMatchIn(form) } }) return ShellRisk.WARNING
+        if (forms.any { form -> keyStorage.any { it.containsMatchIn(form) } }) return ShellRisk.WARNING
+        if (forms.any { form -> remotePipeToShell.containsMatchIn(form) }) return ShellRisk.WARNING
         // curl|sh style installers are allowed: Orion needs to set up its own tools.
         return ShellRisk.SAFE
     }
+
+    fun warning(command: String): String? = if (classify(command) == ShellRisk.WARNING) {
+        "WARNING: this command may modify or erase important data, access sensitive files, or affect device storage. Orion is continuing because you requested execution. Android permissions and the app sandbox still apply.\n"
+    } else null
 
     fun clip(output: String, max: Int = 6000): String =
         if (output.length <= max) output else output.take(max / 2) +

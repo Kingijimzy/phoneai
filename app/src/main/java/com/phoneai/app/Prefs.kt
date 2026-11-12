@@ -110,6 +110,18 @@ object Providers {
             "https://opencode.ai/zen/v1/models", false, false, requiresPaidOptIn = true
         ),
         Provider(
+            "codex", "OpenAI Codex · ChatGPT", "codex://app-server",
+            "gpt-5-codex", null, "Connect with ChatGPT",
+            "Use the Codex models included with your ChatGPT account. No separate API key.",
+            noKey = false
+        ),
+        Provider(
+            "antigravity", "Google Antigravity", "agy://cli",
+            "gemini-3.8-flash-medium", null, "Connect with Google",
+            "Use models and plan entitlements available to your Google Antigravity account. No separate API key.",
+            noKey = false
+        ),
+        Provider(
             "local", "Local AI (Ollama endpoint)", "http://127.0.0.1:11434/v1",
             "llama3.2:3b", null, "",
             "Local OpenAI-compatible endpoint at 127.0.0.1:11434; requires a separately running Ollama service. Availability and speed depend on the device.",
@@ -171,7 +183,17 @@ object Prefs {
     fun setKey(c: Context, pid: String, v: String): Boolean =
         ApiKeyVault.write(c, "enc_key_$pid", "key_$pid", v)
 
-    fun hasKey(c: Context, pid: String): Boolean = key(c, pid).isNotEmpty()
+    fun hasKey(c: Context, pid: String): Boolean = when (pid) {
+        "codex", "antigravity" -> accountConnected(c, pid)
+        else -> key(c, pid).isNotEmpty()
+    }
+
+    fun accountConnected(c: Context, id: String): Boolean =
+        id in setOf("codex", "antigravity") && sp(c).getBoolean("account_connected_$id", false)
+
+    fun setAccountConnected(c: Context, id: String, connected: Boolean) {
+        if (id in setOf("codex", "antigravity")) sp(c).edit().putBoolean("account_connected_$id", connected).apply()
+    }
 
     fun hasAnyKey(c: Context): Boolean = Providers.all.any { hasKey(c, it.id) }
 

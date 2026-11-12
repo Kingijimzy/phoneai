@@ -39,4 +39,26 @@ class OrionPersonaTest {
     @Test fun pursuesGoalsToCompletion() {
         assertTrue(OrionPersona.CORE.contains("HOW YOU PURSUE A GOAL"))
     }
+    @Test fun entityPhilosophyDefinesTheRequestedCompanionBehaviours() {
+        val doctrine = OrionEntityPhilosophy.doctrineBlock()
+        listOf(
+            "LIVE ACTIVITY",
+            "PERSISTENT COMMITMENTS",
+            "CONTEXT-AWARE MEMORY",
+            "SPOKEN PROGRESS",
+            "SCREEN-AWARE ACTION",
+            "EXPLICIT ACTION BOUNDARIES",
+            "CONTEXT COMPACTION",
+            "ONE ENTITY, ONE EXECUTION PATH",
+            "Keep the values. Question the formula. Let reality update the application."
+        ).forEach { assertTrue("Missing doctrine clause: $it", doctrine.contains(it)) }
+    }
+
+    @Test fun entityPhilosophyDoesNotClaimConsciousnessOrGrantPermissions() {
+        val doctrine = OrionEntityPhilosophy.doctrineBlock()
+        assertTrue(doctrine.contains("not a claim that I am conscious"))
+        assertTrue(doctrine.contains("never grants permission"))
+        assertTrue(doctrine.contains("current owner instruction"))
+    }
+
 }

@@ -24,8 +24,8 @@ import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 
 /**
- * Narrow Python-to-Android bridge. Every method is explicit, read/write-scoped and rechecks
- * consent at call time. The Python AST admits only phone.<registered_method>() calls.
+ * Python-to-Android bridge. The Python AST admits only registered phone.<method>() calls.
+ * Android's native permission model remains authoritative for protected platform resources.
  */
 internal class OrionPythonPhoneApi(
     private val context: Context,
@@ -139,10 +139,7 @@ internal class OrionPythonPhoneApi(
         if (!OrionSensorConsent.read(context, OrionSensorScope.SCREEN_CONTEXT).active())
             return error("screen context grant is not enabled")
         val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
-        // Reuse the production screen reader and suppress its potentially sensitive surfaces entirely
-        // at the Python boundary rather than returning partially filtered node text.
-        return screenSnapshotIfSafe(service)
-            ?: error("screen reading is blocked on a potentially sensitive surface")
+        return service.readScreen()
     }
 
     fun ui_tap_text(text: String): String {
@@ -152,7 +149,6 @@ internal class OrionPythonPhoneApi(
         val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
         if (!OrionSensorConsent.read(context, OrionSensorScope.SCREEN_CONTEXT).active())
             return error("screen context grant is not enabled")
-        if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
         return tool("click_text", JSONObject().put("text", target))
     }
 
@@ -165,7 +161,6 @@ internal class OrionPythonPhoneApi(
             return error("screen context grant is not enabled")
         val metrics = context.resources.displayMetrics
         if (x > metrics.widthPixels || y > metrics.heightPixels) return error("tap coordinates are outside the current display")
-        if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
         return tool("tap", JSONObject().put("x", x).put("y", y).put("allow_coordinates", true))
     }
 
@@ -180,21 +175,8 @@ internal class OrionPythonPhoneApi(
         if (values.filterIndexed { index, _ -> index % 2 == 0 }.any { it > metrics.widthPixels } ||
             values.filterIndexed { index, _ -> index % 2 == 1 }.any { it > metrics.heightPixels })
             return error("swipe coordinates are outside the current display")
-        if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
         return tool("swipe", JSONObject().put("x1", x1).put("y1", y1).put("x2", x2).put("y2", y2)
             .put("ms", 350).put("allow_coordinates", true))
-    }
-
-    private fun screenSafe(service: PhoneAiService): Boolean = screenSnapshotIfSafe(service) != null
-
-    private fun screenSnapshotIfSafe(service: PhoneAiService): String? {
-        val root = service.rootInActiveWindow ?: return null
-        val packageName = root.packageName?.toString().orEmpty()
-        if (SafetyGate.isSensitiveApp(packageName, packageName)) return null
-        val snapshot = service.readScreen()
-        return snapshot.takeIf {
-            !it.startsWith("error:") && !it.contains("(OCR withheld on a potentially sensitive screen)")
-        }
     }
 
     fun fs_list(): String = workspace.list()
@@ -202,31 +184,27 @@ internal class OrionPythonPhoneApi(
     fun fs_write(path: String, content: String): String =
         if (readOnly) error("workspace writes are disabled by the read-only autonomy profile") else workspace.write(path, content)
 
-    /** JSON argv only. No /bin/sh, shell expansion, pipes, redirects, privilege escalation or root. */
+    /** Executes explicit argv under the Android app UID; Android permissions and sandbox still apply. */
     fun shell(argvJson: String): String {
-        val root = File(context.filesDir, "orion-python/workspace")
-        when (workspace.rootStatus()) {
-            OrionPythonWorkspace.RootStatus.READY -> Unit
-            OrionPythonWorkspace.RootStatus.MISSING -> {
-                if (workspace.ensureRootForRepair() == null) return error("Python workspace could not be safely initialized")
-            }
-            OrionPythonWorkspace.RootStatus.UNSAFE -> return error("Python workspace path is suspicious or unsafe; refusing to execute even read-only commands")
-        }
+        val root = context.filesDir.canonicalFile
         val command = OrionPythonShellPolicy.parse(argvJson, root.absolutePath)
-            ?: return error("command rejected: use a registered read-only command and workspace-relative paths")
-        if (command.executable == "pwd") return root.absolutePath
-        val output = File(root, ".command-output-${SystemClock.elapsedRealtime()}.tmp")
+            ?: return error("command must be a non-empty JSON argv array")
+        val output = File(context.cacheDir, ".command-output-${SystemClock.elapsedRealtime()}.tmp")
         return try {
             val executable = File(command.executable)
-            if (!executable.isFile || !executable.canExecute()) return error("Android utility is unavailable: ${executable.name}")
+            if (!executable.isFile || !executable.canExecute()) return error("Android executable is unavailable: ${executable.path.take(180)}")
             val process = ProcessBuilder(listOf(command.executable) + command.args)
                 .directory(root).redirectErrorStream(true).redirectOutput(output).start()
-            if (!process.waitFor(4, TimeUnit.SECONDS)) {
+            if (!process.waitFor(30, TimeUnit.MINUTES)) {
                 process.destroyForcibly()
-                return error("command timed out after 4 seconds")
+                return error("command timed out after 30 minutes")
             }
-            val text = if (output.isFile) output.inputStream().use { it.readNBytes(12_000).toString(Charsets.UTF_8) } else ""
-            JSONObject().put("exit_code", process.exitValue()).put("output", text).toString()
+            val text = if (output.isFile) output.inputStream().use { it.readNBytes(96_000).toString(Charsets.UTF_8) } else ""
+            val warning = ShellPolicy.warning((listOf(command.executable) + command.args).joinToString(" "))
+            JSONObject().put("exit_code", process.exitValue())
+                .put("output", text)
+                .put("warning", warning ?: JSONObject.NULL)
+                .toString()
         } catch (e: Exception) { error("command failed: ${e.javaClass.simpleName}") }
         finally { output.delete() }
     }
@@ -252,7 +230,7 @@ internal class OrionPythonPhoneApi(
 
     fun ws_close(sessionId: String): String = OrionPythonWebSocketTransport.close(sessionId)
 
-    /** GET and POST run immediately for explicitly owner-granted hosts; POST requires a saved host write grant. */
+    /** Public HTTPS GET needs no separate host grant; LAN/local access and POST still require consent and exact host grants. */
     fun http_get(url: String): String = request(url, "GET", "")
 
     fun http_post(url: String, body: String): String {
@@ -262,25 +240,25 @@ internal class OrionPythonPhoneApi(
     }
 
     private fun request(url: String, method: String, body: String): String {
-        val endpoint = OrionPythonNetworkPolicy.validate(context, url)
-            ?: return error("network request blocked: grant NETWORK and explicitly allow this host first")
+        val endpoint = OrionPythonNetworkPolicy.validate(context, url, requireNetworkConsent = method != "GET")
+            ?: return error("network request blocked: public HTTPS GET was blocked by the network policy; check that the URL is HTTPS and resolves to public addresses")
         if (method == "POST" && !endpoint.allowWrites)
             return error("HTTP write access is not granted for ${endpoint.host}; enable this host's write permission in Python network settings")
         val client = OkHttpClient.Builder()
             .proxy(Proxy.NO_PROXY)
             .dns(object : Dns {
                 override fun lookup(hostname: String): List<InetAddress> {
-                    if (!hostname.equals(endpoint.host, ignoreCase = true)) {
-                        throw UnknownHostException("redirect or secondary network host is blocked")
-                    }
-                    return endpoint.addresses
+                    if (hostname.equals(endpoint.host, ignoreCase = true)) return endpoint.addresses
+                    if (method != "GET") throw UnknownHostException("secondary network host is blocked for writes")
+                    return OrionPythonNetworkPolicy.resolvePublicOrGrantedHost(hostname)
+                        ?: throw UnknownHostException("redirect target is not a public internet host")
                 }
             })
-            .connectTimeout(5, TimeUnit.SECONDS)
-            .readTimeout(8, TimeUnit.SECONDS)
-            .writeTimeout(5, TimeUnit.SECONDS)
-            .callTimeout(10, TimeUnit.SECONDS)
-            .followRedirects(false)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(90, TimeUnit.SECONDS)
+            .followRedirects(method == "GET")
             .followSslRedirects(false)
             .build()
         return try {
@@ -293,9 +271,9 @@ internal class OrionPythonPhoneApi(
                 }.build()
             client.newCall(request).execute().use { response ->
                 val responseBody = response.body
-                val bytes = responseBody?.byteStream()?.use { it.readNBytes(64 * 1024) } ?: ByteArray(0)
+                val bytes = responseBody?.byteStream()?.use { it.readNBytes(2 * 1024 * 1024) } ?: ByteArray(0)
                 val truncated = (responseBody?.contentLength() ?: -1L) > bytes.size ||
-                    bytes.size == 64 * 1024
+                    bytes.size == 2 * 1024 * 1024
                 JSONObject().put("status", response.code)
                     .put("body", bytes.toString(Charsets.UTF_8))
                     .put("truncated", truncated).toString()

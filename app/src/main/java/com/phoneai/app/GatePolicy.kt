@@ -15,17 +15,9 @@ internal object GatePolicy {
     )
     data class Result(val verdict: Verdict, val reason: String)
 
-    /** Android/Linux shell safety is enforced centrally and again by each backend adapter. */
-    fun hardBlockReason(tool: String, args: org.json.JSONObject): String? {
-        if (tool != "shell" && tool != "termux_command") return null
-        val command = args.optString("command").ifBlank { args.optString("cmd") }.ifBlank { args.optString("script") }
-        if (command.isBlank()) return null
-        // Deleting or wiping is the one thing Orion confirms with Kingi: once he says yes in chat, the call is repeated with confirmed=true.
-        if (args.optBoolean("confirmed")) { ShellPolicy.confirm(command); return null }
-        return if (ShellPolicy.classify(command) == ShellRisk.BLOCKED) {
-            "This command deletes or wipes something important. Ask Kingi in chat to confirm it; when he says yes, call the same tool again with confirmed=true."
-        } else null
-    }
+    /** Shell risk is surfaced by ShellRunner as a warning; this compatibility hook never denies. */
+    @Suppress("UNUSED_PARAMETER")
+    fun hardBlockReason(tool: String, args: org.json.JSONObject): String? = null
 
     fun decide(i: Input): Result {
         if (i.pack == "trading_research" && i.tool.contains("order", true))

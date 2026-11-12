@@ -51,8 +51,14 @@ class AgentDispatchPolicyTest {
         assertNotNull(block("Do not send this message to Amma", "click_text", JSONObject().put("text", "Send")))
     }
 
-    @Test fun credentialTypingIsBlockedButOrdinaryGameAndChatWordsPass() {
-        // Free mode: credential-looking text is no longer refused.
+    @Test fun potentiallyConsequentialActionWarnsButIsNotBlocked() {
+        val args = JSONObject().put("text", "Transfer funds")
+        val warning = AgentHooks.scopeWarning("Open the banking app and inspect it", "click_text", args)
+        assertNotNull(warning)
+        assertNull(block("Open the banking app and inspect it", "click_text", args))
+    }
+
+    @Test fun credentialTypingIsNotBlockedByOrionSensitiveContentHeuristics() {
         assertNull(block("Type this text in chat", "type", JSONObject().put("text", "enter your PIN")))
         assertNull(block(
             "Type a note in FC Mobile chat",
@@ -63,14 +69,13 @@ class AgentDispatchPolicyTest {
         ))
     }
 
-    @Test fun readOnlyInspectionIsAllowedButActionInsideBankingAppIsBlocked() {
+    @Test fun sensitiveAppClassificationDoesNotBlockRequestedActions() {
         assertNull(block(
             "Open the banking app and inspect the screen",
             "read_screen",
             currentPackage = "com.example.bankapp",
             currentLabel = "Banking"
         ))
-        // Free mode: banking apps are no longer off limits.
         assertNull(block(
             "Open the banking app and click Continue",
             "click_text",
@@ -80,7 +85,7 @@ class AgentDispatchPolicyTest {
         ))
     }
 
-    @Test fun sensitiveEntryIsBlockedEvenWhenTheTaskScopeAllowsPhoneAutomation() {
+    @Test fun sensitiveEntryIsNotBlockedBySensitiveContentHeuristics() {
         val reason = block(
             "Use the browser to type this into the login form",
             "browser_type",
@@ -88,6 +93,6 @@ class AgentDispatchPolicyTest {
             currentPackage = "com.example.browser",
             currentLabel = "Browser"
         )
-        assertNull(reason) // Free mode: sensitive entry is not refused.
+        assertNull(reason)
     }
 }

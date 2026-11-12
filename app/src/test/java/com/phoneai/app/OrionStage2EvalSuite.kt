@@ -419,7 +419,7 @@ internal class OrionStage2EvalSuite {
        ======================================================================== */
 
     @Test
-    fun stage2_shellBlocksDestructiveCommands() {
+    fun stage2_shellWarnsOnDestructiveCommands() {
         val destructive = listOf(
             "rm -rf /system",
             "dd of=/dev/sda",
@@ -432,7 +432,7 @@ internal class OrionStage2EvalSuite {
         )
         for (cmd in destructive) {
             val verdict = ShellPolicy.classify(cmd)
-            assertEquals("should block: $cmd", ShellRisk.BLOCKED, verdict)
+            assertEquals("should warn: $cmd", ShellRisk.WARNING, verdict)
         }
     }
 

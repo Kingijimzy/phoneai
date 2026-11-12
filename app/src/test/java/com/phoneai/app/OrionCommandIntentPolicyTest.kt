@@ -73,6 +73,33 @@ class OrionCommandIntentPolicyTest {
         ))
     }
 
+    @Test fun pythonScraperBuildAndTestWithUrlRoutesToPythonInsteadOfBrowserFirst() {
+        val request = "Code a python scrapper using python test it in this site https://gamehub.xiaoji.com/en/"
+        assertTrue(OrionCommandIntentPolicy.isPythonScraperBuildAndTest(request))
+        assertTrue(OrionCommandIntentPolicy.requiresPythonExecution(request))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+        assertTrue(OrionCommandIntentPolicy.browserToolBlockedBeforePython(request, "browser_navigate"))
+        assertTrue(OrionCommandIntentPolicy.browserToolBlockedBeforePython(request, "web_search"))
+        assertFalse(OrionCommandIntentPolicy.browserToolBlockedBeforePython(request, "python_exec"))
+        assertFalse(OrionCommandIntentPolicy.browserToolBlockedBeforePython(
+            "Open this website in the browser: https://gamehub.xiaoji.com/en/", "browser_navigate"
+        ))
+    }
+
+    @Test fun pythonAuthoringRoutesDirectlyEvenWithoutRunOrExecuteVerb() {
+        val request = "Code a site scraper using Python"
+        assertTrue(OrionCommandIntentPolicy.requiresPythonAuthoring(request))
+        assertFalse(OrionCommandIntentPolicy.requiresPythonExecution(request))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+    }
+
+    @Test fun writeOnlyPythonRequestRoutesToWorkspaceWithoutExecuting() {
+        val request = "Write a Python calculator but do not execute it"
+        assertTrue(OrionCommandIntentPolicy.requiresPythonAuthoring(request))
+        assertFalse(OrionCommandIntentPolicy.requiresPythonExecution(request))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+    }
+
     @Test fun codeOnlyAndNegatedExecutionRequestsStayNonExecuting() {
         assertFalse(OrionCommandIntentPolicy.requiresPythonExecution(
             "Write a Python calculator but do not execute it"
@@ -101,6 +128,13 @@ class OrionCommandIntentPolicyTest {
         assertFalse("Calculator save-and-run is a single deterministic workflow, not a planner-only compound task",
             OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
         assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+    }
+
+    @Test fun simplePythonCalculatorUsesTheDirectNativeExecutionPath() {
+        val request = "Write a Python calculator, save it as a file, execute it and test it."
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+        assertFalse("A simple coding task must not be sent through the structured objective planner",
+            OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
     }
 
     @Test fun investigationRequestsSkipTheChatOnlyActionClassifier() {

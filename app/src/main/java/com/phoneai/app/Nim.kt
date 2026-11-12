@@ -13,14 +13,15 @@ class AiException(message: String, val httpStatus: Int? = null) : RuntimeExcepti
 }
 
 /** Talks to the selected AI service, with bounded same-provider model recovery and cross-provider fallback. */
-class Nim internal constructor(private val ctx: Context, private val commandMode: Boolean = false, sharedBudget: CommandRequestBudget? = null) :
+internal class Nim internal constructor(private val ctx: Context, private val commandMode: Boolean = false, sharedBudget: CommandRequestBudget? = null) :
     OrionModelProvider {
+    // Structured tool calls are scoped to one synchronous chatTurn invocation.
+    private val activeNativeTools = ThreadLocal<List<ToolDefinition>?>()
+    private val nativeToolCalls = ThreadLocal<List<OrionModelToolCall>>()
+
     companion object {
         /** provider id -> time (ms) until which it is skipped (rate limited or bad key) */
         val cooldown = ConcurrentHashMap<String, Long>()
-
-        /** provider id -> time of the last request (used to space requests out) */
-        private val lastCall = ConcurrentHashMap<String, Long>()
 
         /** provider id -> times of requests in the last minute (so we slow down BEFORE a limit is hit) */
         private val hits = ConcurrentHashMap<String, java.util.concurrent.ConcurrentLinkedDeque<Long>>()
@@ -86,6 +87,57 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             lastSuccess["chat"]?.let { sb.append("\\nLast successful chat: ").append(it) }
             lastSuccess["vision"]?.let { sb.append("\\nLast successful screen-vision: ").append(it) }
             return sb.toString().trim()
+        }
+    }
+
+    private fun nativeToolsRejected(failure: Throwable): Boolean {
+        val messages = ArrayList<String>()
+        var current: Throwable? = failure
+        while (current != null) {
+            messages += current.message.orEmpty()
+            current = current.cause
+        }
+        val message = messages.joinToString(" ").lowercase()
+        return message.contains("400") &&
+            (message.contains("tool") || message.contains("function"))
+    }
+
+    override fun chatTurn(
+        messages: JSONArray,
+        vision: Boolean,
+        maxTokens: Int,
+        temperature: Double,
+        fastResponse: Boolean,
+        tools: List<ToolDefinition>,
+        onDelta: ((String) -> Unit)?
+    ): OrionModelTurn {
+        activeNativeTools.set(tools)
+        nativeToolCalls.set(emptyList())
+        return try {
+            try {
+                val text = chat(messages, vision, maxTokens, temperature, fastResponse, onDelta)
+                OrionModelTurn(text, nativeToolCalls.get().orEmpty())
+            } catch (failure: Exception) {
+                if (tools.isEmpty() || cancelled || !nativeToolsRejected(failure)) throw failure
+                // Keep ordinary conversation available, but never translate native-tool
+                // failure into the legacy ACTION/JSON planner. The caller receives an explicit
+                // capability flag and must not claim it executed a requested action.
+                onStatus?.invoke("This provider does not support Orion native tool calls; continuing in chat-only mode.")
+                activeNativeTools.set(emptyList())
+                nativeToolCalls.set(emptyList())
+                val fallbackMessages = JSONArray(messages.toString())
+                fallbackMessages.optJSONObject(0)?.let { system ->
+                    system.put("content", system.optString("content") +
+                        "\nNative Orion tools are unavailable on this provider for this turn. You are chat-only: answer questions, but do not claim to perform phone, file, code, browser, research or external actions.")
+                }
+                OrionModelTurn(
+                    chat(fallbackMessages, vision, maxTokens, temperature, fastResponse, onDelta),
+                    toolCallingAvailable = false
+                )
+            }
+        } finally {
+            activeNativeTools.remove()
+            nativeToolCalls.remove()
         }
     }
 
@@ -183,30 +235,6 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
 
     internal class Http(val code: Int, val body: String, val retryAfter: Int = -1)
 
-    private fun pause(ms: Long) {
-        var left = ms
-        while (left > 0 && !cancelled) {
-            val s = minOf(left, 250L)
-            Thread.sleep(s)
-            left -= s
-        }
-    }
-
-    /** Spaces out requests so free tiers (a few per minute) are not hit in a burst. */
-    private fun pace(p: Provider) {
-        val gap = when (p.id) {
-            "gemini" -> 4500L
-            "groq", "cerebras", "mistral" -> 2200L
-            "openrouter" -> 3000L
-            "nvidia" -> 2500L
-            "local" -> 0L
-            else -> 800L
-        }
-        val wait = (lastCall[p.id] ?: 0L) + gap - System.currentTimeMillis()
-        if (wait > 0) pause(wait)
-        lastCall[p.id] = System.currentTimeMillis()
-    }
-
     /** Called with a short progress message, from the worker thread. */
     @Volatile
     var onStatus: ((String) -> Unit)? = null
@@ -232,7 +260,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         }
     }
 
-    private val commandRequestBudget = sharedBudget ?: CommandRequestBudget(maxRequests = 15)
+    private val commandRequestBudget = sharedBudget ?: CommandRequestBudget(maxRequests = 1000)
 
     /** Starts a fresh request budget and identical-failure counter for one user command. */
     /** AI requests used by the current command (for the cost line). */
@@ -260,7 +288,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
 
     private fun request(p: Provider, method: String, url: String, body: String?, key: String, readMs0: Int = 45000): Http {
         if (!commandRequestBudget.tryReserve()) {
-            throw AiException("Stopped before sending another request: this command reached Orion's 15-request budget. No additional HTTP request was made.")
+            throw AiException("Stopped before sending another request: this command reached Orion's 1000-request safety ceiling. No additional HTTP request was made.")
         }
         // Count every network attempt here, including model catalogues and requests that fail to connect.
         noteHit(p.id)
@@ -272,12 +300,12 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         }
         try {
             conn.requestMethod = method
-            conn.connectTimeout = 15000
-            conn.readTimeout = if (p.noKey) 180000 else readMs
+            conn.connectTimeout = 30000
+            conn.readTimeout = if (p.noKey) 600000 else readMs
             if (p.anthropicStyle) {
                 conn.setRequestProperty("x-api-key", key)
                 conn.setRequestProperty("anthropic-version", "2023-06-01")
-            } else {
+            } else if (!(p.id == "gemini" && url.contains(":generateContent"))) {
                 conn.setRequestProperty("Authorization", "Bearer $key")
             }
             conn.setRequestProperty("Accept", "application/json")
@@ -330,7 +358,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         p: Provider, url: String, body: String, key: String, readMs0: Int, onDelta: (String) -> Unit
     ): Http {
         if (!commandRequestBudget.tryReserve()) {
-            throw AiException("Stopped before sending another request: this command reached Orion's 15-request budget. No additional HTTP request was made.")
+            throw AiException("Stopped before sending another request: this command reached Orion's 1000-request safety ceiling. No additional HTTP request was made.")
         }
         noteHit(p.id)
         val conn = URL(url).openConnection() as HttpURLConnection
@@ -341,10 +369,11 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         val answer = StringBuilder()
         val nonSseBody = StringBuilder()
         var terminalEventSeen = false
+        var streamFinishReason = ""
         try {
             conn.requestMethod = "POST"
-            conn.connectTimeout = 15000
-            conn.readTimeout = if (p.noKey) 180000 else readMs0
+            conn.connectTimeout = 30000
+            conn.readTimeout = if (p.noKey) 600000 else readMs0
             if (p.anthropicStyle) {
                 conn.setRequestProperty("x-api-key", key)
                 conn.setRequestProperty("anthropic-version", "2023-06-01")
@@ -378,6 +407,9 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                         when {
                             p.anthropicStyle -> {
                                 val type = root.optString("type")
+                                if (type == "message_delta") {
+                                    streamFinishReason = root.optJSONObject("delta")?.optString("stop_reason").orEmpty()
+                                }
                                 if (type == "message_stop") {
                                     terminalEventSeen = true
                                     break
@@ -387,6 +419,9 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                             p.id == "opencode-zen" -> {
                                 val type = root.optString("type")
                                 if (type == "response.completed" || type == "response.done") {
+                                    val response = root.optJSONObject("response")
+                                    streamFinishReason = response?.optJSONObject("incomplete_details")?.optString("reason")
+                                        ?: response?.optString("status").orEmpty()
                                     terminalEventSeen = true
                                     break
                                 }
@@ -396,7 +431,10 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                             }
                             else -> {
                                 val choices = root.optJSONArray("choices")
-                                choices?.optJSONObject(0)?.optJSONObject("delta")?.optString("content", "") ?: ""
+                                val choice = choices?.optJSONObject(0)
+                                val finish = choice?.optString("finish_reason").orEmpty()
+                                if (finish.isNotBlank() && finish != "null") streamFinishReason = finish
+                                choice?.optJSONObject("delta")?.optString("content", "") ?: ""
                             }
                         }
                     } catch (_: Exception) { "" }
@@ -422,9 +460,15 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 }
             }
             val synthetic = when {
-                p.anthropicStyle -> JSONObject().put("content", JSONArray().put(JSONObject().put("type", "text").put("text", answer.toString()))).toString()
-                p.id == "opencode-zen" -> JSONObject().put("output_text", answer.toString()).toString()
-                else -> JSONObject().put("choices", JSONArray().put(JSONObject().put("message", JSONObject().put("content", answer.toString())))).toString()
+                p.anthropicStyle -> JSONObject()
+                    .put("stop_reason", streamFinishReason)
+                    .put("content", JSONArray().put(JSONObject().put("type", "text").put("text", answer.toString()))).toString()
+                p.id == "opencode-zen" -> JSONObject().put("output_text", answer.toString())
+                    .put("incomplete_details", if (streamFinishReason.equals("max_output_tokens", true) ||
+                        streamFinishReason.equals("incomplete", true)) JSONObject().put("reason", "max_output_tokens") else JSONObject.NULL).toString()
+                else -> JSONObject().put("choices", JSONArray().put(JSONObject()
+                    .put("message", JSONObject().put("content", answer.toString()))
+                    .put("finish_reason", if (streamFinishReason.isBlank()) JSONObject.NULL else streamFinishReason))).toString()
             }
             return Http(200, synthetic, -1)
         } finally {
@@ -528,7 +572,10 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             body.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
         }
         val response = try {
-            if (p.id == "opencode-zen") {
+            if (p.id == "gemini") {
+                request(p, "POST", geminiUrl(p, model, Prefs.key(ctx, p.id)),
+                    geminiBody(messages, 32, 0.0, emptyList()), Prefs.key(ctx, p.id), readMs0 = 60000)
+            } else if (p.id == "opencode-zen") {
                 val input = JSONArray()
                 for (i in 0 until messages.length()) {
                     val message = messages.optJSONObject(i) ?: continue
@@ -626,11 +673,26 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
     }
 
     /** Converts OpenAI-style messages to Anthropic's format. */
-    private fun anthropicBody(model: String, messages: JSONArray, tokens: Int, temperature: Double): String {
+    private fun anthropicBody(model: String, messages: JSONArray, tokens: Int, temperature: Double, tools: List<ToolDefinition> = emptyList()): String {
         val system = StringBuilder()
         val out = JSONArray()
+        fun appendMessage(role: String, content: Any) {
+            val last = if (out.length() > 0) out.optJSONObject(out.length() - 1) else null
+            if (last != null && last.optString("role") == role) {
+                val previous = last.opt("content")
+                if (previous is JSONArray && content is JSONArray) {
+                    for (i in 0 until content.length()) previous.put(content.get(i))
+                    return
+                }
+                if (previous is String && content is String) {
+                    last.put("content", previous + "\n" + content)
+                    return
+                }
+            }
+            out.put(JSONObject().put("role", role).put("content", content))
+        }
         for (i in 0 until messages.length()) {
-            val m = messages.getJSONObject(i)
+            val m = messages.optJSONObject(i) ?: continue
             val role = m.optString("role")
             val c = m.opt("content")
             if (role == "system") {
@@ -638,43 +700,155 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 system.append(c?.toString() ?: "")
                 continue
             }
+            if (role == "assistant" && m.optJSONArray("tool_calls") != null) {
+                val blocks = JSONArray()
+                if (!c?.toString().isNullOrBlank()) blocks.put(JSONObject().put("type", "text").put("text", c.toString()))
+                val calls = m.optJSONArray("tool_calls") ?: JSONArray()
+                for (j in 0 until calls.length()) {
+                    val call = calls.optJSONObject(j) ?: continue
+                    val fn = call.optJSONObject("function") ?: continue
+                    val args = runCatching { JSONObject(fn.optString("arguments", "{}")) }.getOrDefault(JSONObject())
+                    blocks.put(JSONObject().put("type", "tool_use")
+                        .put("id", call.optString("id")).put("name", fn.optString("name")).put("input", args))
+                }
+                appendMessage("assistant", blocks)
+                continue
+            }
+            if (role == "tool") {
+                val result = JSONArray().put(JSONObject()
+                    .put("type", "tool_result")
+                    .put("tool_use_id", m.optString("tool_call_id"))
+                    .put("content", c?.toString() ?: ""))
+                appendMessage("user", result)
+                continue
+            }
             val content: Any = if (c is JSONArray) {
                 val parts = JSONArray()
                 for (j in 0 until c.length()) {
-                    val part = c.getJSONObject(j)
+                    val part = c.optJSONObject(j) ?: continue
                     if (part.optString("type") == "image_url") {
-                        val url = part.getJSONObject("image_url").optString("url")
+                        val url = part.optJSONObject("image_url")?.optString("url").orEmpty()
                         val data = url.substringAfter("base64,", "")
-                        parts.put(
-                            JSONObject().put("type", "image").put(
-                                "source",
-                                JSONObject().put("type", "base64").put("media_type", "image/jpeg").put("data", data)
-                            )
-                        )
+                        parts.put(JSONObject().put("type", "image").put(
+                            "source", JSONObject().put("type", "base64")
+                                .put("media_type", "image/jpeg").put("data", data)
+                        ))
                     } else {
                         parts.put(JSONObject().put("type", "text").put("text", part.optString("text")))
                     }
                 }
                 parts
-            } else {
-                c?.toString() ?: ""
-            }
-            // Anthropic wants strictly alternating roles; merge neighbours with the same role.
-            val last = if (out.length() > 0) out.getJSONObject(out.length() - 1) else null
-            if (last != null && last.optString("role") == role && content is String && last.opt("content") is String) {
-                last.put("content", last.getString("content") + "\n" + content)
-            } else {
-                out.put(JSONObject().put("role", role).put("content", content))
-            }
+            } else c?.toString() ?: ""
+            appendMessage(if (role == "assistant") "assistant" else "user", content)
         }
         val o = JSONObject().put("model", model).put("max_tokens", tokens).put("messages", out)
         if (system.isNotEmpty()) o.put("system", system.toString())
         o.put("temperature", temperature)
+        if (tools.isNotEmpty()) o.put("tools", OrionToolContractCodec.anthropic(tools))
         return o.toString()
     }
 
+    /** Gemini's native generateContent request/response format; no OpenAI compatibility shim. */
+    private fun geminiBody(
+        messages: JSONArray,
+        tokens: Int,
+        temperature: Double,
+        tools: List<ToolDefinition>
+    ): String {
+        val system = StringBuilder()
+        val contents = JSONArray()
+        val callNames = HashMap<String, String>()
+        fun appendContent(role: String, parts: JSONArray) {
+            if (parts.length() == 0) return
+            val previous = if (contents.length() > 0) contents.optJSONObject(contents.length() - 1) else null
+            if (previous != null && previous.optString("role") == role) {
+                val existing = previous.optJSONArray("parts") ?: JSONArray()
+                for (index in 0 until parts.length()) existing.put(parts.get(index))
+                previous.put("parts", existing)
+            } else {
+                contents.put(JSONObject().put("role", role).put("parts", parts))
+            }
+        }
+        for (i in 0 until messages.length()) {
+            val message = messages.optJSONObject(i) ?: continue
+            val role = message.optString("role", "user")
+            val content = message.opt("content")
+            if (role == "system") {
+                if (system.isNotEmpty()) system.append("\n")
+                system.append(content?.toString().orEmpty())
+                continue
+            }
+            if (role == "assistant" && message.optJSONArray("tool_calls") != null) {
+                val parts = JSONArray()
+                if (!content?.toString().isNullOrBlank()) parts.put(JSONObject().put("text", content.toString()))
+                val calls = message.optJSONArray("tool_calls") ?: JSONArray()
+                for (j in 0 until calls.length()) {
+                    val call = calls.optJSONObject(j) ?: continue
+                    val fn = call.optJSONObject("function") ?: continue
+                    val name = fn.optString("name")
+                    val id = call.optString("id")
+                    callNames[id] = name
+                    val args = runCatching { JSONObject(fn.optString("arguments", "{}")) }.getOrDefault(JSONObject())
+                    parts.put(JSONObject().put("functionCall", JSONObject().put("name", name).put("args", args).put("id", id)))
+                }
+                appendContent("model", parts)
+                continue
+            }
+            if (role == "tool") {
+                val id = message.optString("tool_call_id")
+                val name = message.optString("name").ifBlank { callNames[id].orEmpty() }
+                val response = JSONObject().put("name", name)
+                    .put("response", JSONObject().put("content", content?.toString().orEmpty()))
+                if (id.isNotBlank()) response.put("id", id)
+                val parts = JSONArray().put(JSONObject().put("functionResponse", response))
+                appendContent("user", parts)
+                continue
+            }
+            val parts = JSONArray()
+            if (content is JSONArray) {
+                for (j in 0 until content.length()) {
+                    val part = content.optJSONObject(j) ?: continue
+                    if (part.optString("type") == "image_url") {
+                        val imageUrl = part.optJSONObject("image_url")?.optString("url").orEmpty()
+                        val mime = Regex("^data:([^;]+);base64,").find(imageUrl)?.groupValues?.get(1) ?: "image/jpeg"
+                        val data = imageUrl.substringAfter("base64,", "")
+                        if (data.isNotBlank()) parts.put(JSONObject().put("inlineData",
+                            JSONObject().put("mimeType", mime).put("data", data)))
+                    } else if (part.has("text")) {
+                        parts.put(JSONObject().put("text", part.optString("text")))
+                    }
+                }
+            } else if (content != null) {
+                parts.put(JSONObject().put("text", content.toString()))
+            }
+            appendContent(if (role == "assistant") "model" else "user", parts)
+        }
+        val body = JSONObject().put("contents", contents)
+            .put("generationConfig", JSONObject().put("maxOutputTokens", tokens).put("temperature", temperature))
+        if (system.isNotEmpty()) body.put("systemInstruction",
+            JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system.toString()))))
+        if (tools.isNotEmpty()) {
+            body.put("tools", OrionToolContractCodec.gemini(tools))
+            body.put("toolConfig", JSONObject().put("functionCallingConfig", JSONObject().put("mode", "AUTO")))
+        }
+        return body.toString()
+    }
+
+    private fun geminiUrl(p: Provider, model: String, key: String): String {
+        val root = p.base.substringBefore("/openai").trimEnd('/')
+        val encodedModel = java.net.URLEncoder.encode(model, "UTF-8")
+        val encodedKey = java.net.URLEncoder.encode(key, "UTF-8")
+        return "$root/models/$encodedModel:generateContent?key=$encodedKey"
+    }
+
     private fun extract(p: Provider, body: String): String = try {
-        if (p.id == "opencode-zen") {
+        if (p.id == "gemini") {
+            val parts = JSONObject(body).optJSONArray("candidates")?.optJSONObject(0)
+                ?.optJSONObject("content")?.optJSONArray("parts") ?: JSONArray()
+            buildString {
+                for (i in 0 until parts.length()) append(parts.optJSONObject(i)?.optString("text", "").orEmpty())
+            }
+        } else if (p.id == "opencode-zen") {
             val root = JSONObject(body)
             val direct = root.optString("output_text", "")
             if (direct.isNotBlank()) direct else {
@@ -704,6 +878,9 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
     } catch (e: Exception) {
         ""
     }
+
+    private fun responseWasTruncated(p: Provider, body: String): Boolean =
+        OrionResponseCompleteness.wasTruncated(p.id, body, p.anthropicStyle)
 
     /** A command begins at its explicit caller; the shared budget covers every fallback. */
     override fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, fastResponse: Boolean, onDelta: ((String) -> Unit)?): String {
@@ -748,7 +925,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         }
 
         val now = System.currentTimeMillis()
-        // Auto-switch may try eligible saved providers in order, but the shared 15-request
+        // Auto-switch may try eligible saved providers in order, but the shared 1000-request
         // command budget is the hard cap across model discovery, retries, and provider fallback.
         val backups = if (Prefs.autoSwitch(ctx)) {
             Providers.all
@@ -795,17 +972,21 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
     }
 
     private fun chatOne(
-        p: Provider, messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, hasBackup: Boolean, fastResponse: Boolean = false, onDelta: ((String) -> Unit)? = null
+        p: Provider, messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double,
+        hasBackup: Boolean, fastResponse: Boolean = false, onDelta: ((String) -> Unit)? = null,
+        continuationDepth: Int = 0
     ): String {
         val key = Prefs.key(ctx, p.id)
         // Gemini needs room for its internal thinking. NVIDIA Nemotron 3.5 Super VL
         // reasons by default; short probes (e.g. max_tokens=16) can spend the entire
         // budget reasoning and return choices[0].message.content="" (finish_reason=length).
         // Disable thinking for reliable direct chat/vision replies and provide a safe minimum.
+        val requestedOutput = maxOf(maxTokens, if (fastResponse) 2048 else 32768)
         val tokens = when (p.id) {
-            "gemini" -> if (fastResponse) maxOf(maxTokens * 2, 256) else maxOf(maxTokens * 4, 1024)
-            "nvidia" -> if (fastResponse) maxOf(maxTokens, 256) else maxOf(maxTokens, 1024)
-            else -> maxTokens
+            // Provider-specific thinking overhead is included, then clamped to the selected model's real output ceiling.
+            "gemini" -> if (fastResponse) maxOf(requestedOutput * 2, 2048) else maxOf(requestedOutput * 2, 8192)
+            "nvidia" -> requestedOutput
+            else -> requestedOutput
         }
         val initialModel = selectedModel(p, vision)
         val queue = mutableListOf(initialModel)
@@ -819,9 +1000,9 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         // or empty reply, even when another provider is saved. Otherwise hasBackup forced this
         // limit to 1 and the alternate model was queued but never actually attempted.
         // Fast/background turns still stay bounded; the next saved provider is tried afterward.
-        val maxAttempts = if (fastResponse || Prefs.quotaSaver(ctx) || hasBackup) 2 else 3
+        val maxAttempts = if (fastResponse) 3 else 5
         val start = System.currentTimeMillis()
-        val totalTimeoutMs = if (fastResponse) 10000L else if (p.id == "nvidia") 40000L else 27000L
+        val totalTimeoutMs = if (fastResponse) 30000L else 600000L
         while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < totalTimeoutMs) {
             if (cancelled) throw RuntimeException("Stopped.")
             val model = queue.removeAt(0)
@@ -840,24 +1021,50 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 throw AiException("The selected model context cannot safely fit all attached images with the current conversation. Start a fresh chat or attach fewer images.", 413)
             }
             attempts++
-            pace(p)
+            onStatus?.invoke(p.label + ": preparing " + model.substringAfterLast('/') + "...")
             if (cancelled) throw RuntimeException("Stopped.")
-            onStatus?.invoke(p.label + ": asking " + model.substringAfterLast('/') + "...")
+            onStatus?.invoke(p.label + ": waiting for " + model.substringAfterLast('/') + " response...")
             val url: String
             val payload: String
-            if (p.anthropicStyle) {
+            if (p.id == "gemini") {
+                url = geminiUrl(p, model, key)
+                payload = geminiBody(requestMessages, boundedTokens, temperature, activeNativeTools.get().orEmpty())
+            } else if (p.anthropicStyle) {
                 url = p.base + "/messages"
-                payload = anthropicBody(model, requestMessages, boundedTokens, temperature)
+                payload = anthropicBody(model, requestMessages, boundedTokens, temperature, activeNativeTools.get().orEmpty())
             } else if (p.id == "opencode-zen") {
                 url = p.base + "/responses"
                 val input = JSONArray()
                 for (i in 0 until requestMessages.length()) {
                     val message = requestMessages.optJSONObject(i) ?: continue
-                    input.put(JSONObject().put("role", message.optString("role", "user"))
-                        .put("content", message.opt("content") ?: ""))
+                    val role = message.optString("role", "user")
+                    if (role == "tool") {
+                        input.put(JSONObject().put("type", "function_call_output")
+                            .put("call_id", message.optString("tool_call_id"))
+                            .put("output", message.opt("content")?.toString() ?: ""))
+                    } else if (role == "assistant" && message.optJSONArray("tool_calls") != null) {
+                        val calls = message.optJSONArray("tool_calls") ?: JSONArray()
+                        val assistantText = message.opt("content")?.toString().orEmpty()
+                        if (assistantText.isNotBlank()) input.put(JSONObject()
+                            .put("role", "assistant").put("content", assistantText))
+                        for (j in 0 until calls.length()) {
+                            val call = calls.optJSONObject(j) ?: continue
+                            val fn = call.optJSONObject("function") ?: continue
+                            input.put(JSONObject().put("type", "function_call")
+                                .put("call_id", call.optString("id"))
+                                .put("name", fn.optString("name"))
+                                .put("arguments", fn.optString("arguments", "{}")))
+                        }
+                    } else {
+                        input.put(JSONObject().put("role", if (role == "assistant") "assistant" else "user")
+                            .put("content", message.opt("content") ?: ""))
+                    }
                 }
-                payload = JSONObject().put("model", model).put("input", input)
-                    .put("max_output_tokens", boundedTokens).put("temperature", temperature).toString()
+                val responseBody = JSONObject().put("model", model).put("input", input)
+                    .put("max_output_tokens", boundedTokens).put("temperature", temperature)
+                val toolSpecs = activeNativeTools.get().orEmpty()
+                if (toolSpecs.isNotEmpty()) responseBody.put("tools", OrionToolContractCodec.responses(toolSpecs))
+                payload = responseBody.toString()
             } else {
                 url = p.base + "/chat/completions"
                 val requestBody = JSONObject()
@@ -865,7 +1072,12 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                     .put("messages", requestMessages)
                     .put("temperature", temperature)
                     .put("max_tokens", boundedTokens)
-                if (onDelta != null && !vision) requestBody.put("stream", true)
+                val toolSpecs = activeNativeTools.get().orEmpty()
+                if (toolSpecs.isNotEmpty()) {
+                    requestBody.put("tools", OrionToolContractCodec.openAi(toolSpecs))
+                    requestBody.put("tool_choice", "auto")
+                }
+                if (onDelta != null && !vision && toolSpecs.isEmpty()) requestBody.put("stream", true)
                 if (p.id == "nvidia" && model.equals("nvidia/nemotron-3.5-super-vl-120b-a12b", ignoreCase = true)) {
                     requestBody.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
                 } else if (p.id == "nvidia" && model.lowercase().contains("deepseek-v4")) {
@@ -875,9 +1087,9 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             }
             val r: Http? = try {
                 // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
-                if (onDelta != null && !vision && !p.anthropicStyle && p.id != "opencode-zen") {
-                    requestStream(p, url, payload, key, if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000, onDelta)
-                } else request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000)
+                if (onDelta != null && !vision && !p.anthropicStyle && p.id != "opencode-zen" && p.id != "gemini" && activeNativeTools.get().isNullOrEmpty()) {
+                    requestStream(p, url, payload, key, if (fastResponse) 30000 else 600000, onDelta)
+                } else request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 30000 else 600000)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
@@ -991,8 +1203,37 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 throw AiException("${p.label}: service temporarily busy (HTTP ${r.code}). Try again shortly or use another saved provider.")
             }
             if (r.code !in 200..299) throw AiException("${p.label}: error ${r.code} ${r.body.take(120)}")
-            val content = extract(p, r.body)
-            if (content.isBlank() || content == "null") {
+            val requestedTools = activeNativeTools.get().orEmpty()
+            val truncated = responseWasTruncated(p, r.body)
+            if (truncated && requestedTools.isNotEmpty()) {
+                throw AiException("${p.label}: response hit its output-token limit while preparing a tool call. No partial tool call was dispatched; reduce the task scope or increase the model output limit.")
+            }
+            val parsedTurn = if (requestedTools.isNotEmpty()) {
+                OrionNativeToolCallCodec.parse(p.id, r.body) { name -> ToolRegistry.find(name) != null }
+            } else OrionNativeToolCallCodec.Turn(extract(p, r.body), emptyList())
+            if (parsedTurn.calls.isNotEmpty()) {
+                nativeToolCalls.set(parsedTurn.calls.map { OrionModelToolCall(it.id, it.name, it.arguments, it.available, it.validationError) })
+            }
+            val content = parsedTurn.text
+            if (truncated) {
+                if (content.isBlank()) {
+                    throw AiException("${p.label}: model reached its output-token limit without producing readable text.")
+                }
+                if (continuationDepth >= 2) {
+                    throw AiException("${p.label}: response still reached its output-token limit after two continuations. The partial answer was not accepted as complete.")
+                }
+                onStatus?.invoke("${p.label}: response reached its output-token limit; continuing the same answer without repeating completed work...")
+                val continuation = JSONArray(messages.toString())
+                    .put(JSONObject().put("role", "assistant").put("content", content))
+                    .put(JSONObject().put("role", "user").put("content",
+                        "Continue exactly where your previous response stopped. Do not repeat earlier text, restart the answer, or change the task. Finish the response completely and do not claim completion for work not performed."))
+                val remainder = chatOne(
+                    p, continuation, vision, maxTokens, temperature, hasBackup,
+                    fastResponse, onDelta, continuationDepth + 1
+                )
+                return content + remainder
+            }
+            if ((content.isBlank() || content == "null") && parsedTurn.calls.isEmpty()) {
                 lastNote = "$model -> empty reply"
                 // A selected catalog model can return HTTP 200 but no usable text.
                 // Allow one bounded alternate-model attempt even in quota-saver mode;

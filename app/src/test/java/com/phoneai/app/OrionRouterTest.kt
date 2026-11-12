@@ -24,4 +24,26 @@ class OrionRouterTest {
         val m = OrionRouter.userMessage("do the other one", listOf("user" to "make a tool", "assistant" to "done"), "build tool X", "phone_control=unavailable")
         assertTrue(m.contains("build tool X")); assertTrue(m.contains("phone_control=unavailable")); assertTrue(m.contains("LATEST MESSAGE: do the other one"))
     }
+    @Test fun messagePreservesFullConversationEnvironmentAndLatestRequest() {
+        val turns = (1..12).map { "user" to "turn-$it " + "x".repeat(260) }
+        val environment = "registered tools: " + "tool,".repeat(180) + "last-capability"
+        val objective = "active objective " + "objective-detail ".repeat(40)
+        val command = "latest request " + "latest-detail ".repeat(100)
+        val message = OrionRouter.userMessage(command, turns, objective, environment)
+        assertTrue(message.contains("turn-1"))
+        assertTrue(message.contains("turn-12"))
+        assertTrue(message.contains("last-capability"))
+        assertTrue(message.contains("objective-detail"))
+        assertTrue(message.contains("latest-detail"))
+    }
+
+    @Test fun conversationRestoreDoesNotApplyAnArbitraryTurnOrCharacterLimit() {
+        val turns = (1..60).map { "user" to "turn-$it " + "detail ".repeat(900) }
+        val restored = ConversationContextPolicy.recent(turns)
+        assertEquals(60, restored.size)
+        assertTrue(restored.first().second.contains("turn-1"))
+        assertTrue(restored.first().second.length > 4000)
+        assertTrue(restored.last().second.contains("turn-60"))
+    }
+
 }

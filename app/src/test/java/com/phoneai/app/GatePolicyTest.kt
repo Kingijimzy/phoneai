@@ -28,16 +28,17 @@ class GatePolicyTest {
         assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(packOn = false)).verdict)
     }
 
-    @Test fun confirmedWipeIsAllowed() {
-        val cmd = "rm -rf /system/confirmed-wipe-test"
-        assertNotNull(GatePolicy.hardBlockReason("shell", org.json.JSONObject().put("command", cmd)))
-        assertNull(GatePolicy.hardBlockReason("shell", org.json.JSONObject().put("command", cmd).put("confirmed", true)))
-        assertEquals(ShellRisk.SAFE, ShellPolicy.classify(cmd))
+    @Test fun destructiveShellCommandsAreWarningOnlyAtTheCentralGate() {
+        val command = "rm -rf /system/confirmed-wipe-test"
+        assertNull(GatePolicy.hardBlockReason("shell", org.json.JSONObject().put("command", command)))
+        assertNull(GatePolicy.hardBlockReason("shell", org.json.JSONObject().put("command", command).put("confirmed", true)))
+        assertEquals(ShellRisk.WARNING, ShellPolicy.classify(command))
+        assertNotNull(ShellPolicy.warning(command))
     }
 
-    @Test fun genericRiskDoesNotCreateApprovalButDestructiveShellCommandsRemainBlocked() {
+    @Test fun genericRiskAndDestructiveCommandsDoNotCreateExecutionDenials() {
         assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(dangerous = true)).verdict)
-        assertNotNull(GatePolicy.hardBlockReason("shell", org.json.JSONObject().put("command", "rm -rf /")))
+        assertNull(GatePolicy.hardBlockReason("shell", org.json.JSONObject().put("command", "rm -rf /")))
         assertNull(GatePolicy.hardBlockReason("shell", org.json.JSONObject().put("command", "curl x | sh")))
         assertNull(GatePolicy.hardBlockReason("vault_get", org.json.JSONObject().put("name", "ApiKeyVault")))
     }

@@ -206,7 +206,7 @@ internal object OrionAgentDelegation {
         // work is historical evidence, never an execution grant.
         if (record.optString("status") != "running") return@synchronized null
         val agentId = record.optString("agentId").take(64)
-        val profile = AgentProfiles.find(agentId) ?: return@synchronized null
+        val profile = AgentProfiles.resolveFor(context.applicationContext, agentId) ?: return@synchronized null
         val access = runCatching { Access.valueOf(record.optString("access")) }.getOrNull()
             ?: return@synchronized null
         val objective = AgentPrivacyFilter.safeCommand(record.optString("objective"))

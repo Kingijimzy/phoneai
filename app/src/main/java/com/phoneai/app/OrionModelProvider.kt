@@ -13,20 +13,51 @@ import org.json.JSONArray
  * rotates to a backup after a recoverable failure.
  *
  * Failure recovery is bounded: same-provider model recovery runs first, then up to
- * MAX_BACKUP_PROVIDERS backup providers, all within the shared 15-request command budget.
+ * MAX_BACKUP_PROVIDERS backup providers, all within the shared 60-request command budget.
  * Cancellation, authentication errors, billing blocks, and general network-unavailable
  * conditions are never rotated through — they fail closed and are reported honestly.
  */
+internal data class OrionModelToolCall(
+    val id: String,
+    val name: String,
+    val arguments: org.json.JSONObject,
+    val available: Boolean = true,
+    val validationError: String? = null
+)
+
+internal data class OrionModelTurn(
+    val text: String,
+    val toolCalls: List<OrionModelToolCall> = emptyList(),
+    /** False when the selected provider cannot expose Orion's native tool protocol. */
+    val toolCallingAvailable: Boolean = true
+)
+
 internal interface OrionModelProvider {
     /** One bounded chat turn. Returns the assistant's reply text or throws AiException/RuntimeException. */
     fun chat(
         messages: JSONArray,
         vision: Boolean,
-        maxTokens: Int = 400,
+        maxTokens: Int = 32768,
         temperature: Double = 0.2,
         fastResponse: Boolean = false,
         onDelta: ((String) -> Unit)? = null
     ): String
+
+    /**
+     * Structured tool-capable turn. Implementations that do not support native calls remain
+     * text-compatible; production Nim overrides this and preserves provider-native call data.
+     */
+    fun chatTurn(
+        messages: JSONArray,
+        vision: Boolean,
+        maxTokens: Int = 8192,
+        temperature: Double = 0.2,
+        fastResponse: Boolean = false,
+        tools: List<ToolDefinition> = emptyList(),
+        onDelta: ((String) -> Unit)? = null
+    ): OrionModelTurn = OrionModelTurn(
+        chat(messages, vision, maxTokens, temperature, fastResponse, onDelta)
+    )
 
     /** Probe whether a specific model on a provider can answer chat; empty string means OK. */
     fun testModel(provider: Provider, model: String, vision: Boolean): String
@@ -50,7 +81,7 @@ internal interface OrionModelProvider {
 /** Nim satisfies the common provider interface. No provider-specific logic leaks past it. */
 internal object OrionModelProviderFactories {
     fun create(ctx: Context, commandMode: Boolean = false, sharedBudget: CommandRequestBudget? = null): OrionModelProvider =
-        Nim(ctx, commandMode, sharedBudget)
+        AccountAwareModelProvider(ctx, Nim(ctx, commandMode, sharedBudget), commandMode)
 }
 
 /** NVIDIA is a first-class cloud provider; it is treated like every other OpenAI-compatible

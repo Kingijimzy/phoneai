@@ -9,13 +9,13 @@ class PythonExecutionPolicyTest {
     }
 
     @Test fun developerProfileRaisesOnlyTheBoundedSizeLimit() {
-        assertNull(PythonExecutionPolicy.rejection("x".repeat(9_000), PythonExecutionPolicy.DEVELOPER_MAX_CODE_CHARS))
-        assertNotNull(PythonExecutionPolicy.rejection("x".repeat(17_000), PythonExecutionPolicy.DEVELOPER_MAX_CODE_CHARS))
+        assertNull(PythonExecutionPolicy.rejection("x".repeat(33_000), PythonExecutionPolicy.DEVELOPER_MAX_CODE_CHARS))
+        assertNotNull(PythonExecutionPolicy.rejection("x".repeat(129_000), PythonExecutionPolicy.DEVELOPER_MAX_CODE_CHARS))
     }
 
     @Test fun fullProfileAllowsLargerScripts() {
-        assertNull(PythonExecutionPolicy.rejection("x".repeat(60_000), PythonExecutionPolicy.FULL_MAX_CODE_CHARS))
-        assertNotNull(PythonExecutionPolicy.rejection("x".repeat(65_000), PythonExecutionPolicy.FULL_MAX_CODE_CHARS))
+        assertNull(PythonExecutionPolicy.rejection("x".repeat(200_000), PythonExecutionPolicy.FULL_MAX_CODE_CHARS))
+        assertNotNull(PythonExecutionPolicy.rejection("x".repeat(257_000), PythonExecutionPolicy.FULL_MAX_CODE_CHARS))
     }
 
     @Test fun rejectsEmptyOversizedAndNulInput() {

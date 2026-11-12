@@ -29,7 +29,7 @@ internal fun Activity.showAutonomyControlCenter() {
             ToolPermissions.applyLevel(this, OrionAutonomyPolicy.preset(mode))
             // Keep the existing execution governor in sync with the selected control-center limits.
             AgentPolicy.setBudgets(this, latest.maxToolSteps, latest.maxAiRequests, AgentPolicy.maxMinutes(this))
-            showControlCenterMenu("Mode saved: ${mode.name}. Existing action-specific confirmations remain in force.")
+            showControlCenterMenu("Mode saved: ${mode.name}. Potentially consequential actions show warnings and continue without Orion confirmation.")
         }
         .setNeutralButton("More controls") { _, _ -> showControlCenterMenu(null) }
         .setNegativeButton("Close", null)

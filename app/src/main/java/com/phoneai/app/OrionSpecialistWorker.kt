@@ -39,6 +39,15 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
 
         // Result delivery and finalization are independently retryable and never re-run the model.
         if (existing.status == OrionWorkerJobStore.Status.COMPLETED) return deliverResult(existing)
+        if (existing.status == OrionWorkerJobStore.Status.CANCEL_REQUESTED) {
+            // WorkManager may recreate a Worker in the same process while its detached provider
+            // thread is still alive. Keep the durable slot pending until that thread exits.
+            if (OrionSpecialistProviderRuns.isActive(jobId)) return Result.retry()
+            // After a real process restart the process-local registry is empty; the provider
+            // outcome cannot be proven, so require owner review rather than replaying the call.
+            store.needsReview(jobId, "worker_restarted_with_unacknowledged_cancellation")
+            return Result.failure()
+        }
         if (existing.status !in setOf(OrionWorkerJobStore.Status.QUEUED, OrionWorkerJobStore.Status.RESULT_PENDING)) return Result.success()
 
         val parentIsLive: (String) -> Boolean = { parentId ->
@@ -82,8 +91,13 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             OrionAgentDelegation.Access.TRADING_ANALYSIS -> setOf("bybit_public_ticker")
             OrionAgentDelegation.Access.ANALYSIS_ONLY, OrionAgentDelegation.Access.TASK_PLANNING -> emptySet()
         }
+        val isBuiltInSpecialist = manifest.agentId in setOf("coder", "writer", "planner", "research", "coach") &&
+            AgentProfiles.find(manifest.agentId) != null
+        val isRegisteredCustomAnalysisSpecialist = AgentProfiles.custom(applicationContext).any {
+            it.id == manifest.agentId
+        } && manifest.access == OrionAgentDelegation.Access.ANALYSIS_ONLY && manifest.allowedTools.isEmpty()
         if (manifest.parentTaskId != existing.parentTaskId ||
-            manifest.access != expectedAccess || manifest.agentId !in setOf("coder", "writer", "planner", "research", "coach") ||
+            manifest.access != expectedAccess || (!isBuiltInSpecialist && !isRegisteredCustomAnalysisSpecialist) ||
             !permittedTools.containsAll(manifest.allowedTools) ||
             existing.kind != expectedKind || existing.conversationId.isNullOrBlank() ||
             !parentIsLive(existing.parentTaskId)) {
@@ -118,7 +132,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             return Result.retry()
         }
 
-        val agent = AgentProfiles.find(manifest.agentId) ?: run {
+        val agent = AgentProfiles.resolveFor(applicationContext, manifest.agentId) ?: run {
             store.cancel(jobId, "canonical_specialist_profile_missing")
             return Result.failure()
         }
@@ -157,9 +171,40 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
                 ))
             } catch (t: Exception) {
                 failure.set(t)
+            } finally {
+                // The WorkManager Worker may already have returned while this provider thread
+                // was still unwinding. Resolve its durable cancellation state from the thread
+                // that actually owns the provider call, before releasing the process-local slot.
+                runCatching {
+                    val latest = OrionWorkerJobStore(applicationContext).all()
+                        .firstOrNull { it.id == jobId }
+                    if (latest?.status == OrionWorkerJobStore.Status.CANCEL_REQUESTED) {
+                        if (parentCancelled()) {
+                            OrionWorkerJobStore(applicationContext).confirmCancellation(
+                                jobId, "provider_thread_exited_after_parent_cancellation"
+                            )
+                            OrionAgentDelegation.finish(
+                                applicationContext, manifest,
+                                "cancelled: provider thread exited after parent stop; late output discarded",
+                                cancelled = true
+                            )
+                        } else {
+                            OrionWorkerJobStore(applicationContext).needsReview(
+                                jobId, "provider_thread_exited_after_worker_cancellation_without_result_commit"
+                            )
+                            OrionAgentDelegation.finish(
+                                applicationContext, manifest,
+                                "error: provider thread exited after worker cancellation; inspect before retrying",
+                                failed = true
+                            )
+                        }
+                    }
+                }
+                OrionSpecialistProviderRuns.unregister(jobId, Thread.currentThread())
             }
         }, "orion-specialist-${jobId.take(8)}").apply { isDaemon = true }
 
+        OrionSpecialistProviderRuns.register(jobId, providerThread)
         try {
             providerThread.start()
             while (providerThread.isAlive) {
@@ -167,11 +212,18 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
                 if (cancelled()) {
                     nim.cancel()
                     providerThread.join(5000)
-                    if (parentCancelled()) {
-                        store.cancel(jobId, "parent_cancelled_during_provider_request")
+                    if (parentCancelled() && !providerThread.isAlive) {
+                        store.confirmCancellation(jobId, "parent_cancelled_during_provider_request")
                         OrionAgentDelegation.finish(applicationContext, manifest,
                             "cancelled: parent stopped; late output discarded", cancelled = true)
                         return Result.success()
+                    }
+                    if (providerThread.isAlive) {
+                        // Keep the provider slot owned while the daemon thread may still be
+                        // completing a request. A later process-restart recovery moves this
+                        // unresolved state to NEEDS_REVIEW; do not publish a false stop receipt.
+                        store.cancel(jobId, "provider_thread_still_active_after_cancellation_timeout")
+                        return Result.failure()
                     }
                     store.needsReview(jobId, "workmanager_stopped_during_provider_request")
                     OrionAgentDelegation.finish(applicationContext, manifest,
@@ -183,10 +235,16 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             nim.cancel()
             providerThread.interrupt()
             providerThread.join(5000)
-            if (parentCancelled()) {
-                store.cancel(jobId, "parent_cancelled_during_interrupted_request")
+            if (parentCancelled() && !providerThread.isAlive) {
+                store.confirmCancellation(jobId, "parent_cancelled_during_interrupted_request")
                 OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: parent stopped", cancelled = true)
                 return Result.success()
+            }
+            if (providerThread.isAlive) {
+                // Interruption does not prove the provider call stopped. Retain the active slot
+                // until process-restart recovery can safely move the uncertain job to review.
+                store.cancel(jobId, "provider_thread_still_active_after_interruption_timeout")
+                return Result.failure()
             }
             store.needsReview(jobId, "worker_interrupted_during_provider_request")
             OrionAgentDelegation.finish(applicationContext, manifest,
@@ -196,7 +254,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
 
         if (parentCancelled()) {
             nim.cancel()
-            store.cancel(jobId, "parent_cancelled_before_result_commit")
+            store.confirmCancellation(jobId, "parent_cancelled_before_result_commit")
             OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: late result discarded", cancelled = true)
             return Result.success()
         }
@@ -220,7 +278,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             return Result.failure()
         }
         if (parentCancelled()) {
-            store.cancel(jobId, "parent_cancelled_after_provider_return")
+            store.confirmCancellation(jobId, "parent_cancelled_after_provider_return")
             OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: late result discarded", cancelled = true)
             return Result.success()
         }
@@ -233,7 +291,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             return Result.failure()
         }
         if (parentCancelled()) {
-            store.cancel(jobId, "parent_cancelled_after_result_staging")
+            store.confirmCancellation(jobId, "parent_cancelled_after_result_staging")
             OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: staged result discarded after parent stop", cancelled = true)
             return Result.success()
         }
@@ -317,6 +375,34 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
         const val KEY_JOB_ID = "orion_specialist_job_id"
         const val KEY_TASK_ID = "orion_distributed_task_id"
     }
+}
+
+/**
+ * Process-local ownership marker for provider calls that outlive a cancelled WorkManager Worker.
+ * It is deliberately not durable: after process death no thread can still be executing, and
+ * the durable CANCEL_REQUESTED record is therefore moved to NEEDS_REVIEW on the next open.
+ */
+internal object OrionSpecialistProviderRuns {
+    private val lock = Any()
+    private val active = mutableMapOf<String, Thread>()
+
+    fun register(jobId: String, thread: Thread) = synchronized(lock) {
+        active[jobId] = thread
+    }
+
+    fun isActive(jobId: String): Boolean = synchronized(lock) {
+        val thread = active[jobId] ?: return@synchronized false
+        if (thread.isAlive) true else {
+            active.remove(jobId, thread)
+            false
+        }
+    }
+
+    fun unregister(jobId: String, thread: Thread) = synchronized(lock) {
+        active.remove(jobId, thread)
+    }
+
+    internal fun clearForTest() = synchronized(lock) { active.clear() }
 }
 
 /** Unique work prevents duplicate scheduler calls from creating duplicate provider execution. */

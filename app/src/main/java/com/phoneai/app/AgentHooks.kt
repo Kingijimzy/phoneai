@@ -109,8 +109,6 @@ internal object AgentHooks {
   "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to)\\s+)*(open|launch|tap|click|press|swipe|scroll|type|send|call|text|message|reply|email|delete|remove|install|uninstall|download|share|post|publish|buy|order|book|turn on|turn off|switch|move|rename|copy|write|save|undo|reverse|run|execute)\\b"
  )
  private val risky=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call)\\b",RegexOption.IGNORE_CASE)
- private val explicit=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call|reply|undo|forget|erase|update memory|edit saved memory)\\b",RegexOption.IGNORE_CASE)
- private val messagingIntent=Regex("\\b(message|reply|text|email)\\b",RegexOption.IGNORE_CASE)
  fun scopeBlockReason(request:String,tool:String,args:JSONObject,targetLabel:String=""):String? {
   val definition = ToolRegistry.find(tool) ?: return "Tool '$tool' is not registered; Orion will not execute an unknown action."
   // A model-selected tool must match the user's actual intent. In particular, a weather
@@ -128,10 +126,26 @@ internal object AgentHooks {
   val hasExplicitSendVerb = Regex("""(?i)\b(send|submit|post|publish)\b""").containsMatchIn(request)
   val draftOnly = Regex("""(?i)\b(draft|prepare|compose|write)\b""").containsMatchIn(request) && !hasExplicitSendVerb
   val explicitlyWithheld = refusal || draftWithoutSend || draftOnly
-  val explicitSendIntent = !explicitlyWithheld && (explicit.containsMatchIn(request) || (target.equals("Send", true) && messagingIntent.containsMatchIn(request)))
-  return if((riskyTarget||riskyTool)&&!explicitSendIntent) "Request does not explicitly authorize this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
+  return if((riskyTarget||riskyTool)&&explicitlyWithheld) "The request explicitly withholds this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
  }
- /** Confirmation is reserved for the three irreversible computer settings only. */
+
+ fun scopeWarning(request:String,tool:String,args:JSONObject,targetLabel:String=""):String? {
+  val definition=ToolRegistry.find(tool) ?: return null
+  if(definition.access!=ToolAccess.WRITE) return null
+  val target=when(tool) {
+   "click_text" -> args.optString("text")
+   "browser_click","browser_click_verify" -> args.optString("target")
+   "notification_action" -> args.optString("action")
+   "shell","termux_command" -> args.optString("command")
+   else -> ""
+  }
+  val label=listOf(target,targetLabel).filter{it.isNotBlank()}.joinToString(" ")
+  val riskyTarget=risky.containsMatchIn(label)
+  val riskyTool=tool in setOf("task_delete","forget","update_memory","undo_last") ||
+   (tool=="notification_action" && args.optString("action").equals("reply",true))
+  return if(riskyTarget||riskyTool) "Potentially consequential action for '$tool'${if(label.isBlank())"" else " ('$label')" }; continuing without an Orion confirmation gate." else null
+ }
+ /** Classifies computer settings so dispatch can display a warning; it does not request approval. */
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean =
   IrreversibleActionConfirmationPolicy.computerSettingAction(tool,args) != null
  fun goalAuditUnavailableVerdict(): String = "CONTINUE: independent goal audit unavailable; task completion cannot be confirmed."

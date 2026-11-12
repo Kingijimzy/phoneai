@@ -35,6 +35,16 @@ internal object OrionRouter {
         return Decision(kind, kind == Kind.PLAN || o.optBoolean("plan", false), o.optBoolean("sequential", false), "model")
     }
 
+    /**
+     * Explicit action requests do not need a second model call to decide whether they are actions.
+     * Ambiguous intent remains model-led; clear Python authoring, phone actions, research and
+     * authenticated-account requests enter the tool path deterministically.
+     */
+    fun explicitAction(command: String): Decision? =
+        if (OrionCommandIntentPolicy.requiresDirectActionRouting(command))
+            fallback(command).copy(source = "explicit-action")
+        else null
+
     /** Structural last resort, used only when no model answer is available. */
     fun fallback(command: String): Decision {
         val plan = OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command)
@@ -44,13 +54,13 @@ internal object OrionRouter {
     }
 
     fun userMessage(command: String, recent: List<Pair<String, String>>, objective: String, capabilities: String): String = buildString {
-        if (capabilities.isNotBlank()) appendLine("CAPABILITY STATE: " + capabilities.take(600))
-        if (objective.isNotBlank()) appendLine("UNFINISHED OBJECTIVE: " + objective.take(240))
+        if (capabilities.isNotBlank()) appendLine("LIVE ENVIRONMENT AND CAPABILITY CONTEXT:\n" + capabilities)
+        if (objective.isNotBlank()) appendLine("ACTIVE / UNFINISHED OBJECTIVE:\n" + objective)
         if (recent.isNotEmpty()) {
             appendLine("RECENT TURNS:")
-            recent.takeLast(4).forEach { (r, t) -> appendLine("$r: ${t.replace(Regex("\\s+"), " ").take(200)}") }
+            recent.forEach { (r, t) -> appendLine("$r: $t") }
         }
-        append("LATEST MESSAGE: ").append(command.take(900))
+        append("LATEST MESSAGE: ").append(command)
     }
 
     fun toMessages(system: String, user: String): JSONArray =

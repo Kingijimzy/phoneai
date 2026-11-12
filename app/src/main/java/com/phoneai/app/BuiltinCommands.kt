@@ -77,7 +77,7 @@ internal object BuiltinCommands {
         "  unzip file.zip [-d dir]                 extract inside the workspace\n" +
         "  json file.json path.to[0].value         read a value from JSON\n" +
         "  js 'code' | js file.js                  run JavaScript in a sandbox (no network); use console.log\n" +
-        "  plus the Android shell: ls cat grep sed awk sort head tail wc cp mkdir ... (workspace only)"
+        "  plus the Android shell: ls cat grep sed awk sort head tail wc cp mkdir ... (Android app permissions apply)"
 
     // ---------- execution (Android) ----------
 

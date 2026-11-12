@@ -70,6 +70,63 @@ class OrionExecutionCoordinatorTest {
         assertTrue(OrionTaskCheckpointStore(c).needsOwner(task.taskId))
     }
 
+    @Test fun cancellationWaitsForAnActiveWorkerLeaseToEnd() {
+        val c = context()
+        val now = System.currentTimeMillis()
+        val task = OrionTaskEnvelope.create("active cancellation", now = now)
+        val store = OrionDistributedTaskStore(c)
+        val leases = OrionWorkerLeaseStore(c) { now }
+        assertTrue(store.enqueue(task))
+        assertTrue(store.claim(task.taskId))
+        assertNotNull(leases.acquire(task, "active-worker", 10_000))
+        assertEquals(1, store.cancel(task.taskId))
+        assertEquals("cancel_requested", store.get(task.taskId)?.status)
+
+        OrionExecutionCoordinator(store, leases, c).reconcile()
+
+        assertEquals("cancel_requested", store.get(task.taskId)?.status)
+    }
+
+    @Test fun expiredCancellationWithUnknownActionOutcomeRequiresOwnerReview() {
+        val c = context()
+        val now = System.currentTimeMillis()
+        var clock = now
+        val task = OrionTaskEnvelope.create("uncertain cancellation", now = now)
+        val store = OrionDistributedTaskStore(c)
+        val leases = OrionWorkerLeaseStore(c) { clock }
+        val checkpoints = OrionTaskCheckpointStore(c)
+        assertTrue(store.enqueue(task))
+        assertTrue(store.claim(task.taskId))
+        assertTrue(checkpoints.begin(task.taskId, task.objective))
+        assertTrue(checkpoints.beginAction(task.taskId, "send_message", "b".repeat(64)))
+        assertNotNull(leases.acquire(task, "expired-worker", 1_000))
+        assertEquals(1, store.cancel(task.taskId))
+        clock = now + 2_000
+
+        assertEquals(1, OrionExecutionCoordinator(store, leases, c).reconcile())
+
+        assertEquals("needs_review", store.get(task.taskId)?.status)
+        assertTrue(checkpoints.needsOwner(task.taskId))
+    }
+
+    @Test fun expiredCancellationWithoutInFlightActionBecomesCancelled() {
+        val c = context()
+        val now = System.currentTimeMillis()
+        var clock = now
+        val task = OrionTaskEnvelope.create("safe cancellation", now = now)
+        val store = OrionDistributedTaskStore(c)
+        val leases = OrionWorkerLeaseStore(c) { clock }
+        assertTrue(store.enqueue(task))
+        assertTrue(store.claim(task.taskId))
+        assertNotNull(leases.acquire(task, "expired-worker", 1_000))
+        assertEquals(1, store.cancel(task.taskId))
+        clock = now + 2_000
+
+        assertEquals(1, OrionExecutionCoordinator(store, leases, c).reconcile())
+
+        assertEquals("cancelled", store.get(task.taskId)?.status)
+    }
+
     @Test fun delegatedCheckpointIsIsolatedFromOtherTasks() {
         val c = context()
         val first = OrionTaskEnvelope.create("first task")

@@ -31,7 +31,18 @@ internal object LinuxRuntimePolicy {
     // SHA-256 pinned in .github/workflows/build.yml for the APK-packaged Android W^X loader.
     const val PROOT_LOADER_SHA256 = "44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04"
     const val MAX_ROOTFS_BYTES = 300_000_000L
-    const val MAX_COMMAND = 16_000
+    const val MAX_COMMAND = 128_000
+    const val MIN_PROCESS_TIMEOUT_MS = 250L
+    const val MAX_PROCESS_TIMEOUT_MS = 1_800_000L
+
+    /**
+     * Normalize model/worker supplied timeouts at the process boundary.
+     * Values below the platform minimum become the minimum; long-running profiles are
+     * bounded by the PRoot supervisor's hard 30-minute ceiling. Keep this normalization
+     * centralized so model adapters, task resumes and direct shell callers cannot disagree.
+     */
+    fun normalizeProcessTimeout(requestedMs: Long): Long =
+        requestedMs.coerceIn(MIN_PROCESS_TIMEOUT_MS, MAX_PROCESS_TIMEOUT_MS)
     private val sha256Pattern = Regex("^[0-9a-f]{64}$")
     private val versionPattern = Regex("^[A-Za-z0-9._-]{1,48}$")
 
@@ -57,16 +68,29 @@ internal object LinuxRuntimePolicy {
         installedVersion != null && installedVersion == m.version
 
     /** Fixed argv shape; model text is passed as one /bin/sh -c argument, never host-shell interpolation. */
-    fun prootArgs(prootPath: String, rootfsDir: String, command: String, workspaceHostPath: String? = null): List<String>? {
+    fun prootArgs(
+        prootPath: String,
+        rootfsDir: String,
+        command: String,
+        workspaceHostPath: String? = null,
+        androidAppDataPath: String? = null,
+        sharedStoragePath: String? = null
+    ): List<String>? {
         if (command.isBlank() || command.length > MAX_COMMAND || command.contains('\u0000')) return null
         if (!prootPath.startsWith("/") || prootPath.contains("..") ||
             !rootfsDir.startsWith("/") || rootfsDir.contains("..")) return null
         if (workspaceHostPath != null && (!workspaceHostPath.startsWith("/") || workspaceHostPath.contains("..") || workspaceHostPath.contains(':') || workspaceHostPath.contains('\u0000'))) return null
+        val hostPaths = listOfNotNull(androidAppDataPath, sharedStoragePath)
+        if (hostPaths.any { !it.startsWith("/") || it.contains("..") || it.contains(':') || it.contains('\u0000') }) return null
         return buildList {
             // PRoot -0 maps the guest process to Alpine root without granting Android host-root access.
             // The previous launcher inherited Android app UID 10390, which cannot write to
             // root-owned guest paths such as /root/.api-anything even though HOME was /root.
             addAll(listOf(prootPath, "-0", "-r", rootfsDir, "-b", "/dev", "-b", "/proc"))
+            // Expose only host paths that the Android app UID can already access. Android's
+            // permission model and SELinux continue to enforce every host read/write.
+            if (androidAppDataPath != null) addAll(listOf("-b", "$androidAppDataPath:/android-app"))
+            if (sharedStoragePath != null) addAll(listOf("-b", "$sharedStoragePath:/sdcard"))
             if (workspaceHostPath != null) addAll(listOf("-b", "$workspaceHostPath:/workspace"))
             addAll(listOf("-w", "/root", "/bin/sh", "-c", command))
         }

@@ -2285,6 +2285,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (Prefs.voice(this)) voice.speak(text)
     }
 
+    override fun progress(text: String) {
+        status(text)
+        // Progress speech follows the owner's existing voice-output preference. Do not
+        // interrupt a reply or enqueue repeated narration while Orion is already speaking.
+        if (Prefs.voice(this) && !voice.isSpeaking()) voice.speak(text)
+    }
+
     override fun status(text: String) {
         main.post {
             if (panel != null) {
@@ -2412,9 +2419,6 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             val names = list.map { it.loadLabel(pm).toString() }.sorted().take(40)
             return "error: app not found. Installed apps include: " + names.joinToString(", ")
         }
-        if (SafetyGate.isSensitiveApp(best.activityInfo.packageName, bestLabel)) {
-            return "error: Orion's safety gate blocks opening or automating banking and payment apps. Open and operate that app manually."
-        }
         val launch = pm.getLaunchIntentForPackage(best.activityInfo.packageName)
             ?: return "error: cannot launch $bestLabel"
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -2503,16 +2507,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         sb.append("screen ${size.first}x${size.second}\n")
         walk(root, sb)
 
-        // OCR is local-only. Do not OCR sensitive app screens or any editable/password field.
-        val visibleLabels = nodes.mapNotNull { n ->
-            if (n.isPassword) "(password field)" else if (n.isEditable) n.hintText?.toString()?.lowercase()
-            else (n.text?.toString() ?: n.contentDescription?.toString() ?: n.hintText?.toString())?.lowercase()
-        }.joinToString(" ")
-        val packageId = root.packageName?.toString()?.lowercase().orEmpty()
-        val sensitiveScreen = Regex("bank|wallet|payment|pay\\b|authenticator|password|credential|otp|one.?time.?code")
-            .containsMatchIn(packageId + " " + visibleLabels)
-        if (!sensitiveScreen) {
-            try {
+        // Run on-device OCR and visual perception on all screens; editable/password regions remain excluded.
+        try {
                 val shot = screenshotBase64()
                 if (shot != null) {
                     val bytes = Base64.decode(shot.b64, Base64.DEFAULT)
@@ -2594,14 +2590,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             } catch (_: Exception) {
                 sb.append("(on-device OCR unavailable for this screen; accessibility results are still available)\n")
             }
-        } else {
-            sb.append("(OCR withheld on a potentially sensitive screen)\n")
-        }
         if (nodes.size + ocrElements.size + visualElements.size < 3) {
             sb.append("(very few readable elements: this may be a game or custom-drawn screen)\n")
         }
         val rendered = sb.toString().take(2800)
-        if (!sensitiveScreen && OrionSensorConsent.read(this, OrionSensorScope.SCREEN_CONTEXT).active()) {
+        if (OrionSensorConsent.read(this, OrionSensorScope.SCREEN_CONTEXT).active()) {
             runCatching {
                 val digest = java.security.MessageDigest.getInstance("SHA-256")
                     .digest(rendered.toByteArray(Charsets.UTF_8))
@@ -2612,7 +2605,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     modality = OrionMultimodalEvidenceStore.Modality.SCREEN,
                     source = "accessibility_ocr_screen",
                     digest = digest,
-                    summary = "Non-sensitive screen observation recorded; OCR and screenshot contents are transient and not stored in the evidence index."
+                    summary = "Screen observation recorded; OCR and screenshot contents are transient and not stored in the evidence index."
                 )
             }
         }
@@ -2709,13 +2702,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     fun typeText(text: String): String {
         if (text.isEmpty()) return "error: refusing to type empty text"
         if (text.length > 4000) return "error: text exceeds the 4000 character limit"
-        if (SafetyGate.containsSensitiveCredentialText(text)) {
-            return "error: Orion's safety gate blocks typing card, CVV/CVC, password, passcode, PIN, OTP, security-code, or card-number text. Enter sensitive details yourself."
-        }
         val root = rootInActiveWindow ?: return "error: cannot inspect the current screen"
         val field = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: findEditable(root)
             ?: return "error: no editable text field found. Click the intended field first."
-        if (field.isPassword) return "error: refusing to type into a password field. Ask the user to enter credentials themselves."
         val targetPackage = field.packageName?.toString()
         // Flutter and React Native fields may reject ACTION_SET_TEXT. Focus the target, then
         // send the agent's explicit payload through Orion's InputConnection instead.

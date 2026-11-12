@@ -154,12 +154,32 @@ internal object OrionTasksCapabilityExecutor {
         }
         "agent_reassign" -> {
             val id = args.optString("job_id").trim()
+            val targetAgent = args.optString("agent").trim().lowercase()
             val store = OrionWorkerJobStore(service)
             val job = store.all().firstOrNull { it.id == id }
             if (job == null) "error: job $id not found"
             else {
-                store.cancel(id, "reassigned to ${args.optString("agent")}")
-                tools.queueAgent(args.optString("agent"), job.objective, job.parentObjectiveId.orEmpty(), "reassign-" + id.takeLast(8) + "-" + args.optString("agent"))
+                val rejection = OrionSpecialistReassignmentPolicy.rejection(
+                    currentAgentId = job.manifestId?.let { OrionAgentDelegation.restore(service, it)?.agentId }.orEmpty(),
+                    targetAgentId = targetAgent,
+                    status = job.status
+                )
+                when {
+                    rejection != null -> "error: $rejection; the original job was not changed."
+                    !store.cancel(id, "reassigned to $targetAgent") ->
+                        "error: the original job could not be durably cancelled; no replacement was queued."
+                    else -> {
+                        val replacement = tools.queueAgent(
+                            targetAgent, job.objective, job.parentObjectiveId.orEmpty(),
+                            "reassign-" + id.takeLast(8) + "-" + targetAgent
+                        )
+                        if (replacement.startsWith("error:", true)) {
+                            "The original job was cancelled, but the replacement could not be queued: " + replacement.removePrefix("error:").trim()
+                        } else {
+                            "Reassignment recorded. Original job $id is cancelled. " + replacement
+                        }
+                    }
+                }
             }
         }
         "specialist_job_status" -> {
@@ -263,5 +283,35 @@ internal object OrionTasksCapabilityExecutor {
             }
         }
         else -> "error: tasks executor does not implement '$tool'."
+    }
+}
+
+
+/** Pure policy for safe, bounded specialist replacement; the caller must persist cancellation first. */
+internal object OrionSpecialistReassignmentPolicy {
+    private val backgroundAgents = setOf("coder", "writer", "planner", "research", "coach")
+    private val replaceableStates = setOf(
+        OrionWorkerJobStore.Status.QUEUED,
+        OrionWorkerJobStore.Status.RUNNING,
+        OrionWorkerJobStore.Status.RESULT_PENDING,
+        OrionWorkerJobStore.Status.PAUSED
+    )
+
+    fun rejection(
+        currentAgentId: String,
+        targetAgentId: String,
+        status: OrionWorkerJobStore.Status
+    ): String? {
+        val target = targetAgentId.trim().lowercase()
+        if (target !in backgroundAgents || AgentProfiles.find(target) == null) {
+            return "replacement must be one of the registered background specialists: " + backgroundAgents.sorted().joinToString(", ")
+        }
+        if (currentAgentId.isNotBlank() && currentAgentId.equals(target, ignoreCase = true)) {
+            return "the requested specialist is already assigned; choose a different role or inspect the existing job"
+        }
+        if (status !in replaceableStates) {
+            return "job state ${status.name.lowercase()} is terminal or cannot be safely reassigned"
+        }
+        return null
     }
 }

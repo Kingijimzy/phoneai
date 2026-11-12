@@ -1,5 +1,6 @@
 package com.phoneai.app
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -49,6 +50,18 @@ internal fun OrionModelSheet(onDismiss: () -> Unit, onNeedKey: () -> Unit, onCha
             Text("Pick a model to chat with", color = Color(0xFF9AA0AD), fontSize = 12.sp)
             Spacer(Modifier.height(14.dp))
             Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
+                    .background(Color(0xFF303034))
+                    .clickable { c.startActivity(Intent(c, AccountConnectionsActivity::class.java)) }
+                    .padding(horizontal = 14.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Account connections", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text("CHATGPT / GOOGLE", color = Color(0xFFB9BBC4), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(32.dp))
                     .background(Brush.horizontalGradient(listOf(Color(0xFF3A3A3F), Color(0xFF2C2C30))))
                     .clickable { Prefs.setModelRouting(c, !smart); tick++; onChanged() }.padding(14.dp),
@@ -72,7 +85,11 @@ internal fun OrionModelSheet(onDismiss: () -> Unit, onNeedKey: () -> Unit, onCha
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(30.dp)).background(Color(0xFF2C2C2E))
                             .border(1.dp, if (selected) Color(0xFFBBBBBB) else Color.Transparent, RoundedCornerShape(30.dp))
                             .clickable {
-                                if (ready) { Prefs.setProvider(c, false, p.id); tick++; onChanged(); onDismiss() } else { onDismiss(); onNeedKey() }
+                                if (ready) { Prefs.setProvider(c, false, p.id); tick++; onChanged(); onDismiss() }
+                                else if (p.id == "codex" || p.id == "antigravity") {
+                                    onDismiss()
+                                    c.startActivity(Intent(c, AccountConnectionsActivity::class.java))
+                                } else { onDismiss(); onNeedKey() }
                             }.padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
@@ -80,7 +97,7 @@ internal fun OrionModelSheet(onDismiss: () -> Unit, onNeedKey: () -> Unit, onCha
                             Text(p.label.take(1).uppercase(), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         }
                         Text(p.label, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                        Text(if (selected) "IN USE" else if (ready) "READY" else "ADD KEY", fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                        Text(if (selected) "IN USE" else if (ready) "READY" else if (p.id == "codex" || p.id == "antigravity") "CONNECT" else "ADD KEY", fontSize = 10.sp, fontWeight = FontWeight.Bold,
                             color = if (ready) Color.White else Color(0xFFE2A16F),
                             modifier = Modifier.clip(RoundedCornerShape(12.dp))
                                 .background(if (ready) Brush.horizontalGradient(listOf(Color(0xFF4A4A50), Color(0xFF4A4A50))) else Brush.horizontalGradient(listOf(Color(0xFF3A3A3C), Color(0xFF3A3A3C))))

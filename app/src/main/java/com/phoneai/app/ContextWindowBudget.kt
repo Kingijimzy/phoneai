@@ -15,6 +15,8 @@ internal object ContextWindowBudget {
         val s = section.lowercase()
         return when {
             "orion grasp executive cycle" in s -> 108
+            "orion platform self-knowledge" in s || "orion capability layers" in s -> 106
+            "orion identity — ambient awareness" in s || "orion identity - ambient awareness" in s -> 107
             "task resume instructions" in s || "active objective" in s -> 110
             "durable execution checkpoint" in s -> 109
             "durable objective graph" in s || "objective graph" in s -> 108

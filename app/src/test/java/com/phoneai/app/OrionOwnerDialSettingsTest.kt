@@ -25,7 +25,7 @@ class OrionOwnerDialSettingsTest {
         OrionOwnerDialSettings.write(context, OrionOwnerDials(recoveryMaxAttempts = 99, recoveryBackoffSeconds = 1))
         val saved = OrionOwnerDialSettings.read(context)
         assertEquals(4, saved.recoveryMaxAttempts)
-        assertEquals(15, saved.recoveryBackoffSeconds)
+        assertEquals(1, saved.recoveryBackoffSeconds)
         OrionOwnerDialSettings.write(context, saved.copy(recoveryMaxAttempts = 0, recoveryBackoffSeconds = 300))
         val updated = OrionOwnerDialSettings.read(context)
         assertEquals(0, updated.recoveryMaxAttempts)
@@ -34,10 +34,10 @@ class OrionOwnerDialSettingsTest {
 
     @Test fun pythonProfileChangesOnlyTheCodeSizeBudget() {
         OrionOwnerDialSettings.write(context, OrionOwnerDials(pythonProfile = OrionPythonProfile.GUARDED))
-        assertEquals(8_000, PythonExecutionPolicy.maxCodeChars(context))
-        assertTrue(PythonExecutionPolicy.rejection("x".repeat(8_001)) != null)
+        assertEquals(32_000, PythonExecutionPolicy.maxCodeChars(context))
+        assertTrue(PythonExecutionPolicy.rejection("x".repeat(32_001)) != null)
         OrionOwnerDialSettings.write(context, OrionOwnerDials(pythonProfile = OrionPythonProfile.DEVELOPER))
-        assertEquals(16_000, PythonExecutionPolicy.maxCodeChars(context))
-        assertTrue(PythonExecutionPolicy.rejection("x".repeat(16_001), PythonExecutionPolicy.maxCodeChars(context)) != null)
+        assertEquals(128_000, PythonExecutionPolicy.maxCodeChars(context))
+        assertTrue(PythonExecutionPolicy.rejection("x".repeat(128_001), PythonExecutionPolicy.maxCodeChars(context)) != null)
     }
 }

@@ -1115,8 +1115,11 @@ class Tools(
         val agent = AgentProfiles.resolveFor(svc, agentName)
             ?: return "error: unknown specialist. Available: " + AgentProfiles.everyone(svc).joinToString(", ") { it.id }
         if (task.isBlank()) return "error: specialist task is required"
-        if (agent.id !in setOf("coder", "writer", "planner", "research", "coach") || AgentProfiles.find(agent.id) == null) {
-            return "error: background execution supports only built-in coder, writer and planner (no external tools), research (public web/news search), and coach (public ticker only); no private account data or trading writes are available."
+        val builtInBackgroundAgent = agent.id in setOf("coder", "writer", "planner", "research", "coach") &&
+            AgentProfiles.find(agent.id) != null
+        val registeredCustomAnalysisAgent = AgentProfiles.custom(svc).any { it.id == agent.id }
+        if (!builtInBackgroundAgent && !registeredCustomAnalysisAgent) {
+            return "error: background work requires a registered built-in specialist or an existing custom specialist profile."
         }
         val parentTaskId = AgentCheckpointStore.evidenceTaskId(svc)
             ?: return "error: start a durable Orion objective before queuing background specialist work."
@@ -1218,7 +1221,7 @@ class Tools(
     }
 
     fun pythonExec(code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }): String =
-        OrionPythonRuntime.execute(svc, code, confirm, stopped, onPythonOutput)
+        OrionPythonRuntime.execute(svc, code, confirm, stopped, onPythonOutput, toolInvoker = delegatedCapabilityDispatch)
 
     fun shell(command: String, where: String): String =
         if (command.isBlank()) "error: command is required"

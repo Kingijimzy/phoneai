@@ -28,14 +28,27 @@ internal object OrionUnifiedExecutionCoordinator {
         val app = context.applicationContext
         val tasks = OrionDistributedTaskStore(app)
         val accepted = tasks.enqueue(task)
-        if (!accepted && tasks.get(task.taskId) == null) {
-            return OrionCoordinatedResult.Failed(task.taskId, "task_enqueue_rejected")
-        }
-        return if (scheduleDroneTask(app, task.taskId)) {
-            OrionCoordinatedResult.Deferred(task.taskId, "queued_for_android_workmanager")
-        } else {
-            tasks.fail(task.taskId, retryable = true)
-            OrionCoordinatedResult.Deferred(task.taskId, "task_persisted_scheduler_unavailable_retry_pending")
+        val record = tasks.get(task.taskId)
+            ?: return OrionCoordinatedResult.Failed(task.taskId, "task_enqueue_rejected")
+
+        // Idempotent enqueue must report the durable task state, not pretend every duplicate
+        // is a newly queued task. In particular, never rewrite a queued task as failed merely
+        // because WorkManager could not accept this scheduling attempt.
+        return when (record.status) {
+            "queued", "retry_wait" -> if (scheduleDroneTask(app, task.taskId)) {
+                OrionCoordinatedResult.Deferred(
+                    task.taskId,
+                    if (accepted) "queued_for_android_workmanager" else "existing_task_rescheduled"
+                )
+            } else {
+                OrionCoordinatedResult.Deferred(task.taskId, "task_persisted_queued_scheduler_unavailable")
+            }
+            "running" -> OrionCoordinatedResult.Deferred(task.taskId, "task_already_running")
+            "completed" -> OrionCoordinatedResult.Deferred(task.taskId, "task_already_completed")
+            "cancel_requested" -> OrionCoordinatedResult.Deferred(task.taskId, "task_cancellation_pending")
+            "needs_review" -> OrionCoordinatedResult.NeedsOwner(task.taskId, "task_requires_owner_review")
+            "failed", "cancelled" -> OrionCoordinatedResult.Failed(task.taskId, "task_already_" + record.status)
+            else -> OrionCoordinatedResult.Failed(task.taskId, "task_has_unknown_status")
         }
     }
 
@@ -95,7 +108,8 @@ internal object OrionUnifiedExecutionCoordinator {
                 OrionWorkerJobStore.Status.QUEUED,
                 OrionWorkerJobStore.Status.RUNNING,
                 OrionWorkerJobStore.Status.RESULT_PENDING,
-                OrionWorkerJobStore.Status.PAUSED
+                OrionWorkerJobStore.Status.PAUSED,
+                OrionWorkerJobStore.Status.CANCEL_REQUESTED
             )
         }
         val legacyChanged = legacy.cancelParent(parentTaskId, reason)

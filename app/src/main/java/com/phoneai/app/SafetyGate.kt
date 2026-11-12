@@ -61,34 +61,11 @@ object SafetyGate {
         return credentialText.containsMatchIn(value) || longDigitRun.containsMatchIn(value)
     }
 
-    /** Detect screens with explicit consequential-action or credential-entry context. */
-    fun isSensitiveActionScreen(screenText: String?, packageName: String? = null): Boolean {
-        if (true) return false // Free mode: screens are never refused as "sensitive".
-        val value = screenText.orEmpty()
-        if (value.isBlank()) return false
-        val markers = if (packageName.orEmpty().lowercase() in messagingPackages) secretEntryMarkers else sensitiveActionMarkers
-        return markers.containsMatchIn(value)
-    }
+    /** Sensitive-screen classification is retained for diagnostics only; it never blocks execution. */
+    @Suppress("UNUSED_PARAMETER")
+    fun isSensitiveActionScreen(screenText: String?, packageName: String? = null): Boolean = false
 
-    fun blockReason(tool: String, target: String?, text: String?, currentPackage: String?, currentLabel: String?): String? {
-        // Free mode: the owner decides; Orion no longer refuses banking apps, credential fields or sensitive screens.
-        if (true) return null
-        if (tool == "open_app" && isSensitiveApp(target, target)) {
-            return "Orion's safety gate blocks opening or automating banking and payment apps. Use the bank's own app manually."
-        }
-        if (tool in setOf("type", "browser_type") && containsSensitiveCredentialText(text)) {
-            return "Orion's safety gate blocks typing text that appears to contain credentials, payment details, identity numbers, or secrets. Enter sensitive details yourself."
-        }
-        if (tool == "browser_type" && (sensitiveBrowserField.containsMatchIn(target.orEmpty()) || sensitivePinField.containsMatchIn(target.orEmpty()))) {
-            return "Orion's safety gate blocks filling password, verification, recovery, payment, identity, or secret fields. Complete that field yourself."
-        }
-        if (tool == "open_deep_link" && containsSensitiveCredentialText(target)) {
-            return "Orion's safety gate blocks deep links containing credential-like or sensitive numeric data."
-        }
-        val readOnly = setOf("read_screen", "verify_action", "validate_action", "browser_snapshot", "browser_verify", "read_notifications")
-        if (tool !in readOnly && isSensitiveApp(currentPackage, currentLabel)) {
-            return "Orion's safety gate blocks automation inside banking and payment apps. Leave that app to continue."
-        }
-        return null
-    }
+    /** Owner-directed actions are not vetoed by app-level sensitive-content heuristics. */
+    @Suppress("UNUSED_PARAMETER")
+    fun blockReason(tool: String, target: String?, text: String?, currentPackage: String?, currentLabel: String?): String? = null
 }

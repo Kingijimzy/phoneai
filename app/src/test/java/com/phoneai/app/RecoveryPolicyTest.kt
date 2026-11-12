@@ -12,7 +12,9 @@ class RecoveryPolicyTest {
         val r = RecoveryPolicy.riskOf("read_screen", ToolAccess.READ, consequential = false)
         assertEquals(Risk.READ_ONLY, r)
         assertEquals(Decision.RETRY_READ, RecoveryPolicy.decide(r, Failure.TRANSIENT, 0))
-        assertEquals(Decision.REPLAN, RecoveryPolicy.decide(r, Failure.TRANSIENT, 1))
+        assertEquals(Decision.RETRY_READ, RecoveryPolicy.decide(r, Failure.TRANSIENT, 1))
+        assertEquals(Decision.RETRY_READ, RecoveryPolicy.decide(r, Failure.TRANSIENT, 3))
+        assertEquals(Decision.REPLAN, RecoveryPolicy.decide(r, Failure.TRANSIENT, 4))
         assertEquals("after the bounded retries, replan instead of retrying forever",
             Decision.REPLAN, RecoveryPolicy.decide(r, Failure.TRANSIENT, RecoveryPolicy.MAX_READ_RETRIES))
     }
@@ -35,7 +37,8 @@ class RecoveryPolicyTest {
 
     @Test fun timedOutReadIsRetriedBecauseReadsHaveNoSideEffects() {
         assertEquals(Decision.RETRY_READ, RecoveryPolicy.decide(Risk.READ_ONLY, Failure.AMBIGUOUS, 0))
-        assertEquals(Decision.REPLAN, RecoveryPolicy.decide(Risk.READ_ONLY, Failure.AMBIGUOUS, 1))
+        assertEquals(Decision.RETRY_READ, RecoveryPolicy.decide(Risk.READ_ONLY, Failure.AMBIGUOUS, 1))
+        assertEquals(Decision.REPLAN, RecoveryPolicy.decide(Risk.READ_ONLY, Failure.AMBIGUOUS, 4))
     }
 
     @Test fun consequentialActionsPauseEvenWhenTransient() {
@@ -102,15 +105,18 @@ class RecoveryPolicyTest {
         assertTrue(RecoveryPolicy.replanNudge("shell", Failure.DIAGNOSTIC, "exit code 1").contains("Do not repeat this action unchanged"))
     }
 
-    @Test fun repeatedReplansExhaustTheLifecycleIntoRecord() {
-        // Three alternate routes are allowed; the fourth failure stops the task.
+    @Test fun repeatedReplansExhaustTheLifecycleIntoBlockedReview() {
+        // Three alternate routes are allowed; the next failure pauses for owner review.
+        // BLOCKED is resumable and must not be confused with terminal RECORD.
         var lc = TaskLifecycle(phase = Phase.EXECUTE)
         repeat(TaskLifecycle.MAX_RECOVERIES) {
             lc = lc.fail()!!; assertEquals(Phase.RECOVER, lc.phase)
             lc = lc.replan()!!.advance()!!.advance()!!.advance()!!
         }
         lc = lc.fail()!!
-        assertEquals("recovery budget exhausted", Phase.RECORD, lc.phase)
+        assertEquals("recovery budget exhausted", Phase.BLOCKED, lc.phase)
+        assertFalse(lc.isTerminal)
+        assertEquals(Phase.PLAN, lc.resume()!!.phase)
     }
 
     private fun isErr(r: String) = r.startsWith("error")
@@ -132,8 +138,8 @@ class RecoveryPolicyTest {
         val out = RecoveryPolicy.retryRead("error: 503 unavailable", ::isErr, { false }, { false }, { }, { _, _ -> }) {
             calls++; "error: 503 unavailable"
         }
-        assertEquals(1, calls)
-        assertEquals(1, out.retries)
+        assertEquals(4, calls)
+        assertEquals(4, out.retries)
         assertTrue(isErr(out.result))
     }
 

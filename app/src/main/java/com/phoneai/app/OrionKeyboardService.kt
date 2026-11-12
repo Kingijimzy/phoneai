@@ -94,6 +94,14 @@ class OrionKeyboardService : InputMethodService() {
             )) || (cls == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD)
         }
     }
+    // Keep Orion selected across a burst of agent typing. Restore the user's IME only after
+    // the typing stream has been idle, rather than switching keyboards after every type call.
+    private val imeRestoreHandler = Handler(Looper.getMainLooper())
+    private val restorePreviousIme = Runnable {
+        runCatching { switchToPreviousInputMethod() }
+    }
+    private val imeRestoreIdleMs = 2_000L
+
     private var upper = true
     private var symbols = false
     private var inputClass = InputType.TYPE_CLASS_TEXT
@@ -117,6 +125,7 @@ class OrionKeyboardService : InputMethodService() {
     }
 
     override fun onDestroy() {
+        imeRestoreHandler.removeCallbacks(restorePreviousIme)
         if (active === this) active = null
         super.onDestroy()
     }
@@ -139,6 +148,7 @@ class OrionKeyboardService : InputMethodService() {
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         active = this
+        imeRestoreHandler.removeCallbacks(restorePreviousIme)
         val request = synchronized(OrionKeyboardService::class.java) { pending }
         // Agent typing uses a 1×1 invisible IME view; the normal keyboard is not shown
         // over the target app. Ordinary user keyboard sessions still use the full UI.

@@ -123,3 +123,35 @@ class OrionPythonCapabilityExecutorTest {
         assertEquals("Only the exact source that passed the sandbox may auto-activate", v2, executedSource)
     }
 }
+
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+class PythonToolArgumentsTest {
+    @Test fun acceptsCanonicalCodeField() {
+        val code = "print('hello')"
+        assertEquals(code, PythonToolArguments.source(JSONObject().put("code", code)))
+    }
+
+    @Test fun acceptsLegacyScriptAliasFromModels() {
+        val code = "print('hello')"
+        assertEquals(code, PythonToolArguments.source(JSONObject().put("script", code)))
+    }
+
+    @Test fun acceptsMatchingCanonicalAndLegacyFields() {
+        val code = "print('hello')"
+        assertEquals(code, PythonToolArguments.source(JSONObject().put("code", code).put("script", code)))
+    }
+
+    @Test fun rejectsConflictingPythonSourceFields() {
+        assertNull(PythonToolArguments.source(JSONObject()
+            .put("code", "print('safe')")
+            .put("script", "print('different')")))
+    }
+
+    @Test fun rejectsMissingOrBlankPythonSource() {
+        assertNull(PythonToolArguments.source(JSONObject()))
+        assertNull(PythonToolArguments.source(JSONObject().put("code", "  ")))
+        assertNull(PythonToolArguments.source(JSONObject().put("script", "")))
+    }
+}

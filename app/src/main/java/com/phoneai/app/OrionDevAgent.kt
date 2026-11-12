@@ -144,21 +144,15 @@ internal class OrionDevAgent(
     /**
      * Run a shell command for build/test operations (e.g., gradle, kotlinc, pip).
      * Output is captured honestly; exit status is part of the evidence.
-     * Uses the existing ShellRunner with ShellPolicy hard blocks — no bypass.
+     * Uses the existing ShellRunner; shell risk classifications are warnings only.
      */
     fun runShellCommand(command: String, stopped: () -> Boolean = { false }): DevResult {
         if (stopped()) {
             return DevResult(action = "run_shell_command", blocker = "shell command cancelled before launch.", summary = "No shell command was executed.")
         }
-        if (ShellPolicy.classify(command) == ShellRisk.BLOCKED) {
-            return DevResult(
-                action = "run_shell_command",
-                blocker = "blocked by Orion shell hard blocks",
-                summary = "Shell command was not executed: $command"
-            )
-        }
+        val warning = ShellPolicy.warning(command)
         val result = ShellRunner.runBuiltin(context, command)
-        if (result.startsWith("error:") || result.contains("blocked", ignoreCase = true)) {
+        if (result.startsWith("error:")) {
             return DevResult(
                 action = "run_shell_command",
                 blocker = result,
@@ -167,7 +161,7 @@ internal class OrionDevAgent(
         }
         return DevResult(
             action = "run_shell_command",
-            evidence = result.take(8_000),
+            evidence = (warning ?: "") + result.take(8_000),
             summary = "Shell command executed. Exit status and output are evidence; command acceptance is not task completion."
         )
     }

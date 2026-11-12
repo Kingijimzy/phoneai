@@ -181,10 +181,6 @@ class TerminalActivity : Activity() {
     private fun runInput() {
         val cmd = input.text.toString().trim()
         if (cmd.isEmpty()) return
-        if (backend == Backend.BUILTIN && ShellPolicy.classify(cmd) == ShellRisk.BLOCKED) {
-            append("$ $cmd\nBlocked: this command is on Orion's catastrophic hard-block list.\n")
-            return
-        }
         executeCommand(cmd)
     }
 

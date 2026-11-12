@@ -12,7 +12,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-/** Runs commands in Orion's private workspace (built-in shell) or in the user's Termux (full Linux tools). */
+/** Runs Android app-UID shell commands, Termux commands, and Alpine/PRoot Linux commands. */
 object ShellRunner {
     private const val TERMUX_PKG = "com.termux"
     private const val TERMUX_HOME = "/data/data/com.termux/files/home"
@@ -24,40 +24,30 @@ object ShellRunner {
 
     /** One shared project root for shell, CPython and workspace file tools. */
     fun workspace(c: Context): File {
-        val managed = OrionPythonWorkspace(c.applicationContext)
-        when (managed.rootStatus()) {
-            OrionPythonWorkspace.RootStatus.READY -> Unit
-            OrionPythonWorkspace.RootStatus.MISSING -> check(managed.ensureRootForRepair() != null) { "Orion workspace could not be safely initialized." }
-            OrionPythonWorkspace.RootStatus.UNSAFE -> error("Orion workspace path is unsafe; refusing shell access.")
+        return File(c.applicationContext.filesDir, "orion-python/workspace").apply {
+            if (!exists()) mkdirs()
         }
-        return File(c.applicationContext.filesDir, "orion-python/workspace")
     }
 
     private fun currentDirectory(c: Context): File {
-        val root = workspace(c).canonicalFile
+        val defaultDirectory = c.filesDir.canonicalFile
         val saved = c.getSharedPreferences("orion_builtin_shell", Context.MODE_PRIVATE)
-            .getString("cwd", root.path) ?: root.path
+            .getString("cwd", defaultDirectory.path) ?: defaultDirectory.path
         val candidate = runCatching { File(saved).canonicalFile }.getOrNull()
-        return if (candidate != null && candidate.isDirectory &&
-            (candidate.path == root.path || candidate.path.startsWith(root.path + File.separator))) candidate else root
+        return candidate?.takeIf { it.isDirectory } ?: defaultDirectory
     }
 
     private fun changeDirectory(c: Context, raw: String): String {
-        val root = workspace(c).canonicalFile
+        val defaultDirectory = c.filesDir.canonicalFile
         val current = currentDirectory(c)
         val arg = raw.trim().removeSurrounding("\"").removeSurrounding("'")
-        if (arg.isBlank() || arg == "~") {
-            c.getSharedPreferences("orion_builtin_shell", Context.MODE_PRIVATE).edit().putString("cwd", root.path).apply()
-            return "cwd: workspace/"
-        }
-        val candidate = runCatching { (if (File(arg).isAbsolute) File(arg) else File(current, arg)).canonicalFile }.getOrNull()
-            ?: return "error: invalid directory"
-        if (candidate.path != root.path && !candidate.path.startsWith(root.path + File.separator))
-            return "error: directory must remain inside Orion's private workspace"
-        if (!candidate.isDirectory) return "error: no such workspace directory"
+        val target = if (arg.isBlank() || arg == "~") defaultDirectory.path else arg
+        val candidate = runCatching {
+            (if (File(target).isAbsolute) File(target) else File(current, target)).canonicalFile
+        }.getOrNull() ?: return "error: invalid directory"
+        if (!candidate.isDirectory) return "error: no such directory"
         c.getSharedPreferences("orion_builtin_shell", Context.MODE_PRIVATE).edit().putString("cwd", candidate.path).apply()
-        val relative = candidate.relativeTo(root).path
-        return "cwd: workspace/" + if (relative == ".") "" else relative
+        return "cwd: ${candidate.path}"
     }
 
     /** Resolves a path inside the workspace, refusing anything that escapes it. */
@@ -70,23 +60,29 @@ object ShellRunner {
 
     fun termuxInstalled(c: Context): Boolean = try { c.packageManager.getPackageInfo(TERMUX_PKG, 0); true } catch (_: Exception) { false }
 
+    private fun hasNativeAndroidCommand(name: String): Boolean {
+        if (name.isBlank() || name.any { !it.isLetterOrDigit() && it != '_' && it != '-' }) return false
+        return listOf("/system/bin/$name", "/system/xbin/$name", "/vendor/bin/$name")
+            .any { path -> File(path).let { it.isFile && it.canExecute() } }
+    }
+
     fun runBuiltin(c: Context, command: String, timeoutSec: Long = 20, onOutput: (String) -> Unit = {}): String {
         val normalized = command.trim()
         if (normalized.isEmpty()) return "error: command is required"
-        if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
-        // Defense in depth: every backend applies the same catastrophic hard-block policy.
-        if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) {
-            return "error: blocked by Orion shell hard blocks (root/system wipe, raw block-device write, or fork bomb)"
-        }
+        if (normalized.length > LinuxRuntimePolicy.MAX_COMMAND) return "error: command exceeds the ${LinuxRuntimePolicy.MAX_COMMAND} character runtime limit"
         if (normalized == "cd" || normalized.startsWith("cd ")) {
             return changeDirectory(c, normalized.removePrefix("cd").trim())
         }
         if (normalized == "pwd") {
-            val root = workspace(c).canonicalFile
-            val relative = currentDirectory(c).relativeTo(root).path
-            return "workspace/" + if (relative == ".") "" else relative
+            return currentDirectory(c).absolutePath
         }
-        BuiltinCommands.run(c, normalized)?.let { return ShellPolicy.clip(it) }
+        // Prefer the real Android executable whenever it exists. The JVM convenience
+        // implementation is only a fallback for utilities Android does not ship.
+        val builtinArgs = BuiltinCommands.parse(normalized)
+        val nativeCommand = builtinArgs?.firstOrNull()?.let(::hasNativeAndroidCommand) == true
+        if (builtinArgs != null && !nativeCommand) {
+            BuiltinCommands.run(c, normalized)?.let { return ShellPolicy.clip(it) }
+        }
         return try {
             val p = ProcessBuilder("/system/bin/sh", "-c", normalized).directory(currentDirectory(c)).redirectErrorStream(true).start()
             val out = StringBuffer()
@@ -106,10 +102,7 @@ object ShellRunner {
         }
         val normalized = command.trim()
         if (normalized.isEmpty()) return "error: command is required"
-        if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
-        if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) {
-            return "error: blocked by Orion shell hard blocks (root/system wipe, raw block-device write, or fork bomb)"
-        }
+        if (normalized.length > LinuxRuntimePolicy.MAX_COMMAND) return "error: command exceeds the ${LinuxRuntimePolicy.MAX_COMMAND} character runtime limit"
         val effectiveTimeout = maxOf(timeoutSec, ShellExecutionRouting.commandTimeoutMs(normalized) / 1000L)
             .coerceIn(1L, 180L)
         val id = ids.incrementAndGet()
@@ -144,7 +137,11 @@ object ShellRunner {
             }
             check(runtime.isReady(manifest)) { "Alpine runtime did not pass readiness checks after installation." }
         }
-        return runtime.interactiveLaunchConfig(workspace(c).absolutePath)
+        return runtime.interactiveLaunchConfig(
+            workspace(c).absolutePath,
+            c.applicationInfo.dataDir,
+            File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath
+        )
     }
 
     fun run(c: Context, command: String, where: String): String =
@@ -152,14 +149,10 @@ object ShellRunner {
 
     /** Executes a command while forwarding stdout/stderr chunks as they arrive. */
     fun runStreaming(c: Context, command: String, where: String, onOutput: (String) -> Unit): String {
-        // Enforce the same hard blocks before backend selection. In particular, the Linux/PRoot
-        // path must not bypass policy merely because its executor is different.
+        // Shell risk classification is advisory; it never prevents backend dispatch.
         val normalized = command.trim()
         if (normalized.isEmpty()) return "error: command is required"
-        if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
-        if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) {
-            return "error: blocked by Orion shell hard blocks (root/system wipe, raw block-device write, or fork bomb)"
-        }
+        if (normalized.length > LinuxRuntimePolicy.MAX_COMMAND) return "error: command exceeds the ${LinuxRuntimePolicy.MAX_COMMAND} character runtime limit"
         // Buffer complete lines so credentials split across process read chunks are redacted together.
         val pending = StringBuilder()
         val outputLock = Any()
@@ -212,9 +205,17 @@ object ShellRunner {
                         "error: Alpine installation finished but readiness checks failed. No fallback to Android shell was attempted."
                     } else {
                         safeEmitter("Alpine ready. Running command…\n")
-                        runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), safeEmitter, workspaceHostPath = workspace(c).absolutePath)
+                        runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), safeEmitter, workspaceHostPath = workspace(c).absolutePath,
+                            androidAppDataPath = c.applicationInfo.dataDir,
+                            sharedStoragePath = File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath
+                        )
                     }
-                } else runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), safeEmitter, workspaceHostPath = workspace(c).absolutePath)
+                } else runtime.execute(
+                    manifest, command, ShellExecutionRouting.commandTimeoutMs(command), safeEmitter,
+                    workspaceHostPath = workspace(c).absolutePath,
+                    androidAppDataPath = c.applicationInfo.dataDir,
+                    sharedStoragePath = File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath
+                )
             }
             ShellExecutionRouting.Backend.INVALID -> "error: unknown shell backend. Use where=builtin, where=linux, or where=termux."
         }
@@ -229,7 +230,9 @@ object ShellRunner {
                 result.replaceFirst("exit=0\n", "exit=0\nLOCAL VERIFY PASS: shell process exited with code 0.\n")
             else -> result
         }
-        AgentPolicy.log(c.applicationContext, "shell:$where", command, null, verifiedResult)
+        val warning = ShellPolicy.warning(command)
+        val reportedResult = if (warning == null) verifiedResult else warning + verifiedResult
+        AgentPolicy.log(c.applicationContext, "shell:$where", command, null, reportedResult)
         // Dedicated shell command record with secret redaction for independent audit.
         val exitCode = when {
             verifiedResult.startsWith("EXIT 0 · SUCCESS\n") -> 0
@@ -239,8 +242,8 @@ object ShellRunner {
             }
             else -> null
         }
-        ShellCommandStore.record(c.applicationContext, ShellExecutionRouting.backend(where).name.lowercase(), command, exitCode, verifiedResult, exitCode == 0)
-        return verifiedResult
+        ShellCommandStore.record(c.applicationContext, ShellExecutionRouting.backend(where).name.lowercase(), command, exitCode, reportedResult, exitCode == 0)
+        return reportedResult
     }
 
     fun writeFile(c: Context, rel: String, content: String): String {

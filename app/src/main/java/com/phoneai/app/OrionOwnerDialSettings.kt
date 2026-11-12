@@ -9,7 +9,7 @@ internal data class OrionOwnerDials(
     val autoActivateVerifiedExtensions: Boolean = false,
     val pythonProfile: OrionPythonProfile = OrionPythonProfile.GUARDED,
     val recoveryMaxAttempts: Int = 3,
-    val recoveryBackoffSeconds: Int = 30
+    val recoveryBackoffSeconds: Int = 1
 )
 
 internal object OrionOwnerDialSettings {
@@ -24,7 +24,7 @@ internal object OrionOwnerDialSettings {
             autoActivateVerifiedExtensions = p.getBoolean("auto_activate_verified_extensions", false),
             pythonProfile = profile,
             recoveryMaxAttempts = p.getInt("recovery_max_attempts", 3).coerceIn(0, 4),
-            recoveryBackoffSeconds = p.getInt("recovery_backoff_seconds", 30).coerceIn(15, 300)
+            recoveryBackoffSeconds = p.getInt("recovery_backoff_seconds", 1).coerceIn(1, 300)
         )
     }
 
@@ -33,14 +33,14 @@ internal object OrionOwnerDialSettings {
             .putBoolean("auto_activate_verified_extensions", value.autoActivateVerifiedExtensions)
             .putString("python_profile", value.pythonProfile.name)
             .putInt("recovery_max_attempts", value.recoveryMaxAttempts.coerceIn(0, 4))
-            .putInt("recovery_backoff_seconds", value.recoveryBackoffSeconds.coerceIn(15, 300))
+            .putInt("recovery_backoff_seconds", value.recoveryBackoffSeconds.coerceIn(1, 300))
             .apply()
     }
 
     /** GUARDED/DEVELOPER relax size only. FULL (owner opt-in, set in the credential-gated Owner Control Centre) also lifts the in-guest socket/subprocess block; per-run approval and the guest isolation stay. */
     fun pythonMaxCodeChars(context: Context): Int = when (read(context).pythonProfile) {
-        OrionPythonProfile.GUARDED -> 8_000
-        OrionPythonProfile.DEVELOPER -> 16_000
+        OrionPythonProfile.GUARDED -> PythonExecutionPolicy.GUARDED_MAX_CODE_CHARS
+        OrionPythonProfile.DEVELOPER -> PythonExecutionPolicy.DEVELOPER_MAX_CODE_CHARS
         OrionPythonProfile.FULL -> PythonExecutionPolicy.FULL_MAX_CODE_CHARS
     }
 }

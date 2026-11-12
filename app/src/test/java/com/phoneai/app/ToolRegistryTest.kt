@@ -5,7 +5,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ToolRegistryTest {
-        @Test fun workspaceListIsRegisteredAndReadOnly() {
+        @Test fun ultronCoordinationToolsAreAvailableBesideNativeExecutionTools() {
+        val requestTools = ToolRegistry.nativeToolsFor("create a multi-step task and build a Python project")
+            .map { it.name }.toSet()
+        assertTrue(requestTools.containsAll(setOf(
+            "chronos_awareness", "soul_state", "recall", "remember",
+            "ask_agent", "queue_agent", "agent_jobs", "create_agent",
+            "task_list", "task_add", "task_update",
+            "python_exec", "workspace_write", "workspace_read", "save_file"
+        )))
+        assertTrue("The combined tool window must remain under provider limits",
+            requestTools.size <= 64)
+    }
+
+    @Test fun workspaceListIsRegisteredAndReadOnly() {
         val tool = ToolRegistry.all.single { it.name == "workspace_list" }
         assertEquals(ToolAccess.READ, tool.access)
         assertEquals("workspace_shell", AgentPolicy.packForTool("workspace_list"))
@@ -21,6 +34,19 @@ class ToolRegistryTest {
         }
         assertTrue(ToolRegistry.find("workspace_delete")!!.promptLine.contains("journaled for conflict-safe undo"))
         assertTrue(ToolRegistry.find("workspace_move")!!.promptLine.contains("without overwriting"))
+    }
+
+    @Test fun savedGestureRoutinesAreExposedThroughTheNativePhoneDispatcher() {
+        listOf("routine_run", "routine_resume").forEach { name ->
+            assertEquals(ToolAccess.WRITE, ToolRegistry.access(name))
+            assertEquals("phone_control", AgentPolicy.packForTool(name))
+            assertTrue(ToolRegistry.requiresAccessibility(name))
+            assertEquals(OrionCapabilityAdapters.Backend.DEVICE, OrionCapabilityAdapters.route(name)?.backend)
+            assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.DEVICE, name))
+        }
+        val selected = ToolRegistry.nativeToolsFor("resume routine Morning routine").map { it.name }.toSet()
+        assertTrue(selected.containsAll(setOf("routine_run", "routine_resume")))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting("resume routine Morning routine"))
     }
 
     @Test fun deviceLocationToolIsRegisteredAndMappedToPhoneControl() {
@@ -230,5 +256,78 @@ class ToolRegistryPromptAvailabilityTest {
         val compact = ToolRegistry.promptSection(null)
         assertTrue(compact.contains("Also available, signatures only"))
         assertTrue(compact.contains("task_list {}"))
+    }
+
+    @Test fun mcpDiscoveryGuidanceUsesOnlyRegisteredReadTools() {
+        val prompt = ToolRegistry.promptSection("Check my MCP servers and discover API Anything tools").lowercase()
+        assertTrue(prompt.contains("mcp_status"))
+        assertTrue(prompt.contains("mcp_list_tools"))
+        assertTrue(prompt.contains("show configured mcp endpoint"))
+        assertTrue(prompt.contains("discover names/descriptions from configured mcp"))
+        assertTrue(prompt.contains("do not invent mcp_servers_list"))
+        assertTrue(prompt.contains("listing tools is read-only"))
+        assertEquals(ToolAccess.READ, ToolRegistry.access("mcp_status"))
+        assertEquals(ToolAccess.READ, ToolRegistry.access("mcp_list_tools"))
+    }
+}
+
+
+
+class ToolRegistryNativeSelectionTest {
+    @Test fun currentRequestToolsCannotBeCrowdedOutByHistoricalToolNames() {
+        val stale = ToolRegistry.names().take(18).toSet()
+        val selected = ToolRegistry.nativeToolsFor("Open WhatsApp and inspect the screen", stale).map { it.name }.toSet()
+        assertTrue(selected.contains("open_app"))
+        assertTrue(selected.contains("read_screen"))
+    }
+
+    @Test fun recentToolContextUsesOnlyTheLatestAssistantCallGroup() {
+        val history = org.json.JSONArray()
+            .put(org.json.JSONObject().put("role", "assistant").put("tool_calls", org.json.JSONArray().put(
+                org.json.JSONObject().put("function", org.json.JSONObject().put("name", "mcp_list_tools"))
+            )))
+            .put(org.json.JSONObject().put("role", "tool").put("name", "mcp_list_tools"))
+            .put(org.json.JSONObject().put("role", "assistant").put("content", "Finished MCP inspection."))
+            .put(org.json.JSONObject().put("role", "user").put("content", "Now open WhatsApp."))
+        assertTrue(ToolRegistry.recentToolNames(history).isEmpty())
+
+        history.put(org.json.JSONObject().put("role", "assistant").put("tool_calls", org.json.JSONArray()
+            .put(org.json.JSONObject().put("function", org.json.JSONObject().put("name", "open_app")))
+            .put(org.json.JSONObject().put("function", org.json.JSONObject().put("name", "lookup_app")))))
+        assertEquals(setOf("open_app", "lookup_app"), ToolRegistry.recentToolNames(history))
+    }
+
+    @Test fun userVisibleSaveToolIsAlwaysFullyExposedToTheModel() {
+        assertTrue(ToolRegistry.detailedToolNames("an unrelated phone request").contains("save_file"))
+        assertTrue(ToolRegistry.promptSection("write a Python calculator").contains("USER-VISIBLE FILE SAVE RULE"))
+        assertTrue(ToolRegistry.nativeToolsFor("Write a Python calculator and save it as a file")
+            .any { it.name == "save_file" })
+    }
+
+    @Test fun pythonTasksExposeNativeRuntimeAndFileToolsTogether() {
+        val selected = ToolRegistry.nativeToolsFor(
+            "Write a Python calculator, save it as a file, execute it and test it."
+        ).map { it.name }.toSet()
+        assertTrue(selected.containsAll(setOf(
+            "python_exec", "workspace_write", "workspace_read", "workspace_list", "save_file"
+        )))
+    }
+
+    @Test fun unknownHistoricalToolNamesAreIgnored() {
+        val history = org.json.JSONArray().put(org.json.JSONObject().put("role", "assistant").put("tool_calls", org.json.JSONArray()
+            .put(org.json.JSONObject().put("function", org.json.JSONObject().put("name", "invented_tool")))
+            .put(org.json.JSONObject().put("function", org.json.JSONObject().put("name", "device_info")))))
+        assertEquals(setOf("device_info"), ToolRegistry.recentToolNames(history))
+    }
+
+    @Test fun combinedRequestsExposeCompletePhoneMcpAndDeveloperFamilies() {
+        val selected = ToolRegistry.nativeToolsFor("Inspect MCP servers, use the phone, and build a Python project")
+            .map { it.name }.toSet()
+        val required = setOf(
+            "mcp_status", "mcp_list_tools", "mcp_call", "mcp_list_resources",
+            "open_app", "read_screen", "click", "type", "system_intent",
+            "python_exec", "workspace_read", "workspace_write", "dev_python", "dev_shell"
+        )
+        assertTrue("Combined task must expose all relevant tool families", selected.containsAll(required))
     }
 }

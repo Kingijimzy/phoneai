@@ -18,6 +18,11 @@ class AgentHooksTest {
   assertNull(AgentHooks.scopeBlockReason("What's the weather in Lagos, Nigeria today?", "weather", JSONObject().put("location", "Lagos, Nigeria")))
  }
  @Test fun allowsExplicitSend(){assertNull(AgentHooks.scopeBlockReason("Send this message to Alex","click_text",JSONObject().put("text","Send")))}
+ @Test fun unrequestedConsequentialActionWarnsInsteadOfBlocking(){
+  val args=JSONObject().put("text","Transfer funds")
+  assertNotNull(AgentHooks.scopeWarning("Open the banking app and inspect it","click_text",args))
+  assertNull(AgentHooks.scopeBlockReason("Open the banking app and inspect it","click_text",args))
+ }
  @Test fun negatedAndDraftOnlyRequestsNeverAuthorizeConsequentialActions(){
   listOf("Do not send this message to Alex","Don't send this message to Alex","Never send this message","Draft a message to Amma without sending","Prepare a reply but do not send it").forEach { request ->
    assertNotNull("$request must not authorize clicking Send",AgentHooks.scopeBlockReason(request,"click_text",JSONObject().put("text","Send")))

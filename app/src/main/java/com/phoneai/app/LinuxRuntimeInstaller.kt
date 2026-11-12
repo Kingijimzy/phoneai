@@ -125,29 +125,35 @@ internal class LinuxRuntimeInstaller(
         }
     }
 
-    fun execute(manifest: LinuxRuntimePolicy.Manifest, command: String, timeoutMs: Long = 60_000L, onOutput: (String) -> Unit = {}, workspaceHostPath: String? = null, shouldStop: () -> Boolean = { false }, extraEnvironment: Map<String, String> = emptyMap()): String {
+    fun execute(
+        manifest: LinuxRuntimePolicy.Manifest,
+        command: String,
+        timeoutMs: Long = 60_000L,
+        onOutput: (String) -> Unit = {},
+        workspaceHostPath: String? = null,
+        shouldStop: () -> Boolean = { false },
+        extraEnvironment: Map<String, String> = emptyMap(),
+        androidAppDataPath: String? = null,
+        sharedStoragePath: String? = null
+    ): String {
         if (!isReady(manifest)) return "error: Alpine runtime is not installed or failed readiness checks. Install/repair the pinned Linux runtime first."
-        if (timeoutMs !in 250L..180_000L) return "error: Linux timeout must be between 250 and 180000 ms."
+        // Never leak provider/model timeout values into the process supervisor unchecked.
+        // The old rejection caused otherwise valid Python work to fail before launch when a
+        // caller supplied a sub-250 ms timeout or requested the FULL profile's 30 minutes.
+        val boundedTimeoutMs = LinuxRuntimePolicy.normalizeProcessTimeout(timeoutMs)
         if (command == "__orion_install__") return "error: internal command is not executable"
         val workspace = workspaceHostPath?.let { candidate ->
-            // The guest may see exactly one host directory: Orion's dedicated Python workspace.
-            // A generic "inside filesDir" check would also permit accidental binding of databases,
-            // preferences or other private application state by a future caller.
-            val expected = File(app.filesDir, "orion-python/workspace")
-            val dir = File(candidate)
-            val canonical = runCatching { dir.canonicalFile }.getOrNull()
-            val expectedCanonical = runCatching { expected.canonicalFile }.getOrNull()
-            if (canonical == null || expectedCanonical == null ||
-                canonical.toPath() != expectedCanonical.toPath() ||
-                !canonical.isDirectory || !canonical.canRead() || !canonical.canWrite() ||
-                java.nio.file.Files.isSymbolicLink(dir.toPath()) ||
-                java.nio.file.Files.isSymbolicLink(expected.toPath()) ||
-                java.nio.file.Files.isSymbolicLink(expected.parentFile.toPath())) {
-                return "error: Python workspace bind mount rejected by runtime policy."
+            val directory = runCatching { File(candidate).canonicalFile }.getOrNull()
+                ?: return "error: Linux working directory is unavailable."
+            if (!directory.isDirectory || !directory.canRead() || !directory.canWrite()) {
+                return "error: Linux working directory is unavailable."
             }
-            canonical.absolutePath
+            directory.absolutePath
         }
-        val args = LinuxRuntimePolicy.prootArgs(proot.absolutePath, rootfs.absolutePath, command, workspace)
+        val args = LinuxRuntimePolicy.prootArgs(
+            proot.absolutePath, rootfs.absolutePath, command, workspace,
+            androidAppDataPath, sharedStoragePath
+        )
             ?: return "error: Linux command rejected by runtime policy."
         // Android's resolver is network-specific. Public DNS literals inside a PRoot guest
         // can be unreachable on mobile carriers/private DNS, so mirror the active Android
@@ -166,7 +172,7 @@ internal class LinuxRuntimeInstaller(
             }
         }
         val result = try {
-            runProcess(args, rootfs, timeoutMs, onOutput, shouldStop, extraEnvironment)
+            runProcess(args, rootfs, boundedTimeoutMs, onOutput, shouldStop, extraEnvironment)
         } catch (failure: IOException) {
             // Keep the marker after interrupted package operations so the next call repairs the rootfs.
             return "error: Linux process I/O failed safely: ${(failure.message ?: failure.javaClass.simpleName).take(240)}"
@@ -179,7 +185,7 @@ internal class LinuxRuntimeInstaller(
             (result.cancelled || result.timedOut || result.exitCode in setOf(9, 137, 143))
         if (packageMutation && !packageRecoveryRequired) packageOperationMarker.delete()
         return if (result.cancelled) "error: Linux command cancelled; the guest process was terminated."
-        else if (result.timedOut) "error: Linux command timed out after ${timeoutMs} ms" +
+        else if (result.timedOut) "error: Linux command timed out after ${boundedTimeoutMs} ms" +
             if (packageMutation) ". The next Linux command will restore the pinned base rootfs before continuing." else ""
         else "exit=${result.exitCode}\n${result.output}" +
             if (packageRecoveryRequired) "\nPackage operation was interrupted; the next Linux command will restore the pinned base rootfs before continuing." else ""
@@ -189,18 +195,16 @@ internal class LinuxRuntimeInstaller(
      * Prepares the exact PRoot launch tuple for the maintained Termux terminal emulator.
      * The emulator owns PTY creation, VT parsing, keyboard translation and screen resizing.
      */
-    fun interactiveLaunchConfig(workspaceHostPath: String): LinuxTerminalLaunchConfig {
+    fun interactiveLaunchConfig(
+        workspaceHostPath: String,
+        androidAppDataPath: String? = null,
+        sharedStoragePath: String? = null
+    ): LinuxTerminalLaunchConfig {
         val manifest = LinuxRuntimePolicy.productionManifest
         check(isReady(manifest)) { "Alpine runtime is not installed or failed readiness checks." }
-        val expected = File(app.filesDir, "orion-python/workspace")
         val supplied = File(workspaceHostPath).canonicalFile
-        val canonicalExpected = expected.canonicalFile
-        check(supplied.toPath() == canonicalExpected.toPath() && supplied.isDirectory &&
-            supplied.canRead() && supplied.canWrite() &&
-            !java.nio.file.Files.isSymbolicLink(File(workspaceHostPath).toPath()) &&
-            !java.nio.file.Files.isSymbolicLink(expected.toPath()) &&
-            !java.nio.file.Files.isSymbolicLink(expected.parentFile.toPath())) {
-            "Linux workspace bind mount rejected by runtime policy."
+        check(supplied.isDirectory && supplied.canRead() && supplied.canWrite()) {
+            "Linux working directory is unavailable."
         }
         check(proot.isFile && proot.canExecute() && sha256(proot) == manifest.prootSha256) {
             "Pinned ARM64 PRoot binary is missing or failed checksum verification."
@@ -215,7 +219,8 @@ internal class LinuxRuntimeInstaller(
             android.util.Log.w("OrionLinux", warning)
         }
         val argv = LinuxRuntimePolicy.prootArgs(
-            proot.absolutePath, rootfs.absolutePath, "exec /bin/sh -i", canonicalExpected.absolutePath
+            proot.absolutePath, rootfs.absolutePath, "exec /bin/sh -i", supplied.absolutePath,
+            androidAppDataPath, sharedStoragePath
         ) ?: error("Interactive Linux command rejected by runtime policy.")
         val environment = arrayOf(
             "HOME=/root",
@@ -305,7 +310,7 @@ internal class LinuxRuntimeInstaller(
                         if (count < 0) break
                         val chunk = String(buffer, 0, count)
                         synchronized(output) {
-                            if (output.length < 6000) output.append(chunk.take(6000 - output.length))
+                            if (output.length < 100_000) output.append(chunk.take(100_000 - output.length))
                         }
                         // Stream raw chunks immediately, including partial lines and progress bars.
                         runCatching { onOutput(chunk) }
@@ -324,7 +329,7 @@ internal class LinuxRuntimeInstaller(
             start()
         }
 
-        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs.coerceIn(250L, 180_000L))
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(LinuxRuntimePolicy.normalizeProcessTimeout(timeoutMs))
         var cancelled = false
         val finished = try {
             var done = process.waitFor(200, TimeUnit.MILLISECONDS)
@@ -365,7 +370,7 @@ internal class LinuxRuntimeInstaller(
             throw IOException("Interrupted while collecting Linux process output.", interrupted)
         }
 
-        val captured = synchronized(output) { output.toString().take(6000) }
+        val captured = synchronized(output) { output.toString().take(100_000) }
         if (finished && readerFailure.get() != null) {
             throw IOException("Could not reliably collect Linux process output.", readerFailure.get())
         }

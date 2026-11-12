@@ -245,6 +245,44 @@ internal object OrionProviderContextPolicy {
             else conversation.add(item)
         }
 
+        // Tool-call exchanges are indivisible context units. Never send an assistant tool_calls
+        // envelope without every matching tool result, and never retain orphan tool results.
+        val groups = mutableListOf<List<JSONObject>>()
+        var index = 0
+        while (index < conversation.size) {
+            val item = conversation[index]
+            val role = item.optString("role")
+            val calls = item.optJSONArray("tool_calls")
+            if (role == "assistant" && calls != null && calls.length() > 0) {
+                val expected = (0 until calls.length()).mapNotNull { callIndex ->
+                    calls.optJSONObject(callIndex)?.optString("id")?.takeIf { it.isNotBlank() }
+                }.toSet()
+                val results = mutableListOf<JSONObject>()
+                val found = linkedSetOf<String>()
+                var cursor = index + 1
+                while (cursor < conversation.size && found.size < expected.size) {
+                    val candidate = conversation[cursor]
+                    if (candidate.optString("role") != "tool") break
+                    val callId = candidate.optString("tool_call_id")
+                    if (callId !in expected || !found.add(callId)) break
+                    results.add(candidate)
+                    cursor++
+                }
+                if (expected.isNotEmpty() && found == expected) {
+                    groups.add(listOf(item) + results)
+                    index = cursor
+                } else {
+                    // Incomplete history is unsafe as a provider transcript. Drop the whole
+                    // incomplete exchange; later independent user/assistant turns can survive.
+                    index = maxOf(index + 1, cursor)
+                    while (index < conversation.size && conversation[index].optString("role") == "tool") index++
+                }
+                continue
+            }
+            if (role != "tool") groups.add(listOf(item))
+            index++
+        }
+
         val selected = mutableListOf<JSONObject>()
         var used = 0
         var systemRemaining = (budget * 45 / 100).coerceAtLeast(512)
@@ -261,25 +299,27 @@ internal object OrionProviderContextPolicy {
         }
 
         var remaining = (budget - used).coerceAtLeast(1)
-        val newestUser = conversation.indexOfLast { it.optString("role") == "user" }
-        val retained = mutableListOf<Pair<Int, JSONObject>>()
-        for (index in conversation.indices.reversed()) {
-            val item = conversation[index]
-            val cost = messageCost(item)
+        val newestUserGroup = groups.indexOfLast { group -> group.any { it.optString("role") == "user" } }
+        val retained = mutableListOf<Pair<Int, List<JSONObject>>>()
+        for (groupIndex in groups.indices.reversed()) {
+            val group = groups[groupIndex]
+            val cost = group.sumOf(::messageCost)
             if (cost <= remaining) {
-                retained.add(index to item)
+                retained.add(groupIndex to group)
                 remaining -= cost
-            } else if (index == newestUser && remaining > 24) {
-                val keep = clipped(item, remaining - 12)
-                retained.add(index to keep)
-                remaining -= messageCost(keep).coerceAtMost(remaining)
+            } else if (groupIndex == newestUserGroup && group.size == 1 && remaining > 24) {
+                val keep = clipped(group.single(), remaining - 12)
+                val keptCost = messageCost(keep)
+                if (keptCost in 1..remaining) {
+                    retained.add(groupIndex to listOf(keep))
+                    remaining -= keptCost
+                }
             }
             if (remaining <= 24) break
         }
-        selected.addAll(retained.sortedBy { it.first }.map { it.second })
+        selected.addAll(retained.sortedBy { it.first }.flatMap { it.second })
         return JSONArray().also { out -> selected.forEach { out.put(it) } }
-    }
-}
+    }}
 
 
 /** Version snapshots and expiry metadata are stored locally, separately from the active memory row. */

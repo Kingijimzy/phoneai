@@ -4,7 +4,7 @@ import android.content.Context
 import java.net.InetAddress
 import java.net.URI
 
-/** Exact-host network grants. RFC1918 LAN endpoints are permitted only after an explicit host grant. */
+/** Public HTTPS GET is allowed by task intent; LAN, WebSocket and write access retain explicit consent and exact-host grants. */
 internal object OrionPythonNetworkPolicy {
     private const val PREFS = "orion_python_network_hosts_v1"
     data class Endpoint(
@@ -38,11 +38,16 @@ internal object OrionPythonNetworkPolicy {
             .remove(host).remove("$host:plain_http").remove("$host:writes").apply()
     }
 
-    fun validate(context: Context, url: String): Endpoint? = validateUrl(context, url, websocket = false)
-    fun validateWebSocket(context: Context, url: String): Endpoint? = validateUrl(context, url, websocket = true)
+    fun validate(context: Context, url: String, requireNetworkConsent: Boolean = false): Endpoint? =
+        validateUrl(context, url, websocket = false, requireNetworkConsent = requireNetworkConsent)
+    fun validateWebSocket(context: Context, url: String): Endpoint? =
+        validateUrl(context, url, websocket = true, requireNetworkConsent = true)
 
-    private fun validateUrl(context: Context, url: String, websocket: Boolean): Endpoint? {
-        if (!OrionSensorConsent.read(context, OrionSensorScope.NETWORK).active()) return null
+    private fun validateUrl(
+        context: Context, url: String, websocket: Boolean, requireNetworkConsent: Boolean
+    ): Endpoint? {
+        val networkConsent = OrionSensorConsent.read(context, OrionSensorScope.NETWORK).active()
+        if (requireNetworkConsent && !networkConsent) return null
         val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return null
         if (uri.userInfo != null || uri.fragment != null || (uri.rawQuery?.length ?: 0) > 4096) return null
         val scheme = uri.scheme?.lowercase() ?: return null
@@ -50,25 +55,40 @@ internal object OrionPythonNetworkPolicy {
         if (scheme !in allowedSchemes || uri.host.isNullOrBlank() || uri.port !in -1..65535) return null
         val host = normalizeHost(uri.host) ?: return null
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(host, false)) return null
+        val hostGranted = prefs.getBoolean(host, false)
+        // Public HTTPS GET is read-only and available under the owner's global NETWORK consent;
+        // exact-host grants remain mandatory for local/LAN targets, WebSockets and writes.
+        if (!hostGranted && (websocket || scheme != "https")) return null
 
         // Resolve once and pin this exact address set in OkHttp. Mixed public/private DNS answers
         // are rejected to prevent a hostname from changing the network trust boundary.
-        val addresses = runCatching { InetAddress.getAllByName(host).toList() }.getOrNull()
-            ?.distinctBy { it.hostAddress } ?: return null
+        val addresses = resolvePublicOrGrantedHost(host, allowPrivate = hostGranted) ?: return null
         if (addresses.isEmpty()) return null
         val allPrivateLan = addresses.all(::isPrivateLanAddress)
         val anyPrivateOrSpecial = addresses.any(::isUnsafeAddress)
         if (allPrivateLan) {
             // Only RFC1918 IPv4 and explicitly named loopback are allowed as local endpoints.
-            if (addresses.any { !isPrivateLanAddress(it) }) return null
+            if (!hostGranted || addresses.any { !isPrivateLanAddress(it) }) return null
         } else if (anyPrivateOrSpecial) {
             return null
         }
         val local = allPrivateLan
+        if (local && !networkConsent) return null
         val plainScheme = scheme == "http" || scheme == "ws"
         if (plainScheme && (!local || !prefs.getBoolean("$host:plain_http", false))) return null
         return Endpoint(uri, host, local, prefs.getBoolean("$host:writes", false), addresses)
+    }
+
+    /** DNS resolver for redirects: return only public addresses; reject mixed/private/special answers. */
+    internal fun resolvePublicOrGrantedHost(hostInput: String, allowPrivate: Boolean = false): List<InetAddress>? {
+        val host = normalizeHost(hostInput) ?: return null
+        val addresses = runCatching { InetAddress.getAllByName(host).toList() }
+            .getOrNull()?.distinctBy { it.hostAddress } ?: return null
+        if (addresses.isEmpty()) return null
+        if (addresses.any(::isUnsafeAddress)) {
+            if (!allowPrivate || addresses.any { !isPrivateLanAddress(it) }) return null
+        }
+        return addresses
     }
 
     private fun isPrivateLanAddress(address: InetAddress): Boolean {

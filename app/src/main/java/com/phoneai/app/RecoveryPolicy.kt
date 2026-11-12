@@ -15,7 +15,7 @@ internal object RecoveryPolicy {
     enum class Failure { TRANSIENT, AMBIGUOUS, PERMISSION, UNSUPPORTED_ROUTE, TARGET_MISSING, DIAGNOSTIC, OTHER }
     enum class Decision { RETRY_READ, REPLAN, PAUSE_ASK }
 
-    const val MAX_READ_RETRIES = 1
+    const val MAX_READ_RETRIES = 4
 
     private val permissionWords = listOf("permission", "not granted", "denied", "not allowed", "requires", "consent", "approve")
     private val ambiguousWords = listOf("timed out", "timeout", "no response", "interrupted", "connection lost", "may have")

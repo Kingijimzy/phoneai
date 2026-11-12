@@ -28,8 +28,8 @@ class OrionModelProviderIntegrationTest {
     fun providerFactoriesCreateNimInstance() {
         val provider: OrionModelProvider = OrionModelProviderFactories.create(context)
         assertNotNull(provider)
-        // Nim is the implementation behind the interface
-        assertTrue(provider is Nim)
+        // The production factory wraps Nim with the account-provider router.
+        assertTrue(provider is AccountAwareModelProvider)
     }
 
     @Test
