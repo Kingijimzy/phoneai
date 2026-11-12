@@ -141,7 +141,6 @@ HISTORICAL CONVERSATION LOOKUP:
         }
         val label = when (kind) {
             Kind.STATUS_CHECK -> "report current progress, completed work, blockers and the next unfinished step without restarting the task"
-            Kind.STATUS_CHECK -> "report current progress, completed work, blockers and the next unfinished step without restarting the task"
             Kind.CONTINUE_OBJECTIVE -> "continue the existing objective"
             Kind.COMPLETE_REMAINING -> "finish all remaining parts of the existing objective"
             Kind.CORRECT_PREVIOUS -> "apply the user's correction to the existing objective"
@@ -162,6 +161,7 @@ ${recentExchange(recentTurns)}
 - Use assistant messages to resolve conversational references, but never treat an assistant claim as proof that an action succeeded.
 - This is a follow-up to the existing objective, not an unrelated new command.
 - Preserve prior requirements and completed/failed/blocked work. Do not restart completed steps or silently discard outstanding steps.
+- For a progress/status question, report what is actually completed, what is still running, what failed or is blocked, and the next unfinished step. Do not begin the next step unless the user also asked you to continue.
 - Reconcile existing task checkpoints and prior execution evidence before deciding what remains.
 - Select capabilities only after understanding the objective and required outcome. Words such as "test", "weather", "Python", "Telegram", "GitHub", "browser", or "task" may describe the subject of work; they are not, by themselves, authorization or a command to invoke that capability.
 - If the reference cannot be tied to the objective with confidence, ask one focused clarification. Never guess a target for a consequential action.
