@@ -48,6 +48,9 @@ internal object OrionFactStore {
         prefs.edit().putBoolean("complete", true).apply()
     }
 
+    /** Called by the shared turn-context builder so old facts are migrated before recall. */
+    fun migrateLegacyFactsIfNeeded(c: Context) = migrateLegacyFacts(c)
+
     /** Model/tool-originated writes enter the canonical memory store as reviewable proposals. */
     fun add(c: Context, s: String, p: String, o: String): String {
         val (a, b, d) = Triple(norm(s), norm(p), norm(o))
