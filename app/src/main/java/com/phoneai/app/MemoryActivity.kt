@@ -69,6 +69,7 @@ class MemoryActivity : Activity() {
         page.removeAllViews()
         val all = if (query.isBlank()) MemoryStore.all(this).sortedByDescending { it.updated } else MemoryStore.search(this, query)
         count.text = "${MemoryStore.all(this).size} saved memories · stored only in Orion's app data"
+        renderKnowledgeGraph()
         if (all.isEmpty()) {
             val empty = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(20), dp(28), dp(20), dp(28)); background = panel() }
             empty.addView(text(if (query.isBlank()) "Nothing saved yet" else "No matching memories", 18f, Theme.TEXT, true).apply { gravity = Gravity.CENTER })
@@ -138,6 +139,92 @@ class MemoryActivity : Activity() {
         }
     }
 
+
+    /** Visible health and relationship view for the same SQLite graph used by automatic recall. */
+    private fun renderKnowledgeGraph() {
+        val snapshot = runCatching { OrionKnowledgeGraph.snapshot(this) }.getOrElse {
+            OrionKnowledgeGraph.Snapshot(0, 0, 0, 0, emptyList(), emptyList())
+        }
+        val approved = MemoryStore.all(this).count {
+            MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) &&
+                OrionMemoryLifecycle.isActive(this, it.id)
+        }
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(13), dp(14), dp(13))
+            background = panel()
+        }
+        val heading = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        heading.addView(text("CEREBRO  /  ENTITY KNOWLEDGE GRAPH", 10f, Theme.SILVER, true),
+            LinearLayout.LayoutParams(0, -2, 1f))
+        heading.addView(text("ON DEVICE", 9f, Theme.MUTED, true))
+        card.addView(heading)
+        card.addView(text(
+            "${snapshot.indexedMemories} / $approved approved memories indexed  ·  ${snapshot.entities} entities  ·  ${snapshot.relationships} facts  ·  ${snapshot.terms} search terms",
+            11f, Theme.TEXT_SECONDARY
+        ).apply { setPadding(0, dp(8), 0, dp(9)) })
+        val graphText = if (query.isNotBlank()) {
+            runCatching { KnowledgeGraph.promptBlock(this, query) }.getOrDefault("")
+        } else ""
+        val visibleFacts = graphText.lineSequence().filter { it.isNotBlank() }.take(5).toList()
+            .ifEmpty { snapshot.recentFacts.take(5) }
+        if (visibleFacts.isNotEmpty()) {
+            card.addView(text(if (query.isBlank()) "RECENT RELATIONSHIPS" else "RELATIONSHIPS RELEVANT TO SEARCH", 9f, Theme.MUTED, true)
+                .apply { setPadding(0, 0, 0, dp(5)) })
+            visibleFacts.forEach { fact ->
+                card.addView(text("•  ${fact.removePrefix("- ").trim()}", 12f, Theme.TEXT)
+                    .apply { setPadding(0, dp(3), 0, dp(3)) })
+            }
+        }
+        if (snapshot.recentEntities.isNotEmpty()) {
+            card.addView(text("CONNECTED ENTITIES", 9f, Theme.MUTED, true)
+                .apply { setPadding(0, dp(8), 0, dp(4)) })
+            card.addView(text(snapshot.recentEntities.joinToString("   ·   "), 11f, Theme.TEXT_SECONDARY))
+        }
+        if (visibleFacts.isEmpty() && snapshot.recentEntities.isEmpty()) {
+            card.addView(text(
+                "No connected facts yet. Approve memories mentioning people, places, projects or dates; Orion will index them for recall.",
+                12f, Theme.MUTED
+            ))
+        }
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
+        actions.addView(button("Rebuild graph") {
+            val indexed = runCatching { OrionKnowledgeGraph.rebuild(this) }.getOrDefault(-1)
+            Toast.makeText(this, if (indexed >= 0) "Graph rebuilt · $indexed memories indexed" else "Graph rebuild failed", Toast.LENGTH_SHORT).show()
+            render()
+        })
+        actions.addView(button("Explore") { showGraphLookup() }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(7) })
+        card.addView(actions, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+        page.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+    }
+
+    private fun showGraphLookup() {
+        val input = EditText(this).apply {
+            hint = "Person, place, project or entity"
+            setTextColor(Theme.TEXT)
+            setHintTextColor(Theme.MUTED)
+            setSingleLine(true)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Explore knowledge graph")
+            .setMessage("Find approved facts and connected memories stored on this phone.")
+            .setView(input)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Explore") { _, _ ->
+                val entity = input.text.toString().trim()
+                if (entity.isNotBlank()) {
+                    val facts = runCatching { KnowledgeGraph.query(this, entity) }
+                        .getOrDefault("Could not query graph relationships.")
+                    val connected = runCatching { OrionKnowledgeGraph.relatedMemories(this, entity, 8) }
+                        .getOrDefault(emptyList())
+                    val sources = if (connected.isEmpty()) "No connected approved memories found."
+                        else connected.joinToString("\n\n") { "• ${it.category.uppercase(Locale.ROOT)} — ${it.text}" }
+                    AlertDialog.Builder(this).setTitle(entity)
+                        .setMessage("$facts\n\nCONNECTED MEMORIES\n$sources")
+                        .setPositiveButton("OK", null).show()
+                }
+            }.show()
+    }
 
     private fun chooseRoutineReminder(memoryId: Int) {
         if (!OrionSensorConsent.read(this, OrionSensorScope.ROUTINE_REMINDERS).active()) {

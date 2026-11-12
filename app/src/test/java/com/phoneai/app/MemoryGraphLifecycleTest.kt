@@ -70,6 +70,27 @@ class MemoryGraphLifecycleTest {
         assertTrue("Direct lexical fact must remain in prompt recall", prompt.contains(leagueFact.text))
     }
 
+    @Test fun existingApprovedMemoriesAreRebuiltIntoEntityGraphOnFirstRecall() {
+        val saved = MemoryStore.addOwnerConfirmed(
+            context, "fact", "My sister Amaka lives in Lagos"
+        )!!
+        OrionKnowledgeGraph.clear(context)
+        val reached = OrionKnowledgeGraph.relatedMemoryIds(context, "Amaka")
+        assertTrue("Legacy approved memory should be indexed automatically", reached.contains(saved.id))
+        val snapshot = OrionKnowledgeGraph.snapshot(context)
+        assertTrue(snapshot.indexedMemories > 0)
+        assertTrue(snapshot.entities > 0)
+        assertTrue(snapshot.recentEntities.any { it.contains("amaka") || it.contains("lagos") })
+    }
+
+    @Test fun graphExplorerReturnsOnlyApprovedConnectedSourceMemories() {
+        val approved = MemoryStore.addOwnerConfirmed(context, "fact", "My sister Amaka lives in Lagos")!!
+        val pending = MemoryStore.addObservedProposal(context, "fact", "My friend Amaka visits Lagos", 0.6, "test")!!
+        val connected = OrionKnowledgeGraph.relatedMemories(context, "Amaka")
+        assertTrue(connected.any { it.id == approved.id })
+        assertFalse(connected.any { it.id == pending.id })
+    }
+
     @Test fun graphRecallNeverBypassesOwnerApprovalOrSensitivityFilters() {
         val rejected = MemoryStore.addOwnerConfirmed(context, "fact", "My team is Arsenal")!!
         assertTrue(MemoryStore.setReviewStatus(context, rejected.id, "rejected"))

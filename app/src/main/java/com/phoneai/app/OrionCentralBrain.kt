@@ -208,7 +208,9 @@ internal object OrionCentralBrain {
                 activeObjective = continuityObjective.ifBlank { savedSoulGoal },
                 registeredCapabilityCount = registered.size,
                 enabledSkillCount = enabledSkills.size,
-                memoryAvailable = recentTurns.isNotEmpty() || runCatching { OrionFactStore.tomProfile(app).isNotEmpty() }.getOrDefault(false),
+                memoryAvailable = recentTurns.isNotEmpty() ||
+                    runCatching { MemoryStore.all(app).any { MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) && OrionMemoryLifecycle.isActive(app, it.id) } }.getOrDefault(false) ||
+                    runCatching { OrionFactStore.tomProfile(app).isNotEmpty() }.getOrDefault(false),
                 unresolvedEvidenceSources = contextLoadDiagnostics.filter { it.contains("failed:") }
             )
         )

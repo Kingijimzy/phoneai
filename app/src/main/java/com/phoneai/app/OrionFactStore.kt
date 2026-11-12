@@ -4,7 +4,11 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-/** Long-term memory as (subject, predicate, object) triplets in SQLite, so Orion can query relationships instead of scanning text. */
+/**
+ * Compatibility adapter for legacy triplet tools and the owner preference profile.
+ * New facts live in MemoryStore and OrionKnowledgeGraph; the old facts table is read once
+ * and migrated as untrusted proposals because its original provenance is unavailable.
+ */
 internal object OrionFactStore {
     private class Db(c: Context) : SQLiteOpenHelper(c, "orion_facts.db", null, 2) {
         override fun onCreate(db: SQLiteDatabase) {
@@ -20,41 +24,101 @@ internal object OrionFactStore {
     }
 
     private fun norm(v: String) = v.trim().replace(Regex("\\s+"), " ").take(200)
+    private const val LEGACY_MIGRATION_PREFS = "orion_fact_store_migration"
 
+    /** Old facts lack provenance; migrate them as proposals, never silently as trusted facts. */
+    private fun migrateLegacyFacts(c: Context) {
+        val app = c.applicationContext
+        val prefs = app.getSharedPreferences(LEGACY_MIGRATION_PREFS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean("complete", false)) return
+        val rows = mutableListOf<Triple<String, String, String>>()
+        try {
+            Db(app).readableDatabase.use { db ->
+                db.rawQuery("SELECT s,p,o FROM facts ORDER BY at DESC", null).use {
+                    while (it.moveToNext()) rows += Triple(it.getString(0), it.getString(1), it.getString(2))
+                }
+            }
+        } catch (_: Exception) { return }
+        val ownerName = Prefs.userName(app).trim()
+        val migrated = rows.all { (s, p, o) ->
+            val subject = if (ownerName.isNotBlank() && norm(s).equals(norm(ownerName), true)) "user" else norm(s)
+            val text = "$subject — ${norm(p)} — ${norm(o)}"
+            if (subject.isBlank() || norm(p).isBlank() || norm(o).isBlank() ||
+                MemoryGovernancePolicy.sensitivity(text) == "sensitive") true
+            else MemoryStore.addObservedProposal(
+                app, "fact", text, 0.55,
+                "migrated legacy triplet; original provenance unavailable"
+            ) != null
+        }
+        if (migrated) prefs.edit().putBoolean("complete", true).apply()
+    }
+
+    /** Called by the shared turn-context builder so old facts are migrated before recall. */
+    fun migrateLegacyFactsIfNeeded(c: Context) = migrateLegacyFacts(c)
+
+    /** Model/tool-originated writes enter the canonical memory store as reviewable proposals. */
     fun add(c: Context, s: String, p: String, o: String): String {
         val (a, b, d) = Triple(norm(s), norm(p), norm(o))
         if (a.isBlank() || b.isBlank() || d.isBlank()) return "error: fact_add needs subject, predicate and object"
-        Db(c).writableDatabase.use {
-            it.execSQL("INSERT OR REPLACE INTO facts(s,p,o,at) VALUES(?,?,?,?)", arrayOf(a, b, d, System.currentTimeMillis()))
-        }
-        return "remembered: $a — $b — $d"
+        val memory = MemoryStore.addObservedProposal(
+            c, "fact", "$a — $b — $d", 0.55, "fact_add tool proposal; owner review required"
+        ) ?: return "error: fact proposal could not be saved"
+        return if (memory.reviewStatus == "approved") "already remembered: $a — $b — $d"
+        else "proposed for memory review: $a — $b — $d"
     }
 
-    /** Any blank field is a wildcard; `match` also does a substring search over all three. */
+    /** Direct owner statements enter the same graph as owner-approved memories. */
+    fun addOwnerFact(c: Context, s: String, p: String, o: String): String {
+        val (a, b, d) = Triple(norm(s), norm(p), norm(o))
+        if (a.isBlank() || b.isBlank() || d.isBlank()) return "error: owner fact needs subject, predicate and object"
+        // OrionFactExtractor emits the configured owner name as subject; normalize it
+        // to the canonical owner node so "my ..." queries can retrieve the relationship.
+        val subject = "user"
+        val memory = MemoryStore.addOwnerConfirmed(c, "fact", "$subject — $b — $d")
+            ?: return "error: owner fact could not be saved"
+        return "remembered: $a — $b — $d (memory #${memory.id})"
+    }
+
+    /** Query only approved facts from the canonical MemoryStore/SQLite graph. */
     fun query(c: Context, s: String = "", p: String = "", o: String = "", match: String = "", limit: Int = 30): String {
-        val where = mutableListOf<String>(); val args = mutableListOf<String>()
-        if (s.isNotBlank()) { where += "lower(s)=lower(?)"; args += norm(s) }
-        if (p.isNotBlank()) { where += "lower(p)=lower(?)"; args += norm(p) }
-        if (o.isNotBlank()) { where += "lower(o)=lower(?)"; args += norm(o) }
-        if (match.isNotBlank()) { where += "(s LIKE ? OR p LIKE ? OR o LIKE ?)"; repeat(3) { args += "%${norm(match)}%" } }
-        val sql = "SELECT s,p,o FROM facts" + (if (where.isEmpty()) "" else " WHERE " + where.joinToString(" AND ")) +
-            " ORDER BY at DESC LIMIT ${limit.coerceIn(1, 100)}"
-        val rows = mutableListOf<String>()
-        Db(c).readableDatabase.use { db -> db.rawQuery(sql, args.toTypedArray()).use { while (it.moveToNext()) rows += "${it.getString(0)} — ${it.getString(1)} — ${it.getString(2)}" } }
-        return if (rows.isEmpty()) "no matching facts" else rows.joinToString("\n")
+        migrateLegacyFacts(c)
+        val owner = Prefs.userName(c).trim()
+        val facts = KnowledgeGraph.all(c).filter { fact ->
+            val subjectMatches = s.isBlank() || fact.a.equals(norm(s), true) ||
+                (fact.a == "user" && (s.equals("user", true) || s.equals(owner, true)))
+            val predicateMatches = p.isBlank() || fact.rel.replace('_', ' ').equals(norm(p).replace('_', ' '), true)
+            val objectMatches = o.isBlank() || fact.b.equals(norm(o), true)
+            val matchMatches = match.isBlank() || listOf(fact.a, fact.rel, fact.b).any { it.contains(norm(match), true) }
+            subjectMatches && predicateMatches && objectMatches && matchMatches
+        }.take(limit.coerceIn(1, 100))
+        return if (facts.isEmpty()) "no owner-approved facts match; check the Memory screen for pending proposals"
+        else facts.joinToString("\n") { "${it.a} — ${it.rel} — ${it.b}" }
     }
 
+    /** Forgetting a fact removes it from trusted recall while preserving its rejected record. */
     fun forget(c: Context, s: String, p: String, o: String): String {
-        val n = Db(c).writableDatabase.use { it.delete("facts", "lower(s)=lower(?) AND lower(p)=lower(?) AND lower(o)=lower(?)", arrayOf(norm(s), norm(p), norm(o))) }
-        return if (n > 0) "forgot $n fact(s)" else "no such fact"
+        migrateLegacyFacts(c)
+        val owner = Prefs.userName(c).trim()
+        val matches = MemoryStore.all(c).filter { memory ->
+            MemoryGovernancePolicy.canUseInPrompt(memory.reviewStatus, memory.sensitivity) &&
+                GraphPolicy.extract(memory.text).any { (a, rel, b) ->
+                    val subjectMatches = s.isBlank() || a.equals(norm(s), true) ||
+                        (a == "user" && (s.equals("user", true) || s.equals(owner, true)))
+                    val predicateMatches = p.isBlank() || rel.replace('_', ' ').equals(norm(p).replace('_', ' '), true)
+                    val objectMatches = o.isBlank() || b.equals(norm(o), true)
+                    subjectMatches && predicateMatches && objectMatches
+                }
+        }
+        val changed = matches.count { MemoryStore.setReviewStatus(c, it.id, "rejected") }
+        return if (changed > 0) "forgot $changed fact(s) from trusted recall; rejected records remain available in Memory history"
+        else "no matching approved fact"
     }
 
     data class Tom(val dimension: String, val value: String, val confidence: Double, val evidence: String, val source: String, val observations: Int)
 
     /**
-     * Theory-of-mind preference profile: revisable, evidence-backed hypotheses about how Kingi likes to work
-     * (any dimension Orion judges useful, e.g. detail level, initiative, tone). Agreement raises confidence,
-     * a contradicting observation must beat the current belief to replace it, and values Kingi set himself are never overwritten.
+     * Theory-of-mind preference profile: revisable, evidence-backed hypotheses about how Kingi likes to work.
+     * Owner-set values are authoritative; inferred values remain revisable.
      */
     fun tomObserve(c: Context, dimension: String, value: String, confidence: Double, evidence: String, owner: Boolean = false): Boolean {
         val d = norm(dimension).lowercase().replace(' ', '_').take(40); val v = norm(value).take(160)
@@ -91,13 +155,14 @@ internal object OrionFactStore {
     fun tomBlock(c: Context): String {
         val p = tomProfile(c).filter { it.confidence >= 0.5 }
         if (p.isEmpty()) return ""
-        return "KINGI'S PREFERENCE PROFILE (theory of mind: hypotheses from evidence, revisable; his current words always win):\n" +
+        return "KINGI'S PREFERENCE PROFILE (theory of mind: hypotheses from evidence, revisable; his current words always win):\\n" +
             p.joinToString("\n") { "- ${it.dimension}: ${it.value} (${(it.confidence * 100).toInt()}%, ${it.source}, seen ${it.observations}x)" }
     }
 
-    /** Short block for the prompt: the freshest facts about the owner. */
+    /** Compatibility adapter: prompt facts now come from the canonical approved memory graph. */
     fun promptBlock(c: Context, owner: String): String = runCatching {
-        val rows = query(c, s = owner, limit = 12)
-        if (rows.startsWith("no matching")) "" else "KNOWN FACTS (subject — predicate — object; use fact_query for more, fact_add to remember new ones):\n$rows"
+        migrateLegacyFacts(c)
+        val rows = KnowledgeGraph.promptBlock(c, owner)
+        if (rows.isBlank()) "" else "KNOWN FACTS (approved owner memory; subject — predicate — object):\\n$rows"
     }.getOrDefault("")
 }
