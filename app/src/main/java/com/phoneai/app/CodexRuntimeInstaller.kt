@@ -23,8 +23,9 @@ internal class CodexRuntimeInstaller(context: Context) {
             set -eu
             apk add --no-cache curl tar coreutils
             mkdir -p /tmp/orion-codex-$VERSION /usr/local/bin
-            curl -fL --retry 3 --connect-timeout 20 '$ARCHIVE_URL' -o /tmp/orion-codex-$VERSION/app-server.tar.gz
+            curl -fsSL --retry 3 --connect-timeout 20 --retry-all-errors '$ARCHIVE_URL' -o /tmp/orion-codex-$VERSION/app-server.tar.gz
             echo '$SHA256  /tmp/orion-codex-$VERSION/app-server.tar.gz' | sha256sum -c -
+            tar -tzf /tmp/orion-codex-$VERSION/app-server.tar.gz > /tmp/orion-codex-$VERSION/archive-files.txt
             tar -xzf /tmp/orion-codex-$VERSION/app-server.tar.gz -C /tmp/orion-codex-$VERSION
             find /tmp/orion-codex-$VERSION -type f -name '*-aarch64-unknown-linux-musl' -exec sh -c '
               for file do
@@ -35,9 +36,9 @@ internal class CodexRuntimeInstaller(context: Context) {
                 install -m 755 "${'$'}file" "/usr/local/bin/${'$'}name"
               done
             ' sh {} +
-            test -x '$GUEST_BINARY'
-            test -x '$GUEST_CODE_MODE_HOST'
-            test -x '$GUEST_EXEC_SERVER'
+            if ! test -x '$GUEST_BINARY'; then echo 'Codex archive missing app-server binary'; cat /tmp/orion-codex-$VERSION/archive-files.txt | head -80; find /tmp/orion-codex-$VERSION -maxdepth 4 -type f -print; exit 31; fi
+            if ! test -x '$GUEST_CODE_MODE_HOST'; then echo 'Codex archive missing code-mode-host binary'; find /tmp/orion-codex-$VERSION -maxdepth 4 -type f -print; exit 32; fi
+            if ! test -x '$GUEST_EXEC_SERVER'
             '$GUEST_BINARY' --help >/dev/null
             rm -rf /tmp/orion-codex-$VERSION
         """.trimIndent()
