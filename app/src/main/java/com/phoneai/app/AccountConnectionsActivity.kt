@@ -26,6 +26,7 @@ class AccountConnectionsActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var code: TextView
     private lateinit var connectButton: Button
+    private lateinit var antigravityConnectButton: Button
     private var polling = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,8 +91,15 @@ class AccountConnectionsActivity : Activity() {
             setTextColor(Theme.MUTED)
             setPadding(0, dp(8), 0, dp(8))
             setTextIsSelectable(true)
+            maxLines = 7
+            movementMethod = android.text.method.ScrollingMovementMethod.getInstance()
         }
-        root.addView(antigravityOutput)
+        antigravityOutput.background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(Theme.PANEL)
+            cornerRadius = dp(12).toFloat()
+            setStroke(dp(1), Theme.LINE)
+        }
+        root.addView(antigravityOutput, LinearLayout.LayoutParams(-1, dp(150)))
         antigravityCode = EditText(this).apply {
             hint = "Paste the Antigravity terminal login code if requested"
             setTextColor(Theme.TEXT)
@@ -99,11 +107,12 @@ class AccountConnectionsActivity : Activity() {
             setSingleLine(true)
         }
         root.addView(antigravityCode)
-        root.addView(Button(this).apply {
+        antigravityConnectButton = Button(this).apply {
             text = "CONNECT GOOGLE ANTIGRAVITY"
             isAllCaps = false
             setOnClickListener { connectAntigravity() }
-        }, LinearLayout.LayoutParams(-1, dp(52)))
+        }
+        root.addView(antigravityConnectButton, LinearLayout.LayoutParams(-1, dp(52)))
         root.addView(Button(this).apply {
             text = "SEND LOGIN CODE"
             isAllCaps = false
@@ -111,8 +120,8 @@ class AccountConnectionsActivity : Activity() {
                 val value = antigravityCode.text.toString().trim()
                 if (value.isNotEmpty()) {
                     runCatching { antigravity?.writeLine(value) }
-                        .onSuccess { antigravityCode.setText(""); antigravityOutput.append("\nCode submitted.") }
-                        .onFailure { antigravityOutput.append("\nCould not send code: ${it.message}") }
+                        .onSuccess { antigravityCode.setText(""); appendAntigravityLog("Code submitted.") }
+                        .onFailure { appendAntigravityLog("Could not send code: ${it.message}") }
                 }
             }
         }, LinearLayout.LayoutParams(-1, dp(48)))
@@ -123,6 +132,12 @@ class AccountConnectionsActivity : Activity() {
         }
         root.addView(back, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(24) })
         setContentView(ScrollView(this).apply { addView(root) })
+    }
+
+    private fun appendAntigravityLog(line: String) {
+        if (!::antigravityOutput.isInitialized || isFinishing || isDestroyed) return
+        val combined = (antigravityOutput.text.toString() + "\n" + line).takeLast(9_000)
+        antigravityOutput.text = combined
     }
 
     private fun connectCodex() {
@@ -166,12 +181,15 @@ class AccountConnectionsActivity : Activity() {
     }
 
     private fun connectAntigravity() {
+        if (!::antigravityConnectButton.isInitialized || !antigravityConnectButton.isEnabled) return
+        antigravityConnectButton.isEnabled = false
+        antigravityConnectButton.text = "CONNECTING…"
         antigravityOutput.text = "Installing official Antigravity CLI in Alpine ARM64…"
         worker.execute {
             try {
                 val installer = AntigravityRuntimeInstaller(applicationContext)
                 installer.install({ line ->
-                    runOnUiThread { if (!isFinishing) antigravityOutput.append("\n" + line.take(220)) }
+                    runOnUiThread { if (!isFinishing) appendAntigravityLog(line.take(220)) }
                 }).getOrThrow()
                 val session = installer.openLoginSession(filesDir.absolutePath)
                 antigravity = session
@@ -180,7 +198,7 @@ class AccountConnectionsActivity : Activity() {
                     val line = session.readLine(1_000L) ?: session.readStderrLine(50L) ?: continue
                     runOnUiThread {
                         if (!isFinishing) {
-                            antigravityOutput.append("\n" + line.take(500))
+                            appendAntigravityLog(line.take(500))
                             val url = Regex("https://[^\\s]+").find(line)?.value?.trimEnd('.', ')', ']')
                             if (url != null) runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
                         }
@@ -188,7 +206,7 @@ class AccountConnectionsActivity : Activity() {
                 }
                 val exit = session.exitCodeOrNull()
                 if (exit == 0 && !isFinishing) {
-                    runOnUiThread { antigravityOutput.append("\nLogin command exited. Verifying with a real Antigravity model request…") }
+                    runOnUiThread { appendAntigravityLog("Login command exited. Verifying with a real Antigravity model request…") }
                     val result = installer.runPrompt(
                         filesDir.absolutePath,
                         "Reply with exactly: ORION_ANTIGRAVITY_AUTH_OK"
@@ -211,11 +229,19 @@ class AccountConnectionsActivity : Activity() {
                                 models.take(20).joinToString(", ").ifBlank { "model list unavailable" }
                     }
                 } else if (!isFinishing) {
-                    runOnUiThread { antigravityOutput.append("\nLogin process ended with exit code ${exit ?: "unknown"}.") }
+                    runOnUiThread {
+                        appendAntigravityLog("Login process ended with exit code ${exit ?: "unknown"}.")
+                        antigravityConnectButton.text = "CONNECT GOOGLE ANTIGRAVITY"
+                        antigravityConnectButton.isEnabled = true
+                    }
                 }
             } catch (failure: Exception) {
                 runOnUiThread {
-                    if (!isFinishing) antigravityOutput.append("\nConnection failed: ${failure.message ?: failure.javaClass.simpleName}")
+                    if (!isFinishing) {
+                        appendAntigravityLog("Connection failed: ${failure.message ?: failure.javaClass.simpleName}")
+                        antigravityConnectButton.text = "RETRY GOOGLE ANTIGRAVITY"
+                        antigravityConnectButton.isEnabled = true
+                    }
                 }
             }
         }

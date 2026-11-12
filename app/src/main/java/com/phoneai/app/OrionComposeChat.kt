@@ -515,19 +515,17 @@ internal fun OrionComposeChatScreen(
         animationSpec = tween(durationMillis = 220),
         label = "chat-mode-accent"
     )
-    // Scroll only when transcript length changes. Status updates can arrive frequently while
-    // a tool/model is running; tying animation to status causes repeated scroll work and fights
-    // users who are reading earlier messages.
-    LaunchedEffect(lines.lastOrNull()?.id, (lines.lastOrNull()?.text?.length ?: 0) / 80) {
-        // Keep streaming replies in view in coarse chunks, not every token. Never yank the
-        // reader away from older messages unless they are already near the bottom; always
-        // reveal a newly sent user turn.
-        if (lines.isNotEmpty()) {
+    val visibleLines = remember(lines) { lines.filterNot(::isCompactExecutionNote) }
+    // Stream in coarse chunks and use an immediate list position update rather than starting
+    // a new scroll animation every ~80 characters. This avoids repeated animation work on
+    // long responses and keeps older messages readable when the user has scrolled upward.
+    LaunchedEffect(visibleLines.lastOrNull()?.id, (visibleLines.lastOrNull()?.text?.length ?: 0) / 120) {
+        if (visibleLines.isNotEmpty()) {
             val layout = listState.layoutInfo
             val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index
             val nearBottom = lastVisible == null || layout.totalItemsCount - 1 - lastVisible <= 2
-            if (lines.lastOrNull()?.kind == "me" || nearBottom) {
-                listState.animateScrollToItem(lines.lastIndex)
+            if (visibleLines.lastOrNull()?.kind == "me" || nearBottom) {
+                listState.scrollToItem(visibleLines.lastIndex)
             }
         }
     }
@@ -617,7 +615,6 @@ internal fun OrionComposeChatScreen(
         if (lines.isEmpty()) {
             OrionHome(commandMode = commandMode, onSend = onSend, modifier = Modifier.weight(1f).fillMaxWidth())
         } else {
-            val visibleLines = lines.filterNot(::isCompactExecutionNote)
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
                 state = listState,
