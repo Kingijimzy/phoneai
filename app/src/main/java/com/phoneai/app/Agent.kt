@@ -176,7 +176,7 @@ internal object IrreversibleActionConfirmationPolicy {
         "(?i)(?:^|[;&|]\\s*)(?:sudo\\s+)?(?:rm|shred|srm|wipe|wipefs|mkfs(?:\\.[a-z0-9]+)?|dd)\\b"
     )
     private val destructiveRequest = Regex(
-        "(?i)\\b(delete|wipe|erase|shred|format|factory\\s+reset|empty\\s+(?:the\\s+)?trash|clear\\s+(?:the\\s+)?(?:app\\s+)?data|remove\\s+(?:the\\s+)?(?:file|folder|directory|project|memory|task|app)|uninstall)\\b"
+        "(?i)\\b(delete|wipe|erase|shred|format|factory\\s+reset|empty\\s+(?:the\\s+)?trash|clear\\b.{0,30}\\b(data|storage|history|cache|memory|files?)\\b|remove\\b.{0,30}\\b(files?|folders?|directories|projects?|memories|tasks?|apps?)\\b|uninstall)\\b"
     )
     private val destructiveNegation = Regex(
         "(?i)\\b(?:don['’]?t|do not|never|avoid|without)\\b.{0,60}\\b(delete|wipe|erase|shred|format|remove|uninstall)\\b"
@@ -198,12 +198,15 @@ internal object IrreversibleActionConfirmationPolicy {
             .take(500)
         val normalized = targetTool.lowercase()
         val destructiveTools = setOf(
-            "workspace_delete", "task_delete", "trash_empty", "forget", "macro_delete",
+            "workspace_delete", "task_delete", "trash_empty", "forget", "fact_forget", "macro_delete",
             "goal_remove", "project_delete", "backup_delete", "memory_delete",
             "memory_clear", "chat_history_clear", "delete_file", "wipe_data"
         )
         if (normalized in destructiveTools) {
             return "Orion is about to run $targetTool" + (if (detail.isBlank()) "" else " on $detail") + ". This may permanently delete or wipe data."
+        }
+        if (normalized == "standing_order" && payload.optString("action").equals("remove", ignoreCase = true)) {
+            return "Orion is about to remove the standing order '" + payload.optString("kind").take(80) + "'."
         }
         if (normalized in setOf("shell", "termux_command")) {
             val command = payload.optString("command").trim()
