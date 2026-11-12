@@ -53,8 +53,16 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
             if (mode == Mode.LISTENING || mode == Mode.SPEAKING) postInvalidateOnAnimation()
         }
 
+    @Volatile
+    var speechAmplitude: Float = 0f
+        set(value) {
+            field = value.coerceIn(0f, 1f)
+            if (mode == Mode.SPEAKING) postInvalidateOnAnimation()
+        }
+
     var backing: Boolean = false
 
+    private val painter = OrionOrbPainter()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var smoothLevel = 0f
     private var touchEnergy = 0f
@@ -150,69 +158,20 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         if (w < 2f || h < 2f) return
 
         val time = SystemClock.uptimeMillis() / 1000f
-        val energyTarget = when (mode) {
-            Mode.IDLE -> 0f
-            Mode.LISTENING -> level
-            Mode.THINKING -> .48f
-            Mode.SPEAKING -> .30f + .30f * (.5f + .5f * sin(time * 4.2f))
-            Mode.ACTING -> .34f
-            Mode.WAITING_APPROVAL -> .12f
-            Mode.ERROR -> .05f
-        }
-        smoothLevel += (energyTarget - smoothLevel) * .22f
         touchEnergy *= .86f
         wordPulse *= .78f
-        val energy = (smoothLevel + touchEnergy * .30f + wordPulse * .25f).coerceIn(0f, 1f)
+        val visualLevel = (if (mode == Mode.SPEAKING) max(speechAmplitude, wordPulse * .48f) else level)
+            .plus(touchEnergy * .22f).coerceIn(0f, 1f)
+        canvas.drawColor(android.graphics.Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR)
+        painter.draw(
+            canvas, w / 2f, h / 2f, min(w, h) * .43f, time,
+            level = visualLevel,
+            mode = mode,
+            speechAmplitude = speechAmplitude,
+            wordPulse = wordPulse
+        )
 
-        val columns = 7
-        val rows = 7
-        val stepX = w / (columns + 1f)
-        val stepY = h / (rows + 1f)
-        val baseRadius = min(stepX, stepY) * .17f
-        val silver = 0xFFE5E7EB.toInt()
-        val softSilver = 0xFF9CA3AF.toInt()
-        val warning = Theme.WARN
-        val speed = when (mode) {
-            Mode.IDLE -> .0f
-            Mode.LISTENING -> 2.3f
-            Mode.THINKING -> 1.7f
-            Mode.SPEAKING -> 3.5f
-            Mode.ACTING -> 2.6f
-            Mode.WAITING_APPROVAL -> .4f
-            Mode.ERROR -> .2f
-        }
-
-        for (row in 0 until rows) {
-            for (column in 0 until columns) {
-                val nx = (column - (columns - 1) / 2f) / ((columns - 1) / 2f)
-                val ny = (row - (rows - 1) / 2f) / ((rows - 1) / 2f)
-                val distance = sqrt(nx * nx + ny * ny).coerceAtMost(1.42f)
-                val centerWeight = (1f - distance / 1.42f).coerceIn(0f, 1f)
-                val phase = time * speed + column * .57f + row * .39f + waveOffset
-                val wave = sin(phase)
-                val actionScan = if (mode == Mode.ACTING) {
-                    (1f - abs(row - ((time * 3f).toInt() % rows)) / rows.toFloat()).coerceIn(0f, 1f)
-                } else 0f
-                val listeningPulse = if (mode == Mode.LISTENING) level * (1f - abs(column - 3) / 4f) else 0f
-                val scale = (0.55f + centerWeight * .45f + abs(wave) * energy * .24f + actionScan * .22f + listeningPulse * .18f)
-                    .coerceIn(.35f, 1.28f)
-                val radius = baseRadius * scale
-                val alpha = (65f + centerWeight * 150f + energy * 35f).coerceIn(45f, 255f).toInt()
-                paint.color = if (mode == Mode.ERROR) warning
-                    else if (mode == Mode.WAITING_APPROVAL && row == 0 && column == columns - 1) warning
-                    else if (centerWeight > .60f || abs(wave) * energy > .25f) silver
-                    else softSilver
-                paint.alpha = alpha
-                val x = stepX * (column + 1f)
-                val y = stepY * (row + 1f)
-                canvas.drawCircle(x, y, radius, paint)
-            }
-        }
-        paint.alpha = 255
-
-        val stillAnimating = mode != Mode.IDLE || smoothLevel > .02f || touchEnergy > .02f || wordPulse > .02f
-        if (shouldAnimate() && stillAnimating) {
-            postInvalidateDelayed(nextFrameDelayMs())
-        }
+        val stillAnimating = mode != Mode.IDLE || touchEnergy > .02f || wordPulse > .02f || speechAmplitude > .01f
+        if (shouldAnimate() && stillAnimating) postInvalidateDelayed(nextFrameDelayMs())
     }
 }
