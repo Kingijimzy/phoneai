@@ -24,6 +24,7 @@ class McpSettingsActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var endpoint: TextView
     private lateinit var root: LinearLayout
+    private lateinit var apiAnythingStatus: TextView
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -122,6 +123,19 @@ class McpSettingsActivity : Activity() {
             13f, Theme.MUTED
         ).apply { setPadding(0, 0, 0, dp(8)) })
 
+        card("API ANYTHING  /  WEBSITE CAPABILITY ENGINE") {
+            addView(label(
+                "Managed locally inside Orion's Alpine runtime. It can discover existing site operations, learn new website reads, reuse saved operations and repair drifted operations. No website calls are routed through a third-party proxy.",
+                12f, Theme.MUTED
+            ).apply { setPadding(0, dp(8), 0, dp(8)) })
+            apiAnythingStatus = label(ApiAnythingManager.status(this@McpSettingsActivity), 12f, Theme.SILVER)
+            addView(apiAnythingStatus)
+            addView(button("Install / start / repair API Anything", ::startApiAnything),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            addView(button("Stop managed API Anything", ::stopApiAnything),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        }
+
         card("ENDPOINT") {
             endpoint = label("", 12f, Theme.SILVER).apply { setPadding(0, dp(8), 0, dp(4)) }
             status = label("", 12f, Theme.MUTED)
@@ -176,6 +190,39 @@ class McpSettingsActivity : Activity() {
         val url = McpConnector.endpoint(this)
         endpoint.text = if (url.isBlank()) "No endpoint configured" else url
         status.text = McpConnector.status(this)
+        if (::apiAnythingStatus.isInitialized) apiAnythingStatus.text = ApiAnythingManager.status(this)
+    }
+
+    private fun startApiAnything() {
+        val progress = ProgressDialog.show(this, "Preparing API Anything", "Installing and connecting the local website capability engine…", true, false)
+        worker.execute {
+            val result = ApiAnythingManager.installAndStart(applicationContext) { message ->
+                runOnUiThread {
+                    if (!isFinishing && !isDestroyed && ::apiAnythingStatus.isInitialized) {
+                        apiAnythingStatus.text = message
+                    }
+                }
+            }
+            runOnUiThread {
+                if (progress.isShowing) progress.dismiss()
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                showInfo("API Anything", result.getOrElse { "Setup failed: " + (it.message ?: it.javaClass.simpleName) })
+                refresh()
+            }
+        }
+    }
+
+    private fun stopApiAnything() {
+        AlertDialog.Builder(this)
+            .setTitle("Stop API Anything?")
+            .setMessage("This stops the local website-operation server and disconnects its managed MCP endpoint. Learned site operations remain stored in Orion's Linux runtime.")
+            .setPositiveButton("Stop server") { _, _ ->
+                ApiAnythingManager.stop(applicationContext)
+                refresh()
+                showInfo("API Anything", "Managed API Anything server stopped. Learned operations were preserved.")
+            }
+            .setNegativeButton("Keep running", null)
+            .show()
     }
 
     private fun configureEndpoint() {
