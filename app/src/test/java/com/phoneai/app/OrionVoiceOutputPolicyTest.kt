@@ -39,6 +39,7 @@ print("hello.world")
     }
 
     @Test fun progressIsOneShortAcknowledgement() {
+        OrionVoiceOutputPolicy.beginTask()
         assertEquals("I'm on it.", OrionVoiceOutputPolicy.progressCue("Running Python, reading output and validating files…"))
         assertNull(OrionVoiceOutputPolicy.progressCue(""))
     }
