@@ -163,6 +163,17 @@ object McpConnector {
         return if (paired) result else "MCP endpoint was saved but local managed pairing could not be persisted."
     }
 
+    /** Clears only Orion's managed local API Anything endpoint, preserving MCP scope preferences. */
+    internal fun clearManagedLocal(c: Context, expectedEndpoint: String): Boolean {
+        if (endpoint(c) != expectedEndpoint) return false
+        closeSession(c)
+        return c.getSharedPreferences(PREFS, 0).edit()
+            .remove(URL_KEY).remove(TOKEN_KEY).remove(IV_KEY)
+            .remove("paired_endpoint_sha256")
+            .remove(CATALOGUE_TEXT_KEY).remove(CATALOGUE_AT_KEY)
+            .commit()
+    }
+
     fun clear(c: Context) {
         closeSession(c)
         c.getSharedPreferences(PREFS, 0).edit().clear().commit()
