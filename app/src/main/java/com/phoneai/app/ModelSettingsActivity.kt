@@ -280,8 +280,10 @@ class ModelSettingsActivity : Activity() {
                     else editApiKey(selected, false)
                     return@setItems
                 }
-                val model = Prefs.commandModelId(this) ?: Prefs.cachedModels(this, selected.id).firstOrNull() ?: selected.textModel
-                Prefs.setCommandProvider(this, selected.id, model)
+                val currentProviderId = Prefs.commandProviderId(this)
+                val model = if (currentProviderId == selected.id) Prefs.commandModelId(this) else null
+                val resolvedModel = model ?: Prefs.cachedModels(this, selected.id).firstOrNull() ?: selected.textModel
+                Prefs.setCommandProvider(this, selected.id, resolvedModel)
                 refresh()
             }
         }.setNegativeButton("Cancel", null).show()
