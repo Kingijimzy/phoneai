@@ -19,11 +19,12 @@ internal object ApiAnythingManager {
     @Volatile private var server: LinuxCommandSession? = null
     @Volatile private var lastState = "Not installed"
     @Volatile private var lastError = ""
+    @Volatile private var healthVerified = false
 
     fun status(context: Context): String {
         val enabled = context.getSharedPreferences(PREFS, 0).getBoolean(ENABLED, false)
         val alive = server?.isAlive() == true
-        val healthy = alive && healthCheck()
+        val healthy = alive && healthVerified
         return when {
             healthy -> "API Anything is running locally. Its MCP tools are connected to Orion. Health is verified; website write operations are exposed and remain subject to Orion's MCP scopes."
             enabled && !alive -> "API Anything is enabled but its local server is not running. Orion will try to restart it when the app process starts; use Start / repair to start it now."
@@ -109,6 +110,7 @@ internal object ApiAnythingManager {
             val saved = McpConnector.saveManagedLocal(app, ENDPOINT, token)
             check(saved.startsWith("MCP endpoint saved")) { saved }
             check(healthCheck()) { "API Anything health endpoint did not become ready." }
+            healthVerified = true
             val catalogue = McpConnector.listTools(app)
             check(catalogue.startsWith("MCP tools")) {
                 "API Anything started, but MCP discovery failed: ${catalogue.take(500)}"
@@ -155,9 +157,11 @@ internal object ApiAnythingManager {
                 }
                 if (!session.isAlive() || !healthCheck()) {
                     stopLocked()
+                    healthVerified = false
                     lastError = "Managed server did not recover after process recreation."
                     lastState = "Recovery failed"
                 } else {
+                    healthVerified = true
                     lastState = "Running and connected"
                     lastError = ""
                 }
@@ -200,6 +204,7 @@ internal object ApiAnythingManager {
     private fun stopLocked() {
         server?.close()
         server = null
+        healthVerified = false
     }
 
     private val INSTALL_COMMAND = """
