@@ -176,7 +176,7 @@ internal object IrreversibleActionConfirmationPolicy {
         "(?is)(?:^|[;&|]\\s*|\\b(?:then|do)\\s+)(?:command\\s+)?(?:sudo\\s+)?(?:rm|shred|srm|wipe|wipefs|blkdiscard|mkfs(?:\\.[a-z0-9]+)?|unlink|rmdir|truncate)\\b|\\bdd\\b[^;&|]*\\bof\\s*=|\\bfind\\b[^;&|]*\\s-delete\\b|\\b(?:fastboot\\s+(?:erase|format)|recovery\\s+--wipe)\\b|(?:>|>>)[^;&|]*/dev/(?:block|mmcblk|sd[a-z])"
     )
     private val destructivePython = Regex(
-        """(?is)\\b(?:os\\.(?:remove|unlink|rmdir)|shutil\\.rmtree|pathlib\\.Path\\([^)]*\\)\\s*\\.\\s*(?:unlink|rmdir))\\s*\\("""
+        """(?is)\b(?:os\.(?:remove|unlink|rmdir)|shutil\.rmtree|pathlib\.Path\([^)]*\)\s*\.\s*(?:unlink|rmdir))\s*\("""
     )
     private val destructiveRequest = Regex(
         "(?i)\\b(delete|wipe|erase|shred|format|factory\\s+reset|empty\\s+(?:the\\s+)?trash|clear\\b.{0,30}\\b(data|storage|history|cache|memory|files?)\\b|remove\\b.{0,30}\\b(files?|folders?|directories|projects?|memories|tasks?|apps?)\\b|uninstall)\\b"
