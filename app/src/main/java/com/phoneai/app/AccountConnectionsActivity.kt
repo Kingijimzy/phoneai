@@ -415,7 +415,17 @@ class AccountConnectionsActivity : Activity() {
             } catch (failure: Exception) {
                 runOnUiThread {
                     if (!isFinishing) {
-                        antigravityOutput.append("\nConnection failed: ${failure.message ?: failure.javaClass.simpleName}")
+                        val rootFailure = generateSequence(failure as Throwable?) { it.cause }.last()
+                        val detail = buildString {
+                            append(failure.javaClass.simpleName)
+                            failure.message?.takeIf { it.isNotBlank() }?.let { append(": ").append(it.take(240)) }
+                            if (rootFailure !== failure) {
+                                append(" (root: ").append(rootFailure.javaClass.simpleName)
+                                    .append(": ").append(rootFailure.message.orEmpty().take(180)).append(")")
+                            }
+                        }
+                        android.util.Log.e("OrionAntigravity", "Connection failed", failure)
+                        antigravityOutput.append("\nConnection failed: $detail")
                         antigravityConnectButton.isEnabled = true
                     }
                 }
