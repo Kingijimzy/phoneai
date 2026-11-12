@@ -38,7 +38,7 @@ internal class CodexRuntimeInstaller(context: Context) {
             ' sh {} +
             if ! test -x '$GUEST_BINARY'; then echo 'Codex archive missing app-server binary'; cat /tmp/orion-codex-$VERSION/archive-files.txt | head -80; find /tmp/orion-codex-$VERSION -maxdepth 4 -type f -print; exit 31; fi
             if ! test -x '$GUEST_CODE_MODE_HOST'; then echo 'Codex archive missing code-mode-host binary'; find /tmp/orion-codex-$VERSION -maxdepth 4 -type f -print; exit 32; fi
-            if ! test -x '$GUEST_EXEC_SERVER'
+            if ! test -x '$GUEST_EXEC_SERVER'; then echo 'Codex archive missing exec-server binary'; find /tmp/orion-codex-$VERSION -maxdepth 4 -type f -print; exit 33; fi
             '$GUEST_BINARY' --help >/dev/null
             rm -rf /tmp/orion-codex-$VERSION
         """.trimIndent()
