@@ -20,8 +20,10 @@ internal object OrionMemoryLayers {
             .takeIf { it.isNotEmpty() }?.let { hits ->
                 layers += Layer("L1 CONVERSATION", hits.joinToString("\n") { "- ${it.role}: ${it.snippet.take(220)}" }, 3)
             }
-        // L2 long-term user memory: facts about Kingi plus his preference profile (theory of mind).
-        val longTerm = listOf(OrionFactStore.promptBlock(c, owner), OrionFactStore.tomBlock(c)).filter { it.isNotBlank() }.joinToString("\n")
+        // L2 long-term memory: retrieve approved facts from the canonical graph for this request.
+        // The separate Tom profile remains a compact preference hypothesis layer, not a second fact graph.
+        val graphFacts = KnowledgeGraph.promptBlock(c, q.ifBlank { owner })
+        val longTerm = listOf(graphFacts, OrionFactStore.tomBlock(c)).filter { it.isNotBlank() }.joinToString("\n")
         if (longTerm.isNotBlank()) layers += Layer("L2 LONG-TERM (Kingi)", longTerm, 5)
         // L3 episodic: what worked or failed on similar tasks, and lessons already learned.
         val episodic = listOf(
