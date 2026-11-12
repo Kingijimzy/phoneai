@@ -39,13 +39,13 @@ internal object OrionFactStore {
                 }
             }
         } catch (_: Exception) { return }
-        rows.forEach { (s, p, o) ->
+        val migrated = rows.all { (s, p, o) ->
             MemoryStore.addObservedProposal(
                 app, "fact", "${norm(s)} — ${norm(p)} — ${norm(o)}",
                 0.55, "migrated legacy triplet; original provenance unavailable"
-            )
+            ) != null
         }
-        prefs.edit().putBoolean("complete", true).apply()
+        if (migrated) prefs.edit().putBoolean("complete", true).apply()
     }
 
     /** Called by the shared turn-context builder so old facts are migrated before recall. */
