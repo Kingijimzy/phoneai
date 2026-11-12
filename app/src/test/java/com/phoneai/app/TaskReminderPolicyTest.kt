@@ -10,6 +10,7 @@ class TaskReminderPolicyTest {
         assertTrue(TaskReminderPolicy.isTerminal("done"))
         assertTrue(TaskReminderPolicy.isTerminal("cancelled"))
         assertTrue(TaskReminderPolicy.isTerminal("canceled"))
+        assertTrue(TaskReminderPolicy.isTerminal("failed"))
     }
     @Test fun activeTaskStatesRemainReminderEligible() {
         assertFalse(TaskReminderPolicy.isTerminal("queued"))
