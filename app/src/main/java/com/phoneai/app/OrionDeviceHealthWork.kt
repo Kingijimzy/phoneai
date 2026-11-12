@@ -31,8 +31,14 @@ internal class OrionDeviceHealthWorker(context: Context, params: WorkerParameter
         val total = stat.totalBytes
         val freePercent = if (total > 0) (free * 100 / total).toInt() else null
         val alerts = OrionDeviceHealthPolicy.alerts(percent, charging, free, freePercent)
-        if (alerts.isNotEmpty()) post(alerts.joinToString(" "))
+        if (alerts.isNotEmpty()) post(alerts.joinToString(" ")) else clear()
         return Result.success()
+    }
+
+    private fun clear() {
+        runCatching {
+            (applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(7319)
+        }
     }
 
     private fun post(message: String) {
