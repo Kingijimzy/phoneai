@@ -87,7 +87,8 @@ internal class AntigravityRuntimeInstaller(context: Context) {
         workspaceHostPath: String,
         prompt: String,
         model: String? = null,
-        onSession: ((LinuxCommandSession) -> Unit)? = null
+        onSession: ((LinuxCommandSession) -> Unit)? = null,
+        onDelta: ((String) -> Unit)? = null
     ): String {
         val session = openPromptSession(workspaceHostPath, prompt, model)
         onSession?.invoke(session)
@@ -112,7 +113,10 @@ internal class AntigravityRuntimeInstaller(context: Context) {
                     error("Antigravity requires Google-account sign-in.")
                 }
                 if (event.error.isNotBlank()) error("Antigravity: ${event.error}")
-                if (event.type == "step_update" && event.text.isNotBlank()) output.append(event.text)
+                if (event.type == "step_update" && event.text.isNotBlank()) {
+                    output.append(event.text)
+                    onDelta?.invoke(event.text)
+                }
                 if (event.type == "result") {
                     finalStatus = event.status
                     finalResponse = event.text
