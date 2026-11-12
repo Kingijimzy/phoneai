@@ -12,7 +12,7 @@ internal object OrionSpeechTextPolicy {
     private val htmlTag = Regex("<[^>]{1,300}>")
     private val internalLine = Regex(
         "(?i)^\\s*(?:assistant\\s+to=|tool\\s+(?:call|result)\\s*:|analysis\\s*:|commentary\\s*:|" +
-            "debug\\s*:|stack trace\\s*:|exception in thread|at [\\w.$]+\\([^)]*\\))"
+            "debug\\s*:|stack trace\\s*:|exception in thread|at [\\w.$]+\\([^)]*\\)|(?:package|import|fun|val|var|class|object|interface)\\s+|BUILD SUCCESSFUL|>\\s*Task\\s*:)"
     )
     private val structuredLine = Regex("^\\s*(?:\\{.*[}:,]\\s*|\\[.*[\\],]\\s*|<\\?xml|</?[A-Za-z][^>]*>)\\s*$")
 
@@ -28,10 +28,13 @@ internal object OrionSpeechTextPolicy {
         val proseLines = text.lineSequence()
             .map { it.trim() }
             .filter { it.isNotEmpty() }
-            .filterNot { internalLine.containsMatchIn(it) }
+            .filterNot { internalLine.containsMatchIn(it.replace(Regex("[*_~]"), "")) }
             .filterNot { structuredLine.matches(it) }
-            .filterNot { it.startsWith("|") && it.count { ch -> ch == '|' } >= 2 }
-            .map { line ->
+            .map { sourceLine ->
+                val line = if (sourceLine.startsWith("|") && sourceLine.count { ch -> ch == '|' } >= 2) {
+                    val cells = sourceLine.trim().trim('|').split('|').map { it.trim() }
+                    if (cells.isNotEmpty() && cells.all { it.matches(Regex("[-: ]+")) }) "" else cells.joinToString(", ")
+                } else sourceLine
                 line.replace(Regex("^#{1,6}\\s*"), "")
                     .replace(Regex("^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)"), "")
                     .replace(Regex("\\[([^\\]]+)]\\([^)]*\\)"), "$1")
