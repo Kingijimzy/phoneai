@@ -17,7 +17,7 @@ internal object OrionDeviceCapabilityExecutor {
         "click", "click_text", "point_at", "sketch_screen", "wait_for", "tap", "long_press", "swipe", "swipe_path",
         "scroll", "type", "key", "look", "play", "record_screen",
         "chronos_awareness", "calendar_events", "voice_speak", "voice_listen",
-        "routine_run", "routine_resume"
+        "routine_run", "routine_resume", "device_operation"
     )
 
     fun supports(tool: String): Boolean = tool in supportedTools
@@ -40,6 +40,7 @@ internal object OrionDeviceCapabilityExecutor {
         "lookup_app" -> tools.lookupApp(args.optString("name"))
         "open_app" -> service.openApp(args.optString("name"))
         "system_intent" -> tools.systemIntent(args.optString("action"), args.optString("query"), args.optString("url"))
+        "device_operation" -> DeviceOperationRouter.execute(service, args.optString("operation"), args.optString("value"))
         "open_deep_link" -> tools.openDeepLink(args.optString("uri"))
         "read_notifications" -> OrionNotificationListener.readSafeNotifications()
         "media_status" -> OrionNotificationListener.mediaStatus()
