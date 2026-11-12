@@ -7,6 +7,8 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.widget.Button
+import android.widget.EditText
+import android.text.InputType
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -94,34 +96,51 @@ class CharacterSettingsActivity : Activity() {
         ).apply { setPadding(0, 0, 0, dp(8)) })
 
         card("ORION — THE ENTITY") {
-            addView(label(CharacterProfile.get(Prefs.characterProfile(this@CharacterSettingsActivity)).label, 18f, Theme.TEXT, true)
-                .apply { setPadding(0, dp(9), 0, dp(5)) })
+            val entityName = Prefs.orionEntityName(this@CharacterSettingsActivity)
+            val entityDescription = Prefs.orionEntityDescription(this@CharacterSettingsActivity)
+            addView(label(entityName, 20f, Theme.TEXT, true).apply { setPadding(0, dp(9), 0, dp(5)) })
             addView(label(
-                "Calm, perceptive, decisive and quietly witty. Orion thinks in systems, anticipates relevant needs without being intrusive, explains trade-offs and admits uncertainty.",
+                entityDescription.ifBlank { "A calm, perceptive, decisive companion. Define the identity and purpose in your own words." },
                 12f, Theme.MUTED
             ))
             addView(label(
-                "This identity stays stable when you change AI providers. No provider gets to redefine Orion or claim capabilities it has not demonstrated.",
-                12f, Theme.MUTED
-            ).apply { setPadding(0, dp(8), 0, 0) })
+                "The identity follows you across providers and modes. Editing it changes the companion's name and conversational style, not permissions or capabilities.",
+                11f, Theme.SILVER
+            ).apply { setPadding(0, dp(8), 0, dp(8)) })
+            addView(button("Edit entity name") { editIdentityField(
+                "Entity name", Prefs.orionEntityName(this@CharacterSettingsActivity), 40, false,
+                Prefs::setOrionEntityName
+            ) })
+            addView(button("Edit entity description") { editIdentityField(
+                "Entity description", Prefs.orionEntityDescription(this@CharacterSettingsActivity), 1200, true,
+                Prefs::setOrionEntityDescription
+            ) }.apply { layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) } })
         }
 
         card("ENTITY PHILOSOPHY") {
             val principles = listOf(
-                "Truth before confidence" to "Distinguish what Orion knows, infers, intends and has verified.",
-                "One execution authority" to "All phone, file, browser and developer actions pass through the registered native tool dispatcher.",
-                "User autonomy" to "Explain consequential actions and preserve approval, permission and cancellation boundaries.",
-                "Continuity with restraint" to "Remember commitments and relevant context without inventing memories or exposing unrelated private details.",
-                "Evidence over appearance" to "Show running, completed, failed and interrupted work honestly. Never report an action as complete without evidence."
+                "Truth before confidence" to "Distinguish observation, inference, intention and verified result.",
+                "User autonomy" to "The owner can correct, pause, cancel and change direction.",
+                "Evidence over appearance" to "Never report an action as complete without evidence.",
+                "Minimum sufficient action" to "Choose the smallest reliable intervention and verify its outcome.",
+                "Continuity with restraint" to "Remember relevant commitments without inventing memories or exposing unrelated context."
             )
             principles.forEach { (heading, detail) ->
                 addView(label(heading, 13f, Theme.TEXT, true).apply { setPadding(0, dp(9), 0, dp(2)) })
                 addView(label(detail, 11f, Theme.MUTED))
             }
+            val custom = Prefs.orionEntityPhilosophy(this@CharacterSettingsActivity)
             addView(label(
-                "A persona, mood or provider response can never grant permissions, bypass confirmation, weaken privacy or change trading restrictions.",
-                11f, Theme.SILVER, true
-            ).apply { setPadding(0, dp(12), 0, 0) })
+                custom.ifBlank { "No owner-defined philosophy yet. The core safety and evidence principles remain active." },
+                12f, Theme.SILVER
+            ).apply { setPadding(0, dp(10), 0, dp(8)) })
+            addView(button("Edit Orion's philosophy") { editIdentityField(
+                "Entity philosophy", custom, 2400, true, Prefs::setOrionEntityPhilosophy
+            ) })
+            addView(label(
+                "Your additions guide reasoning and values. They cannot override Android permissions, approval requirements, privacy boundaries or safety rules.",
+                11f, Theme.MUTED
+            ).apply { setPadding(0, dp(8), 0, 0) })
         }
 
         card("APPROVED LANGUAGES") {
@@ -156,6 +175,45 @@ class CharacterSettingsActivity : Activity() {
             clipToPadding = false
             addView(root)
         })
+    }
+
+    private fun editIdentityField(
+        title: String,
+        current: String,
+        maxLength: Int,
+        multiline: Boolean,
+        save: (android.content.Context, String) -> Unit
+    ) {
+        val editor = EditText(this).apply {
+            setText(current)
+            setTextColor(Theme.TEXT)
+            setHintTextColor(Theme.MUTED)
+            textSize = 15f
+            setPadding(dp(13), dp(11), dp(13), dp(11))
+            background = GradientDrawable().apply {
+                setColor(Theme.PANEL2)
+                cornerRadius = dp(12).toFloat()
+                setStroke(dp(1), Theme.LINE_STRONG)
+            }
+            inputType = if (multiline) {
+                InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            } else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            isSingleLine = !multiline
+            minLines = if (multiline) 4 else 1
+            maxLines = if (multiline) 8 else 1
+            filters = arrayOf(android.text.InputFilter.LengthFilter(maxLength))
+            hint = if (multiline) "Write in your own words…" else "Enter a name"
+        }
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(editor)
+            .setPositiveButton("Save") { _, _ ->
+                save(this, editor.text.toString())
+                Toast.makeText(this, "$title saved", Toast.LENGTH_SHORT).show()
+                recreate()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun chooseLanguages() {
