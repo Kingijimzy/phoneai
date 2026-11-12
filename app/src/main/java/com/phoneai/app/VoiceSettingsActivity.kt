@@ -144,7 +144,7 @@ class VoiceSettingsActivity : Activity() {
             addSwitch(this, "Speak Orion's answers", Prefs.voice(this@VoiceSettingsActivity)) {
                 Prefs.setVoice(this@VoiceSettingsActivity, it)
             }
-            addSwitch(this, "Deeper voice", Prefs.deepVoice(this@VoiceSettingsActivity)) {
+            addSwitch(this, "Lower pitch on Android fallback only", Prefs.deepVoice(this@VoiceSettingsActivity)) {
                 Prefs.setDeepVoice(this@VoiceSettingsActivity, it)
             }
             addSwitch(this, "Offline-only voice output", Prefs.offlineVoiceOnly(this@VoiceSettingsActivity)) {
