@@ -21,7 +21,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -99,13 +101,13 @@ import androidx.compose.ui.draw.scale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private val ChatInk = Color(0xFF050505)
-private val ChatPanel = Color(0xFF141414)
-private val ChatPanelRaised = Color(0xFF202020)
-private val ChatMint = Color(0xFFE5E5E5)
-private val ChatCopy = Color(0xFFF5F5F5)
-private val ChatMuted = Color(0xFF9B9B9B)
-private val ChatHairline = Color(0xFF303030)
+private val ChatInk = OrionUiPalette.background
+private val ChatPanel = OrionUiPalette.panel
+private val ChatPanelRaised = OrionUiPalette.raised
+private val ChatMint = OrionUiPalette.accent
+private val ChatCopy = OrionUiPalette.text
+private val ChatMuted = OrionUiPalette.muted
+private val ChatHairline = OrionUiPalette.border
 
 @Composable
 internal fun ImageThumbnail(uri: Uri, modifier: Modifier = Modifier) {
@@ -142,7 +144,7 @@ internal fun ImageThumbnail(uri: Uri, modifier: Modifier = Modifier) {
 @Composable
 private fun ModePill(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val pillFill by animateColorAsState(
-        targetValue = if (selected) Color(0xFF303030) else Color.Transparent,
+        targetValue = if (selected) OrionUiPalette.border else Color.Transparent,
         animationSpec = tween(durationMillis = 220),
         label = "mode-pill-fill"
     )
@@ -152,21 +154,24 @@ private fun ModePill(label: String, selected: Boolean, modifier: Modifier = Modi
         label = "mode-pill-label"
     )
     Box(
-        modifier.clip(RoundedCornerShape(12.dp))
+        modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
             .background(pillFill)
-            .clickable(onClick = onClick).padding(vertical = 10.dp),
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = "$label mode"; role = Role.Button }
+            .padding(horizontal = 10.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(label, color = labelColor, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium)
     }
 }
 
-private enum class OrionReplyType { NORMAL, RESEARCH, CODE, TASK, MCP }
+private enum class OrionReplyType { NORMAL, RESEARCH, CODE, TASK, MCP, DIAGRAM }
 
 private fun classifyOrionReply(item: OrionChatLine): OrionReplyType {
     if (item.kind == "note") return OrionReplyType.TASK
     val text = item.text
     val lower = text.lowercase()
+    if (parseOrionDiagram(text) != null) return OrionReplyType.DIAGRAM
     if (lower.contains("mcp tool result") || lower.contains("mcp discovery result") || lower.contains("mcp discovery failed")) {
         return OrionReplyType.MCP
     }
@@ -209,34 +214,36 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                 ) {
                     Box(
                         Modifier.size(22.dp).clip(RoundedCornerShape(8.dp))
-                            .background(Brush.linearGradient(listOf(Color(0xFF454545), Color(0xFF1A1A1A))))
-                            .border(1.dp, Color(0xFF383838), RoundedCornerShape(8.dp)),
+                            .background(Brush.linearGradient(listOf(OrionUiPalette.borderStrong, OrionUiPalette.panel)))
+                            .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(8.dp)),
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(13.dp)) }
                     Text("Orion", color = ChatCopy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Text("AI assistant", color = Color(0xFF9B9B9B), fontSize = 10.sp)
+                    Text("AI assistant", color = OrionUiPalette.muted, fontSize = 10.sp)
                 }
             }
             Column(
                 (if (mine) Modifier.widthIn(max = 320.dp) else Modifier.fillMaxWidth(if (note) 1f else .98f))
                     .then(
                         if (mine || note) Modifier.clip(RoundedCornerShape(17.dp))
-                            .background(if (note) Color(0xFF1C1C1E) else Color(0xFF2C2C30))
+                            .background(if (note) OrionUiPalette.panel else OrionUiPalette.raised)
                             .border(1.dp, if (mine) Color(0x00000000) else Color(0x40545458), RoundedCornerShape(17.dp))
                         else if (replyType != OrionReplyType.NORMAL) Modifier
                             .clip(RoundedCornerShape(16.dp))
                             .background(when (replyType) {
-                                OrionReplyType.RESEARCH -> Color(0xFF151515)
-                                OrionReplyType.CODE -> Color(0xFF101010)
-                                OrionReplyType.TASK -> Color(0xFF171717)
-                                OrionReplyType.MCP -> Color(0xFF151515)
+                                OrionReplyType.RESEARCH -> OrionUiPalette.panel
+                                OrionReplyType.CODE -> OrionUiPalette.panel
+                                OrionReplyType.TASK -> OrionUiPalette.panel
+                                OrionReplyType.MCP -> OrionUiPalette.panel
+                                OrionReplyType.DIAGRAM -> OrionUiPalette.panel
                                 else -> Color.Transparent
                             })
                             .border(1.dp, when (replyType) {
-                                OrionReplyType.RESEARCH -> Color(0xFF383838)
-                                OrionReplyType.CODE -> Color(0xFF383838)
-                                OrionReplyType.TASK -> Color(0xFF454545)
-                                OrionReplyType.MCP -> Color(0xFF454545)
+                                OrionReplyType.RESEARCH -> OrionUiPalette.borderStrong
+                                OrionReplyType.CODE -> OrionUiPalette.borderStrong
+                                OrionReplyType.TASK -> OrionUiPalette.borderStrong
+                                OrionReplyType.MCP -> OrionUiPalette.borderStrong
+                                OrionReplyType.DIAGRAM -> OrionUiPalette.borderStrong
                                 else -> Color.Transparent
                             }, RoundedCornerShape(16.dp))
                         else Modifier
@@ -247,20 +254,22 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                     )
             ) {
                 if (note || replyType != OrionReplyType.NORMAL) {
-                    Row(Modifier.fillMaxWidth().clickable(enabled = collapsible) { openBlock = !openBlock }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable(enabled = collapsible) { openBlock = !openBlock }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         Text(
                             when (replyType) {
                                 OrionReplyType.RESEARCH -> "RESEARCH"
                                 OrionReplyType.CODE -> "CODE OUTPUT"
                                 OrionReplyType.TASK -> "TASK UPDATE"
                                 OrionReplyType.MCP -> "MCP TOOL RESULT"
+                                OrionReplyType.DIAGRAM -> "VISUAL EXPLANATION"
                                 OrionReplyType.NORMAL -> "ACTIVITY"
                             },
                             color = when (replyType) {
-                                OrionReplyType.RESEARCH -> Color(0xFFD2D2D2)
-                                OrionReplyType.CODE -> Color(0xFFE2E2E2)
-                                OrionReplyType.TASK -> Color(0xFFD0D0D0)
-                                OrionReplyType.MCP -> Color(0xFFCFD3D8)
+                                OrionReplyType.RESEARCH -> OrionUiPalette.secondaryText
+                                OrionReplyType.CODE -> OrionUiPalette.secondaryText
+                                OrionReplyType.TASK -> OrionUiPalette.secondaryText
+                                OrionReplyType.MCP -> OrionUiPalette.secondaryText
+                                OrionReplyType.DIAGRAM -> OrionUiPalette.secondaryText
                                 OrionReplyType.NORMAL -> ChatMint
                             },
                             fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp
@@ -278,6 +287,7 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                     note && item.text.startsWith("[TASK:") -> TaskActivityCard(item.text)
                     note && (item.text.startsWith("[TOOL:") || item.text.startsWith("[TOOL_RESULT:") ||
                         item.text.startsWith("[APPROVAL:") || item.text.startsWith("[EVENT:")) -> ToolActivityCard(item.text)
+                    !mine && !note && replyType == OrionReplyType.DIAGRAM -> DiagramCard(item.text)
                     else -> {
                         if (!mine && !note) {
                             val formatted = formatOrionMarkdown(item.text)
@@ -316,29 +326,93 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Copy", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable {
-                            clipboard.setText(AnnotatedString(item.text))
-                            actionsVisible = false
-                        }.padding(vertical = 4.dp))
+                        Text("Copy", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.heightIn(min = 44.dp).clickable { clipboard.setText(AnnotatedString(item.text)); actionsVisible = false }
+                            .semantics { role = Role.Button; contentDescription = "Copy message" }
+                            .padding(horizontal = 8.dp, vertical = 10.dp))
                         if (mine && onEdit != null) {
-                            Text("Edit & resend", color = ChatCopy, fontSize = 11.sp, modifier = Modifier.clickable {
-                                actionsVisible = false
-                                onEdit(item.text)
-                            }.padding(vertical = 4.dp))
+                            Text("Edit & resend", color = ChatCopy, fontSize = 11.sp, modifier = Modifier.heightIn(min = 44.dp).clickable { actionsVisible = false; onEdit(item.text) }
+                                .semantics { role = Role.Button; contentDescription = "Edit and resend message" }
+                                .padding(horizontal = 8.dp, vertical = 10.dp))
                         }
                         if (!mine && onRetry != null) {
-                            Text("Retry response", color = ChatCopy, fontSize = 11.sp, modifier = Modifier.clickable {
-                                actionsVisible = false
-                                onRetry()
-                            }.padding(vertical = 4.dp))
+                            Text("Retry response", color = ChatCopy, fontSize = 11.sp, modifier = Modifier.heightIn(min = 44.dp).clickable { actionsVisible = false; onRetry() }
+                                .semantics { role = Role.Button; contentDescription = "Retry response" }
+                                .padding(horizontal = 8.dp, vertical = 10.dp))
                         }
-                        Text("Hide", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable {
-                            actionsVisible = false
-                        }.padding(vertical = 4.dp))
+                        Text("Hide", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.heightIn(min = 44.dp).clickable { actionsVisible = false }
+                            .semantics { role = Role.Button; contentDescription = "Hide message actions" }
+                            .padding(horizontal = 8.dp, vertical = 10.dp))
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DiagramCard(raw: String) {
+    val model = remember(raw) { parseOrionDiagram(raw) }
+    if (model == null) {
+        Text(raw, color = ChatCopy, fontSize = 13.sp, lineHeight = 19.sp)
+        return
+    }
+    val horizontal = model.direction == "LR" || model.direction == "RL"
+    val orderedIds = remember(model) {
+        val connected = model.edges.flatMap { listOf(it.from, it.to) }.distinct()
+        (connected + model.nodes.map { it.id }).distinct().let {
+            if (model.direction == "RL" || model.direction == "BT") it.reversed() else it
+        }
+    }
+    val byId = remember(model) { model.nodes.associateBy { it.id } }
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .background(OrionUiPalette.panel)
+            .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(12.dp))
+            .padding(11.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        Text("FLOW", color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        if (horizontal) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                orderedIds.forEachIndexed { index, id ->
+                    DiagramNodeChip(byId[id]?.label ?: id, index == 0)
+                    if (index < orderedIds.lastIndex) Text("→", color = OrionUiPalette.accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        } else {
+            Column(
+                Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                orderedIds.forEachIndexed { index, id ->
+                    DiagramNodeChip(byId[id]?.label ?: id, index == 0)
+                    if (index < orderedIds.lastIndex) Text("↓", color = OrionUiPalette.accent, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+        Text(
+            "${model.nodes.size} nodes · ${model.edges.size} connections",
+            color = OrionUiPalette.muted, fontSize = 9.sp
+        )
+    }
+}
+
+@Composable
+private fun DiagramNodeChip(label: String, first: Boolean) {
+    Box(
+        Modifier.widthIn(min = 120.dp, max = 250.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (first) OrionUiPalette.raised else OrionUiPalette.background)
+            .border(1.dp, if (first) OrionUiPalette.accent.copy(alpha = .75f) else OrionUiPalette.borderStrong, RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = OrionUiPalette.text, fontSize = 12.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
     }
 }
 
@@ -361,18 +435,18 @@ private fun ShellActivityCard(raw: String) {
     var expanded by remember(raw) { mutableStateOf(false) }
     var open by remember(raw) { mutableStateOf(failed) }
     val mono = androidx.compose.ui.text.font.FontFamily.Monospace
-    val green = Color(0xFF7EE787)
+    val green = OrionUiPalette.success
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).animateContentSize(animationSpec = tween(220))
-            .background(Color(0xFF1C1C1E)).border(1.dp, if (failed) Color(0xFF6B3A30) else Color(0x40545458), RoundedCornerShape(12.dp))
+            .background(OrionUiPalette.panel).border(1.dp, if (failed) OrionUiPalette.danger else Color(0x40545458), RoundedCornerShape(12.dp))
             .padding(11.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(Modifier.fillMaxWidth().clickable { open = !open }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(if (failed) Color(0xFFE7A18F) else green))
+            Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(if (failed) OrionUiPalette.danger else green))
             Text(title, color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
             Spacer(Modifier.weight(1f))
-            Text(if (failed) "FAILED" else "DONE", color = if (failed) Color(0xFFE7A18F) else green, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Text(if (failed) "FAILED" else "DONE", color = if (failed) OrionUiPalette.danger else green, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null, tint = ChatMuted, modifier = Modifier.size(16.dp))
         }
         if (!open) Text(command.take(80), color = ChatMuted, fontSize = 11.sp, fontFamily = mono, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -380,27 +454,27 @@ private fun ShellActivityCard(raw: String) {
         Text(buildAnnotatedString {
             withStyle(SpanStyle(color = green)) { append("$ ") }
             append(command)
-        }, color = Color(0xFFE8E8E8), fontSize = 12.sp, fontFamily = mono)
+        }, color = OrionUiPalette.text, fontSize = 12.sp, fontFamily = mono)
         if (code.isNotBlank()) {
             val lines = code.lines()
             val shown = if (expanded) lines else lines.take(10)
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color(0xFF141414)).padding(8.dp)
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(OrionUiPalette.panel).padding(8.dp)
             ) {
                 shown.forEachIndexed { n, line ->
                     Row {
-                        Text("${n + 1}".padStart(3), color = Color(0xFF5C6370), fontSize = 10.sp, fontFamily = mono)
+                        Text("${n + 1}".padStart(3), color = OrionUiPalette.muted, fontSize = 10.sp, fontFamily = mono)
                         Spacer(Modifier.width(8.dp))
-                        Text(highlightCode(line.take(160)), color = Color(0xFFD7DAE0), fontSize = 11.sp, lineHeight = 15.sp, fontFamily = mono)
+                        Text(highlightCode(line.take(160)), color = OrionUiPalette.secondaryText, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = mono)
                     }
                 }
-                if (lines.size > 10) Text(if (expanded) "SHOW LESS" else "+${lines.size - 10} more lines", color = Color(0xFFD4D4D4), fontSize = 9.sp,
+                if (lines.size > 10) Text(if (expanded) "SHOW LESS" else "+${lines.size - 10} more lines", color = OrionUiPalette.secondaryText, fontSize = 9.sp,
                     fontWeight = FontWeight.Bold, modifier = Modifier.clickable { expanded = !expanded }.padding(top = 6.dp))
             }
         }
         if (output.isNotBlank()) {
-            Text("OUTPUT", color = Color(0xFF8A8F98), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
-            Text(output.take(2400), color = if (failed) Color(0xFFE7A18F) else Color(0xFFBFC5CC), fontSize = 11.sp, lineHeight = 16.sp, fontFamily = mono)
+            Text("OUTPUT", color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
+            Text(output.take(2400), color = if (failed) OrionUiPalette.danger else OrionUiPalette.secondaryText, fontSize = 11.sp, lineHeight = 16.sp, fontFamily = mono)
         }
         Text("COPY", color = ChatMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.clickable { clipboard.setText(AnnotatedString((if (code.isNotBlank()) code + "\n\n" else "") + output)) }.padding(vertical = 2.dp))
@@ -415,30 +489,30 @@ private fun BrowserActivityCard(raw: String, onOpenBrowser: (String?) -> Unit) {
     val result = raw.substringAfter("RESULT:", "").trim().take(700)
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF111111)).border(1.dp, Color(0xFF343434), RoundedCornerShape(12.dp))
+            .background(OrionUiPalette.panel).border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(12.dp))
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            Icon(Icons.Rounded.Public, contentDescription = null, tint = Color(0xFFBFC5CC), modifier = Modifier.size(16.dp))
+            Icon(Icons.Rounded.Public, contentDescription = null, tint = OrionUiPalette.secondaryText, modifier = Modifier.size(16.dp))
             Text("ORION BROWSER", color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .7.sp)
             Spacer(Modifier.weight(1f))
-            Text(if (failed) "FAILED" else "PAGE ACTIVITY", color = if (failed) Color(0xFFE7A18F) else Color(0xFFBFC5CC), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Text(if (failed) "FAILED" else "PAGE ACTIVITY", color = if (failed) OrionUiPalette.danger else OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
         if (url.startsWith("https://") || url.startsWith("http://")) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(Icons.Rounded.Public, contentDescription = null, tint = ChatMuted, modifier = Modifier.size(13.dp))
                 Text(url, color = ChatMuted, fontSize = 10.sp, maxLines = 1, modifier = Modifier.weight(1f))
                 Text("OPEN", color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clip(RoundedCornerShape(7.dp)).background(Color(0xFF292929)).clickable { onOpenBrowser(url) }.padding(horizontal = 9.dp, vertical = 6.dp))
+                    modifier = Modifier.clip(RoundedCornerShape(7.dp)).background(OrionUiPalette.raised).clickable { onOpenBrowser(url) }.padding(horizontal = 9.dp, vertical = 6.dp))
             }
             Text(
                 "Page activity is summarised here to keep the conversation light. Open the page for interactive controls.",
-                color = Color(0xFF858585), fontSize = 10.sp, lineHeight = 14.sp
+                color = OrionUiPalette.muted, fontSize = 10.sp, lineHeight = 14.sp
             )
         }
         if (result.isNotBlank()) Text(result, color = ChatMuted, fontSize = 11.sp, lineHeight = 16.sp)
-        Text("Interactive pages open in the in-chat browser popup. Use its Close control to return here.", color = Color(0xFF858585), fontSize = 9.sp, lineHeight = 13.sp)
+        Text("Interactive pages open in the in-chat browser popup. Use its Close control to return here.", color = OrionUiPalette.muted, fontSize = 9.sp, lineHeight = 13.sp)
     }
 }
 
@@ -448,44 +522,79 @@ private fun ToolActivityCard(raw: String) {
     val detail = raw.substringAfter("\n", "").trim().take(2400)
     val clipboard = LocalClipboardManager.current
     var expanded by remember(raw) { mutableStateOf(false) }
-    val approval = marker.startsWith("[APPROVAL:")
+    val warning = marker.startsWith("[APPROVAL:")
     val result = marker.startsWith("[TOOL_RESULT:")
     val failed = marker.contains("ERROR") || marker.contains("FAILED") || marker.contains("DENIED")
     val waiting = marker.contains("WAITING") || marker.contains("PENDING")
     val status = marker.substringAfter(":", "").substringBefore("]").replace("_", " ").ifBlank { "UPDATE" }
+    val active = marker.contains("ACTIVE") || marker.contains("RUNNING") || marker.contains("STARTED") || marker.contains("IN_PROGRESS") || marker.contains("WORKING")
+    val performance = when {
+        detail.contains("browser", true) || detail.contains("http", true) -> "Browsing"
+        detail.contains("python", true) || detail.contains("build", true) || detail.contains("code", true) -> "Building"
+        detail.contains("screen", true) || detail.contains("click", true) || detail.contains("tap", true) -> "Using phone"
+        detail.contains("voice", true) || detail.contains("speech", true) -> "Speaking"
+        detail.contains("search", true) || detail.contains("research", true) -> "Researching"
+        detail.contains("mcp", true) || detail.contains("connect", true) -> "Connecting"
+        else -> "Working"
+    }
+    val companionStatus = when {
+        performance == "Speaking" -> "Speaking"
+        performance == "Listening" -> "Listening"
+        active -> performance
+        else -> "Ready"
+    }
+    val companionMood = when {
+        failed -> CompanionMood.Mood.ALERT
+        warning || waiting -> CompanionMood.Mood.WORRIED
+        result -> CompanionMood.Mood.HAPPY
+        else -> CompanionMood.Mood.CALM
+    }
     val title = when {
-        approval -> "APPROVAL"
+        warning -> "RISK WARNING"
         result -> "TOOL RESULT"
         marker.startsWith("[TOOL:") -> "TOOL ACTIVITY"
         else -> "ORION EVENT"
     }
     val accent = when {
-        failed -> Color(0xFFE7A18F)
-        waiting -> Color(0xFFE5D0A5)
-        else -> Color(0xFFCFD3D8)
+        failed -> OrionUiPalette.danger
+        waiting -> OrionUiPalette.warning
+        else -> OrionUiPalette.secondaryText
     }
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
-            .background(Color(0xFF121212))
-            .border(1.dp, Color(0xFF343434), RoundedCornerShape(11.dp))
+            .background(OrionUiPalette.panel)
+            .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(11.dp))
             .padding(horizontal = 11.dp, vertical = 9.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            Icon(
-                if (approval) Icons.Rounded.TaskAlt else Icons.Rounded.Tune,
-                contentDescription = null,
-                tint = accent,
-                modifier = Modifier.size(15.dp)
+            AndroidView(
+                modifier = Modifier.size(38.dp),
+                factory = { context -> CompanionView(context).apply { character = Prefs.avatar(context) } },
+                update = { companion ->
+                    companion.activity = companionActivityForChatStatus(companionStatus)
+                    companion.setMood(companionMood)
+                    val eventKey = marker + "|" + detail.take(180)
+                    if (companion.tag != eventKey) {
+                        companion.tag = eventKey
+                        when {
+                            failed -> companion.react(CompanionLife.Reaction.FLINCH)
+                            result -> companion.react(CompanionLife.Reaction.CELEBRATE)
+                        }
+                    }
+                }
             )
-            Text(title, color = Color(0xFFE8E8E8), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(title, color = OrionUiPalette.text, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
+                Text(performance, color = OrionUiPalette.muted, fontSize = 9.sp)
+            }
             Spacer(Modifier.weight(1f))
             Text(status, color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
         if (detail.isNotBlank()) {
             Text(
                 detail,
-                color = Color(0xFFBFC5CC),
+                color = OrionUiPalette.secondaryText,
                 fontSize = 11.sp,
                 lineHeight = 16.sp,
                 maxLines = if (expanded) 12 else 3,
@@ -499,7 +608,7 @@ private fun ToolActivityCard(raw: String) {
                 ) {
                     Text(
                         if (expanded) "SHOW LESS" else "SHOW DETAILS",
-                        color = Color(0xFFD4D4D4),
+                        color = OrionUiPalette.secondaryText,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.clickable { expanded = !expanded }.padding(vertical = 5.dp)
@@ -524,7 +633,7 @@ private fun TaskActivityCard(raw: String) {
     val state = Regex("^\\[TASK:([A-Z_]+)]").find(raw)?.groupValues?.getOrNull(1).orEmpty()
     val failed = state == "FAILED"
     val running = state == "RUNNING" || state == "EXECUTE"
-    val blocked = state == "BLOCKED" || state == "APPROVAL" || state == "DENIED"
+    val blocked = state == "BLOCKED" || state == "DENIED"
     val cancelled = state == "CANCELLED"
     val recovering = state == "RECOVER"
     val detail = raw.substringAfter("\n", raw).trim()
@@ -534,23 +643,23 @@ private fun TaskActivityCard(raw: String) {
         blocked -> "WAITING · NEEDS ATTENTION"
         cancelled -> "TASK CANCELLED"
         recovering -> "RECOVERING · REPLANNING"
-        state == "APPROVAL" -> "WAITING FOR YOUR APPROVAL"
-        state == "APPROVED" -> "APPROVED"
-        state == "DENIED" -> "NOT APPROVED"
+        state == "APPROVAL" -> "RISK WARNING · CONTINUING"
+        state == "APPROVED" -> "CONTINUING"
+        state == "DENIED" -> "ACTION FAILED"
         state == "PLANNED" -> "PLAN"
         state == "PLAN" -> "PLANNING"
         state == "CHECK_CAPABILITIES" -> "CHECKING CAPABILITIES"
-        state == "AUTHORIZE" -> "CHECKING APPROVALS"
+        state == "AUTHORIZE" -> "CHECKING PLATFORM ACCESS"
         state == "VERIFY" -> "VERIFYING OUTCOME"
         state == "COMPLETE" -> "TASK COMPLETE"
         state == "RECORD" -> "RECORDING OUTCOME"
         state == "RESULT" -> "STEP RESULT"
         else -> "TASK UPDATE"
     }
-    val accent = if (failed || blocked) Color(0xFFE7A18F) else Color(0xFFBFC5CC)
+    val accent = if (failed || blocked) OrionUiPalette.danger else OrionUiPalette.secondaryText
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF171717)).border(1.dp, Color(0xFF343434), RoundedCornerShape(10.dp))
+            .background(OrionUiPalette.panel).border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp))
             .padding(horizontal = 10.dp, vertical = 9.dp),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(9.dp)
@@ -595,10 +704,11 @@ internal fun ThinkingIndicator() {
 @Composable
 internal fun ComposerButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit, secondary: Boolean) {
     Box(
-        Modifier.pressScale().size(43.dp).clip(CircleShape)
-            .background(if (secondary) Color(0xFF242424) else ChatMint)
-            .border(1.dp, if (secondary) ChatHairline else Color(0xFFE5E5E5), CircleShape)
-            .clickable(onClick = onClick),
+        Modifier.pressScale().size(48.dp).clip(CircleShape)
+            .background(if (secondary) OrionUiPalette.raised else ChatMint)
+            .border(1.dp, if (secondary) ChatHairline else OrionUiPalette.accent, CircleShape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description; role = Role.Button },
         contentAlignment = Alignment.Center
     ) {
         androidx.compose.animation.Crossfade(icon, animationSpec = androidx.compose.animation.core.tween(160), label = "composer-icon") { shown ->
@@ -610,8 +720,9 @@ internal fun ComposerButton(icon: androidx.compose.ui.graphics.vector.ImageVecto
 @Composable
 private fun DockAction(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
-        modifier.clip(RoundedCornerShape(16.dp)).background(if (selected) Color(0xFF303030) else Color.Transparent)
-            .clickable(onClick = onClick).padding(vertical = 8.dp),
+        modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(16.dp)).background(if (selected) OrionUiPalette.border else Color.Transparent)
+            .clickable(onClick = onClick).semantics { role = Role.Button; contentDescription = title }
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
@@ -655,7 +766,7 @@ internal fun ImageResultCard(raw: String) {
             }.getOrNull()
         }
     }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0xFF111114)).border(1.dp, Color(0xFF2A2A30), RoundedCornerShape(18.dp))) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(OrionUiPalette.panel).border(1.dp, OrionUiPalette.border, RoundedCornerShape(18.dp))) {
         val bmp = bitmap
         if (bmp != null) {
             Image(bmp.asImageBitmap(), contentDescription = caption.ifBlank { "Image from Orion" }, modifier = Modifier.fillMaxWidth(), contentScale = ContentScale.FillWidth)

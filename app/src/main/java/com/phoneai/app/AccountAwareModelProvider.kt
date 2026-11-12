@@ -45,7 +45,8 @@ internal class AccountAwareModelProvider(
         temperature: Double,
         fastResponse: Boolean,
         tools: List<ToolDefinition>,
-        onDelta: ((String) -> Unit)?
+        onDelta: ((String) -> Unit)?,
+        onToolCall: ((String, JSONObject) -> String)?
     ): OrionModelTurn {
         val provider = selected(vision)
         if (vision && provider.id in ACCOUNT_IDS) {
@@ -61,17 +62,24 @@ internal class AccountAwareModelProvider(
         val answer = synchronized(lock) {
             check(!cancelled) { "Account model request was cancelled." }
             when (provider.id) {
-                "codex" -> runCodex(prompt, model, onDelta)
-                "antigravity" -> runAntigravity(prompt, model, onDelta)
+                "codex" -> runCodex(prompt, model, tools, onDelta, onToolCall)
+                "antigravity" -> runAntigravity(prompt, model, tools, onDelta, onToolCall)
                 else -> error("Unsupported account provider: " + provider.id)
             }
         }
-        // Account CLI turns currently return text events only. Do not advertise Orion
-        // native tools until an actual MCP/tool bridge is attached to the account session.
-        return OrionModelTurn(answer, toolCallingAvailable = false)
+        // Both account agents expose the exact current Orion tool set through a transport
+        // adapter that routes calls back into the same guarded Central Brain executor.
+        val nativeBridgeReady = provider.id in ACCOUNT_IDS && tools.isNotEmpty() && onToolCall != null
+        return OrionModelTurn(answer, toolCallingAvailable = nativeBridgeReady)
     }
 
-    private fun runCodex(prompt: String, requestedModel: String?, onDelta: ((String) -> Unit)?): String {
+    private fun runCodex(
+        prompt: String,
+        requestedModel: String?,
+        tools: List<ToolDefinition>,
+        onDelta: ((String) -> Unit)?,
+        onToolCall: ((String, JSONObject) -> String)?
+    ): String {
         val installer = CodexRuntimeInstaller(app)
         val client = installer.openAppServer(app.filesDir.absolutePath)
         activeCodex = client
@@ -82,8 +90,8 @@ internal class AccountAwareModelProvider(
             val catalogue = runCatching { client.availableModels() }.getOrDefault(emptyList())
             val model = if (catalogue.isEmpty()) null else requestedModel?.takeIf { it in catalogue }
                 ?: catalogue.firstOrNull()
-            val thread = client.startThread(model)
-            val answer = client.runTurnAndAwait(thread, prompt, model, onDelta = onDelta)
+            val thread = client.startThread(model, tools)
+            val answer = client.runTurnAndAwait(thread, prompt, model, onDelta = onDelta, onToolCall = onToolCall)
             check(answer.isNotBlank()) { "Codex returned an empty model response." }
             Prefs.setAccountConnected(app, "codex", true)
             accountRequests++
@@ -100,18 +108,29 @@ internal class AccountAwareModelProvider(
         }
     }
 
-    private fun runAntigravity(prompt: String, requestedModel: String?, onDelta: ((String) -> Unit)?): String {
+    private fun runAntigravity(
+        prompt: String,
+        requestedModel: String?,
+        tools: List<ToolDefinition>,
+        onDelta: ((String) -> Unit)?,
+        onToolCall: ((String, JSONObject) -> String)?
+    ): String {
         val installer = AntigravityRuntimeInstaller(app)
         installer.install().getOrThrow()
         val model = requestedModel?.takeIf { it.isNotBlank() }
         try {
-            val answer = installer.runPrompt(app.filesDir.absolutePath, prompt, model) { session ->
-                activeAntigravity = session
-            }
+            val answer = installer.runPrompt(
+                app.filesDir.absolutePath,
+                prompt,
+                model,
+                tools = tools,
+                onToolCall = onToolCall,
+                onDelta = onDelta,
+                onSession = { session -> activeAntigravity = session }
+            )
             check(answer.isNotBlank()) { "Antigravity returned an empty model response." }
             Prefs.setAccountConnected(app, "antigravity", true)
             accountRequests++
-            onDelta?.invoke(answer)
             return answer
         } catch (failure: Exception) {
             if (failure.message.orEmpty().contains("auth", true) ||

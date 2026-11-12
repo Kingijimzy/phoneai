@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.content.Context
+import org.json.JSONObject
 
 /** Installs and invokes Google's official Antigravity CLI in the Alpine ARM64 guest. */
 internal class AntigravityRuntimeInstaller(context: Context) {
@@ -10,10 +11,10 @@ internal class AntigravityRuntimeInstaller(context: Context) {
         const val VERSION_MARKER = "/root/.local/bin/agy"
         private const val installCommand = """
             set -eu
-            apk add --no-cache bash curl ca-certificates
+            apk add --no-cache bash curl ca-certificates jq
             mkdir -p /root/.local/bin
             curl -fsSL https://antigravity.google/cli/install.sh -o /tmp/orion-agy-install.sh
-            bash /tmp/orion-agy-install.sh --skip-aliases --skip-path
+            bash /tmp/orion-agy-install.sh
             test -x /root/.local/bin/agy
             /root/.local/bin/agy --version
             mkdir -p /root/.gemini/antigravity-cli
@@ -78,57 +79,142 @@ internal class AntigravityRuntimeInstaller(context: Context) {
         }
     }
 
+    private fun configureOrionMcpBridge(serverName: String, serverUrl: String) {
+        require(serverName.matches(Regex("orion_phoneai_[a-f0-9]{12}"))) {
+            "Invalid temporary Orion MCP server name."
+        }
+        require(serverUrl.startsWith("http://127.0.0.1:")) {
+            "Orion MCP bridge must remain loopback-only."
+        }
+        val command = """
+            set -eu
+            command -v jq >/dev/null 2>&1 || apk add --no-cache jq
+            mkdir -p /root/.gemini/config
+            config=/root/.gemini/config/mcp_config.json
+            [ -f "${'$'}config" ] || printf '{"mcpServers":{}}' > "${'$'}config"
+            jq '.mcpServers = ((.mcpServers // {}) | with_entries(select(.key | startswith("orion_phoneai_") | not)))' "${'$'}config" > "${'$'}config.tmp"
+            mv "${'$'}config.tmp" "${'$'}config"
+            jq --arg name '$serverName' --arg url '$serverUrl' '.mcpServers[${'$'}name] = {"serverUrl":${'$'}url,"timeoutSeconds":600}' "${'$'}config" > "${'$'}config.tmp"
+            mv "${'$'}config.tmp" "${'$'}config"
+            settings=/root/.gemini/antigravity-cli/settings.json
+            settings_backup=/tmp/orion_antigravity_settings_backup.json
+            settings_missing=/tmp/orion_antigravity_settings_was_missing
+            if [ -f "${'$'}settings_backup" ]; then mv "${'$'}settings_backup" "${'$'}settings"; fi
+            if [ -f "${'$'}settings_missing" ]; then rm -f "${'$'}settings" "${'$'}settings_missing"; fi
+            if [ -f "${'$'}settings" ]; then
+              jq '.permissions.allow = ((.permissions.allow // []) | map(select(startswith("mcp(orion_phoneai_") | not)))' "${'$'}settings" > "${'$'}settings.tmp"
+              mv "${'$'}settings.tmp" "${'$'}settings"
+              cp "${'$'}settings" "${'$'}settings_backup"
+            else
+              touch "${'$'}settings_missing"
+              printf '{}' > "${'$'}settings"
+            fi
+            rule="mcp($serverName/*)"
+            jq --arg rule "${'$'}rule" '.permissions = (.permissions // {}) | .permissions.allow = (((.permissions.allow // []) + [${'$'}rule]) | unique) | .permissions.deny = (((.permissions.deny // []) + ["command(*)","unsandboxed(*)","read_file(*)","write_file(*)","read_url(*)","execute_url(*)"]) | unique)' "${'$'}settings" > "${'$'}settings.tmp"
+            mv "${'$'}settings.tmp" "${'$'}settings"
+        """.trimIndent()
+        val result = runtime.execute(
+            LinuxRuntimePolicy.productionManifest,
+            command,
+            timeoutMs = 30_000L
+        )
+        check(result.startsWith("exit=0")) {
+            "Could not configure Orion's restricted Antigravity MCP bridge: " + result.takeLast(1_000)
+        }
+    }
+
+    private fun clearOrionMcpBridge(serverName: String) {
+        val command = """
+            set -eu
+            config=/root/.gemini/config/mcp_config.json
+            if [ -f "${'$'}config" ] && command -v jq >/dev/null 2>&1; then
+              jq --arg name '$serverName' 'del(.mcpServers[${'$'}name])' "${'$'}config" > "${'$'}config.tmp" && mv "${'$'}config.tmp" "${'$'}config"
+            fi
+            settings=/root/.gemini/antigravity-cli/settings.json
+            settings_backup=/tmp/orion_antigravity_settings_backup.json
+            settings_missing=/tmp/orion_antigravity_settings_was_missing
+            if [ -f "${'$'}settings_missing" ]; then
+              rm -f "${'$'}settings" "${'$'}settings_backup" "${'$'}settings_missing"
+            elif [ -f "${'$'}settings_backup" ]; then
+              mv "${'$'}settings_backup" "${'$'}settings"
+            fi
+        """.trimIndent()
+        runCatching {
+            runtime.execute(LinuxRuntimePolicy.productionManifest, command, timeoutMs = 5_000L)
+        }
+    }
+
     fun runPrompt(
         workspaceHostPath: String,
         prompt: String,
         model: String? = null,
+        tools: List<ToolDefinition> = emptyList(),
+        onToolCall: ((String, JSONObject) -> String)? = null,
+        onDelta: ((String) -> Unit)? = null,
         onSession: ((LinuxCommandSession) -> Unit)? = null
     ): String {
-        val session = openPromptSession(workspaceHostPath, prompt, model)
-        onSession?.invoke(session)
-        val output = StringBuilder()
-        val diagnostics = StringBuilder()
-        var finalStatus = ""
-        var finalResponse = ""
-        val deadline = System.currentTimeMillis() + 300_000L
+        val bridge = if (tools.isNotEmpty() && onToolCall != null) {
+            AntigravityOrionMcpBridge(tools) { name, args -> onToolCall(name, args) }
+        } else null
         try {
-            while ((session.isAlive() || session.hasPendingOutput()) && System.currentTimeMillis() < deadline) {
-                val line = session.readLine(500L)
-                if (line == null) {
-                    session.readStderrLine(20L)?.let { diagnostics.append(it).append('\n') }
-                    continue
-                }
-                val event = AntigravityCliProtocol.parseStreamEvent(line)
-                if (event == null) {
-                    diagnostics.append(line).append('\n')
-                    continue
-                }
-                if (AntigravityCliProtocol.isAuthenticationRequired(event)) {
-                    error("Antigravity requires Google-account sign-in.")
-                }
-                if (event.error.isNotBlank()) error("Antigravity: ${event.error}")
-                if (event.type == "step_update" && event.text.isNotBlank()) output.append(event.text)
-                if (event.type == "result") {
-                    finalStatus = event.status
-                    finalResponse = event.text
-                    if (finalStatus == "ERROR") {
-                        error(event.error.ifBlank { finalResponse.ifBlank { "Antigravity returned an error." } })
+            bridge?.let { configureOrionMcpBridge(it.serverName, it.serverUrl) }
+            val session = openPromptSession(workspaceHostPath, prompt, model)
+            try {
+                onSession?.invoke(session)
+                val output = StringBuilder()
+                val diagnostics = StringBuilder()
+                var finalStatus = ""
+                var finalResponse = ""
+                val deadline = System.currentTimeMillis() + 300_000L
+                while ((session.isAlive() || session.hasPendingOutput()) && System.currentTimeMillis() < deadline) {
+                    val line = session.readLine(500L)
+                    if (line == null) {
+                        session.readStderrLine(20L)?.let { diagnostics.append(it).append('\n') }
+                        continue
+                    }
+                    val event = AntigravityCliProtocol.parseStreamEvent(line)
+                    if (event == null) {
+                        diagnostics.append(line).append('\n')
+                        continue
+                    }
+                    if (AntigravityCliProtocol.isAuthenticationRequired(event)) {
+                        error("Antigravity requires Google-account sign-in.")
+                    }
+                    if (event.error.isNotBlank()) error("Antigravity: " + event.error)
+                    if (event.type == "step_update" && event.text.isNotBlank()) {
+                        output.append(event.text)
+                        onDelta?.invoke(event.text)
+                    }
+                    if (event.type == "result") {
+                        finalStatus = event.status
+                        finalResponse = event.text
+                        if (finalStatus == "ERROR") {
+                            error(event.error.ifBlank { finalResponse.ifBlank { "Antigravity returned an error." } })
+                        }
                     }
                 }
+                check(!session.isAlive()) { "Antigravity model request timed out." }
+                check(session.exitCodeOrNull() == 0) {
+                    "Antigravity model request failed: " + diagnostics.toString().take(500)
+                }
+                if (output.isEmpty()) {
+                    output.append(finalResponse)
+                    if (finalResponse.isNotBlank()) onDelta?.invoke(finalResponse)
+                }
+                val response = output.toString().trim()
+                check(response.isNotBlank()) { "Antigravity returned no model response." }
+                check(finalStatus.isBlank() || finalStatus == "SUCCESS") {
+                    "Antigravity did not complete successfully: " + finalStatus
+                }
+                return response
+            } finally {
+                session.close()
             }
-            check(!session.isAlive()) { "Antigravity model request timed out." }
-            check(session.exitCodeOrNull() == 0) {
-                "Antigravity model request failed: ${diagnostics.toString().take(500)}"
-            }
-            if (output.isEmpty()) output.append(finalResponse)
-            val response = output.toString().trim()
-            check(response.isNotBlank()) { "Antigravity returned no model response." }
-            check(finalStatus.isBlank() || finalStatus == "SUCCESS") {
-                "Antigravity did not complete successfully: $finalStatus"
-            }
-            return response
         } finally {
-            session.close()
+            bridge?.let { current ->
+                current.close()
+                clearOrionMcpBridge(current.serverName)
+            }
         }
     }
 }

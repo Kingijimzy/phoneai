@@ -48,6 +48,30 @@ class MarkdownTest {
         val input = "```text\n| a | b |\n| --- | --- |\n```"
         assertEquals(input, normalizeOrionMarkdownTables(input))
     }
+    @Test fun orderedListsPreserveTheirNumbering() {
+        assertEquals("1.  first\n2)  second", formatOrionMarkdown("1. first\n2) second").text)
+    }
+
+    @Test fun taskListsRenderCheckboxes() {
+        assertEquals("☐  pending\n☑  completed", formatOrionMarkdown("- [ ] pending\n- [x] completed").text)
+    }
+
+    @Test fun blockquotesAndHorizontalRulesHaveReadableMarkers() {
+        assertEquals("│  quoted text\n────────────────────────", formatOrionMarkdown("> quoted text\n---").text)
+    }
+
+    @Test fun fencedCodeShowsItsLanguageLabel() {
+        assertEquals("PYTHON\nprint('hello')", formatOrionMarkdown("```python\nprint('hello')\n```").text)
+    }
+
+    @Test fun strikethroughUsesLineThroughSpan() {
+        val formatted = formatOrionMarkdown("~~removed~~")
+        assertEquals("removed", formatted.text)
+        assertEquals(true, formatted.spanStyles.any {
+            it.item.textDecoration == androidx.compose.ui.text.style.TextDecoration.LineThrough
+        })
+    }
+
     @Test fun emptyInputNormalizesSafely() {
         assertEquals("", Markdown.normalizeLines(""))
     }

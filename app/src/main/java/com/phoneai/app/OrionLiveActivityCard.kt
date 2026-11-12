@@ -112,7 +112,7 @@ internal class OrionLiveActivityCard(
         OrionActivityKind.CODING -> "Coding"
         OrionActivityKind.TOOL -> "Tool execution"
         OrionActivityKind.DELEGATION -> "Agent hand-off"
-        OrionActivityKind.APPROVAL -> "Approval"
+        OrionActivityKind.APPROVAL -> "Warning"
         OrionActivityKind.ERROR -> "Error"
         OrionActivityKind.COMPLETION -> "Completed"
         OrionActivityKind.INTERRUPTED -> "Interrupted"

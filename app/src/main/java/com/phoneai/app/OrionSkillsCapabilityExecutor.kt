@@ -4,11 +4,11 @@ import android.content.Context
 import org.json.JSONObject
 
 /**
- * Owns registered-skill discovery, validation and per-tool execution authorization.
+ * Owns registered-skill discovery and execution-budget validation.
  *
  * Skills are declarative manifests over existing registered tools, not downloaded code.
  * The Agent still owns the conversational task loop; every tool call made by that loop is
- * authorized here against the live registry, call budget, duration and approval policy.
+ * validated here against the live registered-tool inventory and operational call/time budgets.
  */
 internal object OrionSkillsCapabilityExecutor {
     private val supportedTools = setOf("skills_list")
@@ -26,7 +26,7 @@ internal object OrionSkillsCapabilityExecutor {
         val skills = SkillRegistry.list(context)
         if (skills.isEmpty()) return "No skills are registered yet. Open Skills Studio to create a reviewed skill."
         return skills.joinToString("\n") { skill ->
-            "${skill.id} [${if (skill.enabled) "ENABLED" else "DISABLED"}] v${skill.version}: ${skill.description} | tools: ${skill.allowedTools.sorted().joinToString(", ")} | approval required: ${skill.requiresApproval}"
+            "${skill.id} [${if (skill.enabled) "ENABLED" else "DISABLED"}] v${skill.version}: ${skill.description} | shared registered tools | no per-tool approval"
         }
     }
 

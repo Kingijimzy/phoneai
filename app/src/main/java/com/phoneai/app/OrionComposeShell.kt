@@ -7,17 +7,15 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -57,6 +55,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -118,7 +124,7 @@ fun OrionComposeShell(
                     when (page) {
                         "Home" -> HomePage(status, onOpenChat, onOpenVoice, onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenAgents, onOpenMemory)
                         "Tools" -> ToolsPage(onOpenFeature)
-                        else -> SettingsPage(onOpenSettings)
+                        else -> SettingsPage(onOpenSettings, onOpenFeature)
                     }
                 }
                 BottomDock(selected) { next ->
@@ -146,6 +152,31 @@ private fun HomePage(
     val entityName = Prefs.orionEntityName(context)
     val setupNeeded = status.contains("0 AI provider", true)
     val controlOff = status.contains("not enabled", true)
+    val activePresence = status.contains("listen", true) || status.contains("think", true) ||
+        status.contains("speak", true) || status.contains("work", true) || status.contains("act", true)
+    val presenceColor by animateColorAsState(
+        targetValue = when {
+            status.contains("error", true) || status.contains("approval", true) -> OrionUiPalette.warning
+            activePresence -> Silver
+            setupNeeded || controlOff -> Muted
+            else -> OrionUiPalette.success
+        },
+        animationSpec = tween(320),
+        label = "home-presence-color"
+    )
+    val presenceTransition = rememberInfiniteTransition(label = "home-presence")
+    val presenceAlpha by presenceTransition.animateFloat(
+        initialValue = if (activePresence) 0.18f else 0f,
+        targetValue = if (activePresence) 0.68f else 0f,
+        animationSpec = infiniteRepeatable(tween(1100), repeatMode = RepeatMode.Reverse),
+        label = "home-presence-alpha"
+    )
+    val presenceScale by presenceTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(tween(1100), repeatMode = RepeatMode.Reverse),
+        label = "home-presence-scale"
+    )
     Column(
         Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState())
             .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 20.dp),
@@ -165,7 +196,9 @@ private fun HomePage(
             Spacer(Modifier.weight(1f))
             Row(
                 Modifier.clip(CircleShape).background(Panel).border(1.dp, Hairline, CircleShape)
-                    .clickable { onOpenSettings(null) }.padding(horizontal = 10.dp, vertical = 8.dp),
+                    .heightIn(min = 44.dp).clickable(role = androidx.compose.ui.semantics.Role.Button) { onOpenSettings(null) }
+                    .semantics { contentDescription = "Open system settings"; role = androidx.compose.ui.semantics.Role.Button }
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
@@ -182,7 +215,13 @@ private fun HomePage(
             verticalArrangement = Arrangement.spacedBy(11.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                Box(Modifier.size(7.dp).clip(CircleShape).background(Silver))
+                Box(Modifier.size(12.dp), contentAlignment = Alignment.Center) {
+                    if (activePresence) {
+                        Box(Modifier.size(12.dp).scale(presenceScale).clip(CircleShape)
+                            .background(presenceColor.copy(alpha = presenceAlpha)))
+                    }
+                    Box(Modifier.size(6.dp).clip(CircleShape).background(presenceColor))
+                }
                 Text("CENTRAL BRAIN", color = Silver, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
                 Spacer(Modifier.weight(1f))
                 Text("ONE ORION · ONE CONVERSATION", color = Muted, fontSize = 8.sp, letterSpacing = .5.sp)
@@ -204,8 +243,10 @@ private fun HomePage(
                 color = Muted, fontSize = 12.sp, lineHeight = 18.sp
             )
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Silver)
-                    .clickable(onClick = onOpenChat).padding(horizontal = 14.dp, vertical = 14.dp),
+                Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(14.dp)).background(Silver)
+                    .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onOpenChat)
+                    .semantics { contentDescription = "Open Orion chat"; role = androidx.compose.ui.semantics.Role.Button }
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
             ) {
                 Icon(Icons.Rounded.ChatBubbleOutline, null, tint = Ink, modifier = Modifier.size(20.dp))
@@ -216,7 +257,9 @@ private fun HomePage(
             }
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(PanelRaised)
-                    .clickable(onClick = onOpenVoice).padding(horizontal = 12.dp, vertical = 11.dp),
+                    .heightIn(min = 48.dp).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onOpenVoice)
+                    .semantics { contentDescription = "Continue by voice"; role = androidx.compose.ui.semantics.Role.Button }
+                    .padding(horizontal = 12.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(Icons.Rounded.GraphicEq, null, tint = Silver, modifier = Modifier.size(19.dp))
@@ -263,9 +306,11 @@ private fun HomeActionCard(
     onClick: () -> Unit
 ) {
     Column(
-        modifier.height(133.dp).clip(RoundedCornerShape(21.dp)).background(Color(0xFF141414))
-            .border(1.dp, Color(0xFF383838), RoundedCornerShape(21.dp))
-            .clickable(onClick = onClick).padding(15.dp),
+        modifier.height(133.dp).clip(RoundedCornerShape(21.dp)).background(Panel)
+            .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(21.dp))
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .semantics { contentDescription = "$title. $subtitle"; role = androidx.compose.ui.semantics.Role.Button }
+            .padding(15.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Icon(icon, null, tint = Silver, modifier = Modifier.size(25.dp))
@@ -329,7 +374,7 @@ private fun ToolsPage(onOpenFeature: (String) -> Unit) {
     ) {
         PageHeading("Feature directory", "Every major Orion destination, grouped by what it helps you do.")
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Panel)
+            Modifier.fillMaxWidth().heightIn(min = 54.dp).clip(RoundedCornerShape(14.dp)).background(Panel)
                 .border(1.dp, Hairline, RoundedCornerShape(14.dp)).padding(13.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -357,11 +402,11 @@ private fun ToolsPage(onOpenFeature: (String) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
-                Modifier.fillMaxWidth().clickable { showRegisteredTools = !showRegisteredTools },
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = androidx.compose.ui.semantics.Role.Button) { showRegisteredTools = !showRegisteredTools },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("Registered agent tools", color = Copy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Registered agent tools", color = Copy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.heightIn(min = 44.dp))
                     Text("${ToolRegistry.all.size} registered contracts · access labels from the live registry", color = Muted, fontSize = 11.sp)
                 }
                 Text(if (showRegisteredTools) "HIDE" else "VIEW", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -370,8 +415,8 @@ private fun ToolsPage(onOpenFeature: (String) -> Unit) {
                 Text("These are tool contracts, not separate app pages. Availability still depends on the current capability, permission and policy state.", color = Muted, fontSize = 11.sp)
                 ToolRegistry.all.forEach { definition ->
                     val readOnly = definition.access == ToolAccess.READ
-                    val badgeColor = if (readOnly) Silver else Color(0xFFE7BD7B)
-                    val badgeBackground = if (readOnly) Color(0xFF242424) else Color(0xFF302820)
+                    val badgeColor = if (readOnly) Silver else OrionUiPalette.warning
+                    val badgeBackground = if (readOnly) PanelRaised else Panel
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp)).background(PanelRaised)
                             .border(1.dp, Hairline, RoundedCornerShape(11.dp)).padding(horizontal = 11.dp, vertical = 9.dp),
@@ -397,7 +442,7 @@ private fun ToolsPage(onOpenFeature: (String) -> Unit) {
 }
 
 @Composable
-private fun SettingsPage(onOpenSettings: (String?) -> Unit) {
+private fun SettingsPage(onOpenSettings: (String?) -> Unit, onOpenFeature: (String) -> Unit) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp)
@@ -438,11 +483,13 @@ private fun PageHeading(title: String, subtitle: String) {
 @Composable
 private fun ActionRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(PanelRaised).border(1.dp, Color(0xFF303030).copy(alpha = .8f), RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick).padding(14.dp),
+        Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(RoundedCornerShape(12.dp)).background(PanelRaised).border(1.dp, Hairline.copy(alpha = .8f), RoundedCornerShape(12.dp))
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .semantics { contentDescription = "$title. $subtitle"; role = androidx.compose.ui.semantics.Role.Button }
+            .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(PanelRaised).border(1.dp, Color(0xFF383838).copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(40.dp).clip(RoundedCornerShape(9.dp)).background(PanelRaised).border(1.dp, Hairline.copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Silver, modifier = Modifier.size(21.dp))
         }
         Spacer(Modifier.width(13.dp))
@@ -529,8 +576,10 @@ private fun DockItem(label: String, icon: androidx.compose.ui.graphics.vector.Im
     val tint by animateColorAsState(if (active) Silver else Muted, animationSpec = tween(180), label = "dock-item-$label")
     Column(
         modifier.height(49.dp).clip(RoundedCornerShape(12.dp))
-            .background(if (active) Color(0xFF252525) else Color.Transparent)
-            .clickable(onClick = onClick).padding(vertical = 5.dp),
+            .background(if (active) PanelRaised else Color.Transparent)
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .semantics { contentDescription = "$label tab"; role = androidx.compose.ui.semantics.Role.Button }
+            .padding(vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {

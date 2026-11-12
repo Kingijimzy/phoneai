@@ -21,14 +21,57 @@ import kotlin.math.sin
  * Animation stops when the system animation scale is off. Tap to switch look.
  */
 internal fun companionActivityForChatStatus(status: String): CompanionView.Activity = when (status.trim().lowercase()) {
-    "listening" -> CompanionView.Activity.LISTENING
-    "speaking" -> CompanionView.Activity.SPEAKING
-    "thinking", "working", "needs approval", "needs_approval", "acting", "researching" -> CompanionView.Activity.THINKING
+    "listening", "recording", "hearing" -> CompanionView.Activity.LISTENING
+    "speaking", "voice output", "talking" -> CompanionView.Activity.SPEAKING
+    "browsing", "searching", "researching", "reading" -> CompanionView.Activity.BROWSING
+    "building", "coding" -> CompanionView.Activity.BUILDING
+    "using phone", "acting", "connecting" -> CompanionView.Activity.ACTING
+    "drawing", "sketching" -> CompanionView.Activity.DRAWING
+    "writing", "editing" -> CompanionView.Activity.WRITING
+    "running", "executing" -> CompanionView.Activity.RUNNING
+    "thinking", "working", "warning", "risk notice", "needs approval" -> CompanionView.Activity.THINKING
     else -> CompanionView.Activity.IDLE
 }
 
+internal fun companionActivityForEvent(event: OrionActivityEvent): CompanionView.Activity? {
+    if (event.status == OrionActivityStatus.WAITING) return CompanionView.Activity.THINKING
+    if (event.status != OrionActivityStatus.ACTIVE) return null
+    val signal = (event.title + " " + event.summary).lowercase()
+    return when (event.kind) {
+        OrionActivityKind.RESEARCH -> CompanionView.Activity.BROWSING
+        OrionActivityKind.CODING -> CompanionView.Activity.BUILDING
+        OrionActivityKind.TOOL -> when {
+            "sketch" in signal || "draw" in signal || "annotat" in signal -> CompanionView.Activity.DRAWING
+            "browser" in signal || "search" in signal || "web" in signal -> CompanionView.Activity.BROWSING
+            "python" in signal || "terminal" in signal || "shell" in signal -> CompanionView.Activity.RUNNING
+            else -> CompanionView.Activity.ACTING
+        }
+        OrionActivityKind.DELEGATION -> CompanionView.Activity.RUNNING
+        OrionActivityKind.THINKING -> CompanionView.Activity.THINKING
+        OrionActivityKind.APPROVAL -> CompanionView.Activity.THINKING
+        else -> null
+    }
+}
+
+internal fun companionStatusForEvent(event: OrionActivityEvent): String? = when (event.status) {
+    OrionActivityStatus.ACTIVE -> when (companionActivityForEvent(event)) {
+        CompanionView.Activity.BROWSING -> "BROWSING"
+        CompanionView.Activity.BUILDING -> "BUILDING"
+        CompanionView.Activity.DRAWING -> "DRAWING"
+        CompanionView.Activity.ACTING -> "ACTING"
+        CompanionView.Activity.RUNNING -> "RUNNING"
+        CompanionView.Activity.THINKING -> "THINKING"
+        else -> null
+    }
+    OrionActivityStatus.WAITING -> "WARNING"
+    OrionActivityStatus.FAILED -> "ERROR"
+    OrionActivityStatus.CANCELLED -> "STOPPED"
+    OrionActivityStatus.INTERRUPTED -> "PAUSED"
+    OrionActivityStatus.SUCCEEDED -> null
+}
+
 internal class CompanionView(context: Context) : View(context) {
-    enum class Activity { IDLE, THINKING, LISTENING, SPEAKING }
+    enum class Activity { IDLE, THINKING, LISTENING, SPEAKING, BROWSING, BUILDING, ACTING, DRAWING, WRITING, RUNNING }
 
     var character = 0
         set(v) { field = ((v % 3) + 3) % 3; invalidate() }
@@ -143,7 +186,7 @@ internal class CompanionView(context: Context) : View(context) {
         // glow, and a pulsing ring while listening or alarmed
         fill.style = Paint.Style.FILL; fill.color = Color.argb(46, Color.red(col), Color.green(col), Color.blue(col))
         canvas.drawCircle(cx, cy, r * 1.3f, fill)
-        if (activity == Activity.LISTENING || reaction == CompanionLife.Reaction.ALARM) {
+        if (activity == Activity.LISTENING || activity == Activity.BROWSING || activity == Activity.ACTING || activity == Activity.DRAWING || activity == Activity.RUNNING || reaction == CompanionLife.Reaction.ALARM) {
             val p = (phase * 6f) % 1f
             line.color = Color.argb(((1f - p) * 160).toInt(), Color.red(col), Color.green(col), Color.blue(col)); line.strokeWidth = r * 0.07f
             canvas.drawCircle(cx, cy, r * (1.1f + p * 0.55f), line)
@@ -172,7 +215,14 @@ internal class CompanionView(context: Context) : View(context) {
         val following = live && SystemClock.uptimeMillis() - lookAtTime < 3500L
         var px = if (following) lookX else sin(phase * tau * 1.5f) * 0.5f
         var py = if (following) lookY else cos(phase * tau * 0.8f) * 0.25f
-        if (activity == Activity.THINKING) { px = 0.6f; py = -0.7f }
+        when (activity) {
+            Activity.THINKING -> { px = 0.6f; py = -0.7f }
+            Activity.BROWSING -> { px = sin(phase * tau * 2.4f) * 0.85f; py = -0.1f }
+            Activity.BUILDING, Activity.WRITING -> { px = -0.35f; py = 0.62f }
+            Activity.ACTING, Activity.RUNNING -> { px = sin(phase * tau * 3.2f); py = 0.1f }
+            Activity.DRAWING -> { px = 0.55f; py = 0.48f }
+            else -> Unit
+        }
         val ex = r * 0.38f; val ey = cy - r * 0.15f; val er = r * 0.17f
         val blink = live && ((phase * 7f) % 1f) > 0.965f
         val squint = reaction == CompanionLife.Reaction.FLINCH
@@ -210,7 +260,7 @@ internal class CompanionView(context: Context) : View(context) {
         }
 
         // thinking dots
-        if (activity == Activity.THINKING) {
+        if (activity == Activity.THINKING || activity == Activity.BUILDING || activity == Activity.WRITING) {
             fill.color = col
             for (i in 0..2) {
                 val t = (phase * 5f + i * 0.33f) % 1f

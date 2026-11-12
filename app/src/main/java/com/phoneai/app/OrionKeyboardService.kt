@@ -49,7 +49,7 @@ class OrionKeyboardService : InputMethodService() {
                 )
             } catch (_: Exception) { null }
             val ourIme = android.content.ComponentName(context, OrionKeyboardService::class.java)
-                .flattenToShortString()
+                .flattenToString()
             // Do not trust a stale InputConnection retained after Android switches to another IME.
             if (service != null && selectedIme == ourIme && service.currentInputConnection != null) {
                 return service.commitAgentText(text, targetPackage)
@@ -98,7 +98,17 @@ class OrionKeyboardService : InputMethodService() {
     // the typing stream has been idle, rather than switching keyboards after every type call.
     private val imeRestoreHandler = Handler(Looper.getMainLooper())
     private val restorePreviousIme = Runnable {
-        runCatching { switchToPreviousInputMethod() }
+        val selectedIme = runCatching {
+            android.provider.Settings.Secure.getString(
+                contentResolver,
+                android.provider.Settings.Secure.DEFAULT_INPUT_METHOD
+            )
+        }.getOrNull()
+        val ourIme = android.content.ComponentName(this, OrionKeyboardService::class.java)
+            .flattenToShortString()
+        if (OrionKeyboardPolicy.shouldRestorePreviousIme(selectedIme, ourIme)) {
+            runCatching { switchToPreviousInputMethod() }
+        }
     }
     private val imeRestoreIdleMs = 2_000L
 
@@ -190,12 +200,12 @@ class OrionKeyboardService : InputMethodService() {
         }
         val accepted = activeConnection.commitText(text, 1)
         if (!accepted) return "error: the focused app rejected replacement text from the active input connection"
-        // Return to the IME the user had selected before Orion was temporarily activated.
-        // InputMethodService requires this switch on its main thread, after commitText completes.
-        Handler(Looper.getMainLooper()).postDelayed({
-            try { switchToPreviousInputMethod() } catch (_: Exception) { }
-        }, 250L)
-        return "typed via Orion Private Keyboard input connection; requested restoration of the previous keyboard"
+        // Keep Orion active for a burst of adjacent field updates. Every successful write
+        // resets the idle timer; restore only after the burst ends, and only if the user
+        // has not manually selected a different IME in the meantime.
+        imeRestoreHandler.removeCallbacks(restorePreviousIme)
+        imeRestoreHandler.postDelayed(restorePreviousIme, imeRestoreIdleMs)
+        return "typed via Orion Private Keyboard input connection; previous keyboard restoration scheduled after typing becomes idle"
     }
 
     override fun onEvaluateFullscreenMode(): Boolean = false

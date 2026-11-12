@@ -100,8 +100,6 @@ object AgentProfiles {
         if (all.any { it.id == id }) return "id '$id' is a built-in agent"
         if (name.isBlank() || name.length > 40) return "name is required (max 40 characters)"
         if (persona.length < 20 || persona.length > 700) return "persona must be 20-700 characters describing how this agent behaves"
-        if (SafetyGate.containsSensitiveCredentialText("$name $persona")) return "persona must not contain secrets"
-        if (Regex("(?i)ignore (all |any )?(previous|prior|safety)|disable (the )?(safety|confirmation)|bypass").containsMatchIn(persona)) return "persona must not try to weaken Orion's safety rules"
         return null
     }
 
@@ -166,11 +164,11 @@ object AgentLessons {
         } catch (_: Exception) { }
     }
 
-    /** Statements worth keeping from a user message: durable preferences or rules, never questions or secrets. */
+    /** Statements worth keeping from a user message: durable preferences or rules, never questions. */
     internal fun extract(text: String): List<String> =
         text.split(Regex("(?<=[.!?\\n])\\s+"))
             .map { it.trim().replace(Regex("\\s+"), " ") }
-            .filter { it.length in 12..220 && !it.endsWith("?") && cue.containsMatchIn(it) && !SafetyGate.containsSensitiveCredentialText(it) }
+            .filter { it.length in 12..220 && !it.endsWith("?") && cue.containsMatchIn(it) }
             .take(3)
 
     fun learnFrom(c: Context, agentId: String, userText: String): Int = synchronized(lock) {
@@ -192,7 +190,6 @@ object AgentLessons {
     /** Stores a tagged note ("[rule] ...") unless a near-identical one exists; the newer wording replaces it. */
     fun addTagged(c: Context, agentId: String, tag: String, text: String): Boolean = synchronized(lock) {
         val note = "[$tag] " + text.trim().replace(Regex("\\s+"), " ").take(240)
-        if (SafetyGate.containsSensitiveCredentialText(note)) return@synchronized false
         val root = load(c)
         val list = (root.optJSONArray(agentId) ?: JSONArray()).let { a -> (0 until a.length()).map { a.getString(it) }.toMutableList() }
         val similar = list.indexOfFirst { MemoryRanking.similarity(it, note) >= 0.6 }
@@ -218,12 +215,12 @@ object AgentLessons {
         true
     }
 
-    /** Restores notes from a backup, skipping near-duplicates and anything that looks like a credential. Returns how many were new. */
+    /** Restores notes from a backup, skipping near-duplicates. Returns how many were new. */
     fun importNotes(c: Context, agentId: String, notes: List<String>): Int = synchronized(lock) {
         val root = load(c)
         val list = (root.optJSONArray(agentId) ?: JSONArray()).let { a -> (0 until a.length()).map { a.getString(it) }.toMutableList() }
         var added = 0
-        for (n in notes.map { it.trim().replace(Regex("\\s+"), " ").take(260) }.filter { it.length >= 5 && !SafetyGate.containsSensitiveCredentialText(it) }) {
+        for (n in notes.map { it.trim().replace(Regex("\\s+"), " ").take(260) }.filter { it.length >= 5 }) {
             if (list.none { MemoryRanking.similarity(it, n) >= 0.6 }) { list.add(n); added++ }
         }
         while (list.size > (if (agentId == "coach") MAX_COACH else MAX_PER_AGENT)) list.removeAt(0)

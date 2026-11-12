@@ -35,7 +35,7 @@ class AgentDispatchPolicyTest {
         assertNull(AgentDispatchPolicy.cancellationBlockReason("click_text", stopped = false))
     }
 
-    @Test fun unknownToolsAndChatModeAreDeniedAtDispatch() {
+    @Test fun unknownToolsAreRejectedButRegisteredToolsProceed() {
         assertNull(block("Explain Bluetooth", "read_screen"))
         assertNotNull(block("Open WhatsApp", "run_shell"))
     }

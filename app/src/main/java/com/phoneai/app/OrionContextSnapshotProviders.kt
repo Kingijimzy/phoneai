@@ -114,7 +114,7 @@ internal object OrionAppUsageContextProvider {
         while (runCatching { events.hasNextEvent() }.getOrDefault(false)) {
             if (!runCatching { events.getNextEvent(event) }.getOrDefault(false)) break
             val pkg = event.packageName.orEmpty()
-            if (pkg.isBlank() || pkg == context.packageName || SafetyGate.isSensitiveApp(pkg, pkg)) continue
+            if (pkg.isBlank() || pkg == context.packageName) continue
             val resumed = event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND ||
                 (Build.VERSION.SDK_INT >= 29 && event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED)
             val paused = event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_BACKGROUND ||
@@ -146,6 +146,6 @@ internal object OrionAppUsageContextProvider {
                 "${label.take(40)}: ${(usage.value / 60_000L).coerceAtLeast(1L)} min"
             }.toList()
         if (rows.isEmpty()) return ""
-        return "OWNER-GRANTED APP USAGE CONTEXT (foreground time in last 30 minutes; on-demand; sensitive apps excluded; not stored): " + rows.joinToString("; ")
+        return "OWNER-GRANTED APP USAGE CONTEXT (foreground time in last 30 minutes; on-demand; not stored): " + rows.joinToString("; ")
     }
 }

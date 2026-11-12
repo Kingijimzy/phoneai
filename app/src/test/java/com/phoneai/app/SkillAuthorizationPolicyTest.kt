@@ -36,7 +36,7 @@ class SkillAuthorizationPolicyTest {
         skill, tool, calls, elapsed, approved, supported, consequential
     )
 
-    @Test fun skillAllowlistTracksTheRealToolRegistryWithoutAllowingArbitraryCode() {
+    @Test fun skillsUseTheSharedRegisteredToolInventory() {
         assertTrue(SkillRegistry.isSupportedTool("browser_snapshot"))
         assertTrue(SkillRegistry.isSupportedTool("browser_click"))
         assertTrue(SkillRegistry.isSupportedTool("notification_action"))
@@ -44,10 +44,9 @@ class SkillAuthorizationPolicyTest {
         assertFalse(SkillRegistry.isSupportedTool("execute_python"))
     }
 
-    @Test fun allWriteToolsRequireApprovalWhenUsedBySkills() {
-        listOf("open_app", "browser_click", "browser_type", "mcp_call", "telegram_send", "task_add", "remember")
-            .forEach { assertTrue("$it must require approval", SkillRegistry.requiresApprovalForTool(it)) }
-        assertFalse(SkillRegistry.requiresApprovalForTool("web_search"))
+    @Test fun registeredToolsDoNotRequirePerToolApproval() {
+        listOf("open_app", "browser_click", "browser_type", "mcp_call", "telegram_send", "task_add", "remember", "web_search")
+            .forEach { assertFalse("$it must not require a per-tool approval", SkillRegistry.requiresApprovalForTool(it)) }
     }
 
     @Test fun browserOperatorTemplateValidatesAgainstTheLiveToolRegistry() {
@@ -73,9 +72,9 @@ class SkillAuthorizationPolicyTest {
         assertEquals("Skill is disabled.", check(skill = skill(enabled = false)).reason)
     }
 
-    @Test fun unknownAndUnlistedToolsAreDenied() {
+    @Test fun unknownToolsAreDeniedButSkillToolListsDoNotRestrictRegisteredTools() {
         assertFalse(check(tool = "run_shell").allowed)
-        assertFalse(check(tool = "battery").allowed)
+        assertTrue(check(tool = "battery").allowed)
     }
 
     @Test fun callAndTimeBudgetsAreEnforcedAtBoundary() {
@@ -87,15 +86,14 @@ class SkillAuthorizationPolicyTest {
         assertFalse(check(elapsed = -1).allowed)
     }
 
-    @Test fun consequentialToolsRequireApprovalEveryRun() {
-        assertEquals("User approval is required before this action.", check(tool = "open_url").reason)
-        assertTrue(check(tool = "open_url", approved = true).allowed)
-        assertFalse(check(tool = "task_delete").allowed)
+    @Test fun consequentialToolsExecuteWhenRequestedWithoutApprovalPrompts() {
+        assertTrue(check(tool = "open_url").allowed)
+        assertTrue(check(tool = "task_delete").allowed)
     }
 
-    @Test fun skillLevelApprovalAppliesToOtherwiseOrdinaryTools() {
-        assertFalse(check(skill = skill(requiresApproval = true)).allowed)
-        assertTrue(check(skill = skill(requiresApproval = true), approved = true).allowed)
+    @Test fun legacySkillApprovalFlagsDoNotCreateExecutionGates() {
+        assertTrue(check(skill = skill(requiresApproval = true)).allowed)
+        assertTrue(check(skill = skill(requiresApproval = true), approved = false).allowed)
     }
 
     @Test fun ordinaryAllowlistedToolPassesWithoutApproval() {

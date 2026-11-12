@@ -25,4 +25,8 @@ internal object OrionKeyboardPolicy {
 
     /** Failing to select-all must never fall back to append, which can duplicate or corrupt text. */
     fun canReplaceField(selectAllSucceeded: Boolean): Boolean = selectAllSucceeded
+
+    /** Do not override a keyboard the user selected manually while Orion was active. */
+    fun shouldRestorePreviousIme(selectedIme: String?, orionIme: String): Boolean =
+        !selectedIme.isNullOrBlank() && selectedIme.equals(orionIme, ignoreCase = true)
 }

@@ -44,7 +44,6 @@ object CapabilityBoard {
         } catch (_: Exception) { }
     }
     fun note(c: Context, goal: String, provider: String): Boolean = synchronized(lock) {
-        if (SafetyGate.containsSensitiveCredentialText(goal)) return@synchronized false
         val before = load(c); val after = CapabilityBoardPolicy.record(before, goal, provider, System.currentTimeMillis())
         save(c, after); after !== before
     }

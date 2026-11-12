@@ -104,7 +104,7 @@ class OwnerControlCenterActivity : Activity() {
 
         addText("ORION / OWNER ONLY", 10f, Theme.MUTED, true, 0)
         addText("Orion Full Control Panel", 27f, Theme.TEXT, true, 5)
-        addText("Owner-authenticated runtime controls. Every dial below is connected to an Orion policy or Android settings surface; hard security boundaries and OS controls remain independently enforced.", 13f, Theme.MUTED, false, 8)
+        addText("Owner runtime controls. Android OS permissions and Android Keystore remain the device and credential boundaries.", 13f, Theme.MUTED, false, 8)
         addButton("‹ Back to Settings") { finish() }
 
         section("AUTONOMY & EXECUTION")
@@ -122,18 +122,18 @@ class OwnerControlCenterActivity : Activity() {
         addText("Registered tools: ${ToolRegistry.all.size} · declarative skills: ${runCatching { SkillRegistry.list(this).size }.getOrDefault(0)} · generated extensions: ${runCatching { SelfExtendingExtensionStore(applicationContext).all().size }.getOrDefault(0)}", 12f, Theme.TEXT, true, 4)
         addButton("Inspect registered tools and extension inventory") { showRegistryAndExtensions() }
         addButton("Open self-extension builder") { startActivity(Intent(this, SelfExtensionLabActivity::class.java)) }
-        addButton("Manage declarative skills and capability packs") { startActivity(Intent(this, AgentControlActivity::class.java)) }
+        addButton("Manage declarative skills and inspect capability status") { startActivity(Intent(this, AgentControlActivity::class.java)) }
 
-        section("AUTONOMY & EXECUTION RULES")
-        addButton("Configure individual tool Allow / Ask / Deny rules") { showToolRules() }
-        addButton("Configure agent approval modes and capability packs") {
+        section("RUNTIME CONTROLS")
+        addButton("View registered tool inventory") { showToolRules() }
+        addButton("Inspect agents and capability status") {
             startActivity(Intent(this, AgentControlActivity::class.java))
         }
         addButton("Open task and recovery centre") { startActivity(Intent(this, TaskCenterActivity::class.java)) }
 
-        section("POLICY & RESTRICTION REGISTER")
-        addText("This register describes Orion app-level gates and their current configurability. It does not expose external model-provider or operating-system internal policies.", 12f, Theme.MUTED, false, 4)
-        addButton("Inspect every registered app policy and hard limit") { showPolicyRegister() }
+        section("PLATFORM BOUNDARIES")
+        addText("Android OS permissions and Android Keystore are the platform boundaries. Orion risk notices are advisory and do not veto requested actions.", 12f, Theme.MUTED, false, 4)
+        addButton("Inspect platform boundaries and runtime limits") { showPolicyRegister() }
         addButton("Inspect enforced security invariants") { showSecurityInvariants() }
 
         section("PRIVACY & SECRETS")
@@ -207,12 +207,11 @@ class OwnerControlCenterActivity : Activity() {
     private fun showJarvisPreset() {
         AlertDialog.Builder(this).setTitle("Jarvis mode")
             .setMessage("Turns ON: AUTOPILOT mode, automatic activation of sandbox-tested extensions (exact source hash), and the Python FULL profile.\n\n" +
-                "Still asks you every time: trades and orders, sending messages, deleting data, spending money, per-run Python approval, Android permission prompts. Risk gate, kill switch and read-only trading defaults stay on.\n\nYou can undo each item from this screen.")
+                "Orion displays advisory risk notices and continues requested work. Android may still require its own permission grant, and connected services may require sign-in. You can undo each setting from this screen.")
             .setPositiveButton("TURN ON") { _, _ ->
                 val cfg = OrionAutonomySettings.read(this)
                 OrionAutonomySettings.write(this, cfg.copy(mode = OrionMode.AUTOPILOT))
-                ToolPermissions.applyLevel(this, OrionAutonomyPolicy.preset(OrionMode.AUTOPILOT))
-                OrionOwnerDialSettings.write(this, OrionOwnerDialSettings.read(this).copy(
+                                OrionOwnerDialSettings.write(this, OrionOwnerDialSettings.read(this).copy(
                     autoActivateVerifiedExtensions = true, pythonProfile = OrionPythonProfile.FULL))
                 AgentPolicy.log(this, "owner-autonomy", "jarvis_preset", true, "owner enabled AUTOPILOT, extension auto-activation and Python FULL")
                 recreate()
@@ -229,8 +228,7 @@ class OwnerControlCenterActivity : Activity() {
             .setSingleChoiceItems(labels, modes.indexOf(current.mode)) { dialog, which ->
                 val selected = modes[which]
                 OrionAutonomySettings.write(this, current.copy(mode = selected))
-                ToolPermissions.applyLevel(this, OrionAutonomyPolicy.preset(selected))
-                AgentPolicy.log(this, "owner-autonomy", "mode", true, "mode changed to ${selected.name}")
+                                AgentPolicy.log(this, "owner-autonomy", "mode", true, "mode changed to ${selected.name}")
                 dialog.dismiss()
                 showAutonomyBudgets()
             }
@@ -250,7 +248,7 @@ class OwnerControlCenterActivity : Activity() {
             "Retries: ${current.maxRetries}",
             "Completion notifications: ${if (current.notifyOnCompletion) "ON" else "OFF"}",
             "Failure notifications: ${if (current.notifyOnFailure) "ON" else "OFF"}",
-            "Approval notifications: ${if (current.notifyOnApproval) "ON" else "OFF"}"
+            "Risk warning notifications: ${if (current.notifyOnApproval) "ON" else "OFF"}"
         )
         AlertDialog.Builder(this).setTitle("Autonomy budgets & notifications")
             .setItems(choices) { _, index ->
@@ -278,7 +276,7 @@ class OwnerControlCenterActivity : Activity() {
             .setMessage(
                 "Current: ${if (current.autoActivateVerifiedExtensions) "ON" else "OFF"}\n\n" +
                 "When ON, Orion may activate an extension automatically only after its exact source hash passes the restricted Python sandbox tests. " +
-                "This is your advance approval for that narrow promotion step. It does not allow arbitrary code, JavaScript execution, network, files, shell, phone actions, or unregistered tool dispatch. " +
+                "This setting automatically promotes only the exact source hash that passed the configured sandbox tests; any source change invalidates that test result. " +
                 "Any source change invalidates the test."
             )
             .setNegativeButton("CLOSE", null)
@@ -293,12 +291,12 @@ class OwnerControlCenterActivity : Activity() {
     private fun showPythonProfile() {
         val current = OrionOwnerDialSettings.read(this)
         val options = arrayOf(
-            "GUARDED · 8,000 characters · explicit approval",
-            "DEVELOPER · 16,000 characters · explicit approval",
-            "FULL · 64,000 characters · raw network, subprocesses · explicit approval"
+            "GUARDED · 8,000 characters",
+            "DEVELOPER · 16,000 characters",
+            "FULL · 64,000 characters · raw network, subprocesses"
         )
         AlertDialog.Builder(this).setTitle("Python execution profile")
-            .setMessage("GUARDED and DEVELOPER keep the in-guest socket/subprocess block. FULL lifts it, so scripts can use the network, run commands and spawn processes inside Orion's Alpine guest (5-minute limit). Each run still needs your approval, and Python can call any Orion tool with phone.tool(name, args), which goes through the normal approval gates.")
+            .setMessage("GUARDED and DEVELOPER keep the in-guest socket/subprocess block. FULL lifts the guest restrictions, so scripts can use the network, run commands and spawn processes inside Orion's Alpine guest (5-minute runtime limit). Orion does not add a per-run approval prompt; Android OS permissions and the guest runtime boundary still apply.")
             .setSingleChoiceItems(options, when (current.pythonProfile) { OrionPythonProfile.GUARDED -> 0; OrionPythonProfile.DEVELOPER -> 1; OrionPythonProfile.FULL -> 2 }) { dialog, which ->
                 val profile = when (which) { 1 -> OrionPythonProfile.DEVELOPER; 2 -> OrionPythonProfile.FULL; else -> OrionPythonProfile.GUARDED }
                 OrionOwnerDialSettings.write(this, current.copy(pythonProfile = profile))
@@ -415,23 +413,17 @@ class OwnerControlCenterActivity : Activity() {
     }
 
     private fun showToolRules() {
-        val tools = ToolRegistry.all.filter { it.name !in ToolPermissionPolicy.alwaysAllowed }
-        fun show() {
-            val labels = tools.map { "${it.name} · ${it.access.name.lowercase()} · ${ToolPermissions.mode(this, it.name).name}" }
-            AlertDialog.Builder(this).setTitle("App tool permissions")
-                .setItems(labels.toTypedArray()) { _, i ->
-                    ToolPermissions.cycle(this, tools[i].name)
-                    show()
-                }
-                .setPositiveButton("Done", null).show()
-        }
-        show()
+        val counts = ToolRegistry.all.groupingBy { it.access }.eachCount()
+        val inventory = ToolRegistry.all.take(100).joinToString("\n") { "• ${it.name} · ${it.access.name.lowercase()}" }
+        val message = "Registered tools: ${ToolRegistry.all.size}\nRead: ${counts[ToolAccess.READ] ?: 0} · Write: ${counts[ToolAccess.WRITE] ?: 0}\n\n$inventory"
+        AlertDialog.Builder(this).setTitle("Registered tool inventory")
+            .setMessage(message).setPositiveButton("Done", null).show()
     }
 
     private fun showPolicyRegister() {
         val entries = listOf(
             "Partnership — the phone, its apps and this project belong to Kingi and Orion together; no tool, pack, mode or policy asks permission.",
-            "Confirmation — Orion checks with Kingi before deleting or wiping anything, and the trading desk keeps per-trade approval.",
+            "Warnings — Orion may surface risk notices, but they are advisory and never pause a requested action.",
             "Android permissions — controlled by Android. Orion uses every permission that is granted and can open system settings so Kingi can grant more.",
         )
         AlertDialog.Builder(this).setTitle("Orion app policy register")
@@ -441,9 +433,9 @@ class OwnerControlCenterActivity : Activity() {
 
     private fun showSecurityInvariants() {
         val entries = OrionSecurityPolicy.invariantStatus()
-        AlertDialog.Builder(this).setTitle("Enforced security invariants")
+        AlertDialog.Builder(this).setTitle("Platform boundaries")
             .setMessage(entries.mapIndexed { i, value -> "${i + 1}. $value" }.joinToString("\n\n") +
-                "\n\nThese checks are enforced by runtime code, not prompt instructions. Android OS permissions and external provider/platform safeguards remain outside Orion's control.")
+                "\n\nAndroid and external platform permissions remain outside Orion's control. Orion does not add a second app-level approval layer.")
             .setPositiveButton("Close", null).show()
     }
 

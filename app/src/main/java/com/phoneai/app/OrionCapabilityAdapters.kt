@@ -36,7 +36,7 @@ internal object OrionCapabilityAdapters {
             "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications",
             "media_status", "media_control", "play_media", "chrome_search", "resolve_contact",
             "list_apps", "list_app_deeplinks", "read_screen", "validate_action", "verify_action",
-            "verify_send", "click", "click_text", "wait_for", "tap", "long_press", "swipe",
+            "verify_send", "click", "click_text", "point_at", "sketch_screen", "wait_for", "tap", "long_press", "swipe",
             "swipe_path", "scroll", "type", "key", "look", "play", "record_screen",
             "chronos_awareness", "calendar_events", "voice_speak", "voice_listen",
             "routine_run", "routine_resume"
