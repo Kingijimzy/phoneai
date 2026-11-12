@@ -33,7 +33,7 @@ internal class OrionLiveActivityCard(
             gravity = Gravity.CENTER_VERTICAL
         }
         val title = TextView(context).apply {
-            text = displayTitle()
+            text = OrionActivityPresentation.title(event)
             textSize = 13f
             setTextColor(0xFFF0F0F0.toInt())
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
@@ -52,7 +52,7 @@ internal class OrionLiveActivityCard(
         addView(heading)
 
         val summary = TextView(context).apply {
-            text = displaySummary()
+            text = OrionActivityPresentation.summary(event)
             textSize = 12f
             setTextColor(0xFFB8B8B8.toInt())
             setPadding(0, dp(5), 0, 0)
@@ -64,7 +64,7 @@ internal class OrionLiveActivityCard(
             text = buildString {
                 append(kindLabel(event.kind).uppercase())
                 elapsed?.let { append("  ·  ").append(it) }
-                event.agentId?.let { append("  ·  ").append(it) }
+                if (event.agentId != null) append("  ·  SPECIALIST")
             }
             textSize = 9f
             letterSpacing = .07f
@@ -78,8 +78,9 @@ internal class OrionLiveActivityCard(
             visibility = View.GONE
             setPadding(0, dp(9), 0, 0)
         }
-        if (event.evidence.isNotEmpty()) {
-            event.evidence.mapNotNull(::cleanDiagnosticText).takeLast(6).forEach { item ->
+        val safeEvidence = OrionActivityPresentation.evidence(event.evidence)
+        if (safeEvidence.isNotEmpty()) {
+            safeEvidence.forEach { item ->
                 details.addView(TextView(context).apply {
                     text = "• $item"
                     textSize = 11f
@@ -103,44 +104,6 @@ internal class OrionLiveActivityCard(
             contentDescription = if (expanded) "Collapse activity details" else "Expand activity details"
         }
         contentDescription = "Expand activity details for ${event.title}"
-    }
-
-    private val internalTrace = Regex(
-        "(?i)(work=|checkpoint=|attempt=|key=notification:|\\\\b(?:RUNNING|DONE)=|task(session|id)[-_:=])"
-    )
-
-    private fun cleanDiagnosticText(raw: String): String? {
-        val cleaned = raw.lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotBlank() && !internalTrace.containsMatchIn(it) }
-            .filterNot { it.startsWith("Task session-", ignoreCase = true) }
-            .joinToString(" ")
-            .replace(Regex("\\\\s+"), " ")
-            .take(220)
-            .trim()
-        return cleaned.takeIf { it.isNotBlank() }
-    }
-
-    private fun displayTitle(): String {
-        val title = cleanDiagnosticText(event.title)
-        if (title != null) return title
-        return when {
-            event.title.contains("notification", true) || event.summary.contains("notification", true) -> "System notification"
-            event.kind == OrionActivityKind.TOOL -> "Phone activity"
-            else -> kindLabel(event.kind)
-        }
-    }
-
-    private fun displaySummary(): String {
-        cleanDiagnosticText(event.summary)?.let { return it }
-        return when (event.status) {
-            OrionActivityStatus.ACTIVE -> "Orion is working on this step."
-            OrionActivityStatus.WAITING -> "Waiting for your decision."
-            OrionActivityStatus.SUCCEEDED -> "This step completed."
-            OrionActivityStatus.FAILED -> "This step failed. Open task details for the error."
-            OrionActivityStatus.CANCELLED -> "This step was cancelled."
-            OrionActivityStatus.INTERRUPTED -> "This step was interrupted."
-        }
     }
 
     private fun kindLabel(kind: OrionActivityKind) = when (kind) {
