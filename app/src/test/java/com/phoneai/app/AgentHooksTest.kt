@@ -105,6 +105,18 @@ class AgentHooksTest {
   assertFalse("A normal discussion of circles is not a phone action", AgentHooks.isPhoneActionRequest("Explain how circles are used in geometry"))
  }
 
+ @Test fun skillAndDocumentCreationRequestsEnterTheCapabilityExecutor() {
+  listOf(
+   "Create a skill tool that you don't establish for yourself",
+   "Create a doc and pdf skill and save it",
+   "Create a PDF summary of this document",
+   "Build a reusable extension for formatting reports"
+  ).forEach { request ->
+   assertTrue("$request must enter the capability executor", AgentHooks.isPhoneActionRequest(request))
+  }
+  assertFalse("An explanation request must remain conversational", AgentHooks.isPhoneActionRequest("Explain how to create a PDF"))
+ }
+
  @Test fun actionWordsInsideNormalSentencesDoNotBecomeCommands() {
   assertFalse(AgentHooks.isPhoneActionRequest("I want to write a poem"))
   assertFalse(AgentHooks.isPhoneActionRequest("Explain how to open a file"))
