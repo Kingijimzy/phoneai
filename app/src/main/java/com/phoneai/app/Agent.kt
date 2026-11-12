@@ -1023,7 +1023,8 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                         .put("type", "function")
                         .put("function", JSONObject()
                             .put("name", call.name)
-                            .put("arguments", call.arguments.toString())))
+                            .put("arguments", call.arguments.toString())
+                            .apply { call.thoughtSignature?.takeIf { it.isNotBlank() }?.let { put("thought_signature", it) } }))
                 }
                 messages.put(JSONObject()
                     .put("role", "assistant")
