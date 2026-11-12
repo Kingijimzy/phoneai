@@ -61,8 +61,8 @@ class SettingsActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle("Install local neural voice")
             .setMessage(
-                "Install Piper Amy, an English neural voice that runs on this phone. " +
-                    "The download is about 21 MB and needs roughly 50–70 MB of free storage. " +
+                "Install Kokoro Emma, a British female neural voice that runs entirely on this phone. " +
+                    "The quantized model download is about 104 MB; allow additional space for the installed model and pronunciation data. " +
                     "Orion will download it only after you confirm. The model is not included in the APK."
             )
             .setNegativeButton("NOT NOW", null)
@@ -136,7 +136,7 @@ class SettingsActivity : Activity() {
                     when {
                         error == null -> showInfoDialog(
                             "Neural voice ready",
-                            "Piper Amy is installed. Orion now synthesizes English replies on-device and streams PCM audio to the speaker sentence by sentence. Android TextToSpeech remains the fallback if the neural engine cannot start."
+                            "Kokoro Emma is installed. Orion now synthesizes British-English replies on-device and streams real PCM audio to the speaker sentence by sentence. Android TextToSpeech remains the fallback if the neural engine cannot start."
                         )
                         error is InterruptedException -> Toast.makeText(this, "Neural voice installation cancelled.", Toast.LENGTH_SHORT).show()
                         else -> showInfoDialog(
@@ -741,23 +741,18 @@ class SettingsActivity : Activity() {
                 Toast.LENGTH_LONG
             ).show()
         }
-        switchRow(s3, "Use installed English neural voice (Piper)", Prefs.neuralVoice(this)) {
-            if (it && !NeuralVoiceInstaller.isInstalled(this)) {
-                Prefs.setNeuralVoice(this, false)
-                Toast.makeText(this, "Install the neural voice below first.", Toast.LENGTH_LONG).show()
-                recreate()
-            } else {
-                Prefs.setNeuralVoice(this, it)
-                Toast.makeText(
-                    this,
-                    if (it) "English neural voice enabled. Speech is generated on-device."
-                    else "Android TextToSpeech is selected.",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
+        switchRow(s3, "Use Orion's British neural voice (Kokoro)", Prefs.neuralVoice(this)) {
+            Prefs.setNeuralVoice(this, it)
+            Toast.makeText(
+                this,
+                if (it && !NeuralVoiceInstaller.isInstalled(this)) "Kokoro is not installed yet. Download the British voice below to activate it."
+                else if (it) "Kokoro British neural speech enabled on-device."
+                else "Android TextToSpeech is selected.",
+                Toast.LENGTH_LONG
+            ).show()
         }
         add(s3, button(
-            if (NeuralVoiceInstaller.isInstalled(this)) "Reinstall / repair neural voice" else "Install neural English voice · about 21 MB",
+            if (NeuralVoiceInstaller.isInstalled(this)) "Repair / reinstall Kokoro British voice" else "Install Kokoro British neural voice · about 104 MB",
             true
         ) { installNeuralVoice() }, 8)
         add(s3, text(
