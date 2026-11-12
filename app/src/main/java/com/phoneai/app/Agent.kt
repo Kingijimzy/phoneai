@@ -173,7 +173,10 @@ internal object ConversationContextPolicy {
 /** Destructive data changes are the only actions that require owner confirmation. */
 internal object IrreversibleActionConfirmationPolicy {
     private val destructiveShell = Regex(
-        "(?i)(?:^|[;&|]\\s*)(?:sudo\\s+)?(?:rm|shred|srm|wipe|wipefs|mkfs(?:\\.[a-z0-9]+)?|dd)\\b"
+        "(?is)(?:^|[;&|]\\s*|\\b(?:then|do)\\s+)(?:command\\s+)?(?:sudo\\s+)?(?:rm|shred|srm|wipe|wipefs|blkdiscard|mkfs(?:\\.[a-z0-9]+)?|unlink|rmdir|truncate)\\b|\\bdd\\b[^;&|]*\\bof\\s*=|\\bfind\\b[^;&|]*\\s-delete\\b|\\b(?:fastboot\\s+(?:erase|format)|recovery\\s+--wipe)\\b|(?:>|>>)[^;&|]*/dev/(?:block|mmcblk|sd[a-z])"
+    )
+    private val destructivePython = Regex(
+        """(?is)\\b(?:os\\.(?:remove|unlink|rmdir)|shutil\\.rmtree|pathlib\\.Path\\([^)]*\\)\\s*\\.\\s*(?:unlink|rmdir))\\s*\\("""
     )
     private val destructiveRequest = Regex(
         "(?i)\\b(delete|wipe|erase|shred|format|factory\\s+reset|empty\\s+(?:the\\s+)?trash|clear\\b.{0,30}\\b(data|storage|history|cache|memory|files?)\\b|remove\\b.{0,30}\\b(files?|folders?|directories|projects?|memories|tasks?|apps?)\\b|uninstall)\\b"
@@ -209,10 +212,19 @@ internal object IrreversibleActionConfirmationPolicy {
             return "Orion is about to remove the standing order '" + payload.optString("kind").take(80) + "'."
         }
         if (normalized in setOf("shell", "termux_command")) {
-            val command = payload.optString("command").trim()
+            val command = payload.optString("command").ifBlank { payload.optString("cmd") }.ifBlank { payload.optString("script") }.trim()
             if (command.isNotBlank() && destructiveShell.containsMatchIn(command)) {
                 return "Orion is about to run a destructive shell command: " + command.take(240) + ". This may permanently delete or wipe data."
             }
+        }
+        if (normalized == "python_exec") {
+            val code = payload.optString("code").ifBlank { payload.optString("script") }
+            if (code.isNotBlank() && (destructivePython.containsMatchIn(code) || destructiveShell.containsMatchIn(code))) {
+                return "Orion is about to run Python code that deletes or wipes data. This may permanently remove files or storage."
+            }
+        }
+        if (normalized == "web_api" && payload.optString("method", "GET").equals("DELETE", ignoreCase = true)) {
+            return "Orion is about to delete a remote HTTP resource. This operation may be irreversible."
         }
         return null
     }
