@@ -596,14 +596,10 @@ class Tools(
 
     /** Opens a WhatsApp chat with a prefilled message. Sending remains an explicit in-app action. */
     fun whatsappCompose(phoneRaw: String, message: String): String {
-        val phone = phoneRaw.trim()
-        val digits = phone.removePrefix("+")
-        if (!digits.matches(Regex("^[1-9][0-9]{7,14}$"))) {
-            return "error: phone must be an international number in E.164 format, for example +2348012345678"
-        }
-        val text = message.trim()
-        if (text.isBlank()) return "error: WhatsApp message cannot be empty"
-        if (text.length > 1000) return "error: WhatsApp prefilled message is limited to 1000 characters"
+        val digits = WhatsAppComposePolicy.normalizePhone(phoneRaw)
+            ?: return "error: phone must be an international number in E.164 format, for example +2348012345678"
+        val text = WhatsAppComposePolicy.validateMessage(message)
+            ?: return "error: WhatsApp prefilled message must contain 1..1000 characters"
         val uri = Uri.parse("https://wa.me/" + digits + "?text=" + Uri.encode(text))
         val candidates = listOf("com.whatsapp", "com.whatsapp.w4b")
         for (packageName in candidates) {
