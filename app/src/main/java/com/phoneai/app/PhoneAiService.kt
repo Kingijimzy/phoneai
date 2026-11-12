@@ -1299,10 +1299,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun addLine(kind: String, text: String) {
         val box = logBox ?: return
         val t = TextView(this)
-        t.text = text
-        t.textSize = if (kind == "note") 11f else 15f
+        t.text = if (kind == "note") text else Markdown.render(text)
+        t.textSize = if (kind == "note") 10f else 14f
         t.setLineSpacing(dp(2).toFloat(), 1.02f)
-        t.maxWidth = (screenSize().first * 0.82f).toInt()
+        t.maxWidth = (screenSize().first * 0.86f).toInt()
         val lp = LinearLayout.LayoutParams(WRAP, WRAP)
         lp.setMargins(0, dp(5), 0, dp(5))
         when (kind) {
@@ -1394,11 +1394,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            intArrayOf(0xF2202020.toInt(), 0xEF151515.toInt(), 0xEC090909.toInt())).apply {
-            cornerRadius = dp(26).toFloat()
-            setStroke(dp(1), 0x775F5F5F.toInt())
-        }
+        root.background = rounded(Theme.PANEL, dp(26).toFloat(), Theme.LINE_STRONG)
         root.setPadding(dp(12), dp(7), dp(12), dp(12))
         root.elevation = dp(18).toFloat()
 
@@ -1414,11 +1410,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val head = LinearLayout(this)
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
-        head.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(0xF2292929.toInt(), 0xEF191919.toInt(), 0xED141414.toInt())).apply {
-            cornerRadius = dp(20).toFloat()
-            setStroke(dp(1), 0x77585858.toInt())
-        }
+        head.background = rounded(Theme.PANEL2, dp(20).toFloat(), Theme.LINE)
         head.setPadding(dp(8), dp(5), dp(6), dp(5))
         val orb = OrbView(this)
         orb.contentDescription = "Orion animated character. Tap to speak."
@@ -1434,10 +1426,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val titleCol = LinearLayout(this)
         titleCol.orientation = LinearLayout.VERTICAL
         titleCol.setPadding(dp(8), 0, 0, 0)
-        val title = label("ORION", 16f, Theme.TEXT)
+        val title = label(Prefs.orionEntityName(this).uppercase(), 16f, Theme.TEXT)
         title.typeface = Typeface.DEFAULT_BOLD
         titleCol.addView(title)
-        val st = label("PERSONAL AI  ·  READY TO HELP", 11f, Theme.CYAN)
+        val st = label("PERSONAL COMPANION  ·  READY", 10f, Theme.SILVER)
         titleCol.addView(st)
         val tagline = label("Think with you. Act with permission.", 10f, Theme.MUTED)
         titleCol.addView(tagline)
@@ -1575,8 +1567,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
         // Keep the command surface compact enough to reveal the app underneath. Full chat
         // remains a separate destination for long conversations, files and history.
-        val panelHeight = (size.second * 0.62f).toInt().coerceAtLeast(dp(360))
-            .coerceAtMost((size.second * 0.68f).toInt())
+        val panelHeight = (size.second * 0.56f).toInt().coerceAtLeast(dp(320))
+            .coerceAtMost((size.second * 0.60f).toInt())
         val lp = WindowManager.LayoutParams(
             size.first - dp(16), panelHeight, OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
         )
