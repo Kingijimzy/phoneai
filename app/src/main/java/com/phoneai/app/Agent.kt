@@ -175,6 +175,17 @@ internal object IrreversibleActionConfirmationPolicy {
     private val destructiveShell = Regex(
         "(?i)(?:^|[;&|]\\s*)(?:sudo\\s+)?(?:rm|shred|srm|wipe|wipefs|mkfs(?:\\.[a-z0-9]+)?|dd)\\b"
     )
+    private val destructiveRequest = Regex(
+        "(?i)\\b(delete|wipe|erase|shred|format|factory\\s+reset|empty\\s+(?:the\\s+)?trash|clear\\s+(?:the\\s+)?(?:app\\s+)?data|remove\\s+(?:the\\s+)?(?:file|folder|directory|project|memory|task|app)|uninstall)\\b"
+    )
+    private val destructiveNegation = Regex(
+        "(?i)\\b(?:don['’]?t|do not|never|avoid|without)\\b.{0,60}\\b(delete|wipe|erase|shred|format|remove|uninstall)\\b"
+    )
+
+    fun destructiveRequestDescription(request: String): String? {
+        if (destructiveNegation.containsMatchIn(request)) return null
+        return destructiveRequest.find(request)?.value
+    }
 
     /** Returns a human-readable warning for an explicitly destructive registered action. */
     fun destructiveAction(tool: String, args: JSONObject): String? {
@@ -316,6 +327,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var runTools = 0
     @Volatile private var runFailed = 0
     @Volatile private var activeRequestScope: String = ""
+    @Volatile private var destructiveApprovalGranted: Boolean = false
     @Volatile private var lastActionScope: String = ""
     @Volatile private var lastActionScopeAt: Long = 0L
 
@@ -323,6 +335,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun setRequestScope(command: String) {
         val scope = TaskScopePolicy.scopeFor(command, lastActionScope, System.currentTimeMillis() - lastActionScopeAt)
         activeRequestScope = scope
+        destructiveApprovalGranted = false
         if (TaskScopePolicy.modeFor(scope) != TaskMode.CHAT) { lastActionScope = scope; lastActionScopeAt = System.currentTimeMillis() }
     }
     // Last locally perceived screen, used for post-action comparison without another model call.
@@ -501,7 +514,17 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
             GatePolicy.Verdict.ALLOW -> Unit
         }
-        IrreversibleActionConfirmationPolicy.destructiveAction(tool, args)?.let { warning ->
+        val directDestructiveWarning = IrreversibleActionConfirmationPolicy.destructiveAction(tool, args)
+        val taskDestructiveIntent = IrreversibleActionConfirmationPolicy.destructiveRequestDescription(activeRequestScope)
+        val requestScopedWarning = if (
+            !destructiveApprovalGranted &&
+            ToolRegistry.access(tool) == ToolAccess.WRITE &&
+            taskDestructiveIntent != null
+        ) {
+            "Your request includes '$taskDestructiveIntent'. Orion is about to perform the requested destructive task. This may permanently delete or wipe data."
+        } else null
+        val destructiveWarning = directDestructiveWarning ?: requestScopedWarning
+        destructiveWarning?.let { warning ->
             ui.note("[WARNING] $warning")
             if (!ui.ask("$warning\n\nDo you want Orion to continue?")) {
                 val denied = "error: destructive action was cancelled; no deletion or wipe was performed."
@@ -509,6 +532,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 taskProofs.record(tool, denied)
                 return denied
             }
+            destructiveApprovalGranted = true
         }
         val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url", "open_deep_link")
         val actionTools = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url", "open_deep_link", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll", "browser_tabs", "system_intent", "open_file")
