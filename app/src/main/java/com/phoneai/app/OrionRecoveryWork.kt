@@ -49,7 +49,7 @@ internal object OrionRecoveryWork {
                 .addTag(UNIQUE_NAME)
                 .build()
             WorkManager.getInstance(context.applicationContext)
-                .enqueueUniqueWork(UNIQUE_NAME, ExistingWorkPolicy.KEEP, request)
+                .enqueueUniqueWork(UNIQUE_NAME, ExistingWorkPolicy.REPLACE, request)
         }
     }
 }
