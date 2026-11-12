@@ -37,6 +37,7 @@ class OrionSpeechTextPolicyTest {
         )
         assertTrue(!spoken.contains("https://"))
         assertTrue(!spoken.contains("|"))
+        assertTrue(spoken.contains("Name, Value"))
         assertTrue(spoken.contains("The result is positive"))
     }
 }
