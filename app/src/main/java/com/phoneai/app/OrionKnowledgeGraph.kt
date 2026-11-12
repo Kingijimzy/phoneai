@@ -122,24 +122,30 @@ internal object OrionKnowledgeGraph {
         val app = context.applicationContext
         val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getInt("version", 0) >= INDEX_VERSION) return
-        synchronized(rebuildLock) {
-            if (prefs.getInt("version", 0) >= INDEX_VERSION) return
-            val eligible = MemoryStore.all(app).filter {
-                MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) &&
-                    OrionMemoryLifecycle.isActive(app, it.id)
-            }
-            val db = GraphDb(app).writableDatabase
-            db.beginTransaction()
-            try {
-                db.delete("edges", null, null)
-                db.delete("nodes", null, null)
-                db.setTransactionSuccessful()
-            } finally {
-                db.endTransaction()
-            }
-            eligible.forEach { indexMemory(app, it) }
-            prefs.edit().putInt("version", INDEX_VERSION).putLong("indexed_at", System.currentTimeMillis()).apply()
+        rebuild(app)
+    }
+
+    /** Rebuild from source-of-truth memory records; safe to run repeatedly. */
+    fun rebuild(context: Context): Int = synchronized(rebuildLock) {
+        val app = context.applicationContext
+        val eligible = MemoryStore.all(app).filter {
+            MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) &&
+                OrionMemoryLifecycle.isActive(app, it.id)
         }
+        val db = GraphDb(app).writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete("edges", null, null)
+            db.delete("nodes", null, null)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        var indexed = 0
+        eligible.forEach { if (indexMemory(app, it) > 0) indexed++ }
+        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putInt("version", INDEX_VERSION).putLong("indexed_at", System.currentTimeMillis()).apply()
+        indexed
     }
 
     /** Resolve lexical terms and entity labels, then traverse at most two graph hops. */
