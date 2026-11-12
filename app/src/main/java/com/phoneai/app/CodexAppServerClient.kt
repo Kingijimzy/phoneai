@@ -113,14 +113,14 @@ internal class CodexAppServerClient(
         while (true) {
             val remaining = deadline - System.currentTimeMillis()
             if (remaining <= 0) {
-                val diagnostics = (startupDiagnostics.toList() + session.stderrSnapshot()).takeLast(20).joinToString("\\n").takeLast(2_000)
+                val diagnostics = (startupDiagnostics.toList() + session.stderrSnapshot()).takeLast(20).joinToString("\n").takeLast(2_000)
                 error("Timed out waiting for Codex app-server method " + request.method +
                     if (diagnostics.isBlank()) "" else ": " + diagnostics)
             }
             val line = session.readLine(remaining.coerceAtMost(500L))
             if (line == null) {
                 if (!session.isAlive()) {
-                    val diagnostics = session.stderrSnapshot().joinToString("\\n").takeLast(2_000)
+                    val diagnostics = session.stderrSnapshot().joinToString("\n").takeLast(2_000)
                     error("Codex app-server exited during " + request.method +
                         (session.exitCodeOrNull()?.let { " (exit=$it)" } ?: "") +
                         if (diagnostics.isBlank()) "" else ": " + diagnostics)
