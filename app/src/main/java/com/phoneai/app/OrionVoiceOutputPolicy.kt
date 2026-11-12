@@ -24,9 +24,11 @@ internal object OrionVoiceOutputPolicy {
         if (maxChars < 40) return null
         val source = raw.trim()
         if (source.isEmpty()) return null
-        val speakableSentences = source.split(Regex("(?<=[.!?])\\s+"))
+        // Strip fenced code before sentence splitting so punctuation inside code cannot leak into speech.
+        val prose = codeFence.replace(source, " ")
+        val speakableSentences = prose.split(Regex("(?<=[.!?])\\s+"))
             .filterNot { inlineCode.containsMatchIn(it) || url.containsMatchIn(it) }
-        var text = codeFence.replace(speakableSentences.joinToString(" "), " ")
+        var text = speakableSentences.joinToString(" ")
         text = markdownLink.replace(text, "$1")
         text = inlineCode.replace(text, " ")
         text = url.replace(text, " link ")
