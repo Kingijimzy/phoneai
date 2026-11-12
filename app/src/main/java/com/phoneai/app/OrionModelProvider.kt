@@ -22,7 +22,9 @@ internal data class OrionModelToolCall(
     val name: String,
     val arguments: org.json.JSONObject,
     val available: Boolean = true,
-    val validationError: String? = null
+    val validationError: String? = null,
+    /** Gemini requires this opaque provider token to be echoed on the matching functionCall. */
+    val thoughtSignature: String? = null
 )
 
 internal data class OrionModelTurn(

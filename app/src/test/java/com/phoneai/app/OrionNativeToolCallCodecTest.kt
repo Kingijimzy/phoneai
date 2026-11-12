@@ -33,6 +33,13 @@ class OrionNativeToolCallCodecTest {
         assertEquals("hardware", turn.calls.single().arguments.getString("detail"))
     }
 
+    @Test fun preservesGeminiThoughtSignatureForFollowUpRoundTrip() {
+        val signature = "opaque-provider-thought-token"
+        val body = """{"candidates":[{"content":{"parts":[{"functionCall":{"id":"gemini-call-2","name":"device_info","args":{"detail":"hardware"}},"thoughtSignature":"$signature"}]}}]}"""
+        val call = OrionNativeToolCallCodec.parse("gemini", body, known).calls.single()
+        assertEquals(signature, call.thoughtSignature)
+    }
+
     @Test fun parsesResponsesApiFunctionCall() {
         val body = """{"output":[{"type":"function_call","call_id":"fc_1","name":"python_exec","arguments":"{\"code\":\"print(7)\"}"},{"type":"message","content":[{"type":"output_text","text":"Done planning."}]}]}"""
         val turn = OrionNativeToolCallCodec.parse("opencode-zen", body, known)

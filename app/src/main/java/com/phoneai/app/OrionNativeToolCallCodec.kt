@@ -10,7 +10,7 @@ import org.json.JSONObject
  * ToolRegistry lookup, argument validation, objective checks, ToolGate and the shared executor.
  */
 internal object OrionNativeToolCallCodec {
-    data class Call(val id: String, val name: String, val arguments: JSONObject, val available: Boolean, val validationError: String? = null)
+    data class Call(val id: String, val name: String, val arguments: JSONObject, val available: Boolean, val validationError: String? = null, val thoughtSignature: String? = null)
     data class Turn(val text: String, val calls: List<Call>)
 
     private const val MAX_CALLS = 32
@@ -21,7 +21,7 @@ internal object OrionNativeToolCallCodec {
         val text = StringBuilder()
         val calls = ArrayList<Call>()
 
-        fun add(id: String, name: String, rawArguments: Any?) {
+        fun add(id: String, name: String, rawArguments: Any?, thoughtSignature: String? = null) {
             if (calls.size >= MAX_CALLS || name.isBlank()) return
             val callId = id.take(160).ifBlank { "native-${calls.size + 1}" }
             val available = isKnownTool(name)
@@ -29,7 +29,7 @@ internal object OrionNativeToolCallCodec {
                 is JSONObject -> rawArguments
                 is String -> {
                     if (rawArguments.length > MAX_ARGUMENT_CHARS) {
-                        calls.add(Call(callId, name, JSONObject(), available, "arguments exceed the 256 KB limit"))
+                        calls.add(Call(callId, name, JSONObject(), available, "arguments exceed the 256 KB limit", thoughtSignature))
                         return
                     }
                     runCatching { JSONObject(rawArguments) }.getOrNull()
@@ -37,7 +37,7 @@ internal object OrionNativeToolCallCodec {
                 else -> null
             }
             if (args == null) {
-                calls.add(Call(callId, name, JSONObject(), available, "arguments must be a valid JSON object"))
+                calls.add(Call(callId, name, JSONObject(), available, "arguments must be a valid JSON object", thoughtSignature))
                 return
             }
             if (args.toString().length > MAX_ARGUMENT_CHARS) {
@@ -45,10 +45,10 @@ internal object OrionNativeToolCallCodec {
                 return
             }
             if (args.length() > 128) {
-                calls.add(Call(callId, name, JSONObject(), available, "arguments exceed the 128-field limit"))
+                calls.add(Call(callId, name, JSONObject(), available, "arguments exceed the 128-field limit", thoughtSignature))
                 return
             }
-            calls.add(Call(callId, name, JSONObject(args.toString()), available))
+            calls.add(Call(callId, name, JSONObject(args.toString()), available, thoughtSignature = thoughtSignature))
         }
 
         when {
@@ -59,7 +59,7 @@ internal object OrionNativeToolCallCodec {
                     val part = parts.optJSONObject(i) ?: continue
                     if (part.has("text")) text.append(part.optString("text"))
                     val call = part.optJSONObject("functionCall") ?: continue
-                    add(call.optString("id").ifBlank { "gemini-${i + 1}" }, call.optString("name"), call.opt("args"))
+                    add(call.optString("id").ifBlank { "gemini-${i + 1}" }, call.optString("name"), call.opt("args"), part.optString("thoughtSignature").ifBlank { part.optString("thought_signature").ifBlank { call.optString("thoughtSignature").ifBlank { call.optString("thought_signature").ifBlank { null } } } })
                 }
             }
             providerId == "opencode-zen" -> {
