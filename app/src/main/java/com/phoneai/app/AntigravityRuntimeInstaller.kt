@@ -10,15 +10,20 @@ internal class AntigravityRuntimeInstaller(context: Context) {
         const val VERSION_MARKER = "/root/.local/bin/agy"
         private const val installCommand = """
             set -eu
-            apk add --no-cache bash curl ca-certificates
+            apk add --no-cache bash curl ca-certificates jq
             mkdir -p /root/.local/bin
             curl -fsSL https://antigravity.google/cli/install.sh -o /tmp/orion-agy-install.sh
             bash /tmp/orion-agy-install.sh --skip-aliases --skip-path
             test -x /root/.local/bin/agy
             /root/.local/bin/agy --version
+            settings=/root/.gemini/antigravity-cli/settings.json
             mkdir -p /root/.gemini/antigravity-cli
-            if [ ! -f /root/.gemini/antigravity-cli/settings.json ]; then
-              printf '{"trustedWorkspaces":["/workspace"]}\n' > /root/.gemini/antigravity-cli/settings.json
+            if [ -f "$settings" ]; then
+              jq '. + {"trustedWorkspaces":["/workspace"],"toolPermission":"proceed-in-sandbox","enableTerminalSandbox":true}
+                | .permissions = ((.permissions // {}) + {"deny": (((.permissions.deny // []) + ["command(sudo)","command(rm -rf)","read_file(/root/.ssh)","write_file(/root/.ssh)"]) | unique)})' "$settings" > "$settings.orion-tmp"
+              mv "$settings.orion-tmp" "$settings"
+            else
+              printf '%s\n' '{"trustedWorkspaces":["/workspace"],"toolPermission":"proceed-in-sandbox","enableTerminalSandbox":true,"permissions":{"deny":["command(sudo)","command(rm -rf)","read_file(/root/.ssh)","write_file(/root/.ssh)"]}}' > "$settings"
             fi
             rm -f /tmp/orion-agy-install.sh
         """
