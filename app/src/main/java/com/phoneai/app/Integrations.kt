@@ -69,7 +69,7 @@ object TelegramBridge {
                     "offset" to nextOffset.toString(),
                     "limit" to "100",
                     "timeout" to "0",
-                    "allowed_updates" to "[\\"message\\"]"
+                    "allowed_updates" to JSONArray().put("message").toString()
                 ))
                 val updates = result.optJSONArray("result") ?: JSONArray()
                 batchSize = updates.length()
@@ -129,7 +129,7 @@ object TelegramBridge {
                 "offset" to offset.toString(),
                 "limit" to "100",
                 "timeout" to "0",
-                "allowed_updates" to "[\\"message\\"]"
+                    "allowed_updates" to JSONArray().put("message").toString()
             ))
             val updates = result.optJSONArray("result") ?: return@synchronized "Telegram returned no update list."
             var newest = offset
@@ -190,7 +190,7 @@ object TelegramBridge {
                 service.executeSharedToolRequest(text, source = "Telegram") { answer ->
                     Thread({
                         val safe = answer.trim().ifBlank { "The task finished without a final response. Check Orion's activity timeline." }
-                        send(context, "Orion result:\\n" + safe.take(12_000))
+                        send(context, "Orion result:\n" + safe.take(12_000))
                         notifyTaskResult(context, safe)
                     }, "OrionTelegramReply").apply { isDaemon = true; start() }
                 }
@@ -209,8 +209,8 @@ object TelegramBridge {
             if (pendingApproval != null) return false
             pendingApproval = pending
         }
-        val warning = "⚠️ ORION DESTRUCTIVE ACTION WARNING\\n" + question +
-            "\\n\\nReply YES to proceed or NO to cancel. This request expires in 90 seconds."
+        val warning = "⚠️ ORION DESTRUCTIVE ACTION WARNING\n" + question +
+            "\n\nReply YES to proceed or NO to cancel. This request expires in 90 seconds."
         notifyProactive(context, "Orion needs your decision", question)
         if (send(context, warning).startsWith("error", ignoreCase = true)) {
             synchronized(approvalLock) { if (pendingApproval === pending) pendingApproval = null }
@@ -238,7 +238,7 @@ object TelegramBridge {
         if (key.isBlank() || message.isBlank()) return
         val cleanKey = key.replace(Regex("[^A-Za-z0-9_.-]"), "_").take(64)
         val fingerprint = java.security.MessageDigest.getInstance("SHA-256")
-            .digest((title + "\\n" + message).toByteArray(Charsets.UTF_8))
+            .digest((title + "\n" + message).toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
         val prefs = context.getSharedPreferences("orion_telegram_outreach", Context.MODE_PRIVATE)
         val localKey = "local_finding_" + cleanKey
@@ -248,7 +248,7 @@ object TelegramBridge {
         val telegramKey = "telegram_finding_" + cleanKey
         if (TelegramListenerService.isEnabled(context) && isConfigured(context) &&
             prefs.getString(telegramKey, "") != fingerprint &&
-            sendProactive(context, title + "\\n" + message.take(3200))) {
+            sendProactive(context, title + "\n" + message.take(3200))) {
             prefs.edit().putString(telegramKey, fingerprint).commit()
         }
     }
@@ -384,11 +384,11 @@ object TelegramBridge {
 object IntegrationStatus {
     fun summary(context: Context): String = listOf(
         "GitHub public API: available (read-only; public repositories only)",
-        "Telegram Bot API: " + if (TelegramBridge.isConfigured(context)) "configured locally; verify token to check connectivity" else "not configured",
+        "Telegram Bot API: " + if (TelegramBridge.isConfigured(context)) "connected; owner-only control and proactive replies are available when the listener is running" else "not configured",
         "YouTube: browser search only; official metadata API not connected",
         "Gmail: not connected (secure OAuth still required)",
         "Crypto market data: public Bybit spot ticker (read-only; no API key); FX feeds not connected",
-        "Remote MCP servers: " + if (McpConnector.configured(context)) "configured; remote tool calls require per-call approval" else "none configured",
+        "Remote MCP servers: " + if (McpConnector.configured(context)) "configured; registered calls use Orion's shared execution policy; delete/wipe actions require owner confirmation" else "none configured",
         "Phone tools and declarative skills: local; skills remain allowlisted and budget-limited"
     ).joinToString("\n")
 }
