@@ -54,7 +54,7 @@ internal class CodexSessionVault(context: Context) {
                 "sandbox_mode = \"danger-full-access\"\n" +
                 "cli_auth_credentials_store = \"file\"\n" +
                 "\n[features]\n" +
-                "shell_tool = false\n" +
+                "shell_tool = true\n" +
                 "view_image = false\n" +
                 "web_search = false\n" +
                 "\n[agents]\n" +
