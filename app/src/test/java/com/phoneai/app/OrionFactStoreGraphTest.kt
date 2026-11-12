@@ -28,8 +28,8 @@ class OrionFactStoreGraphTest {
 
     @Test fun ownerExtractedTripletsBecomeApprovedCanonicalGraphFacts() {
         OrionFactStore.addOwnerFact(context, "Kingi Jimzy", "favourite_sport", "football")
-        val result = OrionFactStore.query(context, "Kingi Jimzy", "favourite_sport", "football")
-        assertTrue(result.contains("kingi jimzy — favourite sport — football"))
+        val result = OrionFactStore.query(context, "user", "favourite_sport", "football")
+        assertTrue(result.contains("user — favourite sport — football"))
         assertTrue(MemoryStore.all(context).any { it.reviewStatus == "approved" && it.text.contains("favourite_sport") })
     }
 
@@ -42,7 +42,7 @@ class OrionFactStoreGraphTest {
 
     @Test fun forgettingCanonicalFactRemovesItFromTrustedRecall() {
         OrionFactStore.addOwnerFact(context, "Kingi Jimzy", "favourite_sport", "football")
-        val result = OrionFactStore.forget(context, "Kingi Jimzy", "favourite_sport", "football")
+        val result = OrionFactStore.forget(context, "user", "favourite_sport", "football")
         assertTrue(result.contains("forgot 1 fact"))
         assertTrue(OrionFactStore.query(context, "Kingi Jimzy", "favourite_sport", "football").contains("no owner-approved facts"))
     }
