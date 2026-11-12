@@ -25,6 +25,13 @@ class TaskScopePolicyTest {
         assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor(TaskScopePolicy.scopeFor("Yes", previous, 1_000)))
     }
 
+    @Test fun naturalQuestionsAboutListingsOnNamedWebsitesRouteToResearch() {
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("What is the file size of Hitman Absolution APK on ApkVision site"))
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("What version is listed on the ApkVision website"))
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Check the price on the official store website"))
+        assertEquals(TaskMode.CHAT, TaskScopePolicy.modeFor("What is the file size of a video on my phone"))
+    }
+
     @Test fun naturalResearchFollowUpsAreClassifiedAsResearch() {
         assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Go do research about it"))
         assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Do research about GitHub connection options"))
