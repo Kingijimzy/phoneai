@@ -30,6 +30,21 @@ class OrionAutonomyPolicyTest {
         assertEquals(4, c.maxRetries)
     }
 
+    @Test fun scheduledGoalsRunOnlyInAutopilotWithEveryGateSatisfied() {
+        fun allowed(mode: OrionMode, core: Boolean = true, proactive: Boolean = true, service: Boolean = true, agent: Boolean = true, busy: Boolean = false) =
+            OrionAutonomyRunPolicy.canRun(mode, core, proactive, service, agent, busy)
+
+        assertTrue(allowed(OrionMode.AUTOPILOT))
+        assertFalse(allowed(OrionMode.TALK))
+        assertFalse(allowed(OrionMode.ASSIST))
+        assertFalse(allowed(OrionMode.BUILDER))
+        assertFalse(allowed(OrionMode.AUTOPILOT, core = false))
+        assertFalse(allowed(OrionMode.AUTOPILOT, proactive = false))
+        assertFalse(allowed(OrionMode.AUTOPILOT, service = false))
+        assertFalse(allowed(OrionMode.AUTOPILOT, agent = false))
+        assertFalse(allowed(OrionMode.AUTOPILOT, busy = true))
+    }
+
     @Test fun zeroConfiguredRetriesNeverRetriesReadFailure() {
         assertEquals(
             RecoveryPolicy.Decision.REPLAN,
