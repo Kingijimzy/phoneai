@@ -33,6 +33,12 @@ class OrionFactStoreGraphTest {
         assertTrue(MemoryStore.all(context).any { it.reviewStatus == "approved" && it.text.contains("favourite_sport") })
     }
 
+    @Test fun ownerFactsAreRetrievedForNaturalLanguageRequests() {
+        OrionFactStore.addOwnerFact(context, "Kingi Jimzy", "favourite_sport", "football")
+        val prompt = KnowledgeGraph.promptBlock(context, "what is my favourite sport")
+        assertTrue("Owner fact should enter the shared turn context", prompt.contains("football"))
+    }
+
     @Test fun modelToolTripletsRemainProposalsUntilOwnerReview() {
         OrionFactStore.add(context, "Kingi Jimzy", "favourite_sport", "football")
         val result = OrionFactStore.query(context, "Kingi Jimzy", "favourite_sport", "football")
