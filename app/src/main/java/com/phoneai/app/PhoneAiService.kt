@@ -209,6 +209,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         voice = Voice(this)
         voice.onSpeaking = { s ->
             speaking = s
+            if (!s) for (o in orbs()) o.speechAmplitude = 0f
             refreshMode()
         }
         voice.onWord = {
