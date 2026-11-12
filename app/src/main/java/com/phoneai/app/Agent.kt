@@ -928,6 +928,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
 
     /** Shared owner-turn bookkeeping for typed chat and action-capable voice turns. */
     private fun recordOwnerTurn(command: String, source: String) {
+        OrionVoiceOutputPolicy.beginTask()
         if (command.trimStart().startsWith("[ORION")) return
         svc.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE).edit()
             .putLong("owner_last_active", System.currentTimeMillis()).apply()
@@ -1210,6 +1211,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 "If they clearly ask Orion to perform a phone action, explain briefly that hands-free conversation cannot execute it yet and that the main chat can handle it. Do not claim or imply that an action was routed or performed from this live-call path. The live-call path cannot execute actions; main chat applies the same native execution path and Android OS permissions. " +
                 "Respond like a thoughtful human conversational partner: concise, direct, natural spoken language, usually 1-3 sentences. " +
                 "No markdown, lists, emoji, robotic disclaimers, or repetitive greetings. Ask a single useful follow-up only when needed. " +
+                OrionVoicePersona.INSTRUCTIONS + " " +
                 "Never pretend an action happened. User name: $name. " +
                 CharacterProfile.systemInstruction(Prefs.characterProfile(svc), svc) +
                 "\n\n" + OrionSessionContextProvider.forLiveVoice(svc, command) +
