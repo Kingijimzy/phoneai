@@ -63,9 +63,9 @@ internal class CodexRuntimeInstaller(context: Context) {
         }
 
     fun openAppServer(workspaceHostPath: String): CodexAppServerClient {
-        // Do not start stdio against a missing/stale guest binary or absent bwrap.
-        // Installation is idempotent and returns a concrete error instead of letting
-        // the first JSON-RPC handshake sit until its timeout.
+        // Do not start stdio against a missing/stale guest binary.
+        // Codex uses PRoot guest execution, so Android's unavailable bubblewrap namespace
+        // support is not a runtime prerequisite.
         install().getOrThrow()
         val vault = CodexSessionVault(app)
         vault.prepare()
