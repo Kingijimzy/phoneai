@@ -139,6 +139,25 @@ object McpConnector {
         } catch (_: Exception) { "Could not securely save MCP settings." }
     }
 
+    /**
+     * Trusts only an API Anything child server that Orion itself just launched on loopback.
+     * The bearer token still goes through the Android Keystore-backed save path.
+     */
+    internal fun saveManagedLocal(c: Context, rawUrl: String, rawToken: String): String {
+        val uri = runCatching { java.net.URI(rawUrl.trim()) }.getOrNull()
+            ?: return "Invalid managed MCP endpoint URL."
+        if (uri.scheme != "http" || uri.host?.lowercase() !in setOf("127.0.0.1", "localhost") ||
+            uri.userInfo != null || uri.fragment != null || uri.port !in 1..65535 ||
+            !uri.path.endsWith("/mcp") || !rawToken.matches(Regex("^[a-fA-F0-9]{64}$"))) {
+            return "Managed API Anything endpoint must be a loopback /mcp URL with its generated token."
+        }
+        val result = save(c, rawUrl, rawToken)
+        if (!result.startsWith("MCP endpoint saved")) return result
+        val paired = c.getSharedPreferences(PREFS, 0).edit()
+            .putString("paired_endpoint_sha256", endpointFingerprint(endpoint(c))).commit()
+        return if (paired) result else "MCP endpoint was saved but local managed pairing could not be persisted."
+    }
+
     fun clear(c: Context) {
         closeSession(c)
         c.getSharedPreferences(PREFS, 0).edit().clear().commit()
