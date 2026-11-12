@@ -91,7 +91,7 @@ internal class AccountAwareModelProvider(
             val model = when {
                 requestedModel.isNullOrBlank() -> catalogue.firstOrNull()
                 catalogue.isEmpty() -> requestedModel
-                requestedModel in catalogue -> requestedModel
+                requestedModel != null && requestedModel in catalogue -> requestedModel
                 !Prefs.autoSwitch(app) -> throw AiException(
                     "The selected Codex model '$requestedModel' is not in the current account catalogue. Auto-switch is off, so Orion kept your selection."
                 )
