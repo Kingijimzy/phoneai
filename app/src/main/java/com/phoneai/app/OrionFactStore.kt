@@ -39,9 +39,11 @@ internal object OrionFactStore {
                 }
             }
         } catch (_: Exception) { return }
+        val ownerName = Prefs.userName(app).trim()
         val migrated = rows.all { (s, p, o) ->
+            val subject = if (ownerName.isNotBlank() && norm(s).equals(norm(ownerName), true)) "user" else norm(s)
             MemoryStore.addObservedProposal(
-                app, "fact", "${norm(s)} — ${norm(p)} — ${norm(o)}",
+                app, "fact", "$subject — ${norm(p)} — ${norm(o)}",
                 0.55, "migrated legacy triplet; original provenance unavailable"
             ) != null
         }
