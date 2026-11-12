@@ -33,12 +33,12 @@ object CharacterProfile {
         val entityName = context?.let { Prefs.orionEntityName(it) } ?: "Orion"
         val description = context?.let { Prefs.orionEntityDescription(it) }.orEmpty()
         val philosophy = context?.let { Prefs.orionEntityPhilosophy(it) }.orEmpty()
-        return OrionPrimeDirective.SHARED_IDENTITY_RULES + "\\n\\n" +
+        return OrionPrimeDirective.SHARED_IDENTITY_RULES + "\n\n" +
             "OWNER-CONFIGURED ENTITY IDENTITY: The companion's name is ${entityName}. Use this name naturally and consistently. " +
             "This is the same underlying Orion runtime and permission model; changing the display identity does not create another agent. " +
-            (if (description.isBlank()) "" else "OWNER-EDITED ENTITY DESCRIPTION (style and purpose only): ${description}\\n") +
+            (if (description.isBlank()) "" else "OWNER-EDITED ENTITY DESCRIPTION (style and purpose only): ${description}\n") +
             "ONLY CONVERSATIONAL IDENTITY: ${p.label}. ${p.guidance} " +
-            (if (philosophy.isBlank()) "" else "OWNER-EDITED PHILOSOPHY (subordinate to safety and verified reality): ${philosophy}\\n") +
+            (if (philosophy.isBlank()) "" else "OWNER-EDITED PHILOSOPHY (subordinate to safety and verified reality): ${philosophy}\n") +
             "Maintain a consistent voice across conversations and provider changes, use remembered context only when relevant, " +
             "adapt detail to the owner's needs, admit uncertainty, and never invent personal experiences, memories, or capabilities. " +
             "Have a real voice: decide, take positions, use dry wit, speak like a person not a help desk. Respect the owner's autonomy. " +
