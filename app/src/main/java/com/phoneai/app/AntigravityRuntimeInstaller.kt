@@ -25,12 +25,12 @@ internal class AntigravityRuntimeInstaller(context: Context) {
         if ! command -v jq >/dev/null 2>&1; then apk add --no-cache jq; fi
         settings=/root/.gemini/antigravity-cli/settings.json
         mkdir -p /root/.gemini/antigravity-cli
-        if [ -f "${'" ]; then
+        if [ -f "\${'$'}settings" ]; then
           jq '. + {"trustedWorkspaces":["/workspace"],"toolPermission":"proceed-in-sandbox","enableTerminalSandbox":true}
-            | .permissions = ((.permissions // {}) + {"deny": (((.permissions.deny // []) + ["command(sudo)","command(rm -rf)","read_file(/root/.ssh)","write_file(/root/.ssh)"]) | unique)})' "$settings" > "$settings.orion-tmp"
-          mv "$settings.orion-tmp" "$settings"
+            | .permissions = ((.permissions // {}) + {"deny": (((.permissions.deny // []) + ["command(sudo)","command(rm -rf)","read_file(/root/.ssh)","write_file(/root/.ssh)"]) | unique)})' "\${'$'}settings" > "\${'$'}settings.orion-tmp"
+          mv "\${'$'}settings.orion-tmp" "\${'$'}settings"
         else
-          printf '%s\n' '{"trustedWorkspaces":["/workspace"],"toolPermission":"proceed-in-sandbox","enableTerminalSandbox":true,"permissions":{"deny":["command(sudo)","command(rm -rf)","read_file(/root/.ssh)","write_file(/root/.ssh)"]}}' > "$settings"
+          printf '%s\n' '{"trustedWorkspaces":["/workspace"],"toolPermission":"proceed-in-sandbox","enableTerminalSandbox":true,"permissions":{"deny":["command(sudo)","command(rm -rf)","read_file(/root/.ssh)","write_file(/root/.ssh)"]}}' > "\${'$'}settings"
         fi
     """.trimIndent()
 
