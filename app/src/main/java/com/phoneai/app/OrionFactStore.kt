@@ -81,7 +81,7 @@ internal object OrionFactStore {
             subjectMatches && predicateMatches && objectMatches && matchMatches
         }.take(limit.coerceIn(1, 100))
         return if (facts.isEmpty()) "no owner-approved facts match; check the Memory screen for pending proposals"
-        else facts.joinToString("\\n") { "${it.a} — ${it.rel} — ${it.b}" }
+        else facts.joinToString("\n") { "${it.a} — ${it.rel} — ${it.b}" }
     }
 
     /** Forgetting a fact removes it from trusted recall while preserving its rejected record. */
@@ -145,7 +145,7 @@ internal object OrionFactStore {
         val p = tomProfile(c).filter { it.confidence >= 0.5 }
         if (p.isEmpty()) return ""
         return "KINGI'S PREFERENCE PROFILE (theory of mind: hypotheses from evidence, revisable; his current words always win):\\n" +
-            p.joinToString("\\n") { "- ${it.dimension}: ${it.value} (${(it.confidence * 100).toInt()}%, ${it.source}, seen ${it.observations}x)" }
+            p.joinToString("\n") { "- ${it.dimension}: ${it.value} (${(it.confidence * 100).toInt()}%, ${it.source}, seen ${it.observations}x)" }
     }
 
     /** Compatibility adapter: prompt facts now come from the canonical approved memory graph. */
