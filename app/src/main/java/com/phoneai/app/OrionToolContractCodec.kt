@@ -12,20 +12,20 @@ import org.json.JSONObject
 internal object OrionToolContractCodec {
     private data class Field(val name: String, val schema: JSONObject, val required: Boolean)
 
-    fun openAi(tools: List<ToolDefinition>): JSONArray = JSONArray().apply {
+    fun openAi(tools: List<ToolDefinition>, descriptionLimit: Int = 1000): JSONArray = JSONArray().apply {
         tools.forEach { tool ->
             val schema = parameters(tool)
             put(JSONObject()
                 .put("type", "function")
                 .put("function", JSONObject()
                     .put("name", tool.name)
-                    .put("description", tool.description.take(1000))
+                    .put("description", tool.description.take(descriptionLimit.coerceIn(80, 1000)))
                     .put("parameters", schema)))
         }
     }
 
     /** Responses API uses a flat function object rather than chat.completions' nested function. */
-    fun responses(tools: List<ToolDefinition>): JSONArray = JSONArray().apply {
+    fun responses(tools: List<ToolDefinition>, descriptionLimit: Int = 1000): JSONArray = JSONArray().apply {
         tools.forEach { tool ->
             put(JSONObject()
                 .put("type", "function")
@@ -36,7 +36,7 @@ internal object OrionToolContractCodec {
         }
     }
 
-    fun anthropic(tools: List<ToolDefinition>): JSONArray = JSONArray().apply {
+    fun anthropic(tools: List<ToolDefinition>, descriptionLimit: Int = 1000): JSONArray = JSONArray().apply {
         tools.forEach { tool ->
             put(JSONObject()
                 .put("name", tool.name)
@@ -45,7 +45,7 @@ internal object OrionToolContractCodec {
         }
     }
 
-    fun gemini(tools: List<ToolDefinition>): JSONArray = JSONArray().apply {
+    fun gemini(tools: List<ToolDefinition>, descriptionLimit: Int = 1000): JSONArray = JSONArray().apply {
         put(JSONObject().put("functionDeclarations", JSONArray().apply {
             tools.forEach { tool ->
                 put(JSONObject()
