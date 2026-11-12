@@ -2554,11 +2554,18 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         // Return as soon as the target app is in front instead of always waiting 1.8 s.
         val target = best.activityInfo.packageName
         var waited = 0
+        var foregroundConfirmed = false
         while (waited < 1800) {
-            Thread.sleep(150); waited += 150
-            if (try { currentPackageName() == target } catch (_: Exception) { false }) { Thread.sleep(250); break }
+            Thread.sleep(150)
+            waited += 150
+            if (try { currentPackageName() == target } catch (_: Exception) { false }) {
+                foregroundConfirmed = true
+                Thread.sleep(250)
+                break
+            }
         }
-        return "opened $bestLabel"
+        return if (foregroundConfirmed) "opened $bestLabel; foreground package verified as $target"
+        else "launch request sent to $bestLabel ($target), but Android has not exposed it as the foreground accessibility window yet; verify the screen before interacting"
     }
 
     fun openUrl(url: String): String {
