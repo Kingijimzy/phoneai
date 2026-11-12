@@ -52,8 +52,8 @@ internal object OrionGoalUnderstanding {
     )
     private val urlInspection = Regex("(?i)https?://[^\\s<>\\\"]+")
     private val urlActionWords = Regex("(?i)\\b(check|inspect|open|visit|read|review|summari[sz]e|analy[sz]e|audit|scan|fetch|look at|look into|what is in|tell me about|explain)\\b")
-    private val namedSiteFactQuestion = Regex("(?is)\\b(?:what|which|how much|how many|tell me|find|check|look up|compare|is|does)\\b.{0,240}\\b(?:on|from)\\s+(?:the\\s+)?[a-z0-9][a-z0-9.-]{1,60}(?:\\s+(?:site|website|webpage|page))?\\b.{0,100}\\b(?:site|website|webpage|page|apk|app|file|size|version|price|listing|download|product|release|updated|available|details|information)\\b")
-    private val namedSitePhrase = Regex("(?i)\\b(?:on|from|in|at)\\s+(?:the\\s+)?[a-z0-9][a-z0-9.-]{1,60}\\s+(?:site|website|webpage)\\b")
+    private val namedSiteFactQuestion = Regex("(?is)\\b(?:what|which|how much|how many|tell me|find|check|look up|compare|is|does)\\b.{0,240}\\b(?:on|from)\\s+(?:the\\s+)?[a-z0-9][a-z0-9.-]{1,60}(?:\\s+[a-z0-9][a-z0-9.-]{1,60})?(?:\\s+(?:site|website|webpage|page))?\\b.{0,100}\\b(?:site|website|webpage|page|apk|app|file|size|version|price|listing|download|product|release|updated|available|details|information)\\b")
+    private val namedSitePhrase = Regex("(?i)\\b(?:on|from|in|at)\\s+(?:the\\s+)?([a-z0-9][a-z0-9.-]{1,60})(?:\\s+[a-z0-9][a-z0-9.-]{1,60})?\\s+(?:site|website|webpage)\\b")
     private val researchWords = Regex(
         "(?i)\\b(research|look up|search the web|find out|compare|latest|current information)\\b"
     )
