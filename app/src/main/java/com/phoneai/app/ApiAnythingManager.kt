@@ -175,9 +175,7 @@ internal object ApiAnythingManager {
             context.applicationContext.getSharedPreferences(PREFS, 0).edit().putBoolean(ENABLED, false).commit()
             lastState = "Stopped by owner"
         }
-        if (McpConnector.endpoint(context.applicationContext) == ENDPOINT) {
-            McpConnector.clear(context.applicationContext)
-        }
+        McpConnector.clearManagedLocal(context.applicationContext, ENDPOINT)
     }
 
     private fun isInstalled(runtime: LinuxRuntimeInstaller, workspace: String): Boolean {
