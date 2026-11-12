@@ -125,12 +125,15 @@ internal object DeviceOperationRouter {
             (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
                 .isNotificationListenerAccessGranted(ComponentName(context, OrionNotificationListener::class.java))
         }.getOrDefault(false)
+        val postNotifications = Build.VERSION.SDK_INT < 33 ||
+            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
         return buildString {
             appendLine("ORION DEVICE CAPABILITY INVENTORY")
             appendLine("Clock: alarm/timer intents and alarm listing")
             appendLine("Audio: media stream read/set/up/down/mute/unmute")
             appendLine("Connectivity: Wi-Fi/Bluetooth settings panels; airplane-mode state read-only")
-            appendLine("Notifications: " + if (notificationAccess) "NotificationListener granted; read/reply/dismiss available for supported notifications" else "NotificationListener access not granted; read/reply/dismiss unavailable")
+            appendLine("Notification reading/replies: " + if (notificationAccess) "NotificationListener granted" else "NotificationListener access not granted")
+            appendLine("Orion notification posting: " + if (postNotifications) "allowed" else "Android 13+ notification permission not granted; background health alerts cannot be shown")
             appendLine("Applications: PackageManager launchable inventory and existing open_app/deep-link tools")
             appendLine("Files: existing MediaStore Downloads and SAF document tools")
             appendLine("System info: battery, network, storage, memory, Android build")
