@@ -31,7 +31,14 @@ object TaskReminder {
         val due = task.dueAt ?: return
         if (task.status == "done" || task.status == "cancelled" || due <= System.currentTimeMillis()) return
         val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, pendingIntent(context, task.id))
+        val operation = pendingIntent(context, task.id)
+        val exactAccessGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarm.canScheduleExactAlarms()
+        if (TaskReminderAlarmPolicy.useExactAlarm(Build.VERSION.SDK_INT, exactAccessGranted)) {
+            alarm.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, operation)
+        } else {
+            // Keep the reminder scheduled when exact-alarm special access is unavailable.
+            alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, operation)
+        }
     }
 
     fun cancel(context: Context, id: Int) {
@@ -92,7 +99,8 @@ class TaskReminderReceiver : BroadcastReceiver() {
 
 class TaskReminderBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action == Intent.ACTION_BOOT_COMPLETED) {
+        if (intent?.action == Intent.ACTION_BOOT_COMPLETED ||
+            intent?.action == AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED) {
             TaskReminder.restoreAll(context)
             ProactiveBriefing.schedule(context)
             GamingFocus.schedule(context)
