@@ -68,10 +68,12 @@ class IrreversibleActionConfirmationPolicyTest {
 
     @Test fun pythonAndRemoteHttpDeletesRequireConfirmation() {
         assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
-            "python_exec", JSONObject().put("code", "import os\\nos.remove('/sdcard/old.txt')")
+            "python_exec", JSONObject().put("code", """import os
+os.remove('/sdcard/old.txt')""")
         ))
         assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
-            "python_exec", JSONObject().put("code", "import shutil\\nshutil.rmtree('/sdcard/cache')")
+            "python_exec", JSONObject().put("code", """import shutil
+shutil.rmtree('/sdcard/cache')""")
         ))
         assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
             "web_api", JSONObject().put("method", "DELETE").put("url", "https://example.com/item/1")
