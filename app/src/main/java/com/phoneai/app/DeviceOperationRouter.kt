@@ -13,6 +13,7 @@ internal enum class DeviceOperation(val wireName: String, val requiresWrite: Boo
     READ_BRIGHTNESS("read_brightness", false),
     READ_SCREEN_TIMEOUT("read_screen_timeout", false),
     LIST_USER_APPS("list_user_apps", false),
+    CAPABILITIES("capabilities", false),
     SET_BRIGHTNESS("set_brightness", true),
     SET_SCREEN_TIMEOUT("set_screen_timeout", true);
 
@@ -41,6 +42,7 @@ internal object DeviceOperationRouter {
         val operation = DeviceOperation.parse(rawOperation)
             ?: return "error: unsupported device operation. Supported: " + DeviceOperation.values().joinToString(", ") { it.wireName }
         val app = context.applicationContext
+        if (operation == DeviceOperation.CAPABILITIES) return capabilityReport(app)
         val nativeCanExecute = when (operation) {
             DeviceOperation.SET_BRIGHTNESS, DeviceOperation.SET_SCREEN_TIMEOUT -> Settings.System.canWrite(app)
             else -> true
@@ -66,6 +68,31 @@ internal object DeviceOperationRouter {
                 }
             }
             DeviceBackend.UNAVAILABLE -> "error: " + route.reason
+        }
+    }
+
+
+    private fun capabilityReport(context: Context): String {
+        val shizuku = OrionShizukuBridge.state()
+        val canWriteSettings = Settings.System.canWrite(context)
+        val enabledAccessibility = Settings.Secure.getString(
+            context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ).orEmpty().contains(context.packageName, ignoreCase = true)
+        val settingBackend = when {
+            canWriteSettings -> "native Android API"
+            shizuku.ready -> "Shizuku UserService (permission granted; bind on demand)"
+            shizuku.installedAndRunning -> "awaiting Shizuku permission"
+            else -> "user-facing Settings handoff"
+        }
+        return buildString {
+            appendLine("ORION DEVICE CAPABILITY INVENTORY")
+            appendLine("Native Android: battery, airplane-mode state, screen brightness, screen timeout, launchable app inventory")
+            appendLine("System-setting writes: " + settingBackend)
+            appendLine("Accessibility: " + if (enabledAccessibility) "enabled in Android settings" else "not enabled")
+            appendLine("Shizuku/Sui: " + shizuku.detail)
+            appendLine("Shizuku UserService: " + if (shizuku.userServiceConnected) "connected" else "not yet connected; reconnects on the next request")
+            appendLine("Linux/PRoot: use the existing explicit Linux runtime for Python, scraping and file processing; it is not a system-settings backend")
+            append("Policy: native Android first; Shizuku only for allowlisted privileged gaps; Accessibility is for visible UI handoff; no arbitrary shell or secure-lock bypass.")
         }
     }
 
