@@ -15,7 +15,7 @@ internal class OrionPythonCapabilityExecutor(
     private val extensionStore: SelfExtendingExtensionStore = SelfExtendingExtensionStore(context),
     private val extensionSandbox: ExtensionSandbox = FullPythonSandbox(
         RestrictedPythonSandbox { source, inputJson -> OrionPythonRuntime.runExtension(context, source, inputJson) }
-    ) { code -> tools?.pythonExec(code, { true }, { false }) ?: "error: Python tool bridge is unavailable in this execution context." }
+    )
 ) {
     private val testReceipts = ExtensionTestReceiptStore(context)
     private val versionHistory = ExtensionVersionHistory(context)
