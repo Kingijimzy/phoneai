@@ -105,13 +105,16 @@ internal class AccountAwareModelProvider(
         installer.install().getOrThrow()
         val model = requestedModel?.takeIf { it.isNotBlank() }
         try {
-            val answer = installer.runPrompt(app.filesDir.absolutePath, prompt, model) { session ->
-                activeAntigravity = session
-            }
+            val answer = installer.runPrompt(
+                app.filesDir.absolutePath,
+                prompt,
+                model,
+                onSession = { session -> activeAntigravity = session },
+                onDelta = onDelta
+            )
             check(answer.isNotBlank()) { "Antigravity returned an empty model response." }
             Prefs.setAccountConnected(app, "antigravity", true)
             accountRequests++
-            onDelta?.invoke(answer)
             return answer
         } catch (failure: Exception) {
             if (failure.message.orEmpty().contains("auth", true) ||

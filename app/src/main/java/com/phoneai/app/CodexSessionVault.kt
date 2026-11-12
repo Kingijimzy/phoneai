@@ -29,7 +29,7 @@ internal class CodexSessionVault(context: Context) {
         if (encrypted.isNotBlank()) authFile.writeText(encrypted)
         File(home, "config.toml").writeText(
             "approval_policy = \"never\"\n" +
-                "sandbox_mode = \"danger-full-access\"\n" +
+                "sandbox_mode = \"workspace-write\"\n" +
                 "cli_auth_credentials_store = \"file\"\n"
         )
         return home

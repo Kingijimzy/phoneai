@@ -10,19 +10,29 @@ internal class AntigravityRuntimeInstaller(context: Context) {
         const val VERSION_MARKER = "/root/.local/bin/agy"
         private const val installCommand = """
             set -eu
-            apk add --no-cache bash curl ca-certificates
+            apk add --no-cache bash curl ca-certificates jq
             mkdir -p /root/.local/bin
             curl -fsSL https://antigravity.google/cli/install.sh -o /tmp/orion-agy-install.sh
             bash /tmp/orion-agy-install.sh --skip-aliases --skip-path
             test -x /root/.local/bin/agy
             /root/.local/bin/agy --version
-            mkdir -p /root/.gemini/antigravity-cli
-            if [ ! -f /root/.gemini/antigravity-cli/settings.json ]; then
-              printf '{"trustedWorkspaces":["/workspace"]}\n' > /root/.gemini/antigravity-cli/settings.json
-            fi
             rm -f /tmp/orion-agy-install.sh
         """
     }
+
+    private val configureCommand = """
+        set -eu
+        if ! command -v jq >/dev/null 2>&1; then apk add --no-cache jq; fi
+        settings=/root/.gemini/antigravity-cli/settings.json
+        mkdir -p /root/.gemini/antigravity-cli
+        if [ -f "${'$'}settings" ]; then
+          jq '. + {"trustedWorkspaces":["/workspace"],"toolPermission":"proceed-in-sandbox","enableTerminalSandbox":true}
+            | .permissions = ((.permissions // {}) + {"deny": (((.permissions.deny // []) + ["command(sudo)","command(rm -rf)","read_file(/root/.ssh)","write_file(/root/.ssh)"]) | unique)})' "${'$'}settings" > "${'$'}settings.orion-tmp"
+          mv "${'$'}settings.orion-tmp" "${'$'}settings"
+        else
+          printf '%s\n' '{"trustedWorkspaces":["/workspace"],"toolPermission":"proceed-in-sandbox","enableTerminalSandbox":true,"permissions":{"deny":["command(sudo)","command(rm -rf)","read_file(/root/.ssh)","write_file(/root/.ssh)"]}}' > "${'$'}settings"
+        fi
+    """.trimIndent()
 
     fun install(onOutput: (String) -> Unit = {}, shouldStop: () -> Boolean = { false }): Result<Unit> =
         runCatching {
@@ -34,15 +44,24 @@ internal class AntigravityRuntimeInstaller(context: Context) {
                 "test -x '$VERSION_MARKER'",
                 timeoutMs = 15_000L
             )
-            if (probe.startsWith("exit=0")) return@runCatching Unit
-            val result = runtime.execute(
+            if (!probe.startsWith("exit=0")) {
+                val result = runtime.execute(
+                    LinuxRuntimePolicy.productionManifest,
+                    installCommand,
+                    timeoutMs = 600_000L,
+                    onOutput = onOutput,
+                    shouldStop = shouldStop
+                )
+                check(result.startsWith("exit=0")) { result.takeLast(4_000) }
+            }
+            val configured = runtime.execute(
                 LinuxRuntimePolicy.productionManifest,
-                installCommand,
-                timeoutMs = 600_000L,
+                configureCommand,
+                timeoutMs = 60_000L,
                 onOutput = onOutput,
                 shouldStop = shouldStop
             )
-            check(result.startsWith("exit=0")) { result.takeLast(4_000) }
+            check(configured.startsWith("exit=0")) { "Antigravity sandbox configuration failed: " + configured.takeLast(2_000) }
         }
 
     /** Signs in with Google in the terminal, prints a one-time code, then exits. */
@@ -82,7 +101,8 @@ internal class AntigravityRuntimeInstaller(context: Context) {
         workspaceHostPath: String,
         prompt: String,
         model: String? = null,
-        onSession: ((LinuxCommandSession) -> Unit)? = null
+        onSession: ((LinuxCommandSession) -> Unit)? = null,
+        onDelta: ((String) -> Unit)? = null
     ): String {
         val session = openPromptSession(workspaceHostPath, prompt, model)
         onSession?.invoke(session)
@@ -107,7 +127,10 @@ internal class AntigravityRuntimeInstaller(context: Context) {
                     error("Antigravity requires Google-account sign-in.")
                 }
                 if (event.error.isNotBlank()) error("Antigravity: ${event.error}")
-                if (event.type == "step_update" && event.text.isNotBlank()) output.append(event.text)
+                if (event.type == "step_update" && event.text.isNotBlank()) {
+                    output.append(event.text)
+                    onDelta?.invoke(event.text)
+                }
                 if (event.type == "result") {
                     finalStatus = event.status
                     finalResponse = event.text

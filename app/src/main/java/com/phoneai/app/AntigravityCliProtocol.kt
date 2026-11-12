@@ -24,7 +24,7 @@ internal object AntigravityCliProtocol {
                 add(prompt)
                 add("--output-format")
                 add("stream-json")
-                add("--dangerously-skip-permissions")
+                add("--sandbox")
                 if (!model.isNullOrBlank()) {
                     add("--model")
                     add(model)
