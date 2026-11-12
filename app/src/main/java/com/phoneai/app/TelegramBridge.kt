@@ -186,8 +186,8 @@ internal object TelegramBridge {
             if (pendingApproval != null) return false
             pendingApproval = pending
         }
-        val warning = "⚠️ ORION DESTRUCTIVE ACTION WARNING\\n" + question +
-            "\\n\\nReply YES to proceed or NO to cancel. This request expires in 90 seconds."
+        val warning = "⚠️ ORION DESTRUCTIVE ACTION WARNING\n" + question +
+            "\n\nReply YES to proceed or NO to cancel. This request expires in 90 seconds."
         notifyProactive(context, "Orion needs your decision", question)
         if (send(context, warning).startsWith("error", ignoreCase = true)) {
             synchronized(approvalLock) { if (pendingApproval === pending) pendingApproval = null }
@@ -216,7 +216,7 @@ internal object TelegramBridge {
         if (key.isBlank() || message.isBlank()) return
         val cleanKey = key.replace(Regex("[^A-Za-z0-9_.-]"), "_").take(64)
         val fingerprint = java.security.MessageDigest.getInstance("SHA-256")
-            .digest((title + "\\n" + message).toByteArray(StandardCharsets.UTF_8))
+            .digest((title + "\n" + message).toByteArray(StandardCharsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
         val prefs = context.getSharedPreferences("orion_telegram_outreach", Context.MODE_PRIVATE)
         val localKey = "local_finding_" + cleanKey
@@ -227,7 +227,7 @@ internal object TelegramBridge {
         val telegramKey = "telegram_finding_" + cleanKey
         if (TelegramListenerService.isEnabled(context) && isConfigured(context) &&
             prefs.getString(telegramKey, "") != fingerprint) {
-            if (sendProactive(context, title + "\\n" + message.take(3200))) {
+            if (sendProactive(context, title + "\n" + message.take(3200))) {
                 prefs.edit().putString(telegramKey, fingerprint).commit()
             }
         }
