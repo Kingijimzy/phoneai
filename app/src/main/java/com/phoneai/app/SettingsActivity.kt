@@ -917,7 +917,7 @@ class SettingsActivity : Activity() {
         // ---- 7. external integrations
         val s7 = card(
             col, "Integrations & workflows",
-            "Connect a Telegram bot safely, inspect connector status, and see which services are genuinely available. Bot tokens are encrypted with Android Keystore and never sent to the AI model."
+            "Connect Orion to your private Telegram chat. Owner instructions use the same central coordinator as the app; task results and proactive alerts can return through Telegram and Android notifications. Only delete/wipe operations require your confirmation. Bot tokens stay encrypted with Android Keystore."
         )
         add(s7, button("Configure Telegram bot", true) { telegramDialog() }, 8)
         add(s7, button("Configure remote MCP server", true) { mcpDialog() }, 8)
@@ -946,7 +946,7 @@ class SettingsActivity : Activity() {
                 val started = TelegramListenerService.start(this)
                 showInfoDialog(
                     "Telegram listener",
-                    if (started) "Continuous Telegram replies started. Keep the ongoing Orion notification visible. Orion checks for messages about every 3 seconds while Android allows the service to run. AI replies use a short timeout and prioritize faster saved providers. Send /start to test."
+                    if (started) "Continuous Telegram control started. Keep the ongoing Orion notification visible. Orion checks for owner messages about every 3 seconds while Android allows the service to run. Instructions use your selected Orion provider and shared coordinator. Delete/wipe actions send a warning and wait for YES or NO. Send /start to test."
                     else "Could not start the listener. First configure a valid bot token and numeric personal chat ID, then try again."
                 )
             }
@@ -2389,14 +2389,14 @@ class SettingsActivity : Activity() {
         token.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         token.setSingleLine(true)
         val chat = EditText(this)
-        chat.hint = "Target chat ID or @channel username"
+        chat.hint = "Your private numeric chat ID"
         chat.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         chat.setSingleLine(true)
         wrap.addView(token)
         wrap.addView(chat)
         AlertDialog.Builder(this)
             .setTitle("Telegram bot setup")
-            .setMessage("Create a bot with @BotFather. Add the bot to your chat and obtain the target chat ID. The token is encrypted on this device and is never included in Orion prompts. Leave neither field blank.")
+            .setMessage("Create a bot with @BotFather, open its private chat, and send /start first. Enter your positive numeric private chat ID (not a group or channel). The token is encrypted on this device and never included in Orion prompts. Old pending messages are discarded when connecting.")
             .setView(wrap)
             .setPositiveButton("Save securely") { _, _ ->
                 val result = TelegramBridge.save(this, token.text.toString(), chat.text.toString())
