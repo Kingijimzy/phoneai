@@ -7,6 +7,8 @@ class OrionApp : Application() {
     override fun onCreate() {
         super.onCreate()
         runCatching { Prefs.loadCustomProviders(this) }
+        // Initialize Shizuku binder listeners early; the optional UserService binds only after permission.
+        runCatching { OrionShizukuBridge.initialize(this) }
         // Re-register persisted reminders after process recreation; boot recovery remains in the receiver.
         runCatching { TaskReminder.restoreAll(this) }
         // Start the background heartbeat whenever the app process starts, not only after the accessibility service connects.
