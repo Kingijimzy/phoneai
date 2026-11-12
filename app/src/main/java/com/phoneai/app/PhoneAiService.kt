@@ -1413,11 +1413,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            intArrayOf(0xF2202020.toInt(), 0xEF151515.toInt(), 0xEC090909.toInt())).apply {
-            cornerRadius = dp(26).toFloat()
-            setStroke(dp(1), 0x775F5F5F.toInt())
-        }
+        root.background = rounded(Theme.PANEL, dp(26).toFloat(), Theme.LINE_STRONG)
         root.setPadding(dp(12), dp(7), dp(12), dp(12))
         root.elevation = dp(18).toFloat()
 
@@ -1433,11 +1429,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val head = LinearLayout(this)
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
-        head.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(0xF2292929.toInt(), 0xEF191919.toInt(), 0xED141414.toInt())).apply {
-            cornerRadius = dp(20).toFloat()
-            setStroke(dp(1), 0x77585858.toInt())
-        }
+        head.background = rounded(Theme.PANEL2, dp(20).toFloat(), Theme.LINE)
         head.setPadding(dp(8), dp(5), dp(6), dp(5))
         val orb = OrbView(this)
         orb.contentDescription = "Orion animated character. Tap to speak."
@@ -1453,10 +1445,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val titleCol = LinearLayout(this)
         titleCol.orientation = LinearLayout.VERTICAL
         titleCol.setPadding(dp(8), 0, 0, 0)
-        val title = label("ORION", 16f, Theme.TEXT)
+        val title = label(Prefs.orionEntityName(this).uppercase(), 16f, Theme.TEXT)
         title.typeface = Typeface.DEFAULT_BOLD
         titleCol.addView(title)
-        val st = label("PERSONAL AI  ·  READY TO HELP", 11f, Theme.CYAN)
+        val st = label("PERSONAL COMPANION  ·  READY", 10f, Theme.SILVER)
         titleCol.addView(st)
         val tagline = label("Think with you. Act with permission.", 10f, Theme.MUTED)
         titleCol.addView(tagline)
