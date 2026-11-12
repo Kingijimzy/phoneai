@@ -119,7 +119,14 @@ internal object TelegramBridge {
         for (i in 0 until updates.length()) {
             val update = updates.optJSONObject(i) ?: continue
             val updateId = update.optLong("update_id", -1L)
-            if (updateId >= 0L) latestOffset = maxOf(latestOffset, updateId + 1L)
+            if (updateId >= 0L) {
+                latestOffset = maxOf(latestOffset, updateId + 1L)
+                // Persist the update checkpoint before any command or reply side effect. If
+                // Android kills the process mid-dispatch, Telegram will not replay the command.
+                if (!prefs(app).edit().putLong(OFFSET, latestOffset).commit()) {
+                    return@synchronized "error: Telegram update checkpoint could not be saved; no further update was dispatched."
+                }
+            }
             val message = update.optJSONObject("message")
             if (message == null) {
                 ignored++
@@ -173,7 +180,6 @@ internal object TelegramBridge {
                 }, "OrionTelegramReply").apply { isDaemon = true; start() }
             }
         }
-        if (latestOffset > offset) prefs(app).edit().putLong(OFFSET, latestOffset).commit()
         "Telegram poll complete: " + accepted + " owner message(s) accepted; " + ignored + " unrelated or unsupported update(s) ignored."
     }
 
