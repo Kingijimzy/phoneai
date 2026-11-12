@@ -49,14 +49,12 @@ internal object SoulEngineWatcher {
         val registered = runCatching { ToolRegistry.all.size }.getOrDefault(0)
         val implemented = AgentPolicy.packs.count { it.implemented }
         val enabled = AgentPolicy.packs.count { it.implemented && AgentPolicy.enabled(c, it.id) }
-        val disclosure = runCatching { Prefs.accessibilityDisclosureAccepted(c) }.getOrDefault(false)
         val report = runCatching {
             OrionCapabilityAudit.evaluate(
                 registeredTools = registered,
                 implementedPacks = implemented,
                 enabledPacks = enabled,
                 accessibilityReady = service != null,
-                screenDisclosureAccepted = disclosure,
                 screenPerceptionReady = service != null && runCatching { service.rootInActiveWindow != null }.getOrDefault(false)
             )
         }.getOrElse {
@@ -66,7 +64,6 @@ internal object SoulEngineWatcher {
                 implementedPacks = implemented,
                 enabledPacks = enabled,
                 accessibilityReady = service != null,
-                screenDisclosureAccepted = disclosure,
                 screenPerceptionReady = false,
                 limitations = listOf("capability_audit_exception")
             )

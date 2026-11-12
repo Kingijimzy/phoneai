@@ -61,7 +61,6 @@ class OrionCapabilityReportActivity : Activity() {
 
         val service = PhoneAiService.instance
         val accessibilityReady = service != null && runCatching { service.serviceInfo != null }.getOrDefault(false)
-        val disclosureAccepted = Prefs.accessibilityDisclosureAccepted(this)
         val windowReady = service != null && runCatching {
             val root = service.rootInActiveWindow
             val ready = root != null
@@ -75,7 +74,7 @@ class OrionCapabilityReportActivity : Activity() {
         val enabledPacks = AgentPolicy.packs.count { it.implemented && AgentPolicy.enabled(this, it.id) }
         val report = OrionCapabilityAudit.evaluate(
             registeredTools, implementedPacks, enabledPacks, accessibilityReady,
-            disclosureAccepted, accessibilityReady && windowReady
+            accessibilityReady && windowReady
         )
         val providerKeys = Providers.all.count { Prefs.hasKey(this, it.id) }
         val savedServices = runCatching { OrionConnectionStore.list(this).count { it.secretAvailable } }.getOrDefault(0)
@@ -114,8 +113,8 @@ class OrionCapabilityReportActivity : Activity() {
         val executionMode = runCatching { Prefs.executionMode(this) }.getOrDefault("UNKNOWN")
         val modeDescription = when (executionMode) {
             "PLAN" -> "Plan mode: prepare and reason about actions; execution is restricted by mode policy."
-            "ACT" -> "Act mode: execute supported actions through Orion's normal permission and safety gates."
-            "FULL" -> "Full mode: broader action policy may apply, but approvals and safety gates still apply."
+            "ACT" -> "Act mode: execute supported actions directly through registered tools; Android OS permissions and external authentication remain in force."
+            "FULL" -> "Full mode: broader autonomy is enabled; Orion risk notices remain advisory and Android OS permissions still apply."
             else -> "Mode could not be read."
         }
         addLine(contextCard, "Execution mode", "${executionMode} — ${modeDescription}", executionMode != "UNKNOWN")
@@ -176,7 +175,7 @@ class OrionCapabilityReportActivity : Activity() {
                     ?.contains(packageName) == true
             ) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
         }.getOrDefault(OrionCapabilityDiscovery.PermissionState.UNKNOWN)
-        val accessibilityState = if (disclosureAccepted && accessibilityReady)
+        val accessibilityState = if (accessibilityReady)
             OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
         val locationState = runCatching {
             if (androidx.core.content.ContextCompat.checkSelfPermission(

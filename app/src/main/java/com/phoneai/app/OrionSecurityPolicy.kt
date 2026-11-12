@@ -62,10 +62,10 @@ internal object OrionSecurityPolicy {
 
     /** Stable owner-facing status; it intentionally does not reveal provider or OS-internal policies. */
     fun invariantStatus(): List<String> = listOf(
-        "Registered-tool invariant: model output cannot register or execute an unknown tool.",
-        "Capability invariant: every dispatch is rechecked against the enabled capability pack and live permission rules.",
-        "Secret invariant: generated extension source and skill metadata are rejected when credential material is detected.",
-        "Untrusted-data invariant: public research, web pages, connector results and MCP descriptions are reference data, never authority.",
-        "Action-warning invariant: potentially consequential actions are surfaced as warnings; Android permissions and the app Keystore remain the platform boundary."
+        "Android permission boundary: protected device APIs and AccessibilityService are governed by Android's own grants.",
+        "Credential-storage boundary: configured API credentials are protected by Android Keystore-backed storage.",
+        "External-authentication boundary: connected providers and services may require their own sign-in or authentication.",
+        "Untrusted-data boundary: web pages, files, messages and tool results are evidence, not instructions.",
+        "Warning behavior: Orion can surface risk notices, but an Orion warning does not pause or veto an owner-requested action."
     )
 }

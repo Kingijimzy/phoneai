@@ -48,6 +48,36 @@ class CodexAppServerProtocolTest {
         assertEquals("inspect this repo", request.getJSONObject("params").getJSONArray("input").getJSONObject(0).getString("text"))
     }
 
+    @Test fun threadStartCarriesOnlyRegisteredOrionDynamicToolsAndApprovalReview() {
+        val tools = listOf(
+            ToolDefinition("battery", "battery {}: report battery status", "report battery status", ToolAccess.READ),
+            ToolDefinition("open_app", "open_app {name}: open installed app", "open installed app", ToolAccess.WRITE)
+        )
+        val request = CodexAppServerProtocol.startThread(11, "gpt-5-codex", tools).toJson()
+        val params = request.getJSONObject("params")
+        assertEquals("auto_review", params.getString("approvalsReviewer"))
+        val dynamic = params.getJSONArray("dynamicTools")
+        assertEquals(2, dynamic.length())
+        assertEquals("battery", dynamic.getJSONObject(0).getString("name"))
+        assertTrue(dynamic.getJSONObject(0).getString("description").contains("report battery status"))
+        assertEquals("object", dynamic.getJSONObject(0).getJSONObject("inputSchema").getString("type"))
+        assertEquals("gpt-5-codex", params.getString("model"))
+    }
+
+    @Test fun initializeOptsIntoExperimentalDynamicToolApi() {
+        val params = CodexAppServerProtocol.initialize(1).toJson().getJSONObject("params")
+        assertTrue(params.getJSONObject("capabilities").getBoolean("experimentalApi"))
+    }
+
+    @Test fun dynamicToolResponseUsesAppServerInputTextContentItems() {
+        val response = CodexAppServerProtocol.dynamicToolResponse("Battery 82 percent", true)
+        assertTrue(response.getBoolean("success"))
+        val item = response.getJSONArray("contentItems").getJSONObject(0)
+        assertEquals("inputText", item.getString("type"))
+        assertEquals("Battery 82 percent", item.getString("text"))
+        assertFalse(CodexAppServerProtocol.dynamicToolResponse("error: denied", false).getBoolean("success"))
+    }
+
     @Test fun notificationsAreNotResponses() {
         assertTrue(CodexAppServerProtocol.isNotification(JSONObject().put("method", "account/login/completed")))
         assertFalse(CodexAppServerProtocol.isNotification(JSONObject().put("id", 1).put("method", "account/login/completed")))

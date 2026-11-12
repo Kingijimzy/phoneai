@@ -126,15 +126,20 @@ object CoachMemory {
 
     private val marker = Regex("(?im)^\\s*(MEMORY|MISTAKE|RULES)\\s*:\\s*(.+)$")
 
+    private val credentialLike = Regex(
+        "(?i)\\b(password|passcode|pin|otp|one[- ]time code|security code|card number|cvv|cvc|api key|private key|secret key)\\b|\\b(?:\\d[ -]?){13,19}\\b"
+    )
+
     fun parse(reply: String): Parsed {
         val notes = ArrayList<Pair<String, String>>()
         for (m in marker.findAll(reply)) {
             val tag = when (m.groupValues[1].uppercase()) { "MEMORY" -> "chart"; "MISTAKE" -> "mistake"; else -> "rule" }
             val body = m.groupValues[2].trim()
-            if (tag == "rule") body.split("|").map { it.trim() }.filter { it.length in 6..200 }.take(6).forEach { notes.add(tag to it) }
-            else if (body.length in 6..240) notes.add(tag to body)
+            val looksLikeCredential = credentialLike.containsMatchIn(body) || OrionSecurityPolicy.findEmbeddedSecret(body) != null
+            if (!looksLikeCredential && tag == "rule") body.split("|").map { it.trim() }.filter { it.length in 6..200 }.take(6).forEach { notes.add(tag to it) }
+            else if (!looksLikeCredential && body.length in 6..240) notes.add(tag to body)
         }
         val clean = reply.replace(marker, "").replace(Regex("\\n{3,}"), "\n\n").trim()
-        return Parsed(clean, notes.filter { !SafetyGate.containsSensitiveCredentialText(it.second) }.take(8))
+        return Parsed(clean, notes.take(8))
     }
 }

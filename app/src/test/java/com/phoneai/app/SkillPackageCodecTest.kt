@@ -15,22 +15,26 @@ class SkillPackageCodecTest {
         enabled = true
     )
 
-    @Test fun exportRoundTripsAndAlwaysImportsDisabled() {
-        val (parsed, message) = SkillPackageCodec.parse(SkillPackageCodec.export(valid))
+    @Test fun exportRoundTripsUsingTheSharedToolInventoryWithoutApprovalFlags() {
+        val exported = SkillPackageCodec.export(valid)
+        val (parsed, message) = SkillPackageCodec.parse(exported)
         assertNotNull(message, parsed)
         assertEquals(valid.id, parsed!!.id)
-        assertEquals(valid.allowedTools, parsed.allowedTools)
+        assertEquals(ToolRegistry.names(), parsed.allowedTools)
         assertFalse(parsed.enabled)
-        assertTrue(parsed.requiresApproval)
+        assertFalse(parsed.requiresApproval)
+        assertFalse(exported.contains("\"requiresApproval\": true"))
     }
 
-    @Test fun rejectsUnknownFormatAndExecutableOrUnknownTools() {
+    @Test fun legacyPackageToolListsAreIgnoredRatherThanBecomingScopes() {
+        val legacy = SkillPackageCodec.export(valid).replace("\"allowedTools\": [", "\"allowedTools\": [\"run_shell_unrestricted\", ")
+        val parsed = SkillPackageCodec.parse(legacy).first
+        assertNotNull(parsed)
+        assertEquals(ToolRegistry.names(), parsed!!.allowedTools)
+    }
+
+    @Test fun rejectsUnknownFormatAndInvalidBudgets() {
         assertNull(SkillPackageCodec.parse("""{"format":"arbitrary-code","formatVersion":1,"skill":{}}""").first)
-        val unknown = SkillPackageCodec.export(valid).replace("fetch_url", "run_shell_unrestricted")
-        assertNull(SkillPackageCodec.parse(unknown).first)
-    }
-
-    @Test fun rejectsInvalidBudgetsAndOversizedInput() {
         val bad = SkillPackageCodec.export(valid).replace("\"maxCalls\": 5", "\"maxCalls\": 500")
         assertNull(SkillPackageCodec.parse(bad).first)
         assertNull(SkillPackageCodec.parse("x".repeat(100_001)).first)

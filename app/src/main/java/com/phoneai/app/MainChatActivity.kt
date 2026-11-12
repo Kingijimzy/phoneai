@@ -251,7 +251,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 .setTitle("Connect OpenRouter")
                 .setMessage("OpenRouter supports its official browser authorization flow here. Approve access in your browser, then return to Orion.")
                 .setPositiveButton("SIGN IN") { _, _ ->
-                    startActivity(Intent(this, SettingsActivity::class.java).putExtra("start_openrouter_signin", true))
+                    startActivity(Intent(this, ModelSettingsActivity::class.java).putExtra("start_openrouter_signin", true))
                 }
                 .setNeutralButton("ENTER API KEY") { _, _ -> showApiKeyEntry(p) }
                 .setNegativeButton("CANCEL", null)
@@ -445,7 +445,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         val dialog = AlertDialog.Builder(this)
             .setTitle("MCP servers in chat")
             .setMessage(message)
-            .setPositiveButton("OPEN MCP SETTINGS") { _, _ -> startActivity(Intent(this, SettingsActivity::class.java)) }
+            .setPositiveButton("OPEN MCP SETTINGS") { _, _ -> startActivity(Intent(this, McpSettingsActivity::class.java)) }
             .setNeutralButton("DISCOVER TOOLS", null)
             .setNegativeButton("CLOSE", null)
             .create()
@@ -462,7 +462,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                             .setTitle(if (result.startsWith("error:") || result.startsWith("MCP discovery failed")) "MCP discovery failed" else "MCP discovery result")
                             .setMessage(result + "\n\nThis result verifies discovery only; it does not prove every tool call succeeds.")
                             .setPositiveButton("DONE", null)
-                            .setNeutralButton("MCP SETTINGS") { _, _ -> startActivity(Intent(this, SettingsActivity::class.java)) }
+                            .setNeutralButton("MCP SETTINGS") { _, _ -> startActivity(Intent(this, McpSettingsActivity::class.java)) }
                             .show()
                     }
                 }.start()

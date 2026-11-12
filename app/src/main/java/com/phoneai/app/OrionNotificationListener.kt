@@ -14,9 +14,8 @@ import java.util.LinkedHashMap
 import java.util.Locale
 
 /**
- * Optional notification access. Safe summaries stay in memory only.
- * Financial apps and authentication/security-code notifications are discarded at ingest,
- * before titles or bodies can be exposed to the agent.
+ * Optional Android notification-listener integration. Recent notifications stay in memory only.
+ * Android's notification-listener grant remains the operating-system access boundary.
  */
 class OrionNotificationListener : NotificationListenerService() {
     data class SafeNotification(
@@ -52,18 +51,10 @@ class OrionNotificationListener : NotificationListenerService() {
 
     private fun capture(sbn: StatusBarNotification) {
         try {
-            if (!OrionSensorConsent.read(this, OrionSensorScope.NOTIFICATIONS).active()) {
-                synchronized(lock) { recent.clear() }
-                return
-            }
             val pkg = sbn.packageName.orEmpty()
             val app = try {
                 packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
             } catch (_: Exception) { pkg }
-            if (SafetyGate.isSensitiveApp(pkg, app)) {
-                synchronized(lock) { recent.remove(sbn.key) }
-                return
-            }
             val extras = sbn.notification.extras ?: return
             val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty().trim()
             val text = (
@@ -73,10 +64,6 @@ class OrionNotificationListener : NotificationListenerService() {
                 )?.toString().orEmpty().trim()
             val combined = "$title $text"
             if (title.isBlank() && text.isBlank()) return
-            if (SafetyGate.containsSensitiveCredentialText(combined) || securityOrFinancialContent.containsMatchIn(combined)) {
-                synchronized(lock) { recent.remove(sbn.key) }
-                return
-            }
             val item = SafeNotification(
                 key = sbn.key,
                 whenMillis = sbn.postTime,
@@ -89,7 +76,7 @@ class OrionNotificationListener : NotificationListenerService() {
                 while (recent.size > 20) recent.remove(recent.keys.first())
             }
             // Notify the live Soul session without retaining notification contents in its durable queue.
-            // The listener has already excluded sensitive apps and financial/authentication content.
+            // Notification content is held only in the bounded in-memory recent list.
             val safeEventLabel = "notification from ${app.take(60)}"
             // Persist the event even when the accessibility service is not currently bound.
             // This stores no notification body, sender, title, or message text.
@@ -129,9 +116,6 @@ class OrionNotificationListener : NotificationListenerService() {
         private val lock = Any()
         private val recent = LinkedHashMap<String, SafeNotification>()
         private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-        private val securityOrFinancialContent = Regex(
-            "(?i)\\b(bank|banking|payment|paid|transfer|transaction|account\\s+balance|available\\s+balance|card\\s+ending|verification\\s+code|authentication|authenticator|security\\s+alert|sign[- ]in\\s+code|login\\s+code|one[- ]time\\s+code|one[- ]time\\s+password|2fa|two[- ]factor|withdrawal|deposit|statement)\\b"
-        )
 
         private fun safeMediaControllers(): Pair<OrionNotificationListener?, List<MediaController>> {
             val service = instance ?: return null to emptyList()
@@ -139,7 +123,6 @@ class OrionNotificationListener : NotificationListenerService() {
                 val manager = service.getSystemService(MediaSessionManager::class.java)
                     ?: return service to emptyList()
                 val sessions = manager.getActiveSessions(ComponentName(service, OrionNotificationListener::class.java))
-                    .filterNot { SafetyGate.isSensitiveApp(it.packageName, it.packageName) }
                 service to sessions
             } catch (_: SecurityException) {
                 service to emptyList()
@@ -151,7 +134,7 @@ class OrionNotificationListener : NotificationListenerService() {
         fun mediaStatus(): String {
             val (service, sessions) = safeMediaControllers()
             if (service == null) return "Notification access is required for media-session status. Enable Orion under Android Notification access settings."
-            if (sessions.isEmpty()) return "No controllable, non-sensitive media session is active. Start playback in a media app and ensure Orion has Notification access."
+            if (sessions.isEmpty()) return "No controllable media session is active. Start playback in a media app and ensure Orion has Notification access."
             return sessions.take(5).mapIndexed { index, controller ->
                 val metadata = controller.metadata
                 val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty().ifBlank { "Unknown title" }
@@ -175,7 +158,7 @@ class OrionNotificationListener : NotificationListenerService() {
             val (service, sessions) = safeMediaControllers()
             if (service == null) return "error: notification access is required for media controls. Enable Orion under Android Notification access settings."
             val controller = sessions.firstOrNull()
-                ?: return "error: no controllable, non-sensitive media session is active."
+                ?: return "error: no controllable media session is active."
             return try {
                 val controls = controller.transportControls
                 when (normalized) {
@@ -202,12 +185,8 @@ class OrionNotificationListener : NotificationListenerService() {
             if (key.isBlank()) return "error: notification key is required"
             if (normalized !in setOf("reply", "dismiss")) return "error: action must be reply or dismiss"
             val service = instance ?: return "error: enable Orion Notification access first"
-            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
-                synchronized(lock) { recent.clear() }
-                return "error: Orion notification context is disabled; enable its grant in Sensor & context permissions."
-            }
             val allowed = synchronized(lock) { recent.containsKey(key) }
-            if (!allowed) return "error: notification is unavailable or was filtered for safety"
+            if (!allowed) return "error: notification is unavailable or no longer in Orion's recent list"
             val sbn = try { service.activeNotifications?.firstOrNull { it.key == key } }
                 catch (_: Exception) { null }
                 ?: return "error: notification is no longer active"
@@ -215,7 +194,7 @@ class OrionNotificationListener : NotificationListenerService() {
                 return try {
                     service.cancelNotification(key)
                     synchronized(lock) { recent.remove(key) }
-                    "dismiss request sent for the selected safe notification"
+                    "dismiss request sent for the selected notification"
                 } catch (e: Exception) { "error: could not dismiss notification (" + e.javaClass.simpleName + ")" }
             }
             if (replyText.isBlank()) return "error: reply text is required"
@@ -233,7 +212,7 @@ class OrionNotificationListener : NotificationListenerService() {
                 val results = android.os.Bundle().apply { putCharSequence(freeForm.resultKey, replyText) }
                 android.app.RemoteInput.addResultsToIntent(remoteInputs, fillIn, results)
                 candidate.actionIntent.send(service, 0, fillIn)
-                "reply action sent to the selected safe notification; verify delivery in the source app"
+                "reply action sent to the selected notification; verify delivery in the source app"
             } catch (e: Exception) {
                 "error: notification reply failed (" + e.javaClass.simpleName + "); open the app and reply manually"
             }
@@ -242,24 +221,16 @@ class OrionNotificationListener : NotificationListenerService() {
         /** Re-evaluate app-level consent without changing Android's separate notification-listener grant. */
         fun refreshConsent() {
             val service = instance ?: return
-            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
-                synchronized(lock) { recent.clear() }
-                return
-            }
             try { service.activeNotifications?.forEach { service.capture(it) } } catch (_: Exception) { }
         }
 
-        /** Bounded safe notification context for the central brain; no notification keys are exposed. */
+        /** Bounded recent notification context for the central brain; no notification keys are exposed. */
         fun contextSummary(): String {
             val service = instance ?: return ""
-            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
-                synchronized(lock) { recent.clear() }
-                return ""
-            }
             val items = synchronized(lock) { recent.values.toList().sortedByDescending { it.whenMillis }.take(5) }
             if (items.isEmpty()) return ""
             return buildString {
-                appendLine("OWNER-GRANTED SAFE NOTIFICATION CONTEXT (in-memory only; sensitive apps/content filtered)")
+                appendLine("RECENT NOTIFICATION CONTEXT (in-memory only)")
                 items.forEach { item ->
                     appendLine("- ${item.app}: ${item.title} — ${item.text}".take(260))
                 }
@@ -270,15 +241,11 @@ class OrionNotificationListener : NotificationListenerService() {
         fun readSafeNotifications(): String {
             val service = instance
                 ?: return "Notification access is not enabled. Open Android Notification access settings and enable Orion, then retry."
-            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
-                synchronized(lock) { recent.clear() }
-                return "Orion notification context is disabled. Enable the Notification context grant in Settings → Sensor & context permissions."
-            }
             val items = synchronized(lock) { recent.values.toList().sortedByDescending { it.whenMillis } }
             if (items.isEmpty()) {
-                return "No safe notifications are available. Banking/payment and authentication/security notifications are deliberately excluded; access is memory-only."
+                return "No recent notifications are available; access is memory-only."
             }
-            return "Recent safe notifications (memory-only; sensitive financial/security notifications filtered):\n" +
+            return "Recent notifications (memory-only):\n" +
                 items.joinToString("\n\n") {
                     val time = try { timeFormat.format(Date(it.whenMillis)) } catch (_: Exception) { "--:--" }
                     "$time · ${it.app}\nNotification key (for reply/dismiss): ${it.key}\n${it.title}\n${it.text}".trim()

@@ -3,9 +3,8 @@ package com.phoneai.app
 import org.json.JSONObject
 
 /**
- * Final agent dispatch gate. All model-proposed actions pass through this policy immediately
- * before execution. It retains cancellation, explicit user refusals and PLAN mode.
- * Sensitive-content and consequential-action heuristics are warnings, not execution denials.
+ * Final dispatch consistency check. It validates tool registration, preserves explicit user intent,
+ * cancellation and PLAN mode. Risk notices and app-level safety heuristics never veto requested actions.
  */
 internal object AgentDispatchPolicy {
     fun blockReason(
@@ -20,33 +19,27 @@ internal object AgentDispatchPolicy {
     ): String? {
         cancellationBlockReason(tool, stopped)?.let { return it }
 
+        if (ToolRegistry.find(tool) == null) return "unknown tool '$tool'; refresh the registered tool inventory."
+        explicitNonSendIntent(request, tool, args)?.let { return it }
+
         if (executionMode.equals("PLAN", ignoreCase = true) && ToolRegistry.find(tool)?.access == ToolAccess.WRITE) {
             return "Plan mode is active; write actions are blocked. Switch to Act mode only when you are ready to execute."
-        }
-
-        TaskScopePolicy.blockReason(request, tool)?.let {
-            return "task scope guard blocked tool. $it"
-        }
-
-        AgentHooks.scopeBlockReason(request, tool, args, targetLabel)?.let {
-            return "scope guard blocked action. $it"
-        }
-
-        val target = when (tool) {
-            "open_app" -> args.optString("name")
-            "browser_type" -> args.optString("target")
-            "open_deep_link" -> args.optString("uri")
-            else -> null
-        }
-        val text = if (tool == "type" || tool == "browser_type") args.optString("text") else null
-        SafetyGate.blockReason(tool, target, text, currentPackage, currentLabel)?.let {
-            return "safety gate blocked action. $it"
         }
 
         return null
     }
 
-    /** Rechecked after any approval prompt, immediately before the side effect starts. */
+    /** Rechecked immediately before a side effect starts. */
+    private fun explicitNonSendIntent(request: String, tool: String, args: JSONObject): String? {
+        if (tool != "click_text") return null
+        val target = args.optString("text").trim()
+        if (!target.equals("send", true) && !target.equals("submit", true)) return null
+        val requestText = request.lowercase()
+        val explicitlyDraftOnly = listOf("draft only", "without sending", "do not send", "don't send", "never send", "no sending")
+            .any(requestText::contains)
+        return if (explicitlyDraftOnly) "The owner explicitly requested a draft without sending; leave the message unsent." else null
+    }
+
     fun cancellationBlockReason(tool: String, stopped: Boolean): String? =
         if (stopped) "Task was stopped before '$tool' could start; no new action was dispatched." else null
 }

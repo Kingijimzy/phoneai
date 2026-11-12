@@ -49,6 +49,21 @@ class ToolRegistryTest {
         assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting("resume routine Morning routine"))
     }
 
+    @Test fun pointAndSketchToolsUseTheNativeAccessibilityDeviceExecutor() {
+        listOf("point_at", "sketch_screen").forEach { name ->
+            assertEquals(ToolAccess.WRITE, ToolRegistry.access(name))
+            assertTrue(ToolRegistry.requiresAccessibility(name))
+            assertEquals("phone_control", AgentPolicy.packForTool(name))
+            assertEquals(OrionCapabilityAdapters.Backend.DEVICE, OrionCapabilityAdapters.route(name)?.backend)
+            assertTrue(OrionDeviceCapabilityExecutor.supports(name))
+            assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.DEVICE, name))
+        }
+        val sketch = ToolRegistry.find("sketch_screen")!!.promptLine
+        assertTrue(sketch.contains("circle"))
+        assertTrue(sketch.contains("arrow"))
+        assertTrue(sketch.contains("underline"))
+    }
+
     @Test fun deviceLocationToolIsRegisteredAndMappedToPhoneControl() {
         assertTrue(ToolRegistry.all.any { it.name == "device_location" })
         assertEquals("phone_control", AgentPolicy.packForTool("device_location"))
@@ -58,7 +73,7 @@ class ToolRegistryTest {
         val names = ToolRegistry.all.map { it.name }
         assertEquals("Each tool name must have exactly one definition.", names.size, names.toSet().size)
         assertTrue(names.containsAll(setOf(
-            "read_screen", "verify_send", "type", "click_text", "browser_snapshot",
+            "read_screen", "point_at", "sketch_screen", "verify_send", "type", "click_text", "browser_snapshot",
             "browser_type", "weather", "bybit_public_ticker", "telegram_send",
             "mcp_call", "remember", "recall", "discussion_search", "decision_history", "task_delete", "ask_user", "termux_command", "trade_history_summary", "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"
         )))
@@ -129,9 +144,9 @@ class ToolRegistryTest {
         assertTrue(contract.contains("does not require chrome or termux"))
     }
 
-    @Test fun screenInspectionAndAppControlRequireExplicitDisclosure() {
-        listOf("read_screen", "click", "click_text", "type", "tap", "verify_action", "look", "play", "open_app")
-            .forEach { assertTrue("$it must require screen-access consent", ToolRegistry.requiresAccessibility(it)) }
+    @Test fun screenInspectionAndAppControlUseAndroidAccessibilityService() {
+        listOf("read_screen", "click", "click_text", "type", "tap", "verify_action", "look", "play", "open_app", "point_at", "sketch_screen")
+            .forEach { assertTrue("$it must use Android AccessibilityService", ToolRegistry.requiresAccessibility(it)) }
         assertFalse(ToolRegistry.requiresAccessibility("browser_snapshot"))
         assertFalse(ToolRegistry.requiresAccessibility("bybit_public_ticker"))
         assertFalse(ToolRegistry.requiresAccessibility("weather"))

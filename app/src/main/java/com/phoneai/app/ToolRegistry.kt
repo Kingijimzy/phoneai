@@ -42,7 +42,9 @@ internal object ToolRegistry {
         tool("save_file", ToolAccess.WRITE, "save_file {filename, content, folder?}: create a user-accessible text or code file in Downloads (optional single safe child folder; defaults to Orion); max 200 KB; verify the saved name, byte size and location before reporting success; never claim success on a storage error"),
         tool("list_apps", ToolAccess.READ, "list_apps {}: list names of installed apps"),
         tool("list_app_deeplinks", ToolAccess.READ, "list_app_deeplinks {scheme?}: list installed handlers for allowlisted https, tel, sms, smsto, mailto, geo, whatsapp, tg, youtube, spotify schemes"),
-        tool("read_screen", ToolAccess.READ, "read_screen {}: merged numbered accessibility, on-device OCR, and unlabeled visual-region targets; visual regions are heuristic and OCR/detection are withheld on potentially sensitive screens"),
+        tool("read_screen", ToolAccess.READ, "read_screen {}: inspect the current screen and return numbered accessibility, on-device OCR, and visual-region targets with current screen-pixel bounds"),
+        tool("point_at", ToolAccess.WRITE, "point_at {id, duration_ms?}: draw a temporary, touch-transparent highlight around the exact current read_screen target"),
+        tool("sketch_screen", ToolAccess.WRITE, "sketch_screen {shape, id?, x?, y?, radius?, label?, duration_ms?}: draw a temporary circle, arrow, underline, box, or highlight around a current screen target; use a read_screen ID when available, or vision screenshot-pixel x/y for image-only objects; refresh the screen before sketching"),
         tool("validate_action", ToolAccess.READ, "validate_action {tool, id?, text?, x?, y?, allow_coordinates?}: local preflight before acting; click needs a current ID, click_text needs visible text, coordinate tools require finite non-negative coordinates, no suitable numbered target, and allow_coordinates=true; does not perform the action"),
         tool("verify_action", ToolAccess.READ, "verify_action {expected_text?, previous_text?, expect_change?}: locally inspect the current screen after an action; a changed screen alone does not prove overall completion"),
         tool("verify_send", ToolAccess.READ, "verify_send {contact, message}: verify exact contact, exact outgoing message, and visible sent/delivered/read status; only PASS confirms the send"),
@@ -56,8 +58,8 @@ internal object ToolRegistry {
         tool("scroll", ToolAccess.WRITE, "scroll {direction}: scroll up or down"),
         tool("type", ToolAccess.WRITE, "type {text}: type into the focused text field; click the field first; replaces its text"),
         tool("key", ToolAccess.WRITE, "key {name}: back, home, recents, notifications, quick_settings, screenshot, enter, lock, or power_menu"),
-        tool("look", ToolAccess.READ, "look {question}: inspect a screenshot and describe it for games, images, or content read_screen cannot see"),
-        tool("play", ToolAccess.WRITE, "play {goal, steps}: bounded vision loop for games/unreadable screens; at most 40 steps; stops on sensitive or ambiguous screens and never auto-dismisses pop-ups"),
+        tool("look", ToolAccess.READ, "look {question}: inspect a screenshot for games, images, and image-only objects; when asked to locate a specific object, return its center x/y and approximate radius in screenshot pixels so sketch_screen can annotate it"),
+        tool("play", ToolAccess.WRITE, "play {goal, steps}: vision-driven Android UI control for games and custom screens; uses current screen targets where possible, warns about consequential actions without asking for approval, and continues the owner-requested task until complete, cancelled, or blocked by Android"),
         tool("routine_run", ToolAccess.WRITE, "routine_run {name}: replay one saved Teach Mode gesture routine by exact name; verifies the target app and recorded screen fingerprints, checkpoints every gesture, stops on mismatch/uncertain outcome, and never assumes the overall goal succeeded"),
         tool("routine_resume", ToolAccess.WRITE, "routine_resume {name}: resume the exact saved Teach Mode routine from its durable checkpoint after inspecting the current target screen; never restart or repeat an ambiguous in-flight gesture"),
         tool("open_url", ToolAccess.WRITE, "open_url {url}: open the URL inside Orion Browser (WebView)"),
@@ -219,7 +221,7 @@ internal object ToolRegistry {
         tool("followup_done", ToolAccess.WRITE, "followup_done {id}: mark a follow-up as done"),
         tool("quiet_period_set", ToolAccess.WRITE, "quiet_period_set {startHour, endHour}: set quiet hours (0-23) when Orion will not speak proactively"),
         tool("skills_list", ToolAccess.READ, "skills_list {}: list registered skill IDs, enabled state, purpose, allowed tools, and allowed tool inventory"),
-        tool("ask_user", ToolAccess.WRITE, "ask_user {question, options: array of strings, access}: show 2–4 tap options; use READ for inspection-only choices and WRITE for changes; required before irreversible actions"),
+        tool("ask_user", ToolAccess.WRITE, "ask_user {question, options: array of strings, access}: show 2–4 tap options when a genuine choice or missing detail needs the owner's input; not an execution approval gate"),
         tool("model_decision_log", ToolAccess.WRITE, "model_decision_log {tool, arguments, reason, provider?, model?, taskId?, turnId?}: record an AI model or tool decision before execution; updated with result and verification after completion"),
         tool("model_decision_search", ToolAccess.READ, "model_decision_search {query}: search local model/tool decision records by tool, arguments, reason, or result; shows verification status and provenance"),
         tool("model_status", ToolAccess.READ, "model_status {}: show configured provider readiness, offline mode, selected chat/vision provider, and last successful model"),
@@ -247,12 +249,12 @@ internal object ToolRegistry {
     fun access(name: String): ToolAccess? = find(name)?.access
 
     /**
-     * Tools that inspect the visible screen or control apps through Android's accessibility
-     * path must not run until the user has accepted Orion's separate screen-access disclosure.
+     * Tools that inspect or control the phone use Android's AccessibilityService.
+     * The Android OS accessibility grant and live service binding are the access boundary.
      */
     private val accessibilityRequired = setOf(
         "open_app", "open_deep_link", "read_screen", "validate_action", "verify_action", "verify_send",
-        "click", "click_text", "wait_for", "tap", "long_press", "swipe", "swipe_path", "scroll", "routine_run", "routine_resume",
+        "click", "click_text", "point_at", "sketch_screen", "wait_for", "tap", "long_press", "swipe", "swipe_path", "scroll", "routine_run", "routine_resume",
         "type", "key", "look", "play"
     )
 
@@ -275,7 +277,7 @@ internal object ToolRegistry {
         "macro_save", "macro_run", "macro_list", "macro_delete",
         "voice_speak", "voice_listen", "document_extract", "device_info",
         "python_exec", "image_generate", "shell", "workspace_read", "workspace_write", "save_file",
-        "routine_run", "routine_resume",
+        "routine_run", "routine_resume", "read_screen", "point_at", "sketch_screen",
         "mcp_status", "mcp_list_tools",
         "browser_navigate", "browser_snapshot", "fetch_url", "web_search", "live_web_search"
     )
@@ -308,7 +310,7 @@ internal object ToolRegistry {
         "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt"
     )
     private val phoneNativeTools = listOf(
-        "lookup_app", "open_app", "read_screen", "validate_action", "verify_action",
+        "lookup_app", "open_app", "read_screen", "point_at", "sketch_screen", "validate_action", "verify_action",
         "verify_send", "click", "click_text", "tap", "type", "wait_for", "routine_run", "routine_resume",
         "open_deep_link", "system_intent", "device_info", "look"
     )
@@ -412,8 +414,8 @@ internal object ToolRegistry {
         }
         if (status.isNotBlank()) append("\n\n").append(status)
         append("\n\nTool-use guidance:\n")
-        append("- SCREEN TARGET RULE: choose an ID from read_screen and use click {id}; do not invent coordinates when a numbered element exists. Use look/play screenshots when the numbered map cannot describe the screen, such as a game canvas or image-only UI.\n")
-        append("- LOW-LATENCY PHONE ACTION RULE: prefer a direct registered capability over simulating a human workflow. For 'open YouTube and search for X', use play_media with the exact query and YouTube app when supported; do not open the app and then spend multiple read_screen/click/type calls reproducing its search box. For an exact visible label already supplied by the user or returned by the latest screen read, use click_text directly; do not take another screenshot first. Batch independent read-only calls in one turn. Group consecutive safe actions only when the next target is already known, and verify once at the end or after a meaningful state change. Never batch across an approval gate, an uncertain target, or a destructive/external side effect.\n")
+        append("- SCREEN TARGET RULE: choose an ID from read_screen. Use point_at to indicate a target, sketch_screen with shape=circle to circle it, or arrow/underline/box to annotate it; for image-only objects, use look to identify screenshot-pixel x/y and call sketch_screen with coordinates. Use click {id} only when the owner asks Orion to activate it. Refresh the screen before acting on a stale target.\n")
+        append("- LOW-LATENCY PHONE ACTION RULE: prefer a direct registered capability over simulating a human workflow. For 'open YouTube and search for X', use play_media with the exact query and YouTube app when supported; do not open the app and then spend multiple read_screen/click/type calls reproducing its search box. For an exact visible label already supplied by the user or returned by the latest screen read, use click_text directly; do not take another screenshot first. Batch independent read-only calls in one turn. Group consecutive safe actions only when the next target is already known, and verify once at the end or after a meaningful state change. Do not batch across an uncertain target or a meaningful state transition; risk notices are advisory and do not pause requested execution.\n")
         append("- SHELL BACKEND RULE: use where=builtin only for Orion workspace commands; use where=termux for the user's Termux packages and Python, and where=linux only for Orion's verified Alpine runtime. Do not use the Termux bridge tool for installs. If a bridge is unavailable, report the exact setup requirement rather than claiming Termux is missing.\n")
         append("- MCP DISCOVERY RULE: for requests to inspect MCP servers or discover remote tools, call registered mcp_status first, then mcp_list_tools when an endpoint is configured. Do not invent mcp_servers_list or mcp_discover. This app currently configures one remote MCP endpoint. Listing tools is read-only; never call mcp_call unless the owner separately requested an operation.\n")
         append("- ROUTE SELECTION RULE: before choosing a tool, match the requested outcome to an exact registered tool contract and live capability state. Never invent tool names, argument keys, providers, APIs, browser routes, or capabilities. If a suitable registered tool exists, call it directly; do not narrate speculative alternatives first. If no compatible tool is registered or its runtime is unavailable, state the exact blocker instead of guessing or trying unrelated tools. After a tool error, change route only when the returned error proves the alternative is compatible.\n")

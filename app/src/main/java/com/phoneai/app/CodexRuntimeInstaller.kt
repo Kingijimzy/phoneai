@@ -73,6 +73,7 @@ internal class CodexRuntimeInstaller(context: Context) {
             listOf(GUEST_BINARY, "--listen", "stdio://"),
             extraEnvironment = mapOf("CODEX_HOME" to "/android-app/codex-session")
         )
-        return CodexAppServerClient(session, onClose = { vault.persist() })
+        // Bound the first on-device account/session initialization window.
+        return CodexAppServerClient(session, requestTimeoutMs = 90_000L, onClose = { vault.persist() })
     }
 }

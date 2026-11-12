@@ -4,14 +4,14 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Central agent permission policy. Execution adapters must call evaluate() before dispatch. */
+/** Central capability registry. Registered tools run directly; PLAN mode and Android OS permissions remain authoritative. */
 object AgentPolicy {
     enum class Mode(val label: String) { PLAN("Plan"), ALLOW("Allow") }
     enum class Decision { ALLOW, PLAN_ONLY, DENY }
     data class Pack(val id: String, val title: String, val description: String, val implemented: Boolean = false)
     data class RuleResult(val decision: Decision, val reason: String)
     val packs = listOf(
-        Pack("workspace_shell", "Workspace shell", "Owner-authorized shell commands and SAF workspace read/write/patch operations; potentially destructive commands emit warnings but are not blocked", true),
+        Pack("workspace_shell", "Workspace shell", "Shell commands and workspace read/write/patch operations; risk notices are advisory", true),
         Pack("phone_control", "Phone control", "Accessibility actions with act → verify → report", true),
         Pack("termux_bridge", "Termux bridge", "Optional Termux RUN_COMMAND service; requires install, user permission and external-app setting", true),
         Pack("remote_computer", "Remote computer", "Cursor Cloud Agent API; generic sandbox/VPS remains separate", true),
@@ -35,8 +35,8 @@ object AgentPolicy {
     }
     /**
      * Core companion packs are enabled on first launch so phone and messaging features are discoverable.
-     * This only makes their tools available: Android OS permissions, explicit capability scope and validation
-     * still apply. Restart, shutdown and Wi-Fi toggles emit warnings but do not require an Orion confirmation. Optional bridges remain opt-in.
+     * Android OS permissions and external service authentication remain the access boundaries.
+     * Risk notices do not pause requested actions; optional external bridges still need their own setup.
      */
     internal val defaultOnPacks = setOf(
         "orion_core", "connected_services", "workspace_shell", "self_test",
@@ -71,7 +71,7 @@ object AgentPolicy {
     fun packOffMessage(pack: String): String =
         "The '$pack' capability pack is switched off, so this tool is unavailable right now. The feature exists: tell the user which pack to switch on (${ToolGate.howToEnable(pack)}) instead of saying Orion lacks it."
 
-    /** Gate for the agent's dispatch: the same table as every other caller, with the per-tool mode and task memory. */
+    /** Compatibility decision adapter. GatePolicy is default-ALLOW except PLAN mode and disabled trading order execution. */
     internal fun gate(
         c: Context, pack: String, toolId: String, dangerous: Boolean,
         toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false,
@@ -111,7 +111,7 @@ object AgentPolicy {
         return RuleResult(decision, r.reason)
     }
 
-    /** Maps every built-in tool to exactly one enabled capability pack. Unknown tools fail closed. */
+    /** Maps each registered built-in tool to its capability family for status and routing. */
     fun packForTool(tool: String): String? = when (tool) {
         "extension_list", "extension_create", "extension_update", "extension_test", "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback" -> "orion_core"
         "play" -> "gaming_hobby"
@@ -136,7 +136,7 @@ object AgentPolicy {
         "telegram_status", "telegram_inbox", "telegram_send", "sms", "notification_action", "resolve_contact" -> "messaging"
         "device_location", "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "media_status", "media_control", "play_media", "chrome_search",
         "find_files", "open_file", "save_file", "list_apps", "list_app_deeplinks", "read_screen", "look", "validate_action", "verify_action",
-        "verify_send", "click", "click_text", "wait_for", "tap", "long_press", "swipe", "swipe_path", "scroll", "type",
+        "verify_send", "click", "click_text", "point_at", "sketch_screen", "wait_for", "tap", "long_press", "swipe", "swipe_path", "scroll", "type",
         "routine_run", "routine_resume", "key", "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify", "browser_click",
         "browser_click_verify", "browser_type", "browser_scroll", "browser_navigate", "browser_back", "browser_tabs",
         "browser_upload", "browser_handoff", "browser_wait", "browser_close", "settings", "dial", "alarm", "timer",

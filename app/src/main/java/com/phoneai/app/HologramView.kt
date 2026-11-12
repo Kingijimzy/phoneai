@@ -50,5 +50,7 @@ internal class HologramView(context: Context) : WebView(context) {
         CompanionView.Activity.THINKING -> "thinking"
         CompanionView.Activity.LISTENING -> "listening"
         CompanionView.Activity.SPEAKING -> "speaking"
+        CompanionView.Activity.BROWSING, CompanionView.Activity.WRITING -> "thinking"
+        CompanionView.Activity.BUILDING, CompanionView.Activity.ACTING, CompanionView.Activity.DRAWING, CompanionView.Activity.RUNNING -> "acting"
     }
 }

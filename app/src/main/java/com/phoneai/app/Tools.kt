@@ -37,11 +37,11 @@ class Tools(
     private val onPythonOutput: (String) -> Unit = {}
 ) {
 
-    private fun launch(i: Intent, settleMs: Long = 1200): String {
+    private fun launch(i: Intent, settleMs: Long = OrionActionLatencyPolicy.LAUNCH_SETTLE_MS): String {
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return try {
             svc.startActivity(i)
-            if (settleMs > 0) Thread.sleep(settleMs)
+            if (settleMs > 0) Thread.sleep(OrionActionLatencyPolicy.launchDelay(settleMs))
             "ok"
         } catch (e: Exception) {
             "error: ${e.message}"
@@ -86,7 +86,7 @@ class Tools(
         var hops = 0
         while (cur != null && hops < 6) {
             if (cur.isClickable && cur.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-                Thread.sleep(600)
+                Thread.sleep(OrionActionLatencyPolicy.CLICK_SETTLE_MS)
                 return "clicked \"$text\""
             }
             cur = cur.parent
@@ -105,7 +105,7 @@ class Tools(
             if (root != null && root.findAccessibilityNodeInfosByText(text).any { it.isVisibleToUser }) {
                 return "found \"$text\""
             }
-            Thread.sleep(500)
+            Thread.sleep(OrionActionLatencyPolicy.WAIT_POLL_MS)
         }
         return "not found: \"$text\" did not appear"
     }
@@ -558,15 +558,11 @@ class Tools(
     }
 
     /**
-     * Launch a tightly allowlisted app deep link. Arbitrary intent:// components and
-     * bank/payment/credential URLs are deliberately rejected.
+     * Launch a supported Android app deep link through the platform intent resolver.
      */
     fun openDeepLink(uriText: String): String {
         val raw = uriText.trim()
         if (raw.isBlank() || raw.length > 2048) return "error: deep link must be 1–2048 characters"
-        if (SafetyGate.containsSensitiveCredentialText(raw) || SafetyGate.isSensitiveApp(raw, raw)) {
-            return "error: safety gate blocked a financial or credential-bearing deep link"
-        }
         val uri = try { java.net.URI(raw) } catch (_: Exception) { null }
             ?: return "error: malformed deep link"
         val scheme = uri.scheme?.lowercase() ?: return "error: deep link needs an explicit scheme"

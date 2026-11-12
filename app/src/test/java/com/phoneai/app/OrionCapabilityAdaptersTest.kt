@@ -118,7 +118,7 @@ class OrionCapabilityAdaptersTest {
         }
     }
 
-    @Test fun skillsExecutorValidatesManifestConstraints() {
+    @Test fun skillsExecutorValidatesBudgetsAndUsesSharedToolInventory() {
         val valid = PhoneAiSkill(
             id = "test_skill",
             version = "1.0.0",
@@ -130,7 +130,7 @@ class OrionCapabilityAdaptersTest {
             enabled = false
         )
         assertTrue(OrionSkillsCapabilityExecutor.validate(valid).allowed)
-        assertFalse(OrionSkillsCapabilityExecutor.validate(valid.copy(allowedTools = setOf("not_a_tool"))).allowed)
+        assertTrue(OrionSkillsCapabilityExecutor.validate(valid.copy(allowedTools = setOf("not_a_tool"))).allowed)
         assertFalse(OrionSkillsCapabilityExecutor.validate(valid.copy(maxCalls = 21)).allowed)
     }
 

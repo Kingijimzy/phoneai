@@ -26,7 +26,6 @@ internal fun Activity.showAutonomyControlCenter() {
             val mode = OrionMode.values()[which]
             val latest = OrionAutonomySettings.read(this).copy(mode = mode)
             OrionAutonomySettings.write(this, latest)
-            ToolPermissions.applyLevel(this, OrionAutonomyPolicy.preset(mode))
             // Keep the existing execution governor in sync with the selected control-center limits.
             AgentPolicy.setBudgets(this, latest.maxToolSteps, latest.maxAiRequests, AgentPolicy.maxMinutes(this))
             showControlCenterMenu("Mode saved: ${mode.name}. Potentially consequential actions show warnings and continue without Orion confirmation.")
@@ -40,7 +39,6 @@ private fun Activity.showControlCenterMenu(message: String?) {
     val rows = listOf(
         "Execution limits",
         "Notifications",
-        "Individual capability permissions",
         "Android permission status"
     )
     val builder = AlertDialog.Builder(this).setTitle("Autonomy controls")
@@ -48,8 +46,7 @@ private fun Activity.showControlCenterMenu(message: String?) {
             when (which) {
                 0 -> showExecutionLimits()
                 1 -> showAutonomyNotifications()
-                2 -> showToolList()
-                3 -> showAndroidPermissionStatus()
+                2 -> showAndroidPermissionStatus()
             }
         }.setNegativeButton("Close", null)
     if (!message.isNullOrBlank()) builder.setMessage(message)
@@ -99,13 +96,13 @@ private fun Activity.showAutonomyNotifications() {
         Switch(this).apply { text = label; isChecked = checked; panel.addView(this, ViewGroup.LayoutParams(-1, -2)) }
     val completion = toggle("Notify when a goal completes", current.notifyOnCompletion)
     val failure = toggle("Notify when a goal fails or pauses", current.notifyOnFailure)
-    val approval = toggle("Notify when approval is needed", current.notifyOnApproval)
+    val warning = toggle("Notify when Orion issues a risk warning", current.notifyOnApproval)
     AlertDialog.Builder(this).setTitle("Notification preferences").setView(panel)
         .setPositiveButton("Save") { _, _ ->
             OrionAutonomySettings.write(this, current.copy(
                 notifyOnCompletion = completion.isChecked,
                 notifyOnFailure = failure.isChecked,
-                notifyOnApproval = approval.isChecked
+                notifyOnApproval = warning.isChecked
             ))
             showControlCenterMenu("Notification preferences saved.")
         }.setNegativeButton("Cancel", null).show()
@@ -128,12 +125,4 @@ private fun Activity.showAndroidPermissionStatus() {
     AlertDialog.Builder(this).setTitle("Android permission status")
         .setMessage(rows.joinToString("\n") + "\n\nOrion reads current grant state. It should request only missing runtime permissions when a feature is enabled.")
         .setPositiveButton("OK", null).show()
-}
-
-private fun Activity.showToolList() {
-    val tools = ToolRegistry.all.filter { it.name !in ToolPermissionPolicy.alwaysAllowed }
-    val rows = tools.map { t -> "${t.name}  [${t.access.name.lowercase()}]  →  ${ToolPermissions.mode(this, t.name).name}" }
-    AlertDialog.Builder(this).setTitle("Tap a tool to cycle Allow / Ask / Deny")
-        .setItems(rows.toTypedArray()) { _, i -> ToolPermissions.cycle(this, tools[i].name); showToolList() }
-        .setNegativeButton("Done", null).show()
 }
