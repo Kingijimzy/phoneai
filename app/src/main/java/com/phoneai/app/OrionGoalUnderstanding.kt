@@ -85,6 +85,7 @@ internal object OrionGoalUnderstanding {
             Regex("(?i)\\b(terminal|shell|command line|cli)\\b").containsMatchIn(q) -> "terminal/shell"
             Regex("(?i)\\b(phone|device|screen|app|settings|alarm|timer)\\b").containsMatchIn(q) -> "Android device"
             Regex("(?i)\\b(repo|repository|source|code|build|pull request|commit)\\b").containsMatchIn(q) -> "code repository"
+            namedSitePhrase.find(q)?.groupValues?.getOrNull(1)?.isNotBlank() == true -> namedSitePhrase.find(q)?.groupValues?.getOrNull(1).orEmpty()
             urlInspection.find(q)?.value?.let { Regex("(?i)https?://([^/\\s?#]+)").find(q)?.groupValues?.getOrNull(1)?.removePrefix("www.") } != null -> Regex("(?i)https?://([^/\\s?#]+)").find(q)?.groupValues?.getOrNull(1)?.removePrefix("www.").orEmpty()
             else -> ""
         }
