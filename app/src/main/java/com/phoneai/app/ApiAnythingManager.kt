@@ -71,7 +71,7 @@ internal object ApiAnythingManager {
                     workspace.absolutePath, app.applicationInfo.dataDir,
                     java.io.File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath
                 ),
-                listOf("/bin/sh", "-lc", "exec api-anything serve --host $HOST --port $PORT --allow-writes")
+                listOf("/bin/sh", "-lc", "export API_ANYTHING_BROWSER=chromium; exec api-anything serve --host $HOST --port $PORT --allow-writes")
             )
             server = session
             val deadline = System.currentTimeMillis() + 60_000L
