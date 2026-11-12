@@ -32,7 +32,6 @@ internal object OrionCapabilityAudit {
         if (enabledPacks <= 0) limitations += "no_enabled_capability_packs"
         if (!accessibilityReady) limitations += "accessibility_service_unavailable"
         if (!screenPerceptionReady) limitations += "screen_perception_unavailable"
-        if (!shizukuReady) limitations += "shizuku_not_ready_optional"
 
         val status = when {
             registeredTools <= 0 || implementedPacks <= 0 || !accessibilityReady -> Status.BLOCKED
