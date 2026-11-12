@@ -67,6 +67,7 @@ class SelfExtendingExtensionsTest {
         assertFalse(store.saveDraft(draft()))
         assertNotNull(SelfExtendingExtensionPolicy.validateSource("ruby", "puts 'hi'"))
         assertNotNull(SelfExtendingExtensionPolicy.validateSource("javascript", "function run(x) { return x; }"))
+        assertNotNull(SelfExtendingExtensionPolicy.validateSource("python_full", "import os\\nRESULT = os.listdir('/')"))
     }
 
     @Test fun disabledOrTamperedExtensionsAreNeverReturnedAsExecutable() {

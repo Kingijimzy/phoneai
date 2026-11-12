@@ -38,11 +38,9 @@ internal object SelfExtendingExtensionPolicy {
         if (source.isBlank()) return "Generated source is empty."
         if (runtime != "python_full" && source.toByteArray(Charsets.UTF_8).size > MAX_SOURCE_BYTES) return "Generated source exceeds the 8,000-byte runtime limit."
         if (runtime == "python_full") {
-            // Full CPython in Orion's workspace runtime: files, network, packages, the phone bridge.
-            if (source.toByteArray(Charsets.UTF_8).size > MAX_FULL_SOURCE_BYTES) return "Source exceeds the 64,000-byte limit."
-            return null
+            return "python_full generated extensions are disabled until Orion has an OS-enforced isolated worker. PRoot runs under the Android app UID and is not a security boundary. Use python_exec for an explicitly requested full-CPython task; generated extensions must use the restricted python runtime."
         }
-        if (runtime != "python") return "Supported extension runtimes: python (pure data transform) and python_full (files, network, packages, phone bridge)."
+        if (runtime != "python") return "Supported extension runtime: python (restricted pure data transform). Full CPython remains available through the explicit python_exec tool, not auto-activated extensions."
         OrionSecurityPolicy.findEmbeddedSecret(source)?.let { return it.message }
         if (runtime == "python" && forbiddenPython.any { it.containsMatchIn(source) }) {
             return "Source uses a restricted Python operation; request a simpler capability-scoped implementation."

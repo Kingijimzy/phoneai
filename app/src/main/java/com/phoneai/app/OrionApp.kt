@@ -9,5 +9,8 @@ class OrionApp : Application() {
         runCatching { Prefs.loadCustomProviders(this) }
         // Start the background heartbeat whenever the app process starts, not only after the accessibility service connects.
         if (OrionMasterControl.isEnabled(this)) runCatching { OrionProactiveWork.ensureScheduled(this) }
+        // The managed website API server is a child of Orion's PRoot runtime. Reattach it
+        // after Android recreates the app process; never install packages during app startup.
+        runCatching { ApiAnythingManager.resumeIfEnabled(this) }
     }
 }
