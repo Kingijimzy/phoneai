@@ -30,6 +30,7 @@ class ModelSettingsActivity : Activity() {
     private lateinit var visionModel: TextView
     private lateinit var chatStatus: TextView
     private lateinit var visionStatus: TextView
+    private lateinit var commandProvider: TextView
     private lateinit var autoSwitch: Switch
     private lateinit var paidSwitch: Switch
     private lateinit var modelRuntime: AccountAwareModelProvider
@@ -158,6 +159,14 @@ class ModelSettingsActivity : Activity() {
             }
         }
 
+        card(root, "COMMAND / CODING MODEL") {
+            commandProvider = label("", 14f, Theme.TEXT, true)
+            addView(commandProvider)
+            addView(label("Commands and coding tasks can inherit chat provider/model or use an independent selection.", 11f, Theme.MUTED))
+            rowButton(this, "Choose command provider", "Select Inherit chat to use normal conversation routing.") { chooseCommandProvider() }
+            rowButton(this, "Choose command model", "Select a model specifically for command execution.") { chooseCommandModel() }
+        }
+
         card(root, "ROUTING & COST CONTROL") {
             autoSwitch = Switch(this@ModelSettingsActivity).apply {
                 text = "Auto-switch on recoverable provider errors"
@@ -249,9 +258,62 @@ class ModelSettingsActivity : Activity() {
         chatProvider.text = chat.label
         chatModel.text = "Model: " + Prefs.model(this, chat, false)
         chatStatus.text = providerStatus(chat)
+        val command = Prefs.commandProviderId(this)?.let { Providers.find(it) }
+        commandProvider.text = if (command == null) "Inherit chat · ${chat.label} / ${Prefs.model(this, chat, false)}"
+            else "${command.label} · ${Prefs.commandModelId(this) ?: command.textModel}"
         visionProvider.text = vision.label
         visionModel.text = "Model: " + Prefs.model(this, vision, true)
         visionStatus.text = providerStatus(vision)
+    }
+
+    private fun chooseCommandProvider() {
+        val options = listOf<Provider?>(null) + Providers.all
+        val labels = options.map { p -> if (p == null) "Inherit chat" else p.label + " · " + providerStatus(p) }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("Command provider").setItems(labels) { _, index ->
+            val selected = options[index]
+            if (selected == null) { Prefs.clearCommandProvider(this); refresh() }
+            else {
+                val configured = selected.noKey || Prefs.hasKey(this, selected.id) ||
+                    (selected.id == "codex" || selected.id == "antigravity") && Prefs.accountConnected(this, selected.id)
+                if (!configured) {
+                    if (selected.id == "codex" || selected.id == "antigravity") startActivity(Intent(this, AccountConnectionsActivity::class.java))
+                    else editApiKey(selected, false)
+                    return@setItems
+                }
+                val model = Prefs.commandModelId(this) ?: Prefs.cachedModels(this, selected.id).firstOrNull() ?: selected.textModel
+                Prefs.setCommandProvider(this, selected.id, model)
+                refresh()
+            }
+        }.setNegativeButton("Cancel", null).show()
+    }
+
+    private fun chooseCommandModel() {
+        val provider = Prefs.commandProviderId(this)?.let { Providers.find(it) } ?: Prefs.provider(this, false)
+        if ((provider.id == "codex" || provider.id == "antigravity") && !Prefs.accountConnected(this, provider.id)) {
+            startActivity(Intent(this, AccountConnectionsActivity::class.java)); return
+        }
+        if (!provider.noKey && provider.id != "codex" && provider.id != "antigravity" && !Prefs.hasKey(this, provider.id)) {
+            editApiKey(provider, false); return
+        }
+        val cached = Prefs.cachedModels(this, provider.id)
+        val progress = ProgressDialog.show(this, "Loading command models", "Contacting ${provider.label}…", true, false)
+        worker.execute {
+            val loaded = runCatching { modelRuntime.allModels(provider) }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) { progress.dismiss(); return@runOnUiThread }
+                progress.dismiss()
+                val models = loaded.getOrNull().orEmpty().ifEmpty { cached }.ifEmpty { listOf(provider.textModel) }.distinct()
+                Prefs.saveCachedModels(this, provider.id, models)
+                AlertDialog.Builder(this).setTitle("${provider.label} command model").setItems(models.toTypedArray()) { _, index ->
+                    val model = models[index]
+                    if (!ProviderBillingPolicy.isAllowed(provider.id, model, provider.requiresPaidOptIn, Prefs.allowPaidProviders(this))) {
+                        Toast.makeText(this, "This model is blocked by the paid-provider setting.", Toast.LENGTH_LONG).show(); return@setItems
+                    }
+                    Prefs.setCommandProvider(this, provider.id, model); refresh()
+                }.setNegativeButton("Cancel", null).show()
+                if (loaded.isFailure && cached.isNotEmpty()) Toast.makeText(this, "Using cached models; refresh failed.", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     private fun chooseProvider(vision: Boolean) {
