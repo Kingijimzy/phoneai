@@ -217,6 +217,21 @@ class Voice(private val ctx: Context) {
         speakWithAndroidTts(chunks, onDone)
     }
 
+    /**
+     * Speaks a composed line with per-sentence pace and breathing room. Engines without per-sentence control
+     * (Android TTS) speak the same words at the owner's chosen rate.
+     */
+    fun speakLine(line: OrionSpokenLine.Line, onDone: (() -> Unit)? = null) {
+        val chunks = OrionSpokenLine.plan(line, Prefs.rate(ctx).coerceIn(0.75f, 1.25f))
+            .map { it.copy(text = clean(it.text)) }.filter { it.text.isNotEmpty() }
+        if (chunks.isEmpty()) { onDone?.invoke(); return }
+        if (Prefs.neuralVoice(ctx) && Locale.getDefault().language == "en" && NeuralVoiceInstaller.isInstalled(ctx)) {
+            speakNeural(chunks.map { it.text }, onDone, chunks.map { it.speed }, chunks.map { it.pauseAfterMs })
+            return
+        }
+        speak(chunks.joinToString(" ") { it.text }, onDone)
+    }
+
     /** Compatibility path if Piper is not installed or native initialization fails. */
     private fun speakWithAndroidTts(chunks: List<String>, onDone: (() -> Unit)?) {
         // Neural-engine failure must not bypass the explicit no-network-TTS preference.
@@ -270,7 +285,7 @@ class Voice(private val ctx: Context) {
      * PCM blocks directly into AudioTrack. Blocking writes add back-pressure; synthesis
      * of the next sentence overlaps playback of the current sentence.
      */
-    private fun speakNeural(chunks: List<String>, onDone: (() -> Unit)?) {
+    private fun speakNeural(chunks: List<String>, onDone: (() -> Unit)?, speeds: List<Float>? = null, pausesMs: List<Int>? = null) {
         val token = playbackGeneration.get()
         val ids = chunks.mapIndexed { index, _ -> "n" + System.nanoTime() + "_" + index }
         ids.forEach { pendingIds.add(it) }
@@ -298,7 +313,7 @@ class Voice(private val ctx: Context) {
                     if (token != playbackGeneration.get()) return@execute
                     fallbackStart = index
                     val generation = GenerationConfig(
-                        speed = Prefs.rate(ctx).coerceIn(0.75f, 1.25f)
+                        speed = speeds?.getOrNull(index) ?: Prefs.rate(ctx).coerceIn(0.75f, 1.25f)
                     )
                     engine.generateWithConfigAndCallback(
                         text = chunks[index],
@@ -329,6 +344,13 @@ class Voice(private val ctx: Context) {
                     if (token != playbackGeneration.get()) return@execute
                     fallbackStart = index + 1
                     if (index < chunks.lastIndex) {
+                        val gapMs = pausesMs?.getOrNull(index) ?: 0
+                        val gapTrack = track
+                        if (gapMs > 0 && gapTrack != null) {
+                            // A breath between sentences: silence the orb can relax into.
+                            writeNeuralSamples(gapTrack, FloatArray(engine.sampleRate() * gapMs / 1000), token)
+                            main.post { if (token == playbackGeneration.get()) onAudioAmplitude?.invoke(0f) }
+                        }
                         finished(ids[index])
                         completedBeforeFallback++
                     }

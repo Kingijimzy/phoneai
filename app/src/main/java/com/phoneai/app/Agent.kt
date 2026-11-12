@@ -1384,6 +1384,30 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
      * are saved immediately by the local extractor. The model pass waits a few seconds and is dropped if Kingi has
      * already sent another message, so it never competes with the live conversation for the provider.
      */
+    /**
+     * What Orion says aloud for a written answer: a short model-composed line with a mood, so speech is
+     * natural and dynamic instead of the chat text read out. Short plain replies skip the model call.
+     * Falls back to the plain speech filter if the model fails.
+     */
+    fun composeSpoken(written: String): OrionSpokenLine.Line? {
+        if (written.isBlank()) return null
+        if (!OrionSpokenLine.needsComposing(written)) return OrionSpokenLine.fallback(written)
+        val heard = runCatching {
+            var found = ""
+            for (i in chatHist.length() - 1 downTo 0) {
+                val m = chatHist.getJSONObject(i)
+                if (m.optString("role") == "user") { found = m.optString("content"); break }
+            }
+            found
+        }.getOrDefault("")
+        return runCatching {
+            val msgs = JSONArray()
+                .put(msg("system", OrionSpokenLine.SYSTEM))
+                .put(msg("user", OrionSpokenLine.userMessage(written, heard)))
+            OrionSpokenLine.parse(talkNim.chat(msgs, false, 220, 0.4))
+        }.getOrNull() ?: OrionSpokenLine.fallback(written)
+    }
+
     private fun reflectOnExchange(command: String) {
         if (command.trim().length < 8 || stopped) return
         runCatching {
