@@ -117,6 +117,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     /** OCR-only elements from the latest read_screen; bounds are in physical screen coordinates. */
     private val ocrElements = ArrayList<ScreenPerception.OcrItem>()
     private val visualElements = ArrayList<VisualElementDetector.Region>()
+    private data class ScreenAnnotation(
+        val bounds: Rect,
+        val shape: String,
+        val caption: String,
+        val targetLabel: String,
+        val expiresAtMs: Long
+    )
+    // Mutations run on the main thread; one overlay renders the live annotation set.
+    private val screenAnnotations = ArrayList<ScreenAnnotation>()
     private var pointOverlay: View? = null
     private var pointOverlayRemoval: Runnable? = null
     @Volatile private var screenGeneration = 0L
@@ -240,16 +249,21 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null || orionRuntime == null || !OrionMasterControl.isEnabled(this)) return
-        // Window transitions are meaningful state changes; ignore noisy text/content events.
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            screenGeneration += 1L
-            // Android may interrupt and later resume an accessibility service without recreating it.
-            // Resume the bounded local queue only when a fresh real window event arrives.
-            if (orionRuntime?.snapshot()?.state == OrionRuntime.State.PAUSED) orionRuntime?.resume()
-            OrionChronosAwareness.onWindowChanged(this, event.packageName?.toString())
-            decisionScheduler?.onWindowChanged()
-            requestContinuousWatcherObservation("window_changed")
-            scheduleRuntimeDrain()
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
+                screenGeneration += 1L
+                main.post { clearPointOverlay() }
+                return
+            }
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                screenGeneration += 1L
+                main.post { clearPointOverlay() }
+                if (orionRuntime?.snapshot()?.state == OrionRuntime.State.PAUSED) orionRuntime?.resume()
+                OrionChronosAwareness.onWindowChanged(this, event.packageName?.toString())
+                decisionScheduler?.onWindowChanged()
+                requestContinuousWatcherObservation("window_changed")
+                scheduleRuntimeDrain()
+            }
         }
     }
 
@@ -2685,7 +2699,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             return Rect(item.bounds) to item.text
         }
         val node = nodes.getOrNull(id) ?: return null
-        if (!node.isVisibleToUser) return null
+        if (!node.isVisibleToUser || node.isPassword) return null
         val bounds = Rect()
         node.getBoundsInScreen(bounds)
         val label = (node.text?.toString() ?: node.contentDescription?.toString() ?: node.hintText?.toString()).orEmpty()
@@ -2737,8 +2751,94 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun clearPointOverlay() {
         pointOverlayRemoval?.let { main.removeCallbacks(it) }
         pointOverlayRemoval = null
+        screenAnnotations.clear()
         pointOverlay?.let { runCatching { if (::wm.isInitialized) wm.removeView(it) } }
         pointOverlay = null
+    }
+
+    private fun schedulePointOverlayExpiry() {
+        pointOverlayRemoval?.let { main.removeCallbacks(it) }
+        val expiresAt = screenAnnotations.minOfOrNull { it.expiresAtMs }
+        if (expiresAt == null) {
+            clearPointOverlay()
+            return
+        }
+        val callback = Runnable {
+            val now = SystemClock.elapsedRealtime()
+            screenAnnotations.removeAll { it.expiresAtMs <= now }
+            if (screenAnnotations.isEmpty()) clearPointOverlay()
+            else {
+                pointOverlay?.invalidate()
+                schedulePointOverlayExpiry()
+            }
+        }
+        pointOverlayRemoval = callback
+        main.postDelayed(callback, (expiresAt - SystemClock.elapsedRealtime()).coerceAtLeast(1L))
+    }
+
+    private fun drawScreenAnnotation(canvas: Canvas, annotation: ScreenAnnotation) {
+        val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFFFC857.toInt()
+            style = Paint.Style.STROKE
+            strokeWidth = dp(3).toFloat()
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0x20FFC857
+            style = Paint.Style.FILL
+        }
+        val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFFFFFFF.toInt()
+            textSize = dp(13).toFloat()
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        }
+        val tag = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xE6222222.toInt()
+            style = Paint.Style.FILL
+        }
+        val rect = RectF(annotation.bounds)
+        rect.inset(-dp(9).toFloat(), -dp(9).toFloat())
+        when (annotation.shape) {
+            "circle" -> {
+                val diameter = maxOf(rect.width(), rect.height()) + dp(10)
+                val circle = RectF(
+                    rect.centerX() - diameter / 2f,
+                    rect.centerY() - diameter / 2f,
+                    rect.centerX() + diameter / 2f,
+                    rect.centerY() + diameter / 2f
+                )
+                canvas.drawOval(circle, fill)
+                canvas.drawOval(circle, outline)
+            }
+            "underline" -> {
+                val y = rect.bottom + dp(7)
+                canvas.drawLine(rect.left, y, rect.right, y, outline)
+                canvas.drawLine(rect.left + dp(5), y + dp(4), rect.right - dp(5), y + dp(4), outline)
+            }
+            "arrow" -> {
+                val startX = rect.centerX()
+                val startY = (rect.top - dp(58)).coerceAtLeast(dp(12).toFloat())
+                val endX = rect.centerX()
+                val endY = rect.top
+                canvas.drawLine(startX, startY, endX, endY, outline)
+                val head = dp(13).toFloat()
+                canvas.drawLine(endX, endY, endX - head, endY - head, outline)
+                canvas.drawLine(endX, endY, endX + head, endY - head, outline)
+                canvas.drawRoundRect(rect, dp(10).toFloat(), dp(10).toFloat(), outline)
+            }
+            else -> {
+                canvas.drawRoundRect(rect, dp(12).toFloat(), dp(12).toFloat(), fill)
+                canvas.drawRoundRect(rect, dp(12).toFloat(), dp(12).toFloat(), outline)
+            }
+        }
+        val caption = annotation.caption.ifBlank { annotation.targetLabel }
+        val tagWidth = (text.measureText(caption) + dp(24)).coerceAtMost(canvas.width.toFloat())
+        val tagLeft = rect.left.coerceIn(0f, (canvas.width - tagWidth).coerceAtLeast(0f))
+        val tagTop = (rect.top - dp(38)).coerceAtLeast(dp(8).toFloat())
+        val tagRect = RectF(tagLeft, tagTop, tagLeft + tagWidth, tagTop + dp(30))
+        canvas.drawRoundRect(tagRect, dp(9).toFloat(), dp(9).toFloat(), tag)
+        canvas.drawText(caption, tagLeft + dp(12), tagTop + dp(20), text)
     }
 
     private fun drawScreenSketch(
@@ -2747,111 +2847,77 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     ): String {
         val target = if (id >= 0) boundsForScreenId(id) else boundsForScreenPoint(x, y, radius)
         if (target == null) return if (id >= 0) {
-            "error: target $id is missing or stale. Run read_screen again and choose a current target ID."
+            "error: target $id is missing, protected, or stale. Run read_screen again and choose a current visible target."
         } else {
             "error: visual coordinates are missing, outside the current screenshot, or stale. Run read_screen and look again."
         }
         val shape = shapeText.trim().lowercase().ifBlank { "highlight" }
         val supported = setOf("circle", "arrow", "underline", "box", "highlight")
         if (shape !in supported) return "error: unsupported sketch shape '$shape'; use circle, arrow, underline, box, or highlight."
-        val bounds = target.first
+        val bounds = Rect(target.first)
         val targetLabel = target.second.ifBlank { if (id >= 0) "Target $id" else "Visual target" }.take(64)
-        val caption = labelText.trim().take(80).ifBlank { targetLabel }
+        val caption = labelText.trim().take(80)
+        val generation = screenSnapshotGeneration
+        val windowId = screenSnapshotWindowId
+        val packageName = screenSnapshotPackage
         val latch = CountDownLatch(1)
         val shown = AtomicBoolean(false)
         main.post {
             try {
-                clearPointOverlay()
-                val view = object : View(this) {
-                    private val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        color = 0xFFFFC857.toInt()
-                        style = Paint.Style.STROKE
-                        strokeWidth = dp(3).toFloat()
-                        strokeCap = Paint.Cap.ROUND
-                        strokeJoin = Paint.Join.ROUND
-                    }
-                    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        color = 0x20FFC857
-                        style = Paint.Style.FILL
-                    }
-                    private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        color = 0xFFFFFFFF.toInt()
-                        textSize = dp(13).toFloat()
-                        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                    }
-                    private val tag = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        color = 0xE6222222.toInt()
-                        style = Paint.Style.FILL
-                    }
-                    override fun onDraw(canvas: Canvas) {
-                        super.onDraw(canvas)
-                        val rect = RectF(bounds)
-                        val pad = dp(9).toFloat()
-                        rect.inset(-pad, -pad)
-                        when (shape) {
-                            "circle" -> {
-                                val diameter = maxOf(rect.width(), rect.height()) + dp(10)
-                                val circle = RectF(
-                                    rect.centerX() - diameter / 2f,
-                                    rect.centerY() - diameter / 2f,
-                                    rect.centerX() + diameter / 2f,
-                                    rect.centerY() + diameter / 2f
-                                )
-                                canvas.drawOval(circle, fill)
-                                canvas.drawOval(circle, outline)
-                            }
-                            "underline" -> {
-                                val y = rect.bottom + dp(7)
-                                canvas.drawLine(rect.left, y, rect.right, y, outline)
-                                canvas.drawLine(rect.left + dp(5), y + dp(4), rect.right - dp(5), y + dp(4), outline)
-                            }
-                            "arrow" -> {
-                                val startX = rect.centerX()
-                                val startY = (rect.top - dp(58)).coerceAtLeast(dp(12).toFloat())
-                                val endX = rect.centerX()
-                                val endY = rect.top
-                                canvas.drawLine(startX, startY, endX, endY, outline)
-                                val head = dp(13).toFloat()
-                                canvas.drawLine(endX, endY, endX - head, endY - head, outline)
-                                canvas.drawLine(endX, endY, endX + head, endY - head, outline)
-                                canvas.drawRoundRect(rect, dp(10).toFloat(), dp(10).toFloat(), outline)
-                            }
-                            else -> {
-                                canvas.drawRoundRect(rect, dp(12).toFloat(), dp(12).toFloat(), fill)
-                                canvas.drawRoundRect(rect, dp(12).toFloat(), dp(12).toFloat(), outline)
-                            }
-                        }
-                        val tagWidth = (text.measureText(caption) + dp(24)).coerceAtMost(width.toFloat())
-                        val tagLeft = rect.left.coerceIn(0f, (width - tagWidth).coerceAtLeast(0f))
-                        val tagTop = (rect.top - dp(38)).coerceAtLeast(dp(8).toFloat())
-                        val tagRect = RectF(tagLeft, tagTop, tagLeft + tagWidth, tagTop + dp(30))
-                        canvas.drawRoundRect(tagRect, dp(9).toFloat(), dp(9).toFloat(), tag)
-                        canvas.drawText(caption, tagLeft + dp(12), tagTop + dp(20), text)
-                    }
-                }.apply {
-                    contentDescription = "Orion $shape annotation around $targetLabel"
-                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                val liveRoot = rootInActiveWindow
+                val snapshotAge = SystemClock.elapsedRealtime() - screenSnapshotAtMs
+                if (liveRoot == null || snapshotAge !in 0L..15_000L ||
+                    generation != screenGeneration || generation != screenSnapshotGeneration ||
+                    liveRoot.windowId != windowId || windowId != screenSnapshotWindowId ||
+                    liveRoot.packageName?.toString().orEmpty() != packageName ||
+                    packageName != screenSnapshotPackage) {
+                    return@post
                 }
-                val params = WindowManager.LayoutParams(
-                    MATCH, MATCH, OVERLAY,
-                    NOT_FOCUSABLE or NOT_MODAL or NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                    PixelFormat.TRANSLUCENT
-                ).apply { gravity = Gravity.TOP or Gravity.START }
-                wm.addView(view, params)
-                pointOverlay = view
+                val now = SystemClock.elapsedRealtime()
+                screenAnnotations.add(
+                    ScreenAnnotation(
+                        bounds = bounds,
+                        shape = shape,
+                        caption = caption,
+                        targetLabel = targetLabel,
+                        expiresAtMs = now + durationMs.coerceIn(700L, 10_000L)
+                    )
+                )
+                while (screenAnnotations.size > 12) screenAnnotations.removeAt(0)
+                if (pointOverlay == null) {
+                    val view = object : View(this) {
+                        override fun onDraw(canvas: Canvas) {
+                            super.onDraw(canvas)
+                            val liveNow = SystemClock.elapsedRealtime()
+                            screenAnnotations.filter { it.expiresAtMs > liveNow }
+                                .forEach { annotation -> drawScreenAnnotation(canvas, annotation) }
+                        }
+                    }.apply {
+                        contentDescription = "Orion screen annotations"
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    }
+                    val params = WindowManager.LayoutParams(
+                        MATCH, MATCH, OVERLAY,
+                        NOT_FOCUSABLE or NOT_MODAL or NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                        PixelFormat.TRANSLUCENT
+                    ).apply { gravity = Gravity.TOP or Gravity.START }
+                    wm.addView(view, params)
+                    pointOverlay = view
+                } else pointOverlay?.invalidate()
+                schedulePointOverlayExpiry()
                 shown.set(true)
-                val remove = Runnable { clearPointOverlay() }
-                pointOverlayRemoval = remove
-                main.postDelayed(remove, durationMs.coerceIn(700L, 10_000L))
             } catch (_: Exception) {
-                shown.set(false)
-                clearPointOverlay()
+                if (screenAnnotations.isEmpty()) clearPointOverlay()
             } finally {
                 latch.countDown()
             }
         }
         latch.await(2500L, TimeUnit.MILLISECONDS)
-        return if (shown.get()) "drew $shape annotation around screen target $id: $caption" else "error: Android could not display the sketch overlay."
+        return if (shown.get()) {
+            "annotation added around $targetLabel; up to 12 annotations can remain visible together with independent timeouts"
+        } else {
+            "error: the screen changed or Android could not display the annotation; read the current screen and retry."
+        }
     }
 
     fun clickId(id: Int): String {
