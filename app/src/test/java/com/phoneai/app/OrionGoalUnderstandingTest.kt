@@ -61,6 +61,7 @@ class OrionGoalUnderstandingTest {
         assertEquals(OrionGoalUnderstanding.Kind.RESEARCH, goal.kind)
         assertTrue(goal.shouldAct)
         assertTrue(goal.verification.contains("evidence"))
+        assertEquals("ApkVision", goal.target)
     }
 
     @Test fun promptSummaryDoesNotEmbedRawUserInput() {
