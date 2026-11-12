@@ -37,7 +37,7 @@ internal object OrionSpeechTextPolicy {
                 } else sourceLine
                 line.replace(Regex("^#{1,6}\\s*"), "")
                     .replace(Regex("^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)"), "")
-                    .replace(Regex("\\[([^\\]]+)]\\([^)]*\\)"), "\\$1")
+                    .replace(Regex("\\[([^\\]]+)]\\([^)]*\\)"), "\$1")
                     .replace(Regex("[*_~]{1,3}"), "")
                     .replace(Regex("\\s+"), " ")
                     .trim()
@@ -46,8 +46,8 @@ internal object OrionSpeechTextPolicy {
             .toList()
 
         return proseLines.joinToString(". ")
-            .replace(Regex("\\s+([,.;:!?])"), "\\$1")
-            .replace(Regex("([.!?])(?:\\s*\\1)+"), "\\$1")
+            .replace(Regex("\\s+([,.;:!?])"), "\$1")
+            .replace(Regex("([.!?])(?:\\s*\\1)+"), "\$1")
             .trim()
             .take(12_000)
     }
