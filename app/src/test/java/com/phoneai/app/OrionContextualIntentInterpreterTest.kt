@@ -107,6 +107,18 @@ class OrionContextualIntentInterpreterTest {
         assertEquals("Audit all PhoneAI executors and repair failures.", result.resolvedObjective)
     }
 
+    @Test fun naturalTryItOnASiteFollowUpResumesThePriorCodingObjective() {
+        val objective = "Write a Python scraper, save it in the workspace and test it."
+        val result = OrionContextualIntentInterpreter.resolve(
+            "Try it on any site to test it if it works",
+            listOf("user" to objective, "assistant" to "I created the scraper template."),
+            objective
+        )
+        assertEquals(OrionContextualIntentInterpreter.Kind.TEST_OBJECTIVE, result.kind)
+        assertEquals(objective, result.resolvedObjective)
+        assertTrue(result.contextBlock.contains("test and verify the existing objective"))
+    }
+
     @Test fun explicitEarlierConversationReferenceIsContextual() {
         val turns = listOf("user" to "We need to repair the keyboard switching crash", "assistant" to "I found the Android 16 settings crash path.")
         val result = OrionContextualIntentInterpreter.resolve("Continue what we discussed last time", emptyList())
