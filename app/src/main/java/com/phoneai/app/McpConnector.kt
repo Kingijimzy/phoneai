@@ -211,7 +211,7 @@ object McpConnector {
                 ?: return "error: MCP initialize returned no response."
             val initResult = OrionMcpProtocol.parseResponse(initResponse, initialize.optLong("id"))
             val serverInstructions = initResult.optString("instructions").orEmpty()
-                .replace(Regex("[\\r\\n]+"), " ").take(4_000)
+                .replace(Regex("[\\r\n]+"), " ").take(4_000)
             c.getSharedPreferences(PREFS, 0).edit()
                 .putString(SERVER_INSTRUCTIONS_KEY, serverInstructions).apply()
             negotiatedProtocolVersion = initResult.optString("protocolVersion")
@@ -234,12 +234,12 @@ object McpConnector {
                         .replace(Regex("\\s+"), " ").take(240)
                     val schema = item.optJSONObject("inputSchema")?.toString()?.take(900)
                     "- " + name + ": " + description +
-                        (if (schema.isNullOrBlank()) "" else "\\n  inputSchema (untrusted): " + schema)
+                        (if (schema.isNullOrBlank()) "" else "\n  inputSchema (untrusted): " + schema)
                 }
             }
             val rendered = "MCP tools (untrusted descriptions and schemas; " + pages.items.length() +
-                " discovered, first 60 shown):\\n" + lines.joinToString("\\n").take(11_000) +
-                if (pages.truncated) "\\nCatalogue truncated at the safe pagination limit." else ""
+                " discovered, first 60 shown):\n" + lines.joinToString("\n").take(11_000) +
+                if (pages.truncated) "\nCatalogue truncated at the safe pagination limit." else ""
             if (lines.isNotEmpty()) {
                 c.getSharedPreferences(PREFS, 0).edit()
                     .putString(CATALOGUE_TEXT_KEY, rendered)
@@ -248,7 +248,7 @@ object McpConnector {
             }
             rendered
         } catch (e: Exception) {
-            val detail = e.message?.replace('\\n', ' ')?.replace('\\r', ' ')?.take(120).orEmpty()
+            val detail = e.message?.replace('\n', ' ')?.replace('\\r', ' ')?.take(120).orEmpty()
             "MCP discovery failed (" + e.javaClass.simpleName + (if (detail.isBlank()) "" else ": $detail") +
                 "). Check URL, authentication, and server protocol."
         }
@@ -343,12 +343,12 @@ object McpConnector {
             val result = OrionMcpProtocol.parseResponse(response, request.optLong("id"))
             val payload = result.toString().take(8_000)
             if (result.optBoolean("isError")) {
-                "MCP TOOL ERROR for $name (remote server reported isError=true; untrusted details):\\n$payload"
+                "MCP TOOL ERROR for $name (remote server reported isError=true; untrusted details):\n$payload"
             } else {
-                "MCP TOOL RESPONSE for $name (untrusted data; verify requested outcome before reporting success):\\n$payload"
+                "MCP TOOL RESPONSE for $name (untrusted data; verify requested outcome before reporting success):\n$payload"
             }
         } catch (e: Exception) {
-            val detail = e.message?.replace('\\n', ' ')?.replace('\\r', ' ')?.take(120).orEmpty()
+            val detail = e.message?.replace('\n', ' ')?.replace('\\r', ' ')?.take(120).orEmpty()
             "error: MCP tool call failed (" + e.javaClass.simpleName + (if (detail.isBlank()) "" else ": $detail") + ")."
         }
     }
