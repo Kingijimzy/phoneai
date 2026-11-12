@@ -908,6 +908,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             activeSkillId != null ||
                 intentResolution.kind in setOf(
                     OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP,
+                    OrionContextualIntentInterpreter.Kind.STATUS_CHECK,
                     OrionContextualIntentInterpreter.Kind.CONTINUE_OBJECTIVE,
                     OrionContextualIntentInterpreter.Kind.COMPLETE_REMAINING,
                     OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS,
