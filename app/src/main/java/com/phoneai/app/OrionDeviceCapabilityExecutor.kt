@@ -75,6 +75,8 @@ internal object OrionDeviceCapabilityExecutor {
         "tap" -> expectedPackageError(args, service) ?: withCoordinates(args, "x", "y") { x, y -> service.tap(x, y) }
         "long_press" -> expectedPackageError(args, service) ?: withCoordinates(args, "x", "y") { x, y -> service.longPress(x, y) }
         "swipe" -> {
+            val mismatch = expectedPackageError(args, service)
+            if (mismatch != null) return mismatch
             val x1 = number(args, "x1")
             val y1 = number(args, "y1")
             val x2 = number(args, "x2")
@@ -83,11 +85,13 @@ internal object OrionDeviceCapabilityExecutor {
             else service.swipe(x1, y1, x2, y2, args.optLong("ms", 300L))
         }
         "swipe_path" -> {
+            val mismatch = expectedPackageError(args, service)
+            if (mismatch != null) return mismatch
             val points = args.optJSONArray("points")
             if (points == null || points.length() < 2) "error: recorded swipe needs at least two points"
             else service.performRecordedPath(points, args.optLong("ms", 300L))
         }
-        "scroll" -> service.scroll(args.optString("direction", "down"))
+        "scroll" -> expectedPackageError(args, service) ?: service.scroll(args.optString("direction", "down"))
         "type" -> expectedPackageError(args, service) ?: service.typeText(args.optString("text"))
         "key" -> service.key(args.optString("name"))
         "look" -> look(args.optString("question", "Describe what is on the screen."))
