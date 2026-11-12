@@ -280,14 +280,14 @@ object LifeLoop {
             // Telegram send keeps its digest pending so a later standing-order tick can retry it.
             if (usable && TelegramListenerService.isEnabled(c) && TelegramBridge.isConfigured(c)) {
                 val fingerprint = java.security.MessageDigest.getInstance("SHA-256")
-                    .digest((o.kind + "\\n" + result).toByteArray(Charsets.UTF_8))
+                    .digest((o.kind + "\n" + result).toByteArray(Charsets.UTF_8))
                     .joinToString("") { "%02x".format(it) }
                 val telegramPrefs = c.getSharedPreferences("orion_telegram_outreach", Context.MODE_PRIVATE)
                 val digestKey = "standing_" + o.kind
                 if (telegramPrefs.getString(digestKey, "") != fingerprint) {
                     val sent = TelegramBridge.sendProactive(
                         c,
-                        "Orion standing-order update — " + (StandingOrderPolicy.kinds[o.kind] ?: o.kind) + "\\n" + result.take(3200)
+                        "Orion standing-order update — " + (StandingOrderPolicy.kinds[o.kind] ?: o.kind) + "\n" + result.take(3200)
                     )
                     if (sent) telegramPrefs.edit().putString(digestKey, fingerprint).commit()
                     else AgentPolicy.log(c, "standing_order", o.kind, null, "Telegram delivery failed; independent digest retained for retry")
