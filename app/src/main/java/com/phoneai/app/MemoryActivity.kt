@@ -143,7 +143,7 @@ class MemoryActivity : Activity() {
     /** Visible health and relationship view for the same SQLite graph used by automatic recall. */
     private fun renderKnowledgeGraph() {
         val snapshot = runCatching { OrionKnowledgeGraph.snapshot(this) }.getOrElse {
-            OrionKnowledgeGraph.Snapshot(0, 0, 0, 0, emptyList())
+            OrionKnowledgeGraph.Snapshot(0, 0, 0, 0, emptyList(), emptyList())
         }
         val approved = MemoryStore.all(this).count {
             MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) &&
@@ -168,18 +168,24 @@ class MemoryActivity : Activity() {
         } else ""
         val visibleFacts = graphText.lineSequence().filter { it.isNotBlank() }.take(5).toList()
             .ifEmpty { snapshot.recentFacts.take(5) }
-        if (visibleFacts.isEmpty()) {
-            card.addView(text(
-                "No connected facts yet. Approved memories mentioning people, places, projects or dates will appear here and become available to Orion's recall.",
-                12f, Theme.MUTED
-            ))
-        } else {
-            card.addView(text(if (query.isBlank()) "RECENT CONNECTIONS" else "CONNECTIONS RELEVANT TO SEARCH", 9f, Theme.MUTED, true)
+        if (visibleFacts.isNotEmpty()) {
+            card.addView(text(if (query.isBlank()) "RECENT RELATIONSHIPS" else "RELATIONSHIPS RELEVANT TO SEARCH", 9f, Theme.MUTED, true)
                 .apply { setPadding(0, 0, 0, dp(5)) })
             visibleFacts.forEach { fact ->
                 card.addView(text("•  ${fact.removePrefix("- ").trim()}", 12f, Theme.TEXT)
                     .apply { setPadding(0, dp(3), 0, dp(3)) })
             }
+        }
+        if (snapshot.recentEntities.isNotEmpty()) {
+            card.addView(text("CONNECTED ENTITIES", 9f, Theme.MUTED, true)
+                .apply { setPadding(0, dp(8), 0, dp(4)) })
+            card.addView(text(snapshot.recentEntities.joinToString("   ·   "), 11f, Theme.TEXT_SECONDARY))
+        }
+        if (visibleFacts.isEmpty() && snapshot.recentEntities.isEmpty()) {
+            card.addView(text(
+                "No connected facts yet. Approve memories mentioning people, places, projects or dates; Orion will index them for recall.",
+                12f, Theme.MUTED
+            ))
         }
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
         actions.addView(button("Rebuild graph") {
@@ -207,9 +213,14 @@ class MemoryActivity : Activity() {
             .setPositiveButton("Explore") { _, _ ->
                 val entity = input.text.toString().trim()
                 if (entity.isNotBlank()) {
-                    val result = runCatching { KnowledgeGraph.query(this, entity) }
-                        .getOrDefault("Could not query the knowledge graph.")
-                    AlertDialog.Builder(this).setTitle(entity).setMessage(result)
+                    val facts = runCatching { KnowledgeGraph.query(this, entity) }
+                        .getOrDefault("Could not query graph relationships.")
+                    val connected = runCatching { OrionKnowledgeGraph.relatedMemories(this, entity, 8) }
+                        .getOrDefault(emptyList())
+                    val sources = if (connected.isEmpty()) "No connected approved memories found."
+                        else connected.joinToString("\\n\\n") { "• ${it.category.uppercase(Locale.ROOT)} — ${it.text}" }
+                    AlertDialog.Builder(this).setTitle(entity)
+                        .setMessage("$facts\\n\\nCONNECTED MEMORIES\\n$sources")
                         .setPositiveButton("OK", null).show()
                 }
             }.show()
