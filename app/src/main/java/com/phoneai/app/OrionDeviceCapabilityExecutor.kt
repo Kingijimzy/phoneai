@@ -128,6 +128,7 @@ internal object OrionDeviceCapabilityExecutor {
 
     /** Optional foreground-app guard for actions planned from a prior screen observation. */
     private fun expectedPackageError(args: JSONObject, service: PhoneAiService): String? {
+        if (service.isDeviceLocked()) return "error: device is locked; unlock it before UI automation"
         val expected = args.optString("expected_package").trim()
         if (expected.isBlank()) return null
         val actual = service.currentPackageName()
