@@ -5,8 +5,9 @@ package com.phoneai.app
  * and constructs every process argument locally. It never accepts a command line from the model.
  */
 internal class OrionShizukuUserService : IOrionDeviceService.Stub() {
-    override fun execute(operation: String, argument: String): String = try {
-        when (operation) {
+    override fun execute(operation: String, argument: String): String {
+        return try {
+            when (operation) {
             "read_brightness" -> runFixed("settings", "get", "system", "screen_brightness")
             "read_screen_timeout" -> runFixed("settings", "get", "system", "screen_off_timeout")
             "read_airplane_mode" -> runFixed("settings", "get", "global", "airplane_mode_on")
@@ -33,9 +34,10 @@ internal class OrionShizukuUserService : IOrionDeviceService.Stub() {
                 }
             }
             else -> "error: unsupported Shizuku operation"
+            }
+        } catch (failure: Throwable) {
+            "error: Shizuku operation failed (" + failure.javaClass.simpleName + ")"
         }
-    } catch (failure: Throwable) {
-        "error: Shizuku operation failed (" + failure.javaClass.simpleName + ")"
     }
 
     private fun runFixed(vararg command: String): String {
