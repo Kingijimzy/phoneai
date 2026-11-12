@@ -22,6 +22,7 @@ internal object OrionMemoryLayers {
             }
         // L2 long-term memory: retrieve approved facts from the canonical graph for this request.
         // The separate Tom profile remains a compact preference hypothesis layer, not a second fact graph.
+        OrionFactStore.migrateLegacyFactsIfNeeded(c)
         val graphFacts = KnowledgeGraph.promptBlock(c, q.ifBlank { owner })
         val longTerm = listOf(graphFacts, OrionFactStore.tomBlock(c)).filter { it.isNotBlank() }.joinToString("\n")
         if (longTerm.isNotBlank()) layers += Layer("L2 LONG-TERM (Kingi)", longTerm, 5)
