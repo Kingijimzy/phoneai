@@ -63,6 +63,7 @@
         <activity android:name=".AccountConnectionsActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".SensorContextActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".SettingsFeatureActivity" android:exported="false" />
+        <activity android:name=".CharacterSettingsActivity" android:exported="false" />
         <activity android:name=".OwnerControlCenterActivity" android:exported="false" android:excludeFromRecents="true" android:finishOnTaskLaunch="true" />
         <activity android:name=".AgentControlActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".WorkspaceShellActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
