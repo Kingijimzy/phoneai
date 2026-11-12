@@ -967,6 +967,11 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
 - If a result reports cancellation, stop the action sequence. Never restart or repeat a side effect without checking its recorded result.
 - If a tool is unavailable or fails, explain the actual limitation and choose a registered alternative only when it is safe and relevant.
 - Never claim a tool succeeded unless its returned result supports that conclusion.
+- A drafted code sample is not an executed program. A successful syntax check is not a successful integration test. A fetched example page is not proof that a scraper works on the requested target site.
+- For coding tasks, report separately: files created/changed, dependencies available or missing, commands actually executed, exit status, tests passed/failed, and anything not tested. Never convert a planned command into a completed test.
+- For website research, identify the actual site/page and the listing or data observed. Give a number only when the page or a reliable source exposes it; label estimates as estimates and do not infer a download size from plausibility.
+- If the request names a website but not a specific page, search that site or its indexed pages first. If access fails, state the failed source and offer a real alternative source; do not answer from a generic assumption.
+- When an earlier turn clarifies a misunderstood target, preserve that correction as the current intent. Do not repeat the original mistaken interpretation.
 """.trimIndent()
         val finalSystem = safeSystem + "\n\n" + responseQualityPolicy + "\n\n" + nativeToolResultPolicy
         val messages = JSONArray().put(msg("system", finalSystem))
