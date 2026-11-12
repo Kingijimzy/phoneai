@@ -44,8 +44,8 @@ internal class LinuxRuntimeInstaller(
             prootLoader.isFile && prootLoader.canExecute() && sha256(prootLoader) == LinuxRuntimePolicy.PROOT_LOADER_SHA256 &&
             File(rootfs, "bin/sh").exists()
 
-    @Synchronized
-    fun install(manifest: LinuxRuntimePolicy.Manifest): Result<Unit> = runCatching {
+    fun install(manifest: LinuxRuntimePolicy.Manifest): Result<Unit> =
+        synchronized(PACKAGE_DATABASE_LOCK) { runCatching {
         LinuxRuntimePolicy.validate(manifest)?.let { error("Invalid Linux manifest: $it") }
         check(proot.isFile && proot.canExecute()) {
             "Bundled ARM64 PRoot is missing or not executable. Rebuild the APK with the pinned native runtime."
@@ -123,7 +123,7 @@ internal class LinuxRuntimeInstaller(
             staging.deleteRecursively()
             markerTemp.delete()
         }
-    }
+    } }
 
     fun execute(
         manifest: LinuxRuntimePolicy.Manifest,
@@ -161,29 +161,30 @@ internal class LinuxRuntimeInstaller(
         val dnsStatus = syncGuestDns()
         if (dnsStatus != null) onOutput("Network DNS setup warning: $dnsStatus\n")
         val packageMutation = ShellExecutionRouting.isPackageOperation(command)
-        if (packageMutation) {
-            // If Android kills Orion mid-install, this durable marker forces a clean pinned-rootfs
-            // recovery before any later command can use a potentially half-written apk database.
-            try {
+        val result = try {
+            if (packageMutation) synchronized(PACKAGE_DATABASE_LOCK) {
+                // Serialize package database mutations across all runtime instances.
                 check(base.mkdirs() || base.isDirectory) { "Could not create Linux runtime directory." }
                 packageOperationMarker.writeText("Interrupted apk operation requires recovery.")
-            } catch (failure: Exception) {
-                return "error: could not protect the Alpine package database before mutation: ${(failure.message ?: failure.javaClass.simpleName).take(180)}"
+                val packageResult = runProcess(args, rootfs, boundedTimeoutMs, onOutput, shouldStop, extraEnvironment)
+                val recoveryRequired = packageResult.cancelled || packageResult.timedOut ||
+                    packageResult.exitCode in setOf(9, 137, 143)
+                if (!recoveryRequired) packageOperationMarker.delete()
+                packageResult
+            } else {
+                runProcess(args, rootfs, boundedTimeoutMs, onOutput, shouldStop, extraEnvironment)
             }
-        }
-        val result = try {
-            runProcess(args, rootfs, boundedTimeoutMs, onOutput, shouldStop, extraEnvironment)
         } catch (failure: IOException) {
-            // Keep the marker after interrupted package operations so the next call repairs the rootfs.
-            return "error: Linux process I/O failed safely: ${(failure.message ?: failure.javaClass.simpleName).take(240)}"
+            return "error: Linux process I/O failed safely: " + (failure.message ?: failure.javaClass.simpleName).take(240)
         } catch (failure: SecurityException) {
-            return "error: Android denied Linux process execution: ${(failure.message ?: "permission denied").take(240)}"
+            return "error: Android denied Linux process execution: " + (failure.message ?: "permission denied").take(240)
+        } catch (failure: Exception) {
+            return "error: Linux package operation failed safely: " + (failure.message ?: failure.javaClass.simpleName).take(240)
         }
-        // A normal non-zero apk exit is not necessarily corruption (for example, a package may
-        // not exist). Keep recovery armed only for timeout or process-killed exit codes.
+        // A normal non-zero apk exit is not necessarily corruption. Keep recovery armed only
+        // when package mutation was interrupted or the process was killed.
         val packageRecoveryRequired = packageMutation &&
             (result.cancelled || result.timedOut || result.exitCode in setOf(9, 137, 143))
-        if (packageMutation && !packageRecoveryRequired) packageOperationMarker.delete()
         return if (result.cancelled) "error: Linux command cancelled; the guest process was terminated."
         else if (result.timedOut) "error: Linux command timed out after ${boundedTimeoutMs} ms" +
             if (packageMutation) ". The next Linux command will restore the pinned base rootfs before continuing." else ""
@@ -417,6 +418,11 @@ internal class LinuxRuntimeInstaller(
             check(part.renameTo(destination)) { "Could not commit verified rootfs archive." }
             return destination
         } finally { connection.disconnect() }
+    }
+
+    companion object {
+        /** Shared across provider/runtime instances so concurrent apk writers cannot corrupt Alpine's package database. */
+        private val PACKAGE_DATABASE_LOCK = Any()
     }
 
     private fun sha256(file: File): String {

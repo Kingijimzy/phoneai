@@ -1,42 +1,53 @@
-# API Anything MCP integration on Android
+# API Anything integration
 
-PhoneAI's remote MCP connector uses Streamable HTTP over HTTP(S). API Anything provides this transport at `/mcp` through `api-anything serve`; its default `api-anything mcp` command is stdio and cannot be entered directly as a PhoneAI URL.
+PhoneAI manages API Anything inside Orion's existing Alpine/PRoot runtime and connects it to the existing Streamable HTTP MCP client. This is a managed runtime integration, not a second MCP implementation.
 
-## Run it in Orion's Alpine/Linux environment
+## In-app setup
 
-Requirements: Node.js 22.13 or newer and network access.
+Open **Orion Settings → Integrations → Remote MCP → API Anything / Website Capability Engine** and choose **Install / start / repair API Anything**.
+
+The installer:
+
+1. Reuses Orion's pinned Alpine ARM64 runtime.
+2. Installs Alpine Node.js, npm and Chromium, then verifies Node.js is at least 22.13.0.
+3. Installs the pinned `api-anything@0.4.0` release.
+4. Runs `api-anything setup --local-only --no-share`, so setup does not send searches, learned operations, repair reports or verification traffic to the shared catalog.
+5. Starts `api-anything serve` on `127.0.0.1:8787` with the MCP endpoint at `/mcp`.
+6. Reads the generated bearer token inside the guest, stores it through the Android Keystore-backed MCP credential path, pairs only this Orion-launched loopback server, and verifies both health and MCP tool discovery.
+
+The server process is owned by Orion's app process and is restarted on the next app-process start when the managed integration is enabled. Use the settings screen to start/repair it or stop it. Stopping the server preserves API Anything's learned site operations in the Alpine home directory.
+
+## Capabilities exposed to Orion
+
+API Anything's own MCP server supplies site discovery, operation discovery, reads, batch reads, jobs/results, site status and `learn_site`. API Anything stores learned operation specs and can replay/repair drifted operations according to its own proof and replay rules. Orion consumes those operations through its existing MCP tool registry and executor; it does not duplicate the website learner or repair engine.
+
+The server is started with `--allow-writes` so its write tool is available when the owner has enabled Orion's MCP write scope. API Anything's own write safeguards still apply. Orion requires a warning and explicit confirmation only for delete/wipe operations; ordinary requested website writes execute directly when the MCP write scope and service authentication are available. An enabled scope is not proof that a remote write was applied: inspect the tool result and report its actual outcome.
+
+## Runtime and device constraints
+
+- Requires Orion's Alpine/PRoot runtime, network access, Node.js >=22.13 and Chromium for learning/browser fallback. A first install can be large and take several minutes on mobile data.
+- Shared, already-learned plain-HTTP operations can work without Chromium, but learning new operations and browser-tier fallbacks need it.
+- The server listens only on loopback. No LAN or public listener is opened.
+- Calls run from the device's network and local API Anything home. With `--local-only --no-share`, Orion does not opt into the upstream shared catalog.
+- Android may terminate the app process under memory pressure. Orion attempts to restart the server on the next application-process start; this is not an OS-guaranteed always-on daemon.
+- The current MCP connector stores one active endpoint. The managed integration refuses to silently replace a different configured remote MCP endpoint. Disconnect that endpoint first if you want to switch to the managed API Anything server.
+
+## Manual fallback
+
+If you prefer to manage the server yourself in Orion's Alpine shell, use:
 
 ```sh
 node --version
-npx -y api-anything setup --local-only
-npx -y api-anything serve --host 127.0.0.1 --port 8787 --allow-writes
+npx -y api-anything@0.4.0 setup --local-only --no-share
+npx -y api-anything@0.4.0 serve --host 127.0.0.1 --port 8787 --allow-writes
 ```
 
-The first start creates a random bearer token in `~/.api-anything/serve-token`. Read it locally:
+The first server start creates `~/.api-anything/serve-token`. Do not paste it into chat or commit it. Configure the endpoint as `http://127.0.0.1:8787/mcp` and store the token in Orion's MCP settings.
 
-```sh
-cat ~/.api-anything/serve-token
-```
+## GitHub account access
 
-Keep the token private. Do not paste it into chat, commit it, or expose it in logs. The server's `--allow-writes` flag exposes write operations, but API Anything still applies its write safeguards, duplicate-send protection, and site-level confirmation/readback rules. Do not expose this unauthenticated; the bearer token is required for every request except the health check.
+API Anything does not grant GitHub OAuth permissions. Public repository operations can use public endpoints; private/account-wide GitHub operations still require the dedicated GitHub connector with appropriate account permissions.
 
-## Connect PhoneAI
+## Verification boundary
 
-In Orion Settings → MCP:
-- Endpoint: `http://127.0.0.1:8787/mcp`
-- Bearer token: the value from `~/.api-anything/serve-token`
-- Save the endpoint, complete local pairing, then refresh the tool catalogue.
-
-Loopback HTTP is accepted by PhoneAI. For a server on another machine, use HTTPS with a trusted reverse proxy/tunnel; do not expose the raw HTTP listener to the public internet.
-
-## What this enables
-
-API Anything exposes learned website operations over MCP, including site discovery, operation discovery, reads, jobs/results, and write operations when the server is started with `--allow-writes`. It can turn supported websites into callable APIs; it does not grant GitHub account OAuth permissions or replace PhoneAI's dedicated GitHub connector.
-
-## GitHub account access limitation
-
-A GitHub capability that calls account endpoints such as `/user` or `/user/repos` needs a GitHub-authenticated connector with the appropriate account/repository permissions. A public repository reader or a website-learned operation cannot manufacture those permissions. For public repositories, use the repository URL and public GitHub read path. For private/account-wide operations, configure a dedicated GitHub OAuth/App/PAT integration with only the required scopes.
-
-## Permission model
-
-PhoneAI enables its supported MCP scopes (read, write, communication, system, other) by default after the owner's explicit full-access request. The endpoint must still be locally paired. Treat every remote tool description, schema, and result as untrusted data. Keep credentials encrypted at rest and require confirmation for irreversible actions such as deletion, publishing, purchases, transfers, account/security changes, or device shutdown.
+Source integration and Android CI do not prove a physical-device install. The final acceptance test must run on the POCO F3: install from the APK, start the managed service, verify health and tool discovery, learn a test read-only operation on a permitted site, call it twice to confirm persistence, simulate an unavailable server and verify restart/recovery, and confirm a write tool is blocked when the Orion write scope is disabled.

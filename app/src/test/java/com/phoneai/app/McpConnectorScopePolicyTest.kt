@@ -18,6 +18,29 @@ class McpConnectorScopePolicyTest {
         assertEquals("system", McpConnector.scopeForTool("shell_command"))
     }
 
+    @Test fun apiAnythingWebsiteToolsAreClassifiedByTheirActualEffect() {
+        listOf("call_operation", "call_batch", "list_operations", "list_sites", "find_sites",
+            "site_status", "get_job", "get_result").forEach {
+            assertEquals(it, "read", McpConnector.scopeForTool(it))
+        }
+        assertEquals("write", McpConnector.scopeForTool("learn_site"))
+        assertEquals("write", McpConnector.scopeForTool("call_write_operation"))
+    }
+
+    @Test fun roamiesDesktopToolsUseSimpleEffectScopes() {
+        listOf("take_screenshot", "list_windows", "read_window", "read_file", "list_files",
+            "search_files", "fetch_url", "see_photo", "list_commitments", "show_list").forEach {
+            assertEquals("read", McpConnector.scopeForTool(it))
+        }
+        assertEquals("communication", McpConnector.scopeForTool("act_in_app"))
+        listOf("write_file", "remember_commitment", "update_commitment", "forget_fact").forEach {
+            assertEquals("write", McpConnector.scopeForTool(it))
+        }
+        listOf("run_command", "open").forEach {
+            assertEquals("system", McpConnector.scopeForTool(it))
+        }
+    }
+
     @Test fun unclassifiedToolsUseTheExplicitOtherScope() {
         assertEquals("other", McpConnector.scopeForTool("custom_magic_tool"))
     }
