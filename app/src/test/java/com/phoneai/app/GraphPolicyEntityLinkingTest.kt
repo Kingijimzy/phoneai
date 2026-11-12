@@ -49,6 +49,13 @@ class GraphPolicyEntityLinkingTest {
         assertTrue(facts.contains(Triple("user", "wants", "build a reliable coding agent")))
     }
 
+    @Test fun explicitTripletsUseTheSameGraphFactParser() {
+        assertEquals(
+            listOf(Triple("kingi jimzy", "favourite sport", "football")),
+            GraphPolicy.extract("Kingi Jimzy — favourite_sport — football")
+        )
+    }
+
     @Test fun repeatedNonExclusivePreferencesRemainSeparateFacts() {
         var facts = GraphPolicy.merge(emptyList(), "user", "likes", "football", 1L)
         facts = GraphPolicy.merge(facts, "user", "likes", "music", 2L)
