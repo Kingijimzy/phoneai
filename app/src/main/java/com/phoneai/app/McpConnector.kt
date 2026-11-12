@@ -128,7 +128,10 @@ object McpConnector {
             val previousEndpoint = prefs.getString(URL_KEY, "") ?: ""
             if (clean != previousEndpoint) closeSession(c)
             val edit = prefs.edit().putString(URL_KEY, clean)
-            if (clean != previousEndpoint) edit.remove("paired_endpoint_sha256")
+            if (clean != previousEndpoint) {
+                edit.remove("paired_endpoint_sha256")
+                    .remove(CATALOGUE_TEXT_KEY).remove(CATALOGUE_AT_KEY)
+            }
             if (rawToken.isBlank()) {
                 // Preserve an existing token only when the endpoint is unchanged.
                 if (clean != previousEndpoint) edit.remove(TOKEN_KEY).remove(IV_KEY)
