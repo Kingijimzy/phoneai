@@ -67,6 +67,7 @@ internal object AgentHooks {
   "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to)\\s+)*(browser|navigate|automation|open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|reply|email|record|turn|switch|screenshot|install|download|close|look at my|check my|fill|login|log in|sign in|research|browse|post|share|buy|order|book|delete|mark as done|undo|reverse last|undo that)\\b",
   RegexOption.IGNORE_CASE
  )
+ private val screenAnnotationIntent = Regex("""(?i)^\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to)\s+)*(?:circle|outline|highlight|point\s+at|mark|annotate)\b.{0,140}\b(?:screen|display)\b""")
  private val memoryActionWords = Regex(
   "(?i)^\\s*(please\\s+)?(can you\\s+)?(remember|recall|forget|save|store|update|pin|unpin|delete|clear)\\s+(that|this|my|me|i prefer|i like|i do not like|i don't like|to|for me|the note|the memory|memory|memories|note|notes)\\b"
  )
@@ -85,6 +86,7 @@ internal object AgentHooks {
  fun isPhoneActionRequest(request:String):Boolean {
   val text = request.trim()
   return phoneActionWords.containsMatchIn(text) ||
+   screenAnnotationIntent.containsMatchIn(text) ||
    memoryActionWords.containsMatchIn(text) ||
    taskActionWords.containsMatchIn(text) ||
    contentActionWords.containsMatchIn(text) ||
