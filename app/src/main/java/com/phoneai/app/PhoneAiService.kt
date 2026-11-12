@@ -3032,6 +3032,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     fun clickId(id: Int): String {
+        interactiveWindowError()?.let { return it }
         // IDs are valid only for the exact, recent window snapshot that produced them.
         val resolved = boundsForScreenId(id)
             ?: return "error: target $id is stale, hidden, protected, or belongs to a different app/window. Run read_screen again."
