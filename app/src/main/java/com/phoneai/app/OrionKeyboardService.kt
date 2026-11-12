@@ -107,10 +107,11 @@ class OrionKeyboardService : InputMethodService() {
     private var inputClass = InputType.TYPE_CLASS_TEXT
     private var inputFlags = 0
 
-    private val bg = Color.rgb(13, 17, 20)
-    private val keyBg = Color.rgb(31, 39, 43)
-    private val accent = Color.rgb(85, 224, 207)
-    private val textColor = Color.rgb(239, 246, 247)
+    // Keep the system IME visually aligned with Orion's graphite/silver UI.
+    private val bg = Theme.BG
+    private val keyBg = Theme.PANEL2
+    private val accent = Theme.SILVER
+    private val textColor = Theme.TEXT
 
     private val numericMode: Boolean
         get() = inputClass == InputType.TYPE_CLASS_NUMBER ||
@@ -190,12 +191,12 @@ class OrionKeyboardService : InputMethodService() {
         }
         val accepted = activeConnection.commitText(text, 1)
         if (!accepted) return "error: the focused app rejected replacement text from the active input connection"
-        // Return to the IME the user had selected before Orion was temporarily activated.
-        // InputMethodService requires this switch on its main thread, after commitText completes.
-        Handler(Looper.getMainLooper()).postDelayed({
-            try { switchToPreviousInputMethod() } catch (_: Exception) { }
-        }, 250L)
-        return "typed via Orion Private Keyboard input connection; requested restoration of the previous keyboard"
+        // Keep Orion selected briefly so a burst of tool-driven typing does not force
+        // Android to switch IMEs after every field. Restore only after the stream is idle.
+        // The dedicated main-thread handler is cancelled when a new input session begins.
+        imeRestoreHandler.removeCallbacks(restorePreviousIme)
+        imeRestoreHandler.postDelayed(restorePreviousIme, imeRestoreIdleMs)
+        return "typed via Orion Private Keyboard input connection; previous keyboard will be restored after the typing stream is idle"
     }
 
     override fun onEvaluateFullscreenMode(): Boolean = false
