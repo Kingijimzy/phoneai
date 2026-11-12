@@ -145,7 +145,7 @@ internal object ApiAnythingManager {
                 if (!probe.startsWith("exit=0")) return@synchronized
                 val session = LinuxCommandSession.start(
                     runtime.interactiveLaunchConfig(workspace.absolutePath, app.applicationInfo.dataDir),
-                    listOf("/bin/sh", "-lc", "exec api-anything serve --host $HOST --port $PORT --allow-writes")
+                    listOf("/bin/sh", "-lc", "export API_ANYTHING_BROWSER=chromium; exec api-anything serve --host $HOST --port $PORT --allow-writes")
                 )
                 server = session
                 val deadline = System.currentTimeMillis() + 30_000L
