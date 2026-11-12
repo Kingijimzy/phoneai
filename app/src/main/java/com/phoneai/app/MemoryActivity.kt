@@ -218,9 +218,9 @@ class MemoryActivity : Activity() {
                     val connected = runCatching { OrionKnowledgeGraph.relatedMemories(this, entity, 8) }
                         .getOrDefault(emptyList())
                     val sources = if (connected.isEmpty()) "No connected approved memories found."
-                        else connected.joinToString("\\n\\n") { "• ${it.category.uppercase(Locale.ROOT)} — ${it.text}" }
+                        else connected.joinToString("\n\n") { "• ${it.category.uppercase(Locale.ROOT)} — ${it.text}" }
                     AlertDialog.Builder(this).setTitle(entity)
-                        .setMessage("$facts\\n\\nCONNECTED MEMORIES\\n$sources")
+                        .setMessage("$facts\n\nCONNECTED MEMORIES\n$sources")
                         .setPositiveButton("OK", null).show()
                 }
             }.show()
