@@ -14,7 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 
-/** The animated glass orb for Compose screens. Redraws each frame; cheap because the painter allocates nothing per frame beyond gradients. */
+/** The shared animated silver point-cloud orb for Compose screens. */
 @Composable
 fun OrionOrb(modifier: Modifier, level: Float = 0f, busy: Boolean = false) {
     val painter = remember { OrionOrbPainter() }
