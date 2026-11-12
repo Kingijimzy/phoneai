@@ -68,8 +68,8 @@ internal object AgentHooks {
   RegexOption.IGNORE_CASE
  )
  private val screenAnnotationIntent = Regex("""(?i)^\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to)\s+)*(?:circle|outline|highlight|point\s+at|mark|annotate)\b.{0,140}\b(?:screen|display)\b""")
- private val capabilityAuthoringIntent = Regex("""(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to)\\s+)*(?:create|build|make|develop|generate|implement)\\b.{0,140}\\b(?:skill|tool|extension)\\b""")
- private val documentCreationIntent = Regex("""(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to)\\s+)*(?:create|make|generate|write|produce|build)\\b.{0,140}\\b(?:document|docx|pdf|word\\s+file|report)\\b""")
+ private val capabilityAuthoringIntent = Regex("""(?i)^\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to)\s+)*(?:create|build|make|develop|generate|implement)\b.{0,140}\b(?:skill|tool|extension)\b""")
+ private val documentCreationIntent = Regex("""(?i)^\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to)\s+)*(?:create|make|generate|write|produce|build)\b.{0,140}\b(?:document|docx|pdf|word\s+file|report)\b""")
  private val memoryActionWords = Regex(
   "(?i)^\\s*(please\\s+)?(can you\\s+)?(remember|recall|forget|save|store|update|pin|unpin|delete|clear)\\s+(that|this|my|me|i prefer|i like|i do not like|i don't like|to|for me|the note|the memory|memory|memories|note|notes)\\b"
  )
