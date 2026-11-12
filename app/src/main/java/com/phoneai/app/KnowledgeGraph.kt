@@ -57,6 +57,16 @@ internal object GraphPolicy {
                     continue
                 }
             }
+            // Explicit triplets written by the fact tool use a neutral separator. They
+            // are still proposals until approved, but once approved they share this graph.
+            val explicit = Regex("^(.{2,40}?)\\s+[—-]\\s+([a-z][a-z0-9_ ]{1,30})\\s+[—-]\\s+(.{2,80})$").find(s)
+            if (explicit != null) {
+                val a = norm(explicit.groupValues[1])
+                val rel = norm(explicit.groupValues[2].replace('_', ' '))
+                val b = norm(explicit.groupValues[3])
+                if (ok(a) && ok(b) && rel.isNotBlank()) out.add(Triple(a, rel, b))
+                continue
+            }
             val attr = Regex("^my ([a-z ]{2,30}?) (?:is|are) (.{2,40})$").find(s)
             val me = Regex("^i (?:am|'m) (?:a |an )?(.{2,40})$").find(s)
             val pref = Regex("^i ($verbs) (.{2,40})$").find(s)
