@@ -1480,7 +1480,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         logScroll = scroll
         if (transcript.isEmpty()) {
             val n = Prefs.userName(this)
-            addLine("ai", "Hello" + (if (n.isEmpty()) "" else ", $n") + ". I'm Orion. Type, tap the mic, or hold the orb and speak. Tell me what to do.")
+            addLine("ai", "Hello" + (if (n.isEmpty()) "" else ", $n") + ". I'm " + Prefs.orionEntityName(this) + ". Type, tap the mic, or hold the orb and speak. Tell me what to do.")
         } else {
             for (item in transcript) addLine(item.first, item.second)
         }
