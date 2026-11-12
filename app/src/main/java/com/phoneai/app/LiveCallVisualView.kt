@@ -146,8 +146,14 @@ class LiveCallVisualView(context: Context) : View(context) {
             Style.DOT_MATRIX -> drawDots(canvas, w, h, t, now)
             Style.EYES -> drawEyes(canvas, w, h, t, now)
             Style.ORB -> {
-                val lvl = if (mode == OrbView.Mode.SPEAKING) maxOf(speechAmplitude, wordPulse * .5f) else micLevel
-                orb.draw(canvas, w / 2f, h / 2f, minOf(w, h) * .34f, t, lvl, mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING)
+                orb.draw(
+                    canvas, w / 2f, h / 2f, minOf(w, h) * .34f, t,
+                    level = micLevel,
+                    busy = mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING,
+                    mode = mode,
+                    speechAmplitude = speechAmplitude,
+                    wordPulse = wordPulse
+                )
                 if (!reducedMotion) postInvalidateOnAnimation()
             }
         }
