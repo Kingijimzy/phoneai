@@ -25,6 +25,14 @@ class IrreversibleActionConfirmationPolicyTest {
         assertFalse(IrreversibleActionConfirmationPolicy.requiresConfirmation("Restart computer or change Wi-Fi"))
     }
 
+    @Test fun explicitDeleteAndWipeRequestsAreClassifiedButNegationsAreNot() {
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Delete the old report file"))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Clear app data for this app"))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Factory reset the phone"))
+        assertNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Do not delete the report"))
+        assertNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Keep the files without removing anything"))
+    }
+
     @Test fun destructiveShellCommandsAreFlaggedButNormalCommandsAreNot() {
         assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
             "shell", JSONObject().put("command", "rm -rf /sdcard/Downloads/old")
