@@ -441,7 +441,7 @@ class Tools(
 
     fun mcpStatus(): String = McpConnector.status(svc)
 
-    fun mcpListTools(): String = McpConnector.listTools(svc)
+    fun mcpListTools(): String = McpConnector.catalogueForPrompt(svc)
 
     fun mcpCall(name: String, args: JSONObject): String = McpConnector.callTool(svc, name, args)
 
