@@ -164,6 +164,12 @@ internal object SoulEngineWatcher {
             limitations.isNotEmpty() -> "Review the Capability board; watcher will not grant permissions or enable packs."
             else -> "Continue bounded checks; review Stage 5 probe/composition reports before adopting any planning guidance."
         }
+        if (limitations.isNotEmpty()) {
+            val issueSummary = "Orion's watcher found " + limitations.size + " issue(s): " +
+                limitations.take(6).joinToString("; ").take(900) +
+                ". Orion has not bypassed permissions or changed settings. Review the Capability board and activity timeline."
+            TelegramBridge.notifyFinding(c, "soul_watcher_limitations", "Orion found capability issues", issueSummary)
+        }
         runCatching { SoulEngineState.recordLesson(c, "watcher_tick", "Watcher action: $action; status=$status.", "observed") }
         runCatching { SoulEngineState.recordWatcherStatus(c, status, action) }
         AgentPolicy.log(c, "soul_watcher", action, null, "status=$status; limitations=${limitations.joinToString(",").ifBlank { "none" }}")
