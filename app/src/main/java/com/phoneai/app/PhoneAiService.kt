@@ -235,6 +235,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val runtime = OrionRuntime(this)
         orionRuntime = runtime
         if (OrionMasterControl.isEnabled(this)) {
+            // Reconcile both durable specialist ledgers whenever the live brain reconnects.
+            runCatching { OrionUnifiedExecutionCoordinator.reconcileAndSchedule(this) }
             runtime.start()
             val scheduler = OrionDecisionScheduler(runtime)
             decisionScheduler = scheduler
@@ -312,6 +314,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     internal fun startOrionAfterMasterStart() {
         if (!OrionMasterControl.isEnabled(this)) return
         main.post {
+            // A manual Core restart is also a durable worker recovery boundary.
+            runCatching { OrionUnifiedExecutionCoordinator.reconcileAndSchedule(this) }
             val runtime = orionRuntime ?: OrionRuntime(this).also { orionRuntime = it }
             runtime.start()
             val scheduler = OrionDecisionScheduler(runtime)
