@@ -62,6 +62,12 @@ class ToolRegistryTest {
         assertTrue(sketch.contains("circle"))
         assertTrue(sketch.contains("arrow"))
         assertTrue(sketch.contains("underline"))
+        assertTrue(sketch.contains("multiple calls accumulate"))
+        assertTrue(sketch.contains("independent timeouts"))
+        assertTrue(sketch.contains("up to 12"))
+        val guidance = ToolRegistry.promptSection("point at three objects and explain them")
+        assertTrue(guidance.contains("accumulate in one explanation"))
+        assertTrue(guidance.contains("Scrolling or changing apps clears stale annotations"))
     }
 
     @Test fun deviceLocationToolIsRegisteredAndMappedToPhoneControl() {
