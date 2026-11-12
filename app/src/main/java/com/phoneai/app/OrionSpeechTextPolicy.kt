@@ -22,7 +22,7 @@ internal object OrionSpeechTextPolicy {
 
         text = fencedCode.replace(text, " ")
         text = inlineCode.replace(text, " ")
-        text = url.replace(text, " ")
+        text = url.replace(text, "the link")
         text = htmlTag.replace(text, " ")
 
         val proseLines = text.lineSequence()
