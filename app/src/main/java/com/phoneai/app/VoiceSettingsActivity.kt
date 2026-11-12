@@ -265,17 +265,8 @@ class VoiceSettingsActivity : Activity() {
                     Toast.LENGTH_LONG
                 ).show()
             }
-            geminiVoiceButton = button("Gemini Live voice · " + Prefs.geminiVoice(this@VoiceSettingsActivity)) {
-                val voices = Prefs.GEMINI_VOICES.toTypedArray()
-                AlertDialog.Builder(this@VoiceSettingsActivity)
-                    .setTitle("Gemini Live voice")
-                    .setSingleChoiceItems(voices, voices.indexOf(Prefs.geminiVoice(this@VoiceSettingsActivity)).coerceAtLeast(0)) { dialog, which ->
-                        Prefs.setGeminiVoice(this@VoiceSettingsActivity, voices[which])
-                        dialog.dismiss()
-                        refresh()
-                    }
-                    .setNegativeButton("Cancel", null)
-                    .show()
+            geminiVoiceButton = button("Gemini Live spoken voice · " + kokoroVoiceLabel()) {
+                chooseKokoroVoice()
             }
             addView(geminiVoiceButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
             geminiSensitivityButton = button("Gemini Live mic sensitivity · " + Prefs.geminiMicSensitivity(this@VoiceSettingsActivity)) {
@@ -353,7 +344,7 @@ class VoiceSettingsActivity : Activity() {
         neuralInstallButton?.text = if (NeuralVoiceInstaller.isInstalled(this)) "Repair / reinstall Kokoro British voice" else "Install Kokoro British neural voice · about 104 MB"
         kokoroVoiceButton?.text = "British voice · " + kokoroVoiceLabel()
         wakeInstallButton?.text = if (WakeWordModelInstaller.isInstalled(this)) "Offline wake-word model · installed" else "Install dedicated offline wake-word model · about 16 MB"
-        geminiVoiceButton?.text = "Gemini Live voice · " + Prefs.geminiVoice(this)
+        geminiVoiceButton?.text = "Gemini Live spoken voice · " + kokoroVoiceLabel()
         geminiSensitivityButton?.text = "Gemini Live mic sensitivity · " + Prefs.geminiMicSensitivity(this)
         liveStyleButton?.text = "Live-call visual · " + liveStyleLabel()
     }
