@@ -42,6 +42,7 @@ internal object OrionDeviceCapabilityExecutor {
         "system_intent" -> tools.systemIntent(args.optString("action"), args.optString("query"), args.optString("url"))
         "device_operation" -> DeviceOperationRouter.execute(service, args.optString("operation"), args.optString("value"))
         "open_deep_link" -> tools.openDeepLink(args.optString("uri"))
+        "whatsapp_compose" -> tools.whatsappCompose(args.optString("phone"), args.optString("message"))
         "read_notifications" -> OrionNotificationListener.readSafeNotifications()
         "media_status" -> OrionNotificationListener.mediaStatus()
         "media_control" -> OrionNotificationListener.controlMedia(args.optString("action"))
