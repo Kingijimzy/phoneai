@@ -1083,7 +1083,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(10), 0, 0, 0)
         }
-        titleCol.addView(label("Orion", 19f, Theme.TEXT, true))
+        titleCol.addView(label(Prefs.orionEntityName(this), 19f, Theme.TEXT, true))
         titleCol.addView(label("PERSONAL INTELLIGENCE", 8f, Theme.MUTED, true).apply {
             letterSpacing = .08f
             setPadding(0, dp(1), 0, dp(2))
@@ -2082,7 +2082,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(0, 0, 0, dp(4))
             }
-            identity.addView(label("Orion", 11f, Theme.MUTED, true))
+            identity.addView(label(Prefs.orionEntityName(this), 11f, Theme.MUTED, true))
             row.addView(identity)
         }
         val body = label(text, if (isNote) 12f else 15f, if (isNote) Theme.MUTED else Theme.TEXT).apply {
