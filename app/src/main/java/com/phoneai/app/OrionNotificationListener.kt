@@ -62,8 +62,12 @@ class OrionNotificationListener : NotificationListenerService() {
                     ?: extras.getCharSequence(Notification.EXTRA_TEXT)
                     ?: extras.getCharSequence(Notification.EXTRA_SUB_TEXT)
                 )?.toString().orEmpty().trim()
-            val combined = "$title $text"
             if (title.isBlank() && text.isBlank()) return
+            // Keep ordinary messaging context, but never retain credential, finance or security content.
+            if (!OrionNotificationContentPolicy.isSafe(pkg, app, title, text)) {
+                synchronized(lock) { recent.remove(sbn.key) }
+                return
+            }
             val item = SafeNotification(
                 key = sbn.key,
                 whenMillis = sbn.postTime,
