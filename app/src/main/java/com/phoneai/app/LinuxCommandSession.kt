@@ -73,7 +73,7 @@ internal class LinuxCommandSession private constructor(
             require(argv.all { it.isNotEmpty() && it.length <= 16_384 && !it.contains('\u0000') }) {
                 "Invalid guest command argument"
             }
-            val builder = ProcessBuilder(config.executable, *config.arguments)
+            val builder = ProcessBuilder(*normalizedLaunchArguments(config.executable, config.arguments))
                 .directory(java.io.File(config.workingDirectory))
             builder.environment().clear()
             config.environment.forEach { entry ->
@@ -96,6 +96,12 @@ internal class LinuxCommandSession private constructor(
             // requested executable so its stdin/stdout become the protocol transport.
             session.writeLine("cd /workspace && exec " + argv.joinToString(" ") { shellQuote(it) })
             return session
+        }
+
+        internal fun normalizedLaunchArguments(executable: String, arguments: Array<String>): Array<String> {
+            require(executable.isNotBlank())
+            return if (arguments.firstOrNull() == executable) arguments.copyOf()
+            else arrayOf(executable, *arguments)
         }
 
         private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
