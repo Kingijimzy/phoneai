@@ -1,78 +1,124 @@
 package com.phoneai.app
 
 import android.graphics.Canvas
-import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.RadialGradient
-import android.graphics.RectF
 import android.graphics.Shader
-import android.graphics.SweepGradient
 import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.sqrt
 import kotlin.math.sin
 
 /**
- * Orion's glass orb: a deep blue/indigo sphere with a turning glass swirl, a bright rim, a soft highlight and two
- * glowing eyes that blink and widen with the voice level. One painter is shared by the chat home screen
- * (Compose) and the live-call screen (View) so both show the same face.
+ * Shared Orion identity renderer: a living silver point-cloud, not a static image.
+ * Points are distributed over a Fibonacci sphere and deformed by travelling waves.
+ * Voice energy is supplied by the real recognizer / generated PCM callbacks.
  */
 class OrionOrbPainter {
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
-    private val eye = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() }
-    private val glow = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val rect = RectF()
+    private val pointCount = 3000
+    private val px = FloatArray(pointCount)
+    private val py = FloatArray(pointCount)
+    private val pz = FloatArray(pointCount)
+    private val point = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 
-    /** [t] seconds, [level] 0..1 voice energy, [busy] true while thinking or acting (eyes narrow, swirl speeds up). */
-    fun draw(canvas: Canvas, cx: Float, cy: Float, radius: Float, t: Float, level: Float = 0f, busy: Boolean = false) {
-        val breathe = 1f + 0.025f * sin(t * 1.6f) + level * 0.06f
-        val r = radius * breathe
-        val save = canvas.save()
-        // soft outer glow
-        glow.shader = RadialGradient(cx, cy, r * 1.45f, intArrayOf(0x553B5BFF, 0x00000000), floatArrayOf(.55f, 1f), Shader.TileMode.CLAMP)
-        canvas.drawCircle(cx, cy, r * 1.45f, glow)
-        // body
-        fill.shader = RadialGradient(cx - r * .28f, cy - r * .3f, r * 1.25f,
-            intArrayOf(0xFF8CC0FF.toInt(), 0xFF3A56E8.toInt(), 0xFF1B1F7A.toInt(), 0xFF050824.toInt()),
-            floatArrayOf(0f, .38f, .75f, 1f), Shader.TileMode.CLAMP)
-        canvas.drawCircle(cx, cy, r, fill)
-        // turning glass swirl, clipped to the sphere
-        val spin = t * (if (busy) 70f else 22f)
-        canvas.save()
-        val clip = android.graphics.Path().apply { addCircle(cx, cy, r, android.graphics.Path.Direction.CW) }
-        canvas.clipPath(clip)
-        canvas.rotate(spin, cx, cy)
-        fill.shader = SweepGradient(cx, cy,
-            intArrayOf(0x00FFFFFF, 0x66A6D8FF, 0x00FFFFFF, 0x4491A6FF, 0x00FFFFFF, 0x55E8F5C0, 0x00FFFFFF),
-            floatArrayOf(0f, .16f, .33f, .5f, .66f, .82f, 1f))
-        rect.set(cx - r * 1.05f, cy - r * .62f, cx + r * 1.05f, cy + r * .62f)
-        canvas.drawOval(rect, fill)
-        canvas.restore()
-        // bright rim
-        ring.strokeWidth = r * .045f
-        ring.shader = SweepGradient(cx, cy, intArrayOf(0xAAFFFFFF.toInt(), 0x445B8CFF, 0xAA7DF0E0.toInt(), 0x44FFF3A6, 0xAAFFFFFF.toInt()), null)
-        canvas.drawCircle(cx, cy, r * .98f, ring)
-        // specular highlight
-        fill.shader = LinearGradient(cx - r * .6f, cy - r * .75f, cx - r * .1f, cy - r * .2f, 0x88FFFFFF.toInt(), 0x00FFFFFF, Shader.TileMode.CLAMP)
-        rect.set(cx - r * .62f, cy - r * .78f, cx - r * .05f, cy - r * .28f)
-        canvas.drawOval(rect, fill)
-        fill.shader = null
-        // eyes
-        val blink = (t % 4.2f).let { if (it > 4.05f) 0.12f else 1f }
-        var eyeH = r * (.30f + level * .12f) * blink
-        if (busy) eyeH *= .62f
-        val eyeW = r * .105f
-        val gap = r * .30f
-        glow.shader = null
-        glow.color = 0x66FFFFFF
-        glow.maskFilter = android.graphics.BlurMaskFilter(r * .07f, android.graphics.BlurMaskFilter.Blur.NORMAL)
-        for (dx in floatArrayOf(-gap, gap)) {
-            rect.set(cx + dx - eyeW, cy - eyeH * .5f - r * .02f, cx + dx + eyeW, cy + eyeH * .5f - r * .02f)
-            canvas.drawRoundRect(rect, eyeW, eyeW, glow)
-            canvas.drawRoundRect(rect, eyeW, eyeW, eye)
+    init {
+        val golden = (PI * (3.0 - sqrt(5.0))).toFloat()
+        for (i in 0 until pointCount) {
+            val y = 1f - (i.toFloat() / (pointCount - 1)) * 2f
+            val radial = sqrt(max(0f, 1f - y * y))
+            val theta = golden * i
+            px[i] = cos(theta) * radial
+            py[i] = y
+            pz[i] = sin(theta) * radial
         }
-        glow.maskFilter = null
-        canvas.restoreToCount(save)
     }
 
-    @Suppress("unused") private val tau = (2 * PI).toFloat()
+    /** level is live mic RMS; speechAmplitude is generated PCM RMS; wordPulse is only a TTS timing cue. */
+    fun draw(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        radius: Float,
+        t: Float,
+        level: Float = 0f,
+        busy: Boolean = false,
+        mode: OrbView.Mode = if (busy) OrbView.Mode.THINKING else OrbView.Mode.IDLE,
+        speechAmplitude: Float = 0f,
+        wordPulse: Float = 0f
+    ) {
+        if (radius <= 0f) return
+        val alert = mode == OrbView.Mode.WAITING_APPROVAL || mode == OrbView.Mode.ERROR
+        val voice = (if (mode == OrbView.Mode.SPEAKING) max(speechAmplitude, wordPulse * .48f) else level).coerceIn(0f, 1f)
+        val thinking = mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING
+        val listen = mode == OrbView.Mode.LISTENING
+        val amplitude = when {
+            mode == OrbView.Mode.SPEAKING -> .12f + voice * .16f
+            listen -> .10f + voice * .12f
+            thinking -> .13f
+            else -> .07f
+        }
+        val frequency = when {
+            thinking -> 3.0f
+            listen -> 1.7f
+            mode == OrbView.Mode.SPEAKING -> 1.5f
+            else -> 1.1f
+        }
+        val rotation = t * when {
+            thinking -> .55f
+            listen -> .05f
+            mode == OrbView.Mode.SPEAKING -> .12f
+            else -> .08f
+        }
+        val cr = cos(rotation)
+        val sr = sin(rotation)
+        val tilt = .38f
+        val ct = cos(tilt)
+        val st = sin(tilt)
+        val r = radius * (1f + .025f * sin(t * 1.6f) + voice * .06f)
+        val glowColor = if (alert) 0x33E7BD7B else 0x33BFC5CC
+        glow.shader = RadialGradient(cx, cy, r * 1.55f, intArrayOf(glowColor, 0x00000000), floatArrayOf(.08f, 1f), Shader.TileMode.CLAMP)
+        canvas.drawCircle(cx, cy, r * 1.55f, glow)
+        glow.shader = null
+
+        // Full 3,000-point sphere at call size; scale down only for tiny chat indicators.
+        val count = when {
+            radius < 58f -> 700
+            radius < 100f -> 1200
+            radius < 165f -> 2100
+            else -> pointCount
+        }
+        val pointScale = (radius / 190f).coerceIn(.34f, 1.45f)
+        val wave = if (thinking) 1.2f else if (listen) .9f else if (mode == OrbView.Mode.SPEAKING) 1f else .35f
+
+        for (i in 0 until count) {
+            val x0 = px[i]
+            val y0 = py[i]
+            val z0 = pz[i]
+            val d = sin(x0 * frequency * 2.2f + t * 1.1f) * cos(y0 * frequency * 1.9f - t * .8f) +
+                sin(z0 * frequency * 2.6f + t * .7f + x0 * 1.3f) * .7f +
+                sin((y0 * 3.1f + x0 * 2.3f) * frequency + t * wave * 1.6f) * .35f
+            val travelling = sin(y0 * 7f - t * (2f + voice * 5f)) * voice * .07f
+            val radial = 1f + d * (amplitude + voice * .15f) + travelling
+            val x = x0 * radial
+            val y = y0 * radial
+            val z = z0 * radial
+            val rx = x * cr + z * sr
+            val rz = -x * sr + z * cr
+            val ry = y * ct - rz * st
+            val depthZ = y * st + rz * ct
+            val perspective = 1f / (1.9f - depthZ * .55f)
+            val sx = cx + rx * r * perspective * 1.9f
+            val sy = cy + ry * r * perspective * 1.9f
+            val depth = ((depthZ + 1f) * .5f).coerceIn(0f, 1f)
+            val alpha = ((.12f + .88f * depth * depth) * if (alert) .95f else .82f).coerceIn(0f, 1f)
+            val size = pointScale * (.48f + depth * 1.08f) * (1f + voice * .45f)
+            val rr = if (alert) (231f + 24f * depth).toInt() else (191f + 64f * depth).toInt()
+            val gg = if (alert) (189f + 40f * depth).toInt() else (197f + 58f * depth).toInt()
+            val bb = if (alert) (123f + 60f * depth).toInt() else (204f + 51f * depth).toInt()
+            point.color = android.graphics.Color.argb((alpha * 255f).toInt(), rr, gg, bb)
+            canvas.drawCircle(sx, sy, size, point)
+        }
+    }
 }
