@@ -161,6 +161,7 @@ internal class GeminiLiveSession(
         try { echoCanceler?.release() } catch (_: Exception) { }
         echoCanceler = null
         listener.onInputLevel(0f)
+        listener.onOutputLevel(0f)
         if (activeSocket == null) disposeClient()
         // Keep OkHttp alive long enough to send the WebSocket close frame.
         // onClosed/onFailure dispose it when a socket was already established.
