@@ -906,7 +906,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // task coordination and multi-step execution are model-selected tools, not a second planner.
         val directActionRoute =
             activeSkillId != null ||
-                intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
+                intentResolution.kind in setOf(
+                    OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP,
+                    OrionContextualIntentInterpreter.Kind.CONTINUE_OBJECTIVE,
+                    OrionContextualIntentInterpreter.Kind.COMPLETE_REMAINING,
+                    OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS,
+                    OrionContextualIntentInterpreter.Kind.TEST_OBJECTIVE,
+                    OrionContextualIntentInterpreter.Kind.AMBIGUOUS_REFERENCE
+                ) ||
                 OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
                 ConversationAutoRoutePolicy.requiresToolAgent(command)
         // Historical recall, ordinary actions and multi-step objectives all use the same
