@@ -645,7 +645,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
 
     fun isVision(id: String): Boolean = visionKeys.any { id.lowercase().contains(it) }
 
-    private fun candidates(p: Provider, vision: Boolean): List<String> {
+    private fun toolDescriptionLimit(recoveryPass: Int): Int = when (recoveryPass) { 0 -> 1000; 1 -> 300; else -> 120 }\n\n    private fun candidates(p: Provider, vision: Boolean): List<String> {
         // Normally quota-saver mode avoids the extra /models request. NVIDIA's catalog
         // retires model IDs frequently (410 Gone), so discover IDs currently exposed to this
         // key after a model failure even in quota-saver mode rather than retrying retired IDs.
@@ -779,7 +779,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         val o = JSONObject().put("model", model).put("max_tokens", tokens).put("messages", out)
         if (system.isNotEmpty()) o.put("system", system.toString())
         o.put("temperature", temperature)
-        if (tools.isNotEmpty()) o.put("tools", OrionToolContractCodec.anthropic(tools))
+        if (tools.isNotEmpty()) o.put("tools", OrionToolContractCodec.anthropic(tools, descriptionLimit))
         return o.toString()
     }
 
@@ -865,7 +865,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         if (system.isNotEmpty()) body.put("systemInstruction",
             JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system.toString()))))
         if (tools.isNotEmpty()) {
-            body.put("tools", OrionToolContractCodec.gemini(tools))
+            body.put("tools", OrionToolContractCodec.gemini(tools, descriptionLimit))
             body.put("toolConfig", JSONObject().put("functionCallingConfig", JSONObject().put("mode", "AUTO")))
         }
         return body.toString()
@@ -1076,10 +1076,10 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             val payload: String
             if (p.id == "gemini") {
                 url = geminiUrl(p, model, key)
-                payload = geminiBody(requestMessages, boundedTokens, temperature, activeNativeTools.get().orEmpty())
+                payload = geminiBody(requestMessages, boundedTokens, temperature, activeNativeTools.get().orEmpty(), toolDescriptionLimit(payloadRecoveryDepth))
             } else if (p.anthropicStyle) {
                 url = p.base + "/messages"
-                payload = anthropicBody(model, requestMessages, boundedTokens, temperature, activeNativeTools.get().orEmpty())
+                payload = anthropicBody(model, requestMessages, boundedTokens, temperature, activeNativeTools.get().orEmpty(), toolDescriptionLimit(payloadRecoveryDepth))
             } else if (p.id == "opencode-zen") {
                 url = p.base + "/responses"
                 val input = JSONArray()
@@ -1111,7 +1111,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 val responseBody = JSONObject().put("model", model).put("input", input)
                     .put("max_output_tokens", boundedTokens).put("temperature", temperature)
                 val toolSpecs = activeNativeTools.get().orEmpty()
-                if (toolSpecs.isNotEmpty()) responseBody.put("tools", OrionToolContractCodec.responses(toolSpecs))
+                if (toolSpecs.isNotEmpty()) responseBody.put("tools", OrionToolContractCodec.responses(toolSpecs, toolDescriptionLimit(payloadRecoveryDepth)))
                 payload = responseBody.toString()
             } else {
                 url = p.base + "/chat/completions"
@@ -1122,7 +1122,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                     .put("max_tokens", boundedTokens)
                 val toolSpecs = activeNativeTools.get().orEmpty()
                 if (toolSpecs.isNotEmpty()) {
-                    requestBody.put("tools", OrionToolContractCodec.openAi(toolSpecs))
+                    requestBody.put("tools", OrionToolContractCodec.openAi(toolSpecs, toolDescriptionLimit(payloadRecoveryDepth)))
                     requestBody.put("tool_choice", "auto")
                 }
                 if (onDelta != null && !vision && toolSpecs.isEmpty()) requestBody.put("stream", true)
@@ -1177,10 +1177,10 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
             if (r.code == 413) {
                 lastHttpStatus = 413
-                if (!vision && payloadRecoveryDepth < 2) {
+                if (payloadRecoveryDepth < 3) {
                     val compacted = OrionProviderPayloadRecovery.compact(requestMessages, payloadRecoveryDepth + 1)
                     val beforeSize = requestMessages.toString().length
-                    if (compacted.toString().length < (beforeSize * 0.82).toInt()) {
+                    if (compacted.toString().length < (beforeSize * 0.94).toInt()) {
                         onStatus?.invoke("${p.label}: request was too large; trimming older conversation context and retrying the same model…")
                         return chatOne(
                             p, compacted, false, maxTokens, temperature, hasBackup,
