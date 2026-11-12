@@ -113,7 +113,7 @@ object AgentPolicy {
 
     /** Maps each registered built-in tool to its capability family for status and routing. */
     fun packForTool(tool: String): String? = when (tool) {
-        "extension_list", "extension_create", "extension_update", "extension_test", "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback" -> "orion_core"
+        "extension_list", "extension_policy", "extension_auto_activation", "extension_create", "extension_update", "extension_test", "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback" -> "orion_core"
         "play" -> "gaming_hobby"
         "termux_command" -> "termux_bridge"
         "shell", "workspace_list", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "python_exec", "project_create", "project_list", "project_inspect", "project_plan", "project_verify" -> "workspace_shell"
