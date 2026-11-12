@@ -138,27 +138,59 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
         }.sortedBy { it.timestampMs }
 
     companion object {
-        data class ProgressStep(val state: String, val title: String)
+        data class ProgressStep(val state: String, val title: String, val detail: String = "")
 
-        /** Turns the task card's history lines ("RUNNING · title: summary") into one row per step, keeping each step's latest state. */
+        /** Keep useful action details visible and distinguish a raw result from verified completion. */
         fun progressSteps(evidence: List<String>): List<ProgressStep> {
-            val byTitle = LinkedHashMap<String, String>()
+            val byTitle = LinkedHashMap<String, ProgressStep>()
+            fun stateName(raw: String): String = when (raw.trim().uppercase()) {
+                "DONE", "SUCCESS", "SUCCEEDED", "COMPLETE", "COMPLETED" -> "DONE"
+                "FAILED", "FAIL", "ERROR" -> "FAILED"
+                "WAITING", "APPROVAL" -> "WAITING"
+                "VERIFYING", "RESULT", "UNVERIFIED" -> "VERIFYING"
+                "CANCELLED", "CANCELED", "STOPPED" -> "CANCELLED"
+                "INTERRUPTED", "PAUSED" -> "INTERRUPTED"
+                else -> "RUNNING"
+            }
             evidence.forEach { line ->
                 val cut = line.indexOf(" · ")
                 if (cut <= 0) return@forEach
-                val state = line.substring(0, cut).trim()
-                val rest = line.substring(cut + 3)
-                var title = rest.substringBefore(": ").trim().take(80)
-                var shownState = state
-                val tool = Regex("^tool=([a-z0-9_]+); outcome=([a-z]+)").find(title.ifBlank { rest })
-                if (tool != null) {
-                    title = tool.groupValues[1].replace('_', ' ').replaceFirstChar { it.uppercase() }
-                    shownState = if (tool.groupValues[2] == "failed") "FAILED" else "DONE"
+                var shownState = stateName(line.substring(0, cut))
+                val rest = line.substring(cut + 3).trim()
+                val rawTitle = rest.substringBefore(": ").trim()
+                val rawDetail = rest.substringAfter(": ", "").trim()
+                val marker = Regex("(?i)tool=([a-z0-9_]+);\\s*outcome=([a-z_-]+)").find("$rawTitle $rawDetail")
+                val title: String
+                val detail: String
+                if (marker != null) {
+                    title = marker.groupValues[1].replace('_', ' ').replaceFirstChar { it.uppercase() }
+                    val outcome = marker.groupValues[2].lowercase()
+                    shownState = when (outcome) {
+                        "failed", "error" -> "FAILED"
+                        "verified", "pass" -> "DONE"
+                        "cancelled", "canceled", "stopped" -> "CANCELLED"
+                        else -> "VERIFYING"
+                    }
+                    detail = when (shownState) {
+                        "FAILED" -> "This operation failed. Expand the task or inspect its result for the reported error."
+                        "DONE" -> "The result was explicitly verified."
+                        "CANCELLED" -> "The operation was cancelled before verification."
+                        else -> "The tool returned a result; Orion has not yet verified the requested outcome."
+                    }
+                } else {
+                    title = when {
+                        rawTitle.equals("request accepted", true) -> "Request received"
+                        rawTitle.startsWith("tool=", true) -> rawTitle.substringAfter("tool=").substringBefore(';').replace('_', ' ').replaceFirstChar { it.uppercase() }
+                        else -> rawTitle.removeSuffix(" failed").removeSuffix(" completed").take(80)
+                    }
+                    detail = rawDetail
                 }
-                if (title == "request accepted") title = "Request received"
-                if (title.isNotBlank()) { byTitle.remove(title); byTitle[title] = shownState }
+                if (title.isNotBlank()) {
+                    byTitle.remove(title)
+                    byTitle[title] = ProgressStep(shownState, title, detail.take(220))
+                }
             }
-            return byTitle.map { ProgressStep(it.value, it.key) }
+            return byTitle.values.toList()
         }
 
         /** Chat keeps only the latest task card visible; the Tasks screen owns full history. */
@@ -218,10 +250,18 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
                     status = if (line.endsWith(":FAILED]")) OrionActivityStatus.FAILED else OrionActivityStatus.SUCCEEDED
                     title = detail.ifBlank { "Browser research" }
                 }
-                line.startsWith("[SHELL:") -> {
-                    kind = OrionActivityKind.CODING
-                    status = if (line.endsWith(":FAILED]")) OrionActivityStatus.FAILED else OrionActivityStatus.SUCCEEDED
-                    title = detail.ifBlank { "Terminal operation" }
+                line.startsWith("[SHELL:FAILED]") -> {
+                    kind = OrionActivityKind.CODING; status = OrionActivityStatus.FAILED
+                    title = detail.ifBlank { "Terminal operation failed" }
+                }
+                line.startsWith("[SHELL:RESULT]") -> {
+                    // A shell receipt is not proof that a requested file exists or a test passed.
+                    kind = OrionActivityKind.CODING; status = OrionActivityStatus.WAITING
+                    title = detail.ifBlank { "Terminal result received" }
+                }
+                line.startsWith("[TASK:RESULT]") -> {
+                    kind = OrionActivityKind.TOOL; status = OrionActivityStatus.WAITING
+                    title = detail.substringBefore(" — ").ifBlank { "Action result received" }
                 }
                 else -> return null
             }
