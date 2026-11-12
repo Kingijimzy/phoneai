@@ -1550,7 +1550,8 @@ class SettingsActivity : Activity() {
         Thread {
             try {
                 val nim = Nim(this)
-                val all = nim.allModels(p)
+                val modelRuntime = AccountAwareModelProvider(this, nim, commandMode = false)
+                val all = modelRuntime.allModels(p)
                 // NVIDIA's catalogue includes embeddings, rerankers, OCR, speech and other
                 // task-specific endpoints that are not chat-completion models. Do not present
                 // those as selectable chat models; many return 404/400 or empty content.
@@ -1602,7 +1603,7 @@ class SettingsActivity : Activity() {
                                 val selected = candidates[which]
                                 Toast.makeText(this, "Testing " + selected + "...", Toast.LENGTH_SHORT).show()
                                 Thread {
-                                    val problem = try { nim.testModel(p, selected, vision) } catch (e: Exception) { e.message ?: "Probe failed" }
+                                    val problem = try { modelRuntime.testModel(p, selected, vision) } catch (e: Exception) { e.message ?: "Probe failed" }
                                     runOnUiThread {
                                         if (problem.isBlank()) {
                                             Prefs.setModel(this, p, vision, selected)
@@ -1666,11 +1667,11 @@ class SettingsActivity : Activity() {
             "Preparing a real request to the selected chat provider…",
             14f, Theme.TEXT
         ).apply { setPadding(dp(18), dp(14), dp(18), dp(14)) }
-        var activeNim: Nim? = null
+        var activeProvider: OrionModelProvider? = null
         val progress = AlertDialog.Builder(this)
             .setTitle("Testing Orion AI")
             .setView(progressText)
-            .setNegativeButton("Cancel") { _, _ -> activeNim?.cancel() }
+            .setNegativeButton("Cancel") { _, _ -> activeProvider?.cancel() }
             .create()
         progress.setCancelable(false)
         progress.show()
@@ -1682,7 +1683,8 @@ class SettingsActivity : Activity() {
                 val p = Prefs.provider(this, vision)
                 val name = if (vision) "Vision route (real image probe)" else "Chat route"
                 val nim = Nim(this)
-                activeNim = nim
+                val modelRuntime = AccountAwareModelProvider(this, nim, commandMode = false)
+                activeProvider = modelRuntime
                 nim.onStatus = { stage ->
                     runOnUiThread {
                         if (progress.isShowing) progressText.text = "$name\n$stage\n\nThis test waits for the provider response. It can take a while if a model is cold or busy."
@@ -1718,7 +1720,7 @@ class SettingsActivity : Activity() {
                             )
                         )
                     }
-                    val answer = nim.chat(m, vision, if (vision) 96 else 16, 0.0).trim()
+                    val answer = modelRuntime.chat(m, vision, if (vision) 96 else 16, 0.0).trim()
                     val actual = if (vision) "vision route" else "chat route"
                     sb.append("$name: RESPONSE RECEIVED.\n")
                     sb.append("Selected: ${p.label} / ${Prefs.model(this, p, vision)}\n")

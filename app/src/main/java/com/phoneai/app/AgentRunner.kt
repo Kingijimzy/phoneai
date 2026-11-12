@@ -329,11 +329,18 @@ object AgentRunner {
             messages.put(JSONObject().put("role", "user").put("content", userText))
         }
         val tier = if (agent.id == "coach") ModelRouter.tierFor(userText, image != null) else ModelRouter.Tier.CHAT
+        val primaryNim = (nim ?: Nim(c)).also { it.tier = tier }
+        // AgentRunner is also used when the selected provider is an account-backed CLI.
+        // Route through the same adapter as chat so agy://cli and codex://app-server are
+        // never passed to Nim's HTTP URL connection.
+        val provider = AccountAwareModelProvider(c, primaryNim, commandMode = false)
+        val accountProviderSelected = Prefs.provider(c, image != null).id in setOf("codex", "antigravity")
         val reply = try {
-            (nim ?: Nim(c)).also { it.tier = tier }.chat(messages, image != null, 900, 0.4).trim()
+            provider.chat(messages, image != null, 900, 0.4).trim()
         } catch (e: Exception) {
-            // If the optional routed model is unavailable for this key, retry once with the selected default model.
-            if (tier == ModelRouter.Tier.CHAT) throw e
+            // Preserve the coach's bounded model-tier retry for HTTP providers only.
+            // Account-backed providers must keep their selected CLI route and report its real error.
+            if (tier == ModelRouter.Tier.CHAT || accountProviderSelected) throw e
             Nim(c).chat(messages, image != null, 900, 0.4).trim()
         }
         if (agent.id != "coach" || delegation != null) return Result(reply, emptyList())
