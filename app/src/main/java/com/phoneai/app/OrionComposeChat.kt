@@ -779,7 +779,16 @@ internal fun OrionComposeChatScreen(
         Box(Modifier.fillMaxWidth().height(1.dp).background(ChatHairline.copy(alpha = .55f)))
 
         if (lines.isEmpty()) {
-            OrionHome(commandMode = commandMode, onSend = onSend, modifier = Modifier.weight(1f).fillMaxWidth())
+            OrionHome(
+                commandMode = commandMode,
+                onSend = onSend,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                orbMode = orbMode,
+                orbMicLevel = orbMicLevel,
+                orbSpeechAmplitude = orbSpeechAmplitude,
+                orbWordPulse = orbWordPulse,
+                onVoice = onVoice
+            )
         } else {
             val visibleLines = lines.filterNot(::isCompactExecutionNote)
             LazyColumn(
