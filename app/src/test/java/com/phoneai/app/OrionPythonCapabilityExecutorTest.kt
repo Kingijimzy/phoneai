@@ -37,6 +37,8 @@ class OrionPythonCapabilityExecutorTest {
             "orion_extension_test_receipts.json",
             "orion_extension_versions.json"
         ).forEach { File(context.filesDir, it).delete() }
+        context.getSharedPreferences("orion_extension_autonomy", Context.MODE_PRIVATE)
+            .edit().clear().commit()
         executedSource = ""
         executor = OrionPythonCapabilityExecutor(context, null, extensionSandbox = sandbox)
     }
