@@ -879,7 +879,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // Capture explicit owner facts at the common entry point, not only in run().
         runCatching {
             OrionFactExtractor.extract(command, Prefs.userName(svc))
-                .forEach { (subject, predicate, value) -> OrionFactStore.add(svc, subject, predicate, value) }
+                .forEach { (subject, predicate, value) -> OrionFactStore.addOwnerFact(svc, subject, predicate, value) }
         }
     }
 
