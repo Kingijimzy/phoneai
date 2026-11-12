@@ -172,8 +172,7 @@ class Voice(private val ctx: Context) {
         callback?.let { cb -> main.post { cb() } }
     }
 
-    private fun clean(s: String): String =
-        s.replace(Regex("[*_`#>]+"), "").replace(Regex("https?://\\S+"), "link").trim()
+    private fun clean(s: String): String = OrionSpeechTextPolicy.prepare(s)
 
     /** Split long replies on sentence boundaries, preserving conversational flow. */
     /** Keep split logic isolated so queue boundaries can be tested without a TTS engine. */
@@ -194,7 +193,7 @@ class Voice(private val ctx: Context) {
             return
         }
 
-        // The installed Piper voice is English-only for now. Other phone languages
+        // The installed Kokoro voice is British English. Other phone languages
         // retain Android TTS rather than being read with an inappropriate English model.
         if (Prefs.neuralVoice(ctx) &&
             Locale.getDefault().language == "en" &&
@@ -217,9 +216,9 @@ class Voice(private val ctx: Context) {
         speakWithAndroidTts(chunks, onDone)
     }
 
-    /** Compatibility path if Piper is not installed or native initialization fails. */
+    /** Compatibility path if Kokoro is not installed or native initialization fails. */
     private fun speakWithAndroidTts(chunks: List<String>, onDone: (() -> Unit)?) {
-        // Neural-engine failure must not bypass the explicit no-network-TTS preference.
+        // Kokoro-engine failure must not bypass the explicit no-network-TTS preference.
         // Report the missing local voice instead of silently dropping the assistant reply.
         if (Prefs.offlineVoiceOnly(ctx) && voiceList().none { !it.features.contains("networkTts") }) {
             main.post { onProblem?.invoke("Orion cannot speak offline because no installed local voice is available. Install voice data in Android Text-to-speech settings, or turn off Offline-only voice.") }
@@ -298,7 +297,8 @@ class Voice(private val ctx: Context) {
                     if (token != playbackGeneration.get()) return@execute
                     fallbackStart = index
                     val generation = GenerationConfig(
-                        speed = Prefs.rate(ctx).coerceIn(0.75f, 1.25f)
+                        sid = Prefs.kokoroSpeakerId(ctx),
+                        speed = Prefs.rate(ctx).coerceIn(0.85f, 1.15f)
                     )
                     engine.generateWithConfigAndCallback(
                         text = chunks[index],
@@ -391,18 +391,21 @@ class Voice(private val ctx: Context) {
         try { current?.release() } catch (_: Exception) {}
         val config = getOfflineTtsConfig(
             modelDir = model.parentFile?.absolutePath
-                ?: throw IllegalStateException("Neural model folder is missing."),
+                ?: throw IllegalStateException("Kokoro model folder is missing."),
             modelName = model.name,
             acousticModelName = "",
             vocoder = "",
-            voices = "",
+            voices = "voices.bin",
             lexicon = "",
             dataDir = NeuralVoiceInstaller.espeakDataDirectory(ctx).absolutePath,
             dictDir = "",
             ruleFsts = "",
             ruleFars = "",
-            numThreads = 2
+            numThreads = 3
         )
+        // British phonemization and speaker embeddings are explicit, not inferred
+        // from the phone locale or the Android system TTS voice.
+        config.model.kokoro.lang = "en-gb"
         return OfflineTts(assetManager = null, config = config).also {
             neuralEngine = it
             neuralEnginePath = model.absolutePath
