@@ -45,6 +45,8 @@ internal class GeminiLiveSession(
         fun onInputLevel(level: Float)
         /** Real PCM output RMS while the live model's audio is played locally. */
         fun onOutputLevel(level: Float) {}
+        /** Stop local Kokoro speech when the live model reports a user interruption. */
+        fun onOutputInterrupted() {}
         fun onUsage(message: String)
         fun onError(message: String)
     }
@@ -57,6 +59,7 @@ internal class GeminiLiveSession(
     private val audioStarted = AtomicBoolean(false)
     private val playbackQueue = LinkedBlockingQueue<ByteArray>(GeminiLivePolicy.PLAYBACK_QUEUE_CAPACITY)
     private val playbackStop = ByteArray(0)
+    private val modelTextBuffer = StringBuilder()
     private val audioLock = Any()
 
     @Volatile private var socket: WebSocket? = null
@@ -202,26 +205,17 @@ internal class GeminiLiveSession(
             listOf(instructions),
             OrionProviderContextPolicy.inputBudget(liveCapabilities, 1_024).coerceAtMost(40_000)
         ).text
+        // Gemini supplies the conversation intelligence; Orion's selected local Kokoro
+        // voice supplies the actual sound. This keeps one consistent voice identity in every mode.
         val generationConfig = JSONObject()
-            .put("responseModalities", JSONArray().put("AUDIO"))
+            .put("responseModalities", JSONArray().put("TEXT"))
             .put("maxOutputTokens", 1024)
-            .put(
-                "speechConfig",
-                JSONObject().put(
-                    "voiceConfig",
-                    JSONObject().put(
-                        "prebuiltVoiceConfig",
-                        JSONObject().put("voiceName", Prefs.geminiVoice(appContext))
-                    )
-                )
-            )
         return JSONObject()
             .put("model", GeminiLivePolicy.MODEL)
             .put("generationConfig", generationConfig)
             .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", boundedInstructions))))
             .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection", activityDetectionConfig()))
             .put("inputAudioTranscription", JSONObject())
-            .put("outputAudioTranscription", JSONObject())
             .put("sessionResumption", JSONObject())
             .put(
                 "contextWindowCompression",
@@ -327,32 +321,34 @@ internal class GeminiLiveSession(
             if (total >= 0L) listener.onUsage("Gemini Live reports $total tokens for the current usage update; this is not a dollar-cost estimate.")
         }
         val serverContent = message.optJSONObject("serverContent") ?: return
-        if (serverContent.optBoolean("interrupted", false)) clearPlaybackQueue()
+        if (serverContent.optBoolean("interrupted", false)) {
+            clearPlaybackQueue()
+            synchronized(modelTextBuffer) { modelTextBuffer.setLength(0) }
+            listener.onOutputInterrupted()
+        }
         serverContent.optJSONObject("inputTranscription")?.optString("text").orEmpty()
             .takeIf { it.isNotBlank() }?.let { listener.onTranscript(it, false) }
         serverContent.optJSONObject("interimInputTranscription")?.optString("text").orEmpty()
             .takeIf { it.isNotBlank() }?.let { listener.onInterimTranscript(it) }
-        serverContent.optJSONObject("outputTranscription")?.optString("text").orEmpty()
-            .takeIf { it.isNotBlank() }?.let { listener.onTranscript(it, true) }
+
         val parts = serverContent.optJSONObject("modelTurn")?.optJSONArray("parts")
         if (parts != null) {
-            for (i in 0 until parts.length()) {
-                val part = parts.optJSONObject(i) ?: continue
-                val inline = part.optJSONObject("inlineData") ?: part.optJSONObject("inline_data") ?: continue
-                val mime = inline.optString("mimeType", inline.optString("mime_type"))
-                if (!mime.startsWith("audio/pcm", true)) continue
-                val encoded = inline.optString("data")
-                if (encoded.isBlank()) continue
-                val audio = try { Base64.decode(encoded, Base64.DEFAULT) } catch (_: Exception) { continue }
-                if (audio.isNotEmpty() && !playbackQueue.offer(audio)) {
-                    // Keep latency bounded if output generation outpaces playback.
-                    playbackQueue.poll()
-                    playbackQueue.offer(audio)
-                    listener.onStatus("Gemini audio buffer was trimmed to preserve low latency.")
+            synchronized(modelTextBuffer) {
+                for (i in 0 until parts.length()) {
+                    val part = parts.optJSONObject(i) ?: continue
+                    val delta = part.optString("text").trim()
+                    if (delta.isNotEmpty()) {
+                        if (modelTextBuffer.isNotEmpty()) modelTextBuffer.append(' ')
+                        modelTextBuffer.append(delta)
+                    }
                 }
             }
         }
         if (serverContent.optBoolean("turnComplete", false)) {
+            val completedText = synchronized(modelTextBuffer) {
+                modelTextBuffer.toString().trim().also { modelTextBuffer.setLength(0) }
+            }
+            if (completedText.isNotBlank()) listener.onTranscript(completedText, true)
             listener.onStatus("Gemini Live ready · speak naturally")
         }
         if (message.has("goAway")) {
