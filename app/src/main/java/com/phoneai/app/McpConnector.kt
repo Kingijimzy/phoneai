@@ -165,7 +165,8 @@ object McpConnector {
         if (!result.startsWith("MCP endpoint saved")) return result
         val paired = c.getSharedPreferences(PREFS, 0).edit()
             .putString("paired_endpoint_sha256", endpointFingerprint(endpoint(c))).commit()
-        return if (paired) result else "MCP endpoint was saved but local managed pairing could not be persisted."
+        return if (paired) "MCP endpoint saved and locally paired for Orion's managed API Anything server."
+            else "MCP endpoint was saved but local managed pairing could not be persisted."
     }
 
     /** Clears only Orion's managed local API Anything endpoint, preserving unrelated MCP preferences. */
