@@ -18,7 +18,8 @@ internal object GraphPolicy {
         "like", "likes", "love", "loves", "play", "plays", "trade", "trades",
         "prefer", "prefers", "hate", "hates", "watch", "watches", "follow", "follows",
         "support", "supports", "own", "owns", "study", "studies", "run", "runs",
-        "build", "builds", "want", "wants", "use", "uses"
+        "build", "builds", "want", "wants", "use", "uses", "works on", "works_on",
+        "likes", "prefers", "follows"
     )
 
     fun norm(s: String): String = s.lowercase().replace(Regex("[^a-z0-9 .+&'-]"), " ").replace(Regex("\\s+"), " ").trim()
@@ -32,7 +33,30 @@ internal object GraphPolicy {
         val sentences = text.split(Regex("(?<=[.!?\\n])\\s+|;\\s+")).map { it.trim().trimEnd('.', '!') }
         for (raw in sentences) {
             if (raw.isEmpty() || raw.endsWith("?")) continue
-            val s = raw.lowercase()
+            var s = raw.lowercase().trim()
+            s = s.removePrefix("owner said:").trim()
+            when {
+                s.startsWith("user preference:") -> {
+                    val value = norm(s.substringAfter(":"))
+                    if (ok(value)) out.add(Triple("user", "prefers", value))
+                    continue
+                }
+                s.startsWith("user routine:") -> {
+                    val value = norm(s.substringAfter(":"))
+                    if (ok(value)) out.add(Triple("user", "follows", value))
+                    continue
+                }
+                s.startsWith("ongoing project:") -> {
+                    val value = norm(s.substringAfter(":"))
+                    if (ok(value)) out.add(Triple("user", "works on", value))
+                    continue
+                }
+                s.startsWith("user goal:") -> {
+                    val value = norm(s.substringAfter(":"))
+                    if (ok(value)) out.add(Triple("user", "wants", value))
+                    continue
+                }
+            }
             val attr = Regex("^my ([a-z ]{2,30}?) (?:is|are) (.{2,40})$").find(s)
             val me = Regex("^i (?:am|'m) (?:a |an )?(.{2,40})$").find(s)
             val pref = Regex("^i ($verbs) (.{2,40})$").find(s)
@@ -66,15 +90,11 @@ internal object GraphPolicy {
         val na = norm(a); val nb = norm(b); val nr = rel.trim().lowercase().take(30)
         if (na.isEmpty() || nb.isEmpty() || nr.isEmpty() || na == nb) return list
         val out = list.toMutableList()
-        // The same subject + relation with a new object replaces the old one for single-valued relations ("my favourite team is ...").
         val i = out.indexOfFirst { it.a == na && it.rel == nr && it.b == nb }
         if (i >= 0) {
             val existing = out[i]
             out[i] = existing.copy(count = existing.count + 1, lastAt = maxOf(existing.lastAt, now))
         } else {
-            // Non-repeatable subject/relation pairs have one current value. Keep the
-            // newest timestamp when replaying history, so an older archived fact can
-            // never roll the current graph value backwards.
             if (nr !in repeatableRelations) {
                 val current = out.filter { it.a == na && it.rel == nr }.maxByOrNull { it.lastAt }
                 if (current != null && current.lastAt > now) {
