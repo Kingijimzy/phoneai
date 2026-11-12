@@ -73,6 +73,15 @@ class OrionPythonCapabilityExecutorTest {
         assertFalse(ExtensionAutonomySettings.autoActivationEnabled(context))
     }
 
+
+    @Test fun autoActivationSettingRejectsNonBooleanValues() {
+        val result = executor.execute(
+            "extension_auto_activation", JSONObject().put("enabled", "yes"), { true }, { false }
+        ).orEmpty()
+        assertTrue(result.startsWith("error:"))
+        assertTrue(ExtensionAutonomySettings.autoActivationEnabled(context))
+    }
+
     @Test fun disabledAutoActivationLeavesDraftDisabledUntilExplicitEnable() {
         ExtensionAutonomySettings.setAutoActivationEnabled(context, false)
         val v1 = source(1)
