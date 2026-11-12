@@ -76,20 +76,22 @@ internal object OrionDeviceCapabilityExecutor {
         "long_press" -> expectedPackageError(args, service) ?: withCoordinates(args, "x", "y") { x, y -> service.longPress(x, y) }
         "swipe" -> {
             val mismatch = expectedPackageError(args, service)
-            if (mismatch != null) return mismatch
-            val x1 = number(args, "x1")
-            val y1 = number(args, "y1")
-            val x2 = number(args, "x2")
-            val y2 = number(args, "y2")
-            if (x1 == null || y1 == null || x2 == null || y2 == null) "error: swipe needs x1,y1,x2,y2"
-            else service.swipe(x1, y1, x2, y2, args.optLong("ms", 300L))
+            if (mismatch != null) mismatch else {
+                val x1 = number(args, "x1")
+                val y1 = number(args, "y1")
+                val x2 = number(args, "x2")
+                val y2 = number(args, "y2")
+                if (x1 == null || y1 == null || x2 == null || y2 == null) "error: swipe needs x1,y1,x2,y2"
+                else service.swipe(x1, y1, x2, y2, args.optLong("ms", 300L))
+            }
         }
         "swipe_path" -> {
             val mismatch = expectedPackageError(args, service)
-            if (mismatch != null) return mismatch
-            val points = args.optJSONArray("points")
-            if (points == null || points.length() < 2) "error: recorded swipe needs at least two points"
-            else service.performRecordedPath(points, args.optLong("ms", 300L))
+            if (mismatch != null) mismatch else {
+                val points = args.optJSONArray("points")
+                if (points == null || points.length() < 2) "error: recorded swipe needs at least two points"
+                else service.performRecordedPath(points, args.optLong("ms", 300L))
+            }
         }
         "scroll" -> expectedPackageError(args, service) ?: service.scroll(args.optString("direction", "down"))
         "type" -> expectedPackageError(args, service) ?: service.typeText(args.optString("text"))
