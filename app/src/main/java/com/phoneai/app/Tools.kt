@@ -530,7 +530,6 @@ class Tools(
                     svc.startActivity(alarm)
                     "alarm request sent to the clock app with skip-UI enabled; Android/OEM clock support varies, so do not claim it was saved until verified"
                 } catch (e: Exception) { "error: clock app could not accept the alarm request (" + e.javaClass.simpleName + ")" }
-                    catch (e: Exception) { "error: clock app could not set alarm (" + e.javaClass.simpleName + ")" }
             }
             "timer" -> {
                 val seconds = query.toIntOrNull() ?: return "error: timer route needs duration in seconds"
