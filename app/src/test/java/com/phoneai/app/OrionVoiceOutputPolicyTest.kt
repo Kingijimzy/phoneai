@@ -20,10 +20,10 @@ class OrionVoiceOutputPolicyTest {
     }
 
     @Test fun punctuationInsideCodeCannotLeakIntoSpeech() {
-        assertEquals(
-            "The result is ready.",
-            OrionVoiceOutputPolicy.forSpeech("The result is ready. \`\`\`python\\nprint(\\\"hello.world\\\")\\n\`\`\`")
-        )
+        val answer = """The result is ready. ```python
+print("hello.world")
+```"""
+        assertEquals("The result is ready.", OrionVoiceOutputPolicy.forSpeech(answer))
     }
 
     @Test fun suppressesCodeOnlyOutput() {
