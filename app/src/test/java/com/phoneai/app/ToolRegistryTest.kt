@@ -375,7 +375,7 @@ class ConversationGroundingPromptRegressionTest {
     @Test fun skillAndDocumentRequestsUseAvailableCreationPaths() {
         val prompt = ToolRegistry.promptSection().lowercase()
         assertTrue(prompt.contains("do not answer that skill creation is contradictory or impossible"))
-        assertTrue(prompt.contains("DOCUMENT/PDF CREATION RULE"))
+        assertTrue(prompt.contains("document/pdf creation rule"))
         assertTrue(prompt.contains("reportlab"))
         assertTrue(prompt.contains("python-docx"))
     }
