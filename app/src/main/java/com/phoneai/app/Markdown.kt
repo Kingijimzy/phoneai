@@ -16,11 +16,23 @@ import android.text.style.URLSpan
  */
 object Markdown {
     /** Line-level cleanup shared by the renderer and tests: bullets and heading markers. */
+    private val ORDERED = Regex("^(\\d+)[.)]\\s+(.*)$")
+    private val RULE = Regex("^\\s*([-*_])(\\s*\\1){2,}\\s*$")
+
+    /**
+     * Line-level cleanup shared by the renderer and tests. Bullets become "•", numbered steps keep
+     * their numbers, nesting is kept as indentation, quotes get a bar and horizontal rules a divider.
+     */
     internal fun normalizeLines(text: String): String = text.lines().joinToString("\n") { line ->
         val t = line.trimStart()
+        val depth = ((line.length - t.length) / 2).coerceIn(0, 3)
+        val pad = "    ".repeat(depth)
+        val ordered = ORDERED.find(t)
         when {
-            t.startsWith("- ") || t.startsWith("* ") -> "• " + t.drop(2)
-            Regex("^\\d+[.)]\\s+").containsMatchIn(t) -> "• " + t.replaceFirst(Regex("^\\d+[.)]\\s+"), "")
+            RULE.matches(line) -> "────────────"
+            t.startsWith("- ") || t.startsWith("* ") || t.startsWith("+ ") -> pad + (if (depth == 0) "• " else "◦ ") + t.drop(2)
+            ordered != null -> pad + ordered.groupValues[1] + ". " + ordered.groupValues[2]
+            t.startsWith("> ") -> "▎ " + t.drop(2)
             else -> line
         }
     }
