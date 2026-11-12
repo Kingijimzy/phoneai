@@ -9,7 +9,7 @@ import org.junit.Test
 
 class IrreversibleActionConfirmationPolicyTest {
     @Test fun destructiveDataToolsRequireConfirmation() {
-        listOf("workspace_delete", "task_delete", "trash_empty", "forget", "macro_delete", "goal_remove", "project_delete", "wipe_data")
+        listOf("workspace_delete", "task_delete", "trash_empty", "forget", "fact_forget", "macro_delete", "goal_remove", "project_delete", "wipe_data")
             .forEach { tool ->
                 assertNotNull("$tool must require confirmation",
                     IrreversibleActionConfirmationPolicy.destructiveAction(tool, JSONObject().put("path", "Downloads/report.txt")))
@@ -29,6 +29,8 @@ class IrreversibleActionConfirmationPolicyTest {
         assertNotNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Delete the old report file"))
         assertNotNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Clear app data for this app"))
         assertNotNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Factory reset the phone"))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Remove all files in Downloads"))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Clear chat history"))
         assertNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Do not delete the report"))
         assertNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Keep the files without removing anything"))
     }
@@ -39,6 +41,9 @@ class IrreversibleActionConfirmationPolicyTest {
         ))
         assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
             "termux_command", JSONObject().put("command", "sudo wipefs /dev/block/sda")
+        ))
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
+            "standing_order", JSONObject().put("action", "remove").put("kind", "github_notifications")
         ))
         assertNull(IrreversibleActionConfirmationPolicy.destructiveAction(
             "shell", JSONObject().put("command", "ls -la /sdcard/Downloads")
