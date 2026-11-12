@@ -273,7 +273,7 @@ internal class GeminiLiveSession(
             body.put("liveConnectConstraints", JSONObject()
                 .put("model", GeminiLivePolicy.MODEL)
                 .put("config", JSONObject()
-                    .put("responseModalities", JSONArray().put("AUDIO"))
+                    .put("responseModalities", JSONArray().put("TEXT"))
                     .put("sessionResumption", JSONObject())))
         }
         val connection = (URL("https://generativelanguage.googleapis.com/v1beta/auth_tokens").openConnection() as HttpURLConnection)
