@@ -72,8 +72,8 @@ internal object OrionDeviceCapabilityExecutor {
             radius = args.optInt("radius", 48)
         )
         "wait_for" -> tools.waitFor(args.optString("text"), args.optDouble("seconds", 8.0))
-        "tap" -> withCoordinates(args, "x", "y") { x, y -> service.tap(x, y) }
-        "long_press" -> withCoordinates(args, "x", "y") { x, y -> service.longPress(x, y) }
+        "tap" -> expectedPackageError(args, service) ?: withCoordinates(args, "x", "y") { x, y -> service.tap(x, y) }
+        "long_press" -> expectedPackageError(args, service) ?: withCoordinates(args, "x", "y") { x, y -> service.longPress(x, y) }
         "swipe" -> {
             val x1 = number(args, "x1")
             val y1 = number(args, "y1")
@@ -88,7 +88,7 @@ internal object OrionDeviceCapabilityExecutor {
             else service.performRecordedPath(points, args.optLong("ms", 300L))
         }
         "scroll" -> service.scroll(args.optString("direction", "down"))
-        "type" -> service.typeText(args.optString("text"))
+        "type" -> expectedPackageError(args, service) ?: service.typeText(args.optString("text"))
         "key" -> service.key(args.optString("name"))
         "look" -> look(args.optString("question", "Describe what is on the screen."))
         "play" -> play(args.optString("goal"), args.optInt("steps", 20))
@@ -113,6 +113,15 @@ internal object OrionDeviceCapabilityExecutor {
             "voice_listen is handled through the live Voice activity; use the microphone UI to speak and read the transcript"
         }
         else -> "error: device executor does not implement '$tool'."
+    }
+
+    /** Optional foreground-app guard for actions planned from a prior screen observation. */
+    private fun expectedPackageError(args: JSONObject, service: PhoneAiService): String? {
+        val expected = args.optString("expected_package").trim()
+        if (expected.isBlank()) return null
+        val actual = service.currentPackageName()
+        return if (actual.equals(expected, ignoreCase = true)) null
+        else "error: foreground app changed (expected $expected, found ${actual.ifBlank { "no accessible window" }}); run read_screen again before acting"
     }
 
     private fun number(args: JSONObject, key: String): Float? {
