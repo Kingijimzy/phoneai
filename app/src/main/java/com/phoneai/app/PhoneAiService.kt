@@ -424,7 +424,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                     // The local screen reader combines accessibility nodes, OCR and visual regions;
                                     // this is availability, not a claim that every screen is readable.
                                     screenPerceptionReady = serviceInfo != null && rootInActiveWindow != null,
-                                    shizukuReady = OrionShizukuBridge.state().canExecute
+                                    shizukuReady = OrionShizukuBridge.state().ready
                                 )
                                 lastCapabilityReport = report
                                 if (report.status == OrionCapabilityAudit.Status.BLOCKED) {
