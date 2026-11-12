@@ -22,7 +22,9 @@ internal object OrionVoiceOutputPolicy {
         val source = raw.trim()
         if (source.isEmpty()) return null
         val containsCode = codeFence.containsMatchIn(source)
-        var text = codeFence.replace(source, " ")
+        val speakableSentences = source.split(Regex("(?<=[.!?])\\s+"))
+            .filterNot { inlineCode.containsMatchIn(it) || url.containsMatchIn(it) }
+        var text = codeFence.replace(speakableSentences.joinToString(" "), " ")
         text = markdownLink.replace(text, "$1")
         text = inlineCode.replace(text, " ")
         text = url.replace(text, " link ")
@@ -42,7 +44,7 @@ internal object OrionVoiceOutputPolicy {
             .map { it.trim() }
             .filter { it.isNotBlank() }
         val selected = if (sentences.isNotEmpty()) {
-            sentences.take(if (codeHeavy) 2 else 3).joinToString(" ")
+            sentences.take(2).joinToString(" ")
         } else text.take(maxChars)
         val result = selected.take(maxChars).trim().trimEnd(',', ';', ':', '-', ' ')
         if (result.length < 3) return null
