@@ -4,6 +4,8 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.ComponentName
+import android.app.NotificationManager
 import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.os.BatteryManager
@@ -103,12 +105,16 @@ internal object DeviceOperationRouter {
         val canWrite = Settings.System.canWrite(context)
         val accessibility = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
             .orEmpty().contains(context.packageName, ignoreCase = true)
+        val notificationAccess = runCatching {
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .isNotificationListenerAccessGranted(ComponentName(context, OrionNotificationListener::class.java))
+        }.getOrDefault(false)
         return buildString {
             appendLine("ORION DEVICE CAPABILITY INVENTORY")
             appendLine("Clock: alarm/timer intents and alarm listing")
             appendLine("Audio: media stream read/set/up/down/mute/unmute")
             appendLine("Connectivity: Wi-Fi/Bluetooth settings panels; airplane-mode state read-only")
-            appendLine("Notifications: existing NotificationListener read/reply/dismiss tools (requires Android Notification access)")
+            appendLine("Notifications: " + if (notificationAccess) "NotificationListener granted; read/reply/dismiss available for supported notifications" else "NotificationListener access not granted; read/reply/dismiss unavailable")
             appendLine("Applications: PackageManager launchable inventory and existing open_app/deep-link tools")
             appendLine("Files: existing MediaStore Downloads and SAF document tools")
             appendLine("System info: battery, network, storage, memory, Android build")
