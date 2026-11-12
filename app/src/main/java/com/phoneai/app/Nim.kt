@@ -172,6 +172,16 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         "vision", "-vl", "vila", "pixtral", "llava", "paligemma", "multimodal", "nemotron-nano-12b-v2-vl",
         "llama-4", "gemma-3", "gemini", "claude", "gpt-4o", "gpt-4.1"
     )
+
+    /** A custom endpoint model catalogue is refreshed after an HTTP model failure, not speculatively. */
+    private fun invalidateModelCatalogue(p: Provider) {
+        val key = Prefs.key(ctx, p.id)
+        if (key.isBlank()) return
+        val fingerprint = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(key.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        modelCatalogCache.remove(p.id + ":" + fingerprint)
+    }
     private val preferred = listOf(
         "deepseek-v4.1-flash", "deepseek-ai/deepseek-v4.1-flash",
         "llama-3.3-nemotron", "llama-3.3-70b", "llama-3.1-nemotron", "llama-3.1-70b",
@@ -618,7 +628,9 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         // Normally quota-saver mode avoids the extra /models request. NVIDIA's catalog
         // retires model IDs frequently (410 Gone), so discover IDs currently exposed to this
         // key after a model failure even in quota-saver mode rather than retrying retired IDs.
-        val ids = if (Prefs.quotaSaver(ctx) && p.id != "nvidia") emptyList() else try {
+        val shouldDiscover = ProviderModelCapabilityPolicy.shouldDiscoverAfterFailure(p.id, Prefs.quotaSaver(ctx))
+        val ids = if (!shouldDiscover) emptyList() else try {
+            if (p.id.startsWith("custom_")) invalidateModelCatalogue(p)
             allModels(p)
         } catch (e: Exception) {
             emptyList()
@@ -652,11 +664,11 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 out.addAll(if (vision) fb.second else fb.first)
             }
             else -> {
-                val vis = ok.filter { isVision(it) }
+                val compatible = if (vision) ok.filter { isVision(it) } else ProviderModelCapabilityPolicy.textCandidates(ok)
                 if (vision) {
-                    out.addAll(vis)
+                    out.addAll(compatible)
                 } else {
-                    val txt = ok.filter { it !in vis }
+                    val txt = compatible
                     for (pref in preferred) {
                         for (id in txt) {
                             if (id.lowercase().contains(pref) && id !in out) out.add(id)
