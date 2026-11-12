@@ -920,17 +920,16 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         }
         fun usable(p: Provider): Boolean = configured(p) && modelAllowed(p)
 
-        var primary = if (configured(selected)) selected
-            else if (Prefs.autoSwitch(ctx)) Providers.all.firstOrNull { usable(it) }
-            else null
-        if (primary == null) {
-            if (!Prefs.autoSwitch(ctx)) {
-                throw IllegalStateException("${selected.label} is selected but not configured for ${if (vision) "vision" else "chat"}. Auto-switch is off, so Orion will not silently use another provider.")
-            }
-            if (Providers.all.any { configured(it) }) {
-                throw IllegalStateException("Only paid or metered providers are configured. Orion blocked the request because paid-provider use is off; enable the explicit setting in Settings only if you accept possible charges.")
-            }
-            throw IllegalStateException("No compatible AI provider is configured. Add a key for a provider that supports ${if (vision) "vision" else "chat"} in Settings.")
+        var primary: Provider = if (configured(selected)) selected
+        else if (!Prefs.autoSwitch(ctx)) {
+            throw IllegalStateException("${selected.label} is selected but not configured for ${if (vision) "vision" else "chat"}. Auto-switch is off, so Orion will not silently use another provider.")
+        } else {
+            Providers.all.firstOrNull { usable(it) }
+                ?: if (Providers.all.any { configured(it) }) {
+                    throw IllegalStateException("Only paid or metered providers are configured. Orion blocked the request because paid-provider use is off; enable the explicit setting in Settings only if you accept possible charges.")
+                } else {
+                    throw IllegalStateException("No compatible AI provider is configured. Add a key for a provider that supports ${if (vision) "vision" else "chat"} in Settings.")
+                }
         }
 
         // --- Offline detection (Requirement 11) ---
