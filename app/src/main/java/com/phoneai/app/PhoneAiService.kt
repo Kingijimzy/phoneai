@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.Manifest
+import android.app.KeyguardManager
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
@@ -3076,6 +3077,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     fun typeText(text: String): String {
+        if (isDeviceLocked()) return "error: device is locked; unlock it before UI automation"
         if (text.isEmpty()) return "error: refusing to type empty text"
         if (text.length > 4000) return "error: text exceeds the 4000 character limit"
         val root = rootInActiveWindow ?: return "error: cannot inspect the current screen"
@@ -3114,40 +3116,64 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     /** Replays a recorded multi-point gesture without an AI call. */
+    /** UI automation is deliberately unavailable while the secure keyguard is showing. */
+    fun isDeviceLocked(): Boolean = try {
+        (getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
+    } catch (_: Exception) { true }
+
+    private fun interactiveWindowError(): String? = when {
+        isDeviceLocked() -> "error: device is locked; unlock it before UI automation"
+        rootInActiveWindow == null -> "error: no interactive accessibility window is available"
+        else -> null
+    }
+
+    private fun withinDisplay(x: Float, y: Float): Boolean {
+        val size = screenSize()
+        return x.isFinite() && y.isFinite() && x >= 0f && y >= 0f && x < size.first && y < size.second
+    }
+
+    /** Replays a bounded recorded path only on the currently unlocked display. */
     fun performRecordedPath(points: JSONArray, durationMs: Long): String {
-        if (points.length() < 2) return "error: recorded gesture has too few points"
-        val path = Path()
+        interactiveWindowError()?.let { return it }
+        if (points.length() !in 2..128) return "error: recorded gesture must contain 2..128 points"
+        val parsed = mutableListOf<Pair<Float, Float>>()
         for (i in 0 until points.length()) {
-            val p = points.optJSONObject(i) ?: continue
-            val x = p.optDouble("x", Double.NaN).toFloat()
-            val y = p.optDouble("y", Double.NaN).toFloat()
-            if (!x.isFinite() || !y.isFinite()) continue
-            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            val point = points.optJSONObject(i) ?: return "error: recorded gesture contains an invalid point"
+            val x = point.optDouble("x", Double.NaN).toFloat()
+            val y = point.optDouble("y", Double.NaN).toFloat()
+            if (!withinDisplay(x, y)) return "error: recorded gesture contains coordinates outside the current display"
+            parsed += x to y
+        }
+        val path = Path()
+        parsed.forEachIndexed { index, point ->
+            if (index == 0) path.moveTo(point.first, point.second) else path.lineTo(point.first, point.second)
         }
         return gesture(path, durationMs.coerceIn(80L, 8000L))
     }
 
     fun tap(x: Float, y: Float): String {
-        val size = screenSize()
-        if (x < 0 || y < 0 || x > size.first || y > size.second) {
-            return "error: ($x,$y) is outside the screen ${size.first}x${size.second}"
-        }
-        val p = Path()
-        p.moveTo(x, y)
-        return gesture(p, 60L)
+        interactiveWindowError()?.let { return it }
+        if (!withinDisplay(x, y)) return "error: tap coordinates are outside the current display"
+        val path = Path()
+        path.moveTo(x, y)
+        return gesture(path, 60L)
     }
 
     fun longPress(x: Float, y: Float): String {
-        val p = Path()
-        p.moveTo(x, y)
-        return gesture(p, 900L)
+        interactiveWindowError()?.let { return it }
+        if (!withinDisplay(x, y)) return "error: long-press coordinates are outside the current display"
+        val path = Path()
+        path.moveTo(x, y)
+        return gesture(path, 900L)
     }
 
     fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, ms: Long): String {
-        val p = Path()
-        p.moveTo(x1, y1)
-        p.lineTo(x2, y2)
-        return gesture(p, ms)
+        interactiveWindowError()?.let { return it }
+        if (!withinDisplay(x1, y1) || !withinDisplay(x2, y2)) return "error: swipe coordinates are outside the current display"
+        val path = Path()
+        path.moveTo(x1, y1)
+        path.lineTo(x2, y2)
+        return gesture(path, ms)
     }
 
     fun scroll(direction: String): String {
