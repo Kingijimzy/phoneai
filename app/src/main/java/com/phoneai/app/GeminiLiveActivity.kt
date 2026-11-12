@@ -312,7 +312,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             if (isFinishing) return@runOnUiThread
             statusView.text = message.uppercase().take(90)
             visual.mode = if (orionVoice?.isSpeaking() == true) OrbView.Mode.SPEAKING else when {
-                message.contains("connect", true) -> OrbView.Mode.THINKING
+                message.contains("connect", true) || message.contains("thinking", true) || message.contains("preparing", true) -> OrbView.Mode.THINKING
                 message.contains("error", true) || message.contains("quota", true) || message.contains("failed", true) -> OrbView.Mode.IDLE
                 message.contains("ready", true) || message.contains("microphone", true) -> if (microphoneEnabled) OrbView.Mode.LISTENING else OrbView.Mode.IDLE
                 else -> visual.mode
@@ -363,7 +363,8 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
                 // Gemini supplies text only; Orion's Kokoro voice owns all audible output.
                 orionVoice?.speak(text)
             } else if (microphoneEnabled && orionVoice?.isSpeaking() != true) {
-                visual.mode = OrbView.Mode.LISTENING
+                // The user's completed turn has arrived; show the real response-planning phase.
+                visual.mode = OrbView.Mode.THINKING
             }
             val prefix = if (fromModel) "ORION: " else "YOU: "
             transcripts.addLast(prefix + text.trim())
@@ -418,7 +419,10 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         runOnUiThread {
             if (::visual.isInitialized) {
                 visual.micLevel = if (microphoneEnabled) level.coerceIn(0f, 1f) else 0f
-                if (active && microphoneEnabled && visual.mode != OrbView.Mode.SPEAKING) visual.mode = OrbView.Mode.LISTENING
+                if (active && microphoneEnabled &&
+                    visual.mode != OrbView.Mode.SPEAKING &&
+                    visual.mode != OrbView.Mode.THINKING
+                ) visual.mode = OrbView.Mode.LISTENING
             }
         }
     }
