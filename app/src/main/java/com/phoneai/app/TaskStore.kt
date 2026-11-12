@@ -29,9 +29,11 @@ object TaskStore {
         cache?.let { return it }
         val tasks = mutableListOf<OrionTask>()
         try {
-            val f = file(c)
-            if (f.exists()) {
-                val arr = JSONArray(atomic(c).openRead().bufferedReader().use { it.readText() })
+            // AtomicFile.openRead() also restores a backup after an interrupted write.
+            val arr = runCatching {
+                JSONArray(atomic(c).openRead().bufferedReader().use { it.readText() })
+            }.getOrNull()
+            if (arr != null) {
                 for (i in 0 until arr.length()) {
                     val o = arr.getJSONObject(i)
                     tasks.add(
