@@ -284,7 +284,7 @@ class ToolRegistryPromptAvailabilityTest {
         assertTrue(prompt.contains("mcp_status"))
         assertTrue(prompt.contains("mcp_list_tools"))
         assertTrue(prompt.contains("show configured mcp endpoint"))
-        assertTrue(prompt.contains("discover configured mcp tools and the server capability guide"))
+        assertTrue(prompt.contains("mcp_list_tools {}"))
         assertTrue(prompt.contains("do not invent mcp_servers_list"))
         assertTrue(prompt.contains("listing tools is read-only"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("mcp_status"))
