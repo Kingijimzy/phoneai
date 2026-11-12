@@ -13,6 +13,9 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Telegram Bot API bridge.
@@ -28,6 +31,12 @@ internal object TelegramBridge {
     private const val TOKEN_ENC = "orion_telegram_bot_token_enc"
     private const val TOKEN_LEGACY = "orion_telegram_bot_token"
     private val pollLock = Any()
+    private val approvalLock = Any()
+    private class PendingApproval {
+        val latch = CountDownLatch(1)
+        val approved = AtomicBoolean(false)
+    }
+    @Volatile private var pendingApproval: PendingApproval? = null
 
     private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private fun token(context: Context) = ApiKeyVault.read(context.applicationContext, TOKEN_ENC, TOKEN_LEGACY)
@@ -127,6 +136,23 @@ internal object TelegramBridge {
                 continue
             }
             accepted++
+            val awaiting = synchronized(approvalLock) { pendingApproval }
+            if (awaiting != null) {
+                when (text.trim().uppercase()) {
+                    "YES", "/YES", "APPROVE" -> {
+                        awaiting.approved.set(true)
+                        awaiting.latch.countDown()
+                        send(app, "Confirmation received. Orion is continuing the destructive action you were warned about.")
+                    }
+                    "NO", "/NO", "CANCEL" -> {
+                        awaiting.approved.set(false)
+                        awaiting.latch.countDown()
+                        send(app, "Cancelled. Orion will not delete or wipe the selected data.")
+                    }
+                    else -> send(app, "A destructive action is waiting for your decision. Reply YES to continue or NO to cancel. Other commands will be handled after this decision.")
+                }
+                continue
+            }
             val service = PhoneAiService.instance
             if (service == null || !OrionMasterControl.isEnabled(app)) {
                 send(app, "Orion received your message, but the Orion service is not running. Start Orion on the phone, then send the instruction again.")
@@ -147,6 +173,33 @@ internal object TelegramBridge {
         }
         if (latestOffset > offset) prefs(app).edit().putLong(OFFSET, latestOffset).commit()
         "Telegram poll complete: " + accepted + " owner message(s) accepted; " + ignored + " unrelated or unsupported update(s) ignored."
+    }
+
+    /**
+     * Destructive-action approval for a Telegram-originated task. The owner must reply YES
+     * or NO from the authenticated private chat; timeout and service loss both deny.
+     */
+    fun askApproval(context: Context, question: String): Boolean {
+        if (!isConfigured(context) || !TelegramListenerService.isEnabled(context)) return false
+        val pending = PendingApproval()
+        synchronized(approvalLock) {
+            if (pendingApproval != null) return false
+            pendingApproval = pending
+        }
+        val warning = "⚠️ ORION DESTRUCTIVE ACTION WARNING\\n" + question +
+            "\\n\\nReply YES to proceed or NO to cancel. This request expires in 90 seconds."
+        notifyProactive(context, "Orion needs your decision", question)
+        if (send(context, warning).startsWith("error", ignoreCase = true)) {
+            synchronized(approvalLock) { if (pendingApproval === pending) pendingApproval = null }
+            return false
+        }
+        val completed = try { pending.latch.await(90, TimeUnit.SECONDS) } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+        synchronized(approvalLock) { if (pendingApproval === pending) pendingApproval = null }
+        if (!completed) send(context, "Approval timed out. Orion cancelled the destructive action; no data was deleted or wiped.")
+        return completed && pending.approved.get()
     }
 
     fun sendProactive(context: Context, message: String): Boolean {
