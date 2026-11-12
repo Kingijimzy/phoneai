@@ -1476,7 +1476,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun showThinkingIndicator() {
         hideThinkingIndicator()
         val box = logBox ?: return
-        val indicator = label("Orion is thinking", 13f, Theme.CYAN)
+        // Keep the thinking state visible without a perpetual animation or forced
+        // scroll loop. Repeated 420 ms animations competed with streamed text/layout.
+        val indicator = label("Orion is thinking…", 13f, Theme.SILVER)
         indicator.setPadding(dp(12), dp(9), dp(12), dp(9))
         indicator.background = rounded(Theme.PANEL, dp(15).toFloat(), Theme.LINE)
         indicator.contentDescription = "Orion is generating a response"
@@ -1484,22 +1486,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             setMargins(0, dp(5), 0, dp(5))
         })
         activityView = indicator
-        var frame = 0
-        val ticker = object : Runnable {
-            override fun run() {
-                if (activityView !== indicator || panel == null || !running) return
-                frame = (frame + 1) % 4
-                indicator.text = "Orion is thinking" + "·".repeat(frame)
-                val pulse = if (frame % 2 == 0) 1f else 0.76f
-                val scale = if (frame % 2 == 0) 1f else 0.985f
-                indicator.animate().alpha(pulse).scaleX(scale).scaleY(scale).setDuration(340L).start()
-                logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
-                main.postDelayed(this, 420)
-            }
+        indicator.alpha = 0f
+        indicator.translationY = dp(3).toFloat()
+        indicator.animate().alpha(1f).translationY(0f)
+            .setDuration(140L)
+            .start()
+        logScroll?.post {
+            if (activityView === indicator) logScroll?.fullScroll(View.FOCUS_DOWN)
         }
-        activityRunnable = ticker
-        main.postDelayed(ticker, 420)
-        logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
     }
 
     private fun hideThinkingIndicator() {
