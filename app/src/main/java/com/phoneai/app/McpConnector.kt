@@ -100,6 +100,11 @@ object McpConnector {
     fun scopeForTool(name: String): String {
         val n = name.lowercase().replace('-', '_').replace('.', '_')
         return when {
+            // API Anything's "call" prefix means invoking a website operation, not making a
+            // phone call or sending a message. Classify its read and write tools explicitly.
+            n in setOf("call_operation", "call_batch", "list_operations", "list_sites", "find_sites",
+                "site_status", "get_job", "get_result") -> "read"
+            n in setOf("learn_site", "call_write_operation") -> "write"
             Regex("(^|_)(send|message|email|telegram|post|publish|reply|notify|share|call|sms)(_|$)").containsMatchIn(n) -> "communication"
             Regex("(^|_)(delete|remove|update|create|write|edit|save|submit|purchase|pay|transfer|trade|order|execute|run|deploy)(_|$)").containsMatchIn(n) -> "write"
             Regex("(^|_)(settings|system|shell|terminal|command|device|install|uninstall|permission|admin)(_|$)").containsMatchIn(n) -> "system"
