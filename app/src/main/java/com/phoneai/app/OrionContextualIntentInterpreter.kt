@@ -44,7 +44,7 @@ internal object OrionContextualIntentInterpreter {
     private val broadCorrection = Regex(
         """(?i)^\s*(?:please\s+)?(?:fix|repair|improve|correct|update|integrate)\s+(?:everything|all of it|the whole thing|the entire thing|the whole platform|the entire platform)\b"""
     )
-    private val statusCheck = Regex("(?i)^\\\\s*(?:hey\\\\s+)?(?:where did we (?:stop|leave off|get to)|where were we|what were we doing|what were we working on|what was i working on)[?!. ]*$")
+    private val statusCheck = Regex("(?i)^\\s*(?:hey\\s+)?(?:where did we (?:stop|leave off|get to)|where were we|what were we doing|what were we working on|what was i working on)[?!. ]*$")
     private val testExistingWork = Regex("(?is)^\\s*(?:please\\s+)?(?:try|test|run|execute|verify|validate)\\s+(?:it|that|the code|the script|the program|the scraper|the file)\\b.*")
     private val testRequest = Regex(
         """(?i)^\s*(?:please\s+)?(?:test|verify|validate|audit|check)\s+(?:everything|it all|all of it|the rest|the remaining work|the outstanding work|all remaining work)\b[.! ]*$"""
