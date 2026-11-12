@@ -15,9 +15,8 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Compact monochrome 7x7 dot-matrix control for the floating quick-command panel.
- * The old glossy sphere is intentionally removed; the full live-call view owns the larger
- * Dot Matrix / Eyes visualizer. Idle draws once, while active modes animate only as needed.
+ * Compact shared point-cloud identity for the floating quick-command panel and companion surfaces.
+ * Uses the same silver living-orb painter as chat and live calls, with adaptive frame pacing.
  */
 class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : View(c, a) {
     enum class Mode { IDLE, LISTENING, THINKING, SPEAKING, ACTING, WAITING_APPROVAL, ERROR }
