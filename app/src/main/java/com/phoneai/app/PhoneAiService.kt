@@ -3119,7 +3119,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     /** Replays a recorded multi-point gesture without an AI call. */
     /** UI automation is deliberately unavailable while the secure keyguard is showing. */
     fun isDeviceLocked(): Boolean = try {
-        (getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
+        (getSystemService(android.content.Context.KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
     } catch (_: Exception) { true }
 
     private fun interactiveWindowError(): String? = when {
