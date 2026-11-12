@@ -16,7 +16,7 @@ internal object OrionProviderPayloadRecovery {
             if (role == "system" || role == "developer") systemMessages += JSONObject(item.toString())
             else conversational += JSONObject(item.toString())
         }
-        systemMessages.forEach(result::put)
+        systemMessages.forEach { result.put(it) }
         val keep = if (pass == 1) 8 else 4
         val latestUser = conversational.indexOfLast { it.optString("role").equals("user", true) }
         if (latestUser >= 0) {
@@ -38,7 +38,7 @@ internal object OrionProviderPayloadRecovery {
                 result.put(item)
             }
         } else {
-            conversational.takeLast(keep).forEach(result::put)
+            conversational.takeLast(keep).forEach { result.put(it) }
         }
         return result
     }

@@ -8,9 +8,9 @@ internal object CodexSandboxSetupPolicy {
           apk add --no-cache bubblewrap-static
         fi
         if ! command -v bwrap >/dev/null 2>&1; then
-          bwrap_static="$(command -v bwrap.static || true)"
-          test -n "$bwrap_static" || { echo 'bubblewrap-static did not install bwrap.static on this Alpine architecture' >&2; exit 42; }
-          ln -sf "$bwrap_static" /usr/local/bin/bwrap
+          bwrap_static="${'$'}(command -v bwrap.static || true)"
+          test -n "${'$'}bwrap_static" || { echo 'bubblewrap-static did not install bwrap.static on this Alpine architecture' >&2; exit 42; }
+          ln -sf "${'$'}bwrap_static" /usr/local/bin/bwrap
         fi
         command -v bwrap >/dev/null
         bwrap --version

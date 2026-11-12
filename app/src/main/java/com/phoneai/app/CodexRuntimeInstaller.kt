@@ -35,9 +35,186 @@ internal class CodexRuntimeInstaller(context: Context) {
             ' sh {} +
             test -x '$GUEST_BINARY'
             if ! command -v bwrap >/dev/null 2>&1; then
-              bwrap_static="$(command -v bwrap.static || true)"
-              test -n "$bwrap_static" || { echo 'bubblewrap-static did not install bwrap.static on this Alpine architecture' >&2; exit 42; }
-              ln -sf "$bwrap_static" /usr/local/bin/bwrap
+              bwrap_static="${'
+            fi
+            command -v bwrap >/dev/null
+            bwrap --version
+            '$GUEST_BINARY' --help >/dev/null
+            rm -rf /tmp/orion-codex-$VERSION
+        """.trimIndent()
+    }
+
+    fun install(onOutput: (String) -> Unit = {}, shouldStop: () -> Boolean = { false }): Result<Unit> =
+        runCatching {
+            if (!runtime.isReady(LinuxRuntimePolicy.productionManifest)) {
+                val base = runtime.install(LinuxRuntimePolicy.productionManifest)
+                check(base.isSuccess) { "Alpine runtime installation failed: ${base.exceptionOrNull()?.message}" }
+            }
+            val probe = runtime.execute(
+                LinuxRuntimePolicy.productionManifest,
+                "test -x '$GUEST_BINARY'",
+                timeoutMs = 15_000L
+            )
+            if (!probe.startsWith("exit=0")) {
+                val result = runtime.execute(
+                LinuxRuntimePolicy.productionManifest,
+                installCommand,
+                timeoutMs = 900_000L,
+                onOutput = onOutput,
+                shouldStop = shouldStop
+            )
+                check(result.startsWith("exit=0")) { result.takeLast(4_000) }
+            }
+            // An old Alpine guest may contain Codex but lack the optional sandbox executable.
+            val sandbox = runtime.execute(
+                LinuxRuntimePolicy.productionManifest,
+                CodexSandboxSetupPolicy.ensureCommand,
+                timeoutMs = 120_000L,
+                onOutput = onOutput,
+                shouldStop = shouldStop
+            )
+            check(sandbox.startsWith("exit=0")) {
+                "Codex sandbox dependency setup failed: " + sandbox.takeLast(2_000)
+            }
+        }
+
+    fun openAppServer(workspaceHostPath: String): CodexAppServerClient {
+        val vault = CodexSessionVault(app)
+        vault.prepare()
+        val config = runtime.interactiveLaunchConfig(
+            workspaceHostPath = workspaceHostPath,
+            androidAppDataPath = app.cacheDir.absolutePath
+        )
+        val session = LinuxCommandSession.start(
+            config,
+            listOf(GUEST_BINARY, "--listen", "stdio://"),
+            extraEnvironment = mapOf("CODEX_HOME" to "/android-app/codex-session")
+        )
+        // Bound the first on-device account/session initialization window.
+        return CodexAppServerClient(session, requestTimeoutMs = 90_000L, onClose = { vault.persist() })
+    }
+}
+}(command -v bwrap.static || true)"
+              test -n "${'
+            fi
+            command -v bwrap >/dev/null
+            bwrap --version
+            '$GUEST_BINARY' --help >/dev/null
+            rm -rf /tmp/orion-codex-$VERSION
+        """.trimIndent()
+    }
+
+    fun install(onOutput: (String) -> Unit = {}, shouldStop: () -> Boolean = { false }): Result<Unit> =
+        runCatching {
+            if (!runtime.isReady(LinuxRuntimePolicy.productionManifest)) {
+                val base = runtime.install(LinuxRuntimePolicy.productionManifest)
+                check(base.isSuccess) { "Alpine runtime installation failed: ${base.exceptionOrNull()?.message}" }
+            }
+            val probe = runtime.execute(
+                LinuxRuntimePolicy.productionManifest,
+                "test -x '$GUEST_BINARY'",
+                timeoutMs = 15_000L
+            )
+            if (!probe.startsWith("exit=0")) {
+                val result = runtime.execute(
+                LinuxRuntimePolicy.productionManifest,
+                installCommand,
+                timeoutMs = 900_000L,
+                onOutput = onOutput,
+                shouldStop = shouldStop
+            )
+                check(result.startsWith("exit=0")) { result.takeLast(4_000) }
+            }
+            // An old Alpine guest may contain Codex but lack the optional sandbox executable.
+            val sandbox = runtime.execute(
+                LinuxRuntimePolicy.productionManifest,
+                CodexSandboxSetupPolicy.ensureCommand,
+                timeoutMs = 120_000L,
+                onOutput = onOutput,
+                shouldStop = shouldStop
+            )
+            check(sandbox.startsWith("exit=0")) {
+                "Codex sandbox dependency setup failed: " + sandbox.takeLast(2_000)
+            }
+        }
+
+    fun openAppServer(workspaceHostPath: String): CodexAppServerClient {
+        val vault = CodexSessionVault(app)
+        vault.prepare()
+        val config = runtime.interactiveLaunchConfig(
+            workspaceHostPath = workspaceHostPath,
+            androidAppDataPath = app.cacheDir.absolutePath
+        )
+        val session = LinuxCommandSession.start(
+            config,
+            listOf(GUEST_BINARY, "--listen", "stdio://"),
+            extraEnvironment = mapOf("CODEX_HOME" to "/android-app/codex-session")
+        )
+        // Bound the first on-device account/session initialization window.
+        return CodexAppServerClient(session, requestTimeoutMs = 90_000L, onClose = { vault.persist() })
+    }
+}
+}bwrap_static" || { echo 'bubblewrap-static did not install bwrap.static on this Alpine architecture' >&2; exit 42; }
+              ln -sf "${'
+            fi
+            command -v bwrap >/dev/null
+            bwrap --version
+            '$GUEST_BINARY' --help >/dev/null
+            rm -rf /tmp/orion-codex-$VERSION
+        """.trimIndent()
+    }
+
+    fun install(onOutput: (String) -> Unit = {}, shouldStop: () -> Boolean = { false }): Result<Unit> =
+        runCatching {
+            if (!runtime.isReady(LinuxRuntimePolicy.productionManifest)) {
+                val base = runtime.install(LinuxRuntimePolicy.productionManifest)
+                check(base.isSuccess) { "Alpine runtime installation failed: ${base.exceptionOrNull()?.message}" }
+            }
+            val probe = runtime.execute(
+                LinuxRuntimePolicy.productionManifest,
+                "test -x '$GUEST_BINARY'",
+                timeoutMs = 15_000L
+            )
+            if (!probe.startsWith("exit=0")) {
+                val result = runtime.execute(
+                LinuxRuntimePolicy.productionManifest,
+                installCommand,
+                timeoutMs = 900_000L,
+                onOutput = onOutput,
+                shouldStop = shouldStop
+            )
+                check(result.startsWith("exit=0")) { result.takeLast(4_000) }
+            }
+            // An old Alpine guest may contain Codex but lack the optional sandbox executable.
+            val sandbox = runtime.execute(
+                LinuxRuntimePolicy.productionManifest,
+                CodexSandboxSetupPolicy.ensureCommand,
+                timeoutMs = 120_000L,
+                onOutput = onOutput,
+                shouldStop = shouldStop
+            )
+            check(sandbox.startsWith("exit=0")) {
+                "Codex sandbox dependency setup failed: " + sandbox.takeLast(2_000)
+            }
+        }
+
+    fun openAppServer(workspaceHostPath: String): CodexAppServerClient {
+        val vault = CodexSessionVault(app)
+        vault.prepare()
+        val config = runtime.interactiveLaunchConfig(
+            workspaceHostPath = workspaceHostPath,
+            androidAppDataPath = app.cacheDir.absolutePath
+        )
+        val session = LinuxCommandSession.start(
+            config,
+            listOf(GUEST_BINARY, "--listen", "stdio://"),
+            extraEnvironment = mapOf("CODEX_HOME" to "/android-app/codex-session")
+        )
+        // Bound the first on-device account/session initialization window.
+        return CodexAppServerClient(session, requestTimeoutMs = 90_000L, onClose = { vault.persist() })
+    }
+}
+}bwrap_static" /usr/local/bin/bwrap
             fi
             command -v bwrap >/dev/null
             bwrap --version
