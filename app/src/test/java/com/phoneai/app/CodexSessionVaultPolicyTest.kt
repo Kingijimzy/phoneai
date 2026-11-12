@@ -9,7 +9,7 @@ class CodexSessionVaultPolicyTest {
         assertTrue(config.contains("approval_policy = \"never\""))
         assertTrue(config.contains("sandbox_mode = \"danger-full-access\""))
         assertTrue(config.contains("[features]"))
-        assertTrue(config.contains("shell_tool = false"))
+        assertTrue(config.contains("shell_tool = true"))
         assertTrue(config.contains("view_image = false"))
         assertTrue(config.contains("web_search = false"))
         assertTrue(config.contains("[agents]"))
