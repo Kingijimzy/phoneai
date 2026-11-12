@@ -9,7 +9,7 @@ import org.json.JSONObject
  * picks a mood; the mood and the sentence shape then set pace and breathing room, so delivery changes
  * with the moment instead of sounding like one fixed narrator voice.
  */
-internal object OrionSpokenLine {
+object OrionSpokenLine {
     enum class Mood(val label: String, val speed: Float, val pauseMs: Int) {
         NEUTRAL("neutral", 1.00f, 260),
         WARM("warm", 0.97f, 300),
