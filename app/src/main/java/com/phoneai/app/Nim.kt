@@ -1021,7 +1021,11 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         // reasons by default; short probes (e.g. max_tokens=16) can spend the entire
         // budget reasoning and return choices[0].message.content="" (finish_reason=length).
         // Disable thinking for reliable direct chat/vision replies and provide a safe minimum.
-        val requestedOutput = maxOf(maxTokens, if (fastResponse) 2048 else 32768)
+        // Keep normal turns responsive: the previous 32k minimum gave every short
+        // chat/tool-planning request a huge output budget. Truncated long answers can
+        // continue through the existing bounded continuation path.
+        val outputCeiling = if (fastResponse) 2048 else 8192
+        val requestedOutput = maxTokens.coerceIn(512, outputCeiling)
         val tokens = when (p.id) {
             // Provider-specific thinking overhead is included, then clamped to the selected model's real output ceiling.
             "gemini" -> if (fastResponse) maxOf(requestedOutput * 2, 2048) else maxOf(requestedOutput * 2, 8192)
@@ -1036,13 +1040,15 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         var lastNote = ""
         var lastHttpStatus: Int? = null
         var attempts = 0
-        // Always reserve one bounded same-provider recovery attempt for a stale model ID
-        // or empty reply, even when another provider is saved. Otherwise hasBackup forced this
-        // limit to 1 and the alternate model was queued but never actually attempted.
-        // Fast/background turns still stay bounded; the next saved provider is tried afterward.
+        // Attempts are bounded. Same-provider alternate models are queued only when
+        // Auto-switch is enabled; with it off this queue contains only the selected model.
         val maxAttempts = if (fastResponse) 3 else 5
         val start = System.currentTimeMillis()
-        val totalTimeoutMs = if (fastResponse) 30000L else 600000L
+        val totalTimeoutMs = when {
+            fastResponse -> 30000L
+            p.noKey -> 600000L
+            else -> 180000L
+        }
         while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < totalTimeoutMs) {
             if (cancelled) throw RuntimeException("Stopped.")
             val model = queue.removeAt(0)
@@ -1128,8 +1134,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             val r: Http? = try {
                 // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
                 if (onDelta != null && !vision && !p.anthropicStyle && p.id != "opencode-zen" && p.id != "gemini" && activeNativeTools.get().isNullOrEmpty()) {
-                    requestStream(p, url, payload, key, if (fastResponse) 30000 else 600000, onDelta)
-                } else request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 30000 else 600000)
+                    requestStream(p, url, payload, key, if (fastResponse) 30000 else 180000, onDelta)
+                } else request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 30000 else 180000)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
