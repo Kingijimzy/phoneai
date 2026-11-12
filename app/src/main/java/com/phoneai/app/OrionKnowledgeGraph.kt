@@ -15,7 +15,8 @@ internal object OrionKnowledgeGraph {
         val entities: Int,
         val relationships: Int,
         val terms: Int,
-        val recentFacts: List<String>
+        val recentFacts: List<String>,
+        val recentEntities: List<String>
     )
 
     private const val INDEX_VERSION = 3
@@ -199,12 +200,26 @@ internal object OrionKnowledgeGraph {
         val relationships = count("SELECT COUNT(*) FROM edges WHERE relation NOT IN ('mentions','co_occurs') AND relation NOT LIKE 'mentions_%'")
         val facts = mutableListOf<String>()
         db.rawQuery(
-            "SELECT s.label,e.relation,t.label FROM edges e JOIN nodes s ON s.id=e.source_id JOIN nodes t ON t.id=e.target_id WHERE s.kind='entity' AND t.kind='entity' AND e.relation NOT LIKE 'mentions_%' ORDER BY e.created_at DESC LIMIT 8",
+            "SELECT s.label,e.relation,t.label FROM edges e JOIN nodes s ON s.id=e.source_id JOIN nodes t ON t.id=e.target_id WHERE s.kind='entity' AND t.kind='entity' AND e.relation NOT LIKE 'mentions_%' AND e.relation!='co_occurs' ORDER BY e.created_at DESC LIMIT 8",
             null
         ).use { cursor ->
             while (cursor.moveToNext()) facts += "${cursor.getString(0)} —${cursor.getString(1).replace('_', ' ')}→ ${cursor.getString(2)}"
         }
-        return Snapshot(indexed, entities, relationships, terms, facts.distinct())
+        val entityLabels = mutableListOf<String>()
+        db.rawQuery("SELECT kind,label FROM nodes WHERE kind='entity' ORDER BY label LIMIT 10", null).use { cursor ->
+            while (cursor.moveToNext()) entityLabels += "${cursor.getString(0).uppercase()}: ${cursor.getString(1)}"
+        }
+        return Snapshot(indexed, entities, relationships, terms, facts.distinct(), entityLabels)
+    }
+
+    /** Approved source memories reached through the graph, re-filtered at read time. */
+    fun relatedMemories(context: Context, query: String, limit: Int = 8): List<Memory> {
+        val ids = relatedMemoryIds(context, query, limit * 3)
+        if (ids.isEmpty()) return emptyList()
+        return MemoryStore.all(context).filter {
+            it.id in ids && MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) &&
+                OrionMemoryLifecycle.isActive(context, it.id)
+        }.sortedByDescending { it.updated }.take(limit.coerceIn(1, 20))
     }
 
     fun forgetMemory(context: Context, memoryId: Int) {
