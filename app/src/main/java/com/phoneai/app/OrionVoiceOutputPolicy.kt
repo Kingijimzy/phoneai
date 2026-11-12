@@ -18,9 +18,6 @@ internal object OrionVoiceOutputPolicy {
     private val progressCueDelivered = java.util.concurrent.atomic.AtomicBoolean(false)
 
     fun beginTask() { progressCueDelivered.set(false) }
-    private val progressCueDelivered = java.util.concurrent.atomic.AtomicBoolean(false)
-
-    fun beginTask() { progressCueDelivered.set(false) }
 
     /** Returns null when the content is not useful or safe to speak. */
     fun forSpeech(raw: String, maxChars: Int = 300): String? {
