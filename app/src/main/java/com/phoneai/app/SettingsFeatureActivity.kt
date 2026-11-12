@@ -114,8 +114,12 @@ class SettingsFeatureActivity : Activity() {
                 card("Voice configuration", "Speech engine, voice output and interaction preferences.", "Configure voice") { openLegacy("voice") }
             }
             "character" -> {
-                card("Response personality", "Choose the assistant character and response style. Your selection is stored by Orion's existing settings.", "Edit character") { openLegacy("character") }
-                card("Language and presentation", "Review language and response formatting preferences.", "Open style controls") { openLegacy("character") }
+                card("Entity identity", "Edit Orion's name, purpose and conversational philosophy. Safety and Android permissions remain authoritative.", "Edit identity") {
+                    startActivity(Intent(this, CharacterSettingsActivity::class.java))
+                }
+                card("Language and presentation", "Review approved languages and response style preferences.", "Open identity controls") {
+                    startActivity(Intent(this, CharacterSettingsActivity::class.java))
+                }
             }
             "permissions" -> {
                 card("App permissions", "Open Android's permission manager for PhoneAI. Review microphone, notifications, contacts and other access.", "Android app permissions") {
