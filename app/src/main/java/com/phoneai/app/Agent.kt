@@ -878,8 +878,12 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         indexMemoryObservation(command, source)
         // Capture explicit owner facts at the common entry point, not only in run().
         runCatching {
-            OrionFactExtractor.extract(command, Prefs.userName(svc))
-                .forEach { (subject, predicate, value) -> OrionFactStore.addOwnerFact(svc, subject, predicate, value) }
+            // MemoryAutoIndexer already captured the explicit durable statement. Use the
+            // older fact extractor only for statement shapes it does not yet understand.
+            if (MemoryAutoIndexer.extract(command) == null) {
+                OrionFactExtractor.extract(command, Prefs.userName(svc))
+                    .forEach { (subject, predicate, value) -> OrionFactStore.addOwnerFact(svc, subject, predicate, value) }
+            }
         }
     }
 
