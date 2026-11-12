@@ -43,6 +43,8 @@ internal class GeminiLiveSession(
         /** Partial ASR text is display-only and must never trigger a device action. */
         fun onInterimTranscript(text: String) {}
         fun onInputLevel(level: Float)
+        /** Real PCM output RMS while the live model's audio is played locally. */
+        fun onOutputLevel(level: Float) {}
         fun onUsage(message: String)
         fun onError(message: String)
     }
@@ -496,7 +498,11 @@ internal class GeminiLiveSession(
     private fun playbackLoop(track: AudioTrack) {
         try {
             while (!stopped.get()) {
-                val bytes = playbackQueue.poll(250L, TimeUnit.MILLISECONDS) ?: continue
+                val bytes = playbackQueue.poll(250L, TimeUnit.MILLISECONDS)
+                if (bytes == null) {
+                    listener.onOutputLevel(0f)
+                    continue
+                }
                 if (bytes === playbackStop) break
                 var offset = 0
                 while (offset < bytes.size && !stopped.get()) {
@@ -505,6 +511,7 @@ internal class GeminiLiveSession(
                         active.write(bytes, offset, bytes.size - offset, AudioTrack.WRITE_BLOCKING)
                     }
                     if (written <= 0) break
+                    listener.onOutputLevel(pcm16Rms(bytes, offset, written))
                     offset += written
                 }
             }
@@ -517,6 +524,23 @@ internal class GeminiLiveSession(
                 if (speaker === track) speaker = null
             }
         }
+    }
+
+    private fun pcm16Rms(bytes: ByteArray, offset: Int, length: Int): Float {
+        val end = (offset + length).coerceAtMost(bytes.size)
+        var index = offset
+        var energy = 0.0
+        var samples = 0
+        while (index + 1 < end) {
+            val low = bytes[index].toInt() and 0xff
+            val high = bytes[index + 1].toInt()
+            val sample = ((high shl 8) or low).toShort().toInt()
+            val normalized = sample.toDouble() / 32768.0
+            energy += normalized * normalized
+            samples++
+            index += 2
+        }
+        return if (samples == 0) 0f else kotlin.math.sqrt(energy / samples).toFloat().coerceIn(0f, 1f)
     }
 
     private fun clearPlaybackQueue() {
