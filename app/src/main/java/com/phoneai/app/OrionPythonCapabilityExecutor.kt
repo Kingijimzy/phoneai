@@ -53,7 +53,7 @@ internal class OrionPythonCapabilityExecutor(
 
     private fun extensionPolicy(): String =
         "Generated-extension auto-activation is " +
-            if (ExtensionAutonomySettings.autoActivationEnabled(context)) "ON" else "OFF" +
+            (if (ExtensionAutonomySettings.autoActivationEnabled(context)) "ON" else "OFF") +
             ". Activation still requires passing tests for the exact source hash; generated code receives no Android, filesystem, network, or shell capabilities."
 
     private fun setExtensionAutoActivation(args: JSONObject): String {
