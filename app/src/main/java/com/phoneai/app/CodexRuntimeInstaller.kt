@@ -81,6 +81,10 @@ internal class CodexRuntimeInstaller(context: Context) {
         }
 
     fun openAppServer(workspaceHostPath: String): CodexAppServerClient {
+        // Do not start stdio against a missing/stale guest binary or absent bwrap.
+        // Installation is idempotent and returns a concrete error instead of letting
+        // the first JSON-RPC handshake sit until its timeout.
+        install().getOrThrow()
         val vault = CodexSessionVault(app)
         vault.prepare()
         val config = runtime.interactiveLaunchConfig(
