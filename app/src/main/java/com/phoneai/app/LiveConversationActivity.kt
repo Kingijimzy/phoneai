@@ -75,6 +75,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
 
         status = label("ORION  ·  READY", 11f, Theme.SILVER, true).apply {
             gravity = Gravity.CENTER
+            contentDescription = "Orion live conversation status"
             letterSpacing = .16f
         }
         root.addView(status, LinearLayout.LayoutParams(-1, dp(28)))
@@ -82,6 +83,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         visual = LiveCallVisualView(this).apply {
             style = LiveCallVisualView.Style.fromPref(Prefs.liveCallStyle(this@LiveConversationActivity))
             onVisualTap = { handleVisualTap() }
+            contentDescription = "Live voice visual. Tap to start listening or interrupt the current response."
+            isFocusable = true
         }
         root.addView(visual, LinearLayout.LayoutParams(-1, 0, 1f))
 
@@ -115,7 +118,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             gravity = Gravity.CENTER
             setPadding(0, dp(8), 0, dp(2))
         }
-        val endItem = control("phone-off", "END", 0xFF202020.toInt(), 0xFF454545.toInt()) {
+        val endItem = control("phone-off", "END", Theme.PANEL2, Theme.LINE_STRONG) {
             PhoneAiService.instance?.endLiveConversation()
             listeningRequested = false
             finish()
@@ -131,12 +134,19 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Theme.SILVER)
-                setStroke(dp(1), 0xFFFFFFFF.toInt())
+                setStroke(dp(1), Theme.TEXT)
             }
             elevation = dp(5).toFloat()
             isClickable = true
             isFocusable = true
             contentDescription = "Start voice input"
+            setOnTouchListener { view, event ->
+                when (event.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> view.animate().scaleX(.96f).scaleY(.96f).setDuration(Theme.MOTION_PRESS_MS.toLong()).start()
+                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1f).scaleY(1f).setDuration(Theme.MOTION_PRESS_MS.toLong()).start()
+                }
+                false
+            }
             micIcon = OrionIconView(this@LiveConversationActivity).apply {
                 icon = "mic"
                 tint = Theme.PANEL
@@ -154,7 +164,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         micItem.addView(micCaption)
         controls.addView(micItem, LinearLayout.LayoutParams(0, -2, 1.15f))
 
-        val chatItem = control("chat", "CHAT", 0xFF171717.toInt(), 0xFF454545.toInt()) {
+        val chatItem = control("chat", "CHAT", Theme.PANEL, Theme.LINE_STRONG) {
             PhoneAiService.instance?.endLiveConversation()
             listeningRequested = false
             startActivity(Intent(this@LiveConversationActivity, MainChatActivity::class.java)
@@ -173,12 +183,19 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             isClickable = true
             isFocusable = true
             contentDescription = captionText
+            setOnTouchListener { view, event ->
+                when (event.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> view.animate().scaleX(.97f).scaleY(.97f).setDuration(Theme.MOTION_PRESS_MS.toLong()).start()
+                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1f).scaleY(1f).setDuration(Theme.MOTION_PRESS_MS.toLong()).start()
+                }
+                false
+            }
             val iconBox = LinearLayout(this@LiveConversationActivity).apply {
                 gravity = Gravity.CENTER
                 background = round(fill, stroke, 24)
                 addView(OrionIconView(this@LiveConversationActivity).apply {
                     icon = iconName
-                    tint = if (captionText == "END") 0xFFE4E4E4.toInt() else Theme.TEXT
+                    tint = if (captionText == "END") Theme.TEXT else Theme.TEXT
                     contentDescription = null
                 }, LinearLayout.LayoutParams(dp(23), dp(23)))
             }
@@ -340,7 +357,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 OrbView.Mode.WAITING_APPROVAL -> "APPROVAL"
                 OrbView.Mode.ERROR -> "ERROR"
             }
-            status.setTextColor(if (mode == OrbView.Mode.WAITING_APPROVAL) 0xFFFFD49B.toInt() else Theme.SILVER)
+            status.setTextColor(if (mode == OrbView.Mode.WAITING_APPROVAL) Theme.WARN else Theme.SILVER)
             micIcon.icon = if (mode == OrbView.Mode.LISTENING) "pause" else if (mode == OrbView.Mode.SPEAKING) "mic" else "mic"
             micCaption.text = when (mode) {
                 OrbView.Mode.LISTENING -> "PAUSE"

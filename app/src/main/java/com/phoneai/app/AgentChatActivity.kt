@@ -190,6 +190,8 @@ class AgentChatActivity : Activity() {
             CompanionView.Activity.THINKING -> OrbView.Mode.THINKING
             CompanionView.Activity.LISTENING -> OrbView.Mode.LISTENING
             CompanionView.Activity.SPEAKING -> OrbView.Mode.SPEAKING
+            CompanionView.Activity.BROWSING, CompanionView.Activity.WRITING -> OrbView.Mode.THINKING
+            CompanionView.Activity.BUILDING, CompanionView.Activity.ACTING, CompanionView.Activity.DRAWING, CompanionView.Activity.RUNNING -> OrbView.Mode.ACTING
         }
         pushHolo()
     }

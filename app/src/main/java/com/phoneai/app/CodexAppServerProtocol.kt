@@ -38,7 +38,7 @@ internal object CodexAppServerProtocol {
         id, "initialize",
         JSONObject()
             .put("clientInfo", JSONObject().put("name", CLIENT_NAME).put("title", CLIENT_TITLE).put("version", SERVER_VERSION))
-            .put("capabilities", JSONObject())
+            .put("capabilities", JSONObject().put("experimentalApi", true))
     )
 
     fun startChatGptDeviceLogin(id: Int): Request = Request(
@@ -50,9 +50,24 @@ internal object CodexAppServerProtocol {
 
     fun listModels(id: Int): Request = Request(id, "model/list", JSONObject())
 
-    fun startThread(id: Int, model: String? = null): Request {
+    fun startThread(id: Int, model: String? = null, tools: List<ToolDefinition> = emptyList()): Request {
         val params = JSONObject()
+            .put("approvalsReviewer", "auto_review")
         if (!model.isNullOrBlank()) params.put("model", model)
+        if (tools.isNotEmpty()) {
+            val dynamicTools = JSONArray()
+            tools.take(128).forEach { tool ->
+                dynamicTools.put(
+                    JSONObject()
+                        .put("name", tool.name)
+                        .put("description", tool.promptLine.take(4_000))
+                        .put("inputSchema", JSONObject()
+                            .put("type", "object")
+                            .put("additionalProperties", true))
+                )
+            }
+            params.put("dynamicTools", dynamicTools)
+        }
         return Request(id, "thread/start", params)
     }
 
@@ -88,6 +103,13 @@ internal object CodexAppServerProtocol {
             item.optString("id").takeIf { it.isNotBlank() }
         }.distinct()
     }
+
+    fun dynamicToolResponse(text: String, success: Boolean): JSONObject =
+        JSONObject()
+            .put("success", success)
+            .put("contentItems", JSONArray().put(
+                JSONObject().put("type", "inputText").put("text", text.take(OrionNativeToolDispatcher.MAX_RESULT_CHARS))
+            ))
 
     fun isNotification(message: JSONObject): Boolean =
         message.has("method") && !message.has("id")

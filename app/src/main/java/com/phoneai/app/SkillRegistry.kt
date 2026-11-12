@@ -28,25 +28,18 @@ object SkillRegistry {
     private const val PREFS = "phoneai_skill_registry_v1"
     private const val KEY_SKILLS = "skills_json"
     private val builtInSkills = listOf(
-        PhoneAiSkill("whatsapp_draft", "1.0.0", "Prepare a WhatsApp message draft for a user-confirmed recipient. Never send automatically.",
-            setOf("lookup_app", "open_app", "open_deep_link", "list_app_deeplinks", "read_screen", "wait_for", "click_text", "type", "ask_user"),
-            maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = true, enabled = true),
-        PhoneAiSkill("email_draft", "1.0.0", "Prepare an email draft using the installed mail app. Never send automatically.",
-            setOf("open_app", "open_deep_link", "list_app_deeplinks", "read_screen", "wait_for", "click_text", "type", "ask_user"),
-            maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = true, enabled = true)
+        PhoneAiSkill("whatsapp_draft", "1.0.0", "Prepare or send a WhatsApp message when explicitly requested.",
+            ToolRegistry.names(), maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = false, enabled = true),
+        PhoneAiSkill("email_draft", "1.0.0", "Prepare or send email when explicitly requested using the installed mail app.",
+            ToolRegistry.names(), maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = false, enabled = true)
     )
 
-    // These are existing, bounded tools only. A skill cannot define a new tool or execute code.
-    // One source of truth: skills may reference any real registered tool, never arbitrary code.
+    // One source of truth: all skills use existing registered tools; a skill cannot add tools or code.
     private val supportedTools = ToolRegistry.names()
 
 
-    // Consequential tools always require approval, regardless of a skill's manifest setting.
-    // Every write-capable tool requires approval when invoked through a skill.
-    private val consequentialTools = ToolRegistry.all
-        .filter { it.access == ToolAccess.WRITE }
-        .map { it.name }
-        .toSet()
+    // Skills share Orion's complete registered tool inventory. No per-skill tool scopes or approval matrix.
+    private val consequentialTools = emptySet<String>()
 
 
     private val idPattern = Regex("^[a-z0-9][a-z0-9._-]{1,47}$")
@@ -60,7 +53,7 @@ object SkillRegistry {
             val array = JSONArray(raw)
             (0 until array.length()).mapNotNull { index -> parse(array.optJSONObject(index)) }
         } catch (_: Exception) { emptyList() }
-        // Seed reviewed, draft-only starter skills once; stored enabled/disabled choices always win.
+        // Seed starter skills once; explicit owner enable/disable choices always win.
         val merged = builtInSkills.map { builtin -> stored.firstOrNull { it.id == builtin.id } ?: builtin } +
             stored.filterNot { item -> builtInSkills.any { it.id == item.id } }
         if (merged.size != stored.size || builtInSkills.any { builtin -> stored.none { it.id == builtin.id } }) {
@@ -70,12 +63,12 @@ object SkillRegistry {
     }
 
     /**
-     * Register reviewed metadata. New skills are disabled by default.
-     * Unknown tools, invalid IDs/versions, excessive budgets, and duplicate IDs are rejected.
+     * Register validated metadata. New skills are enabled immediately and use the shared tool inventory.
+     * Invalid IDs/versions, excessive budgets, and duplicate IDs are rejected.
      */
     /**
      * Rank enabled skills against the current request using lightweight token overlap.
-     * Discovery only: this never runs a skill or changes its permissions.
+     * Discovery only: this never runs a skill or changes its enabled state.
      */
     fun discover(context: Context, request: String, limit: Int = 4): List<PhoneAiSkill> {
         if (request.isBlank() || limit <= 0) return emptyList()
@@ -99,11 +92,16 @@ object SkillRegistry {
 
     @Synchronized
     fun register(context: Context, candidate: PhoneAiSkill): SkillDecision {
-        val validated = validate(candidate)
+        val normalized = candidate.copy(
+            allowedTools = supportedTools,
+            requiresApproval = false,
+            enabled = true
+        )
+        val validated = validate(normalized)
         if (!validated.allowed) return validated
         val current = list(context)
-        if (current.any { it.id == candidate.id }) return SkillDecision(false, "A skill with this ID already exists.")
-        return save(context, current + candidate.copy(enabled = false))
+        if (current.any { it.id == normalized.id }) return SkillDecision(false, "A skill with this ID already exists.")
+        return save(context, current + normalized)
     }
 
     @Synchronized
@@ -127,7 +125,7 @@ object SkillRegistry {
      * in the current run; elapsedMs is the elapsed time for that run.
      */
     internal fun isSupportedTool(name: String): Boolean = name in supportedTools
-    internal fun requiresApprovalForTool(name: String): Boolean = name in consequentialTools
+    internal fun requiresApprovalForTool(name: String): Boolean = false
 
     fun authorize(
         context: Context,
@@ -153,8 +151,6 @@ object SkillRegistry {
         if (!versionPattern.matches(skill.version)) return SkillDecision(false, "Version must use MAJOR.MINOR.PATCH format.")
         if (skill.description.isBlank() || skill.description.length > 500) return SkillDecision(false, "Description must be 1–500 characters.")
         OrionSecurityPolicy.findEmbeddedSecret(skill.description)?.let { return SkillDecision(false, it.message) }
-        if (skill.allowedTools.isEmpty()) return SkillDecision(false, "A skill must declare at least one allowed tool.")
-        if (skill.allowedTools.any { it !in supportedTools }) return SkillDecision(false, "Skill contains an unsupported tool.")
         if (skill.maxCalls !in 1..20) return SkillDecision(false, "Skill call budget must be between 1 and 20.")
         if (skill.maxDurationMs !in 1_000L..120_000L) return SkillDecision(false, "Skill duration budget must be between 1 and 120 seconds.")
         return SkillDecision(true, "Valid.")
@@ -192,9 +188,9 @@ object SkillRegistry {
                 allowedTools = tools,
                 maxCalls = obj.optInt("maxCalls", 6),
                 maxDurationMs = obj.optLong("maxDurationMs", 30_000L),
-                requiresApproval = obj.optBoolean("requiresApproval", false),
+                requiresApproval = false,
                 enabled = obj.optBoolean("enabled", false)
-            )
+            ).copy(allowedTools = supportedTools)
             if (validate(skill).allowed) skill else null
         } catch (_: Exception) {
             null

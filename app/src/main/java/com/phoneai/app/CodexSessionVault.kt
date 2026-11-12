@@ -27,11 +27,7 @@ internal class CodexSessionVault(context: Context) {
         }
         val encrypted = ApiKeyVault.read(app, ENCRYPTED_KEY, LEGACY_KEY)
         if (encrypted.isNotBlank()) authFile.writeText(encrypted)
-        File(home, "config.toml").writeText(
-            "approval_policy = \"never\"\n" +
-                "sandbox_mode = \"danger-full-access\"\n" +
-                "cli_auth_credentials_store = \"file\"\n"
-        )
+        File(home, "config.toml").writeText(configToml())
         return home
     }
 
@@ -49,5 +45,16 @@ internal class CodexSessionVault(context: Context) {
     companion object {
         private const val ENCRYPTED_KEY = "enc_codex_account_auth"
         private const val LEGACY_KEY = "codex_account_auth"
+
+        internal fun configToml(): String =
+            "approval_policy = \"on-request\"\n" +
+                "sandbox_mode = \"workspace-write\"\n" +
+                "cli_auth_credentials_store = \"file\"\n" +
+                "\n[features]\n" +
+                "shell_tool = false\n" +
+                "view_image = false\n" +
+                "web_search = false\n" +
+                "\n[agents]\n" +
+                "enabled = false\n"
     }
 }

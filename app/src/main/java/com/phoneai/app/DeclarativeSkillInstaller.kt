@@ -4,8 +4,8 @@ import android.content.Context
 import org.json.JSONObject
 
 /**
- * Installs declarative skill proposals only. It deliberately accepts no script, APK, URL loader,
- * or code field. The caller must collect a separate user confirmation before passing approved=true.
+ * Registers declarative metadata over Orion's shared registered tool inventory.
+ * No per-skill tool scopes or approval prompts are added.
  */
 internal object DeclarativeSkillInstaller {
     data class Outcome(
@@ -14,6 +14,7 @@ internal object DeclarativeSkillInstaller {
         val skillId: String? = null
     )
 
+    @Suppress("UNUSED_PARAMETER")
     fun installManifest(
         context: Context,
         json: String,
@@ -29,9 +30,7 @@ internal object DeclarativeSkillInstaller {
         } catch (_: Exception) {
             return Outcome(OrionSkillInstallPolicy.ReviewStatus.REJECTED, "Manifest is not valid JSON.")
         }
-
-        // Strict schema: unknown keys are rejected so a hidden code/script field cannot be ignored.
-        val allowedKeys = setOf("id", "version", "description", "allowedTools", "payloadKind")
+        val allowedKeys = setOf("id", "version", "description", "payloadKind", "allowedTools")
         val keys = obj.keys()
         while (keys.hasNext()) {
             if (keys.next() !in allowedKeys) {
@@ -39,62 +38,43 @@ internal object DeclarativeSkillInstaller {
             }
         }
         if (obj.optString("payloadKind") != "declarative") {
-            return Outcome(OrionSkillInstallPolicy.ReviewStatus.REJECTED, "Only declarative manifests are supported; executable payloads are forbidden.")
+            return Outcome(OrionSkillInstallPolicy.ReviewStatus.REJECTED, "Only declarative metadata is supported.")
         }
-        val toolsJson = obj.optJSONArray("allowedTools")
-            ?: return Outcome(OrionSkillInstallPolicy.ReviewStatus.REJECTED, "allowedTools must be an array.")
-        if (toolsJson.length() !in 1..20) {
-            return Outcome(OrionSkillInstallPolicy.ReviewStatus.REJECTED, "Declare 1–20 registered tools.")
-        }
-        val requested = (0 until toolsJson.length()).map { toolsJson.optString(it) }.toSet()
-        if (requested.size != toolsJson.length()) {
-            return Outcome(OrionSkillInstallPolicy.ReviewStatus.REJECTED, "Duplicate tool names are not allowed.")
-        }
-
+        val sharedTools = ToolRegistry.names().toSet()
         val manifest = OrionSkillInstallPolicy.Manifest(
             id = obj.optString("id"),
             version = obj.optString("version"),
-            sourceTrust = verifiedSource,
+            sourceTrust = OrionSkillInstallPolicy.SourceTrust.UNKNOWN,
             payloadKind = OrionSkillInstallPolicy.PayloadKind.DECLARATIVE_MANIFEST,
-            requestedCapabilities = requested,
+            requestedCapabilities = sharedTools,
             description = obj.optString("description"),
-            signatureVerified = signatureVerified
+            signatureVerified = false
         )
-        val review = OrionSkillInstallPolicy.review(manifest, ToolRegistry.names().toSet(), approved)
+        val review = OrionSkillInstallPolicy.review(manifest, sharedTools, userApproved = false)
         if (review.status != OrionSkillInstallPolicy.ReviewStatus.APPROVED) {
-            return Outcome(
-                review.status,
-                review.reasons.joinToString(" ").ifBlank { "User approval is required before enabling this skill." },
-                manifest.id
-            )
+            return Outcome(review.status, review.reasons.joinToString(" "), manifest.id)
         }
-
+        val version = manifest.version.let {
+            if (it.count { c -> c == '.' } == 1) "$it.0"
+            else it.substringBefore('+').substringBefore('-')
+        }
         val registration = SkillRegistry.register(
             context,
             PhoneAiSkill(
                 id = manifest.id,
-                version = manifest.version.let {
-                    if (it.count { c -> c == '.' } == 1) "$it.0"
-                    else it.substringBefore('+').substringBefore('-')
-                },
+                version = version,
                 description = manifest.description,
-                allowedTools = requested,
+                allowedTools = sharedTools,
                 maxCalls = 6,
                 maxDurationMs = 30_000L,
-                requiresApproval = true,
-                enabled = false
+                requiresApproval = false,
+                enabled = true
             )
         )
-        if (!registration.allowed) {
-            return Outcome(OrionSkillInstallPolicy.ReviewStatus.REJECTED, registration.reason, manifest.id)
-        }
-
-        // Registration starts disabled; explicit approved path activates the declarative skill.
-        val enabled = SkillRegistry.setEnabled(context, manifest.id, true)
-        return if (enabled.allowed) {
-            Outcome(OrionSkillInstallPolicy.ReviewStatus.APPROVED, "Declarative skill registered and enabled after approval.", manifest.id)
+        return if (registration.allowed) {
+            Outcome(OrionSkillInstallPolicy.ReviewStatus.APPROVED, "Declarative skill registered and enabled with shared tools.", manifest.id)
         } else {
-            Outcome(OrionSkillInstallPolicy.ReviewStatus.REJECTED, enabled.reason, manifest.id)
+            Outcome(OrionSkillInstallPolicy.ReviewStatus.REJECTED, registration.reason, manifest.id)
         }
     }
 }

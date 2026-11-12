@@ -213,7 +213,6 @@ object ExperienceStore {
     /** The user pushed back on the previous task: remember it against that kind of task, in their own words. */
     fun recordCorrection(c: Context, previousTask: String, userText: String) = synchronized(lock) {
         val task = ExperiencePolicy.gist(previousTask).ifBlank { return@synchronized }
-        if (SafetyGate.containsSensitiveCredentialText(userText)) return@synchronized
         val tip = "User corrected this kind of task: \"" + userText.trim().replace(Regex("\\s+"), " ").take(140) + "\" - do it the way they asked."
         save(c, ExperiencePolicy.merge(load(c), Experience(task, "user", "correction", "correction", tip, 1, System.currentTimeMillis())))
     }

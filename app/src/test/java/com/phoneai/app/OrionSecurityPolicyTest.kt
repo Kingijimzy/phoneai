@@ -31,8 +31,9 @@ class OrionSecurityPolicyTest {
 
     @Test fun securityInvariantRegisterIsOwnerReadable() {
         val rows = OrionSecurityPolicy.invariantStatus()
-        assertTrue(rows.any { it.contains("Registered-tool invariant") })
-        assertTrue(rows.any { it.contains("Secret invariant") })
-        assertTrue(rows.any { it.contains("Untrusted-data invariant") })
+        assertTrue(rows.any { it.contains("Android permission boundary") })
+        assertTrue(rows.any { it.contains("Credential-storage boundary") })
+        assertTrue(rows.any { it.contains("Untrusted-data boundary") })
+        assertTrue(rows.any { it.contains("Warning behavior") })
     }
 }

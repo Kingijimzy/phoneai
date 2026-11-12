@@ -109,7 +109,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         temperature: Double,
         fastResponse: Boolean,
         tools: List<ToolDefinition>,
-        onDelta: ((String) -> Unit)?
+        onDelta: ((String) -> Unit)?,
+        onToolCall: ((String, JSONObject) -> String)?
     ): OrionModelTurn {
         activeNativeTools.set(tools)
         nativeToolCalls.set(emptyList())

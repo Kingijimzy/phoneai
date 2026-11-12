@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -114,8 +115,9 @@ internal fun orionImageSampleSize(width: Int, height: Int, maxDimension: Int = 1
 
 /** Lightweight Markdown presentation for model replies; copy still uses the original source. */
 private val ORION_HEADING_PATTERN = Regex("""^\s{0,3}(#{1,3})\s+(.+)$""")
-private val ORION_BULLET_PATTERN = Regex("""^\s*(?:[-*+]\s+|\d+[.)]\s+)(.+)$""")
-private val ORION_INLINE_TOKEN_PATTERN = Regex("""\[([^\]]+)]\((https?://[^\s)]+)\)|\*\*(.+?)\*\*|`([^`]+)`|(?<![*\w])\*([^*\n]+)\*(?!\w)|(https?://[^\s)]+)""")
+private val ORION_BULLET_PATTERN = Regex("""^(\s*)(?:([-*+])\s+|(\d+[.)])\s+)(.+)$""")
+private val ORION_TASK_PATTERN = Regex("""^(\s*)[-*+]\s+\[([ xX])]\s+(.+)$""")
+private val ORION_INLINE_TOKEN_PATTERN = Regex("""\[([^\]]+)]\((https?://[^\s)]+)\)|\*\*(.+?)\*\*|~~(.+?)~~|`([^`]+)`|(?<![*\w])\*([^*\n]+)\*(?!\w)|(https?://[^\s)]+)""")
 
 internal fun normalizeOrionMarkdownTables(source: String): String {
     val input = source.replace("\r\n", "\n").replace('\r', '\n').split('\n')
@@ -174,6 +176,20 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
                 if (hasRenderedLine) out.append("\n")
                 inCode = true
                 codeFirstLine = true
+                val language = raw.trimStart().removePrefix("```").trim()
+                if (language.isNotBlank()) {
+                    val languageStart = out.length
+                    out.append(language.uppercase())
+                    out.addStyle(
+                        androidx.compose.ui.text.SpanStyle(
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = OrionUiPalette.muted
+                        ),
+                        languageStart, out.length
+                    )
+                    out.append("\n")
+                }
                 codeStart = out.length
                 hasRenderedLine = true
             } else {
@@ -182,8 +198,8 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
                         androidx.compose.ui.text.SpanStyle(
                             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                             fontSize = 12.sp,
-                            color = Color(0xFFF0F0F0),
-                            background = Color(0xFF242424)
+                            color = OrionUiPalette.text,
+                            background = OrionUiPalette.raised
                         ),
                         codeStart, out.length
                     )
@@ -204,8 +220,8 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
                     androidx.compose.ui.text.SpanStyle(
                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                         fontSize = 12.sp,
-                        color = Color(0xFFF0F0F0),
-                        background = Color(0xFF242424)
+                        color = OrionUiPalette.text,
+                        background = OrionUiPalette.raised
                     ),
                     lineStart, out.length
                 )
@@ -215,10 +231,24 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
             return@forEach
         }
 
+        val lineStart = out.length
         val line = raw.trimEnd()
         val heading = ORION_HEADING_PATTERN.find(line)
+        val task = ORION_TASK_PATTERN.find(line)
         val bullet = ORION_BULLET_PATTERN.find(line)
-        val content = heading?.groupValues?.get(2) ?: bullet?.let { "•  " + it.groupValues[1] } ?: line
+        val quote = line.trimStart().startsWith(">")
+        val rule = line.trim() in setOf("---", "***", "___")
+        val indent = (task?.groupValues?.get(1) ?: bullet?.groupValues?.get(1) ?: "")
+            .length.div(2).coerceAtMost(3)
+        val indentPrefix = "\u00A0".repeat(indent * 2)
+        val content = when {
+            heading != null -> heading.groupValues[2]
+            task != null -> indentPrefix + (if (task.groupValues[2].equals("x", true)) "☑  " else "☐  ") + task.groupValues[3]
+            bullet != null -> indentPrefix + (bullet.groupValues[3].ifBlank { "•" }) + "  " + bullet.groupValues[4]
+            quote -> "│  " + line.trimStart().removePrefix(">").trimStart()
+            rule -> "────────────────────────"
+            else -> line
+        }
         val headingSize = heading?.let {
             when (it.groupValues[1].length) { 1 -> 18.sp; 2 -> 16.sp; else -> 15.sp }
         }
@@ -245,7 +275,7 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
                     out.addStringAnnotation("URL", match.groupValues[2], start, out.length)
                     out.addStyle(
                         androidx.compose.ui.text.SpanStyle(
-                            color = Color(0xFFD2D6DA),
+                            color = OrionUiPalette.secondaryText,
                             textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
                         ), start, out.length
                     )
@@ -257,27 +287,34 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
                 match.groups[4] != null -> {
                     out.append(match.groupValues[4])
                     out.addStyle(
-                        androidx.compose.ui.text.SpanStyle(
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                            fontSize = 12.sp,
-                            background = Color(0xFF242424)
-                        ), start, out.length
+                        androidx.compose.ui.text.SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough),
+                        start, out.length
                     )
                 }
                 match.groups[5] != null -> {
                     out.append(match.groupValues[5])
+                    out.addStyle(
+                        androidx.compose.ui.text.SpanStyle(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            background = OrionUiPalette.raised
+                        ), start, out.length
+                    )
+                }
+                match.groups[6] != null -> {
+                    out.append(match.groupValues[6])
                     out.addStyle(
                         androidx.compose.ui.text.SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
                         start, out.length
                     )
                 }
                 else -> {
-                    val url = match.groupValues[6].trimEnd('.', ',', ';')
+                    val url = match.groupValues[7].trimEnd('.', ',', ';')
                     out.append(url)
                     out.addStringAnnotation("URL", url, start, out.length)
                     out.addStyle(
                         androidx.compose.ui.text.SpanStyle(
-                            color = Color(0xFFD2D6DA),
+                            color = OrionUiPalette.secondaryText,
                             textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
                         ), start, out.length
                     )
@@ -286,6 +323,22 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
             cursor = match.range.last + 1
         }
         appendPlain(content.substring(cursor))
+        if (quote && out.length > lineStart) {
+            out.addStyle(
+                androidx.compose.ui.text.SpanStyle(
+                    color = OrionUiPalette.muted,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                ),
+                lineStart, out.length
+            )
+        }
+        if (rule && out.length > lineStart) {
+            out.addStyle(androidx.compose.ui.text.SpanStyle(color = OrionUiPalette.border), lineStart, out.length)
+        }
+        if (task != null && out.length > lineStart) {
+            val markerStart = lineStart + indentPrefix.length
+            out.addStyle(androidx.compose.ui.text.SpanStyle(color = OrionUiPalette.accent), markerStart, (markerStart + 1).coerceAtMost(out.length))
+        }
         hasRenderedLine = true
     }
 
@@ -294,8 +347,8 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
             androidx.compose.ui.text.SpanStyle(
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                 fontSize = 12.sp,
-                color = Color(0xFFF0F0F0),
-                background = Color(0xFF242424)
+                color = OrionUiPalette.text,
+                background = OrionUiPalette.raised
             ),
             codeStart, out.length
         )
@@ -308,11 +361,11 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
     var expanded by rememberSaveable(event.eventId) { mutableStateOf(false) }
     val active = event.status == OrionActivityStatus.ACTIVE
     val accent = when (event.status) {
-        OrionActivityStatus.ACTIVE -> Color(0xFFD1D1D1)
-        OrionActivityStatus.WAITING -> Color(0xFFE0C58A)
-        OrionActivityStatus.SUCCEEDED -> Color(0xFFB8CDBD)
-        OrionActivityStatus.FAILED -> Color(0xFFE09B9B)
-        else -> Color(0xFFAAAAAA)
+        OrionActivityStatus.ACTIVE -> OrionUiPalette.accent
+        OrionActivityStatus.WAITING -> OrionUiPalette.warning
+        OrionActivityStatus.SUCCEEDED -> OrionUiPalette.success
+        OrionActivityStatus.FAILED -> OrionUiPalette.danger
+        else -> OrionUiPalette.muted
     }
     val terminalOutput = event.evidence.lastOrNull { it.contains("Python terminal", true) || it.contains("TASK:OUTPUT", true) }
         ?: event.summary
@@ -325,34 +378,46 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
     )
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp))
-            .background(Color(0xFF111111))
-            .border(1.dp, Color(0xFF303030), RoundedCornerShape(9.dp))
-            .clickable { expanded = !expanded }
+            .background(OrionUiPalette.panel)
+            .border(1.dp, OrionUiPalette.border, RoundedCornerShape(9.dp))
+            .semantics {
+                contentDescription = buildString {
+                    append(event.title)
+                    append(", ")
+                    append(event.status.name.lowercase())
+                    if (event.summary.isNotBlank()) append(". " + event.summary)
+                    append(if (expanded) ". Hide task details" else ". Show task details")
+                }
+                role = Role.Button
+            }
+            .clickable(role = Role.Button) { expanded = !expanded }
             .padding(horizontal = 9.dp, vertical = 6.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(6.dp).clip(CircleShape).background(accent.copy(alpha = if (active) alpha else 1f)))
             Spacer(Modifier.width(7.dp))
-            Text(event.title, color = Color(0xFFE8E8E8), fontSize = 11.sp,
+            Text(event.title, color = OrionUiPalette.text, fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f))
             Text(
                 when (event.status) {
                     OrionActivityStatus.ACTIVE -> "RUNNING"
-                    OrionActivityStatus.WAITING -> "APPROVAL"
+                    OrionActivityStatus.WAITING -> "WARNING"
                     OrionActivityStatus.SUCCEEDED -> "DONE"
                     OrionActivityStatus.FAILED -> "FAILED"
                     OrionActivityStatus.CANCELLED -> "STOPPED"
                     OrionActivityStatus.INTERRUPTED -> "PAUSED"
                 }, color = accent, fontSize = 8.sp, fontWeight = FontWeight.Bold
             )
+            Text(if (expanded) "LESS" else "DETAILS", color = OrionUiPalette.muted, fontSize = 8.sp,
+                fontWeight = FontWeight.SemiBold)
         }
         // Progress bar: sweeps while the task runs, fills when it finishes.
         val sweep by pulse.animateFloat(
             initialValue = 0f, targetValue = 0.7f,
             animationSpec = infiniteRepeatable(tween(1100), repeatMode = RepeatMode.Reverse), label = "task-progress-sweep"
         )
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp, start = 13.dp).height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF262626))) {
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp, start = 13.dp).height(3.dp).clip(RoundedCornerShape(2.dp)).background(OrionUiPalette.raised)) {
             if (active || event.status == OrionActivityStatus.WAITING) {
                 Spacer(Modifier.weight(sweep.coerceAtLeast(0.001f)))
                 Box(Modifier.weight(0.3f).fillMaxHeight().background(accent))
@@ -367,15 +432,15 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
             val finished = steps.count { it.state == "DONE" }
             Text(
                 "$finished of ${steps.size} steps done" + (event.elapsedMs?.let { "  ·  " + OrionActivityTimeline.elapsedLabel(0L, it) } ?: ""),
-                color = Color(0xFF8A8A8A), fontSize = 9.sp, modifier = Modifier.padding(start = 13.dp, top = 5.dp)
+                color = OrionUiPalette.muted, fontSize = 9.sp, modifier = Modifier.padding(start = 13.dp, top = 5.dp)
             )
             shown.forEach { step ->
                 val mark = when (step.state) {
                     "DONE" -> "✓"; "FAILED" -> "✕"; "WAITING" -> "…"; "RUNNING" -> "▸"; else -> "•"
                 }
                 val tint = when (step.state) {
-                    "DONE" -> Color(0xFFB8CDBD); "FAILED" -> Color(0xFFE09B9B); "WAITING" -> Color(0xFFE0C58A)
-                    "RUNNING" -> Color(0xFFF0F0F0); else -> Color(0xFF999999)
+                    "DONE" -> OrionUiPalette.success; "FAILED" -> OrionUiPalette.danger; "WAITING" -> OrionUiPalette.warning
+                    "RUNNING" -> OrionUiPalette.text; else -> OrionUiPalette.muted
                 }
                 Row(Modifier.padding(start = 13.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(mark, color = tint.copy(alpha = if (step.state == "RUNNING") alpha else 1f), fontSize = 10.sp, modifier = Modifier.width(14.dp))
@@ -387,42 +452,42 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
         if (terminalEvidence != null) {
             Text(
                 "$ " + terminalEvidence.commandLabel,
-                color = Color(0xFFB8B8B8), fontSize = 9.sp,
+                color = OrionUiPalette.secondaryText, fontSize = 9.sp,
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                 modifier = Modifier.padding(start = 13.dp, top = 4.dp)
             )
             if (terminalEvidence.outputTail.isNotBlank()) {
                 Text(
                     terminalEvidence.outputTail.takeLast(400),
-                    color = Color(0xFFB8CDBD), fontSize = 9.sp, lineHeight = 12.sp,
+                    color = OrionUiPalette.success, fontSize = 9.sp, lineHeight = 12.sp,
                     fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                     maxLines = if (expanded) 8 else 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth().padding(start = 13.dp, top = 2.dp)
-                        .clip(RoundedCornerShape(5.dp)).background(Color(0xFF080808)).padding(6.dp)
+                        .clip(RoundedCornerShape(5.dp)).background(OrionUiPalette.background).padding(6.dp)
                 )
             }
             terminalEvidence.exitCode?.let { code ->
-                Text("exit $code", color = if (code == 0) Color(0xFFB8CDBD) else Color(0xFFE09B9B),
+                Text("exit $code", color = if (code == 0) OrionUiPalette.success else OrionUiPalette.danger,
                     fontSize = 8.sp, modifier = Modifier.padding(start = 13.dp, top = 2.dp))
             }
         } else if (event.kind == OrionActivityKind.TOOL && (event.title.contains("terminal", true) || event.summary.contains("TASK:OUTPUT", true))) {
             Text(
                 terminalOutput.lineSequence().lastOrNull().orEmpty().takeLast(180).ifBlank { "Starting process…" },
-                color = Color(0xFFB8CDBD), fontSize = 9.sp, lineHeight = 11.sp,
+                color = OrionUiPalette.success, fontSize = 9.sp, lineHeight = 11.sp,
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                 maxLines = if (expanded) 6 else 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 13.dp, top = 3.dp)
             )
         } else if (event.summary.isNotBlank()) {
-            Text(event.summary, color = Color(0xFF999999), fontSize = 9.sp,
+            Text(event.summary, color = OrionUiPalette.muted, fontSize = 9.sp,
                 maxLines = if (expanded) 4 else 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 13.dp, top = 2.dp))
         }
         if (expanded) {
             event.evidence.takeLast(10).forEach { line ->
-                Text(line, color = Color(0xFFAAAAAA), fontSize = 8.sp, lineHeight = 11.sp)
+                Text(line, color = OrionUiPalette.muted, fontSize = 8.sp, lineHeight = 11.sp)
             }
-            Text("Task ${event.taskId}", color = Color(0xFF666666), fontSize = 8.sp)
+            Text("Task ${event.taskId}", color = OrionUiPalette.muted, fontSize = 8.sp)
         }
     }
 }
@@ -439,13 +504,13 @@ internal fun isCompactExecutionNote(item: OrionChatLine): Boolean {
     ).any { text.startsWith(it) }
 }
 
-private val ChatInk = Color(0xFF050505)
-private val ChatPanel = Color(0xFF141414)
-private val ChatPanelRaised = Color(0xFF202020)
-private val ChatMint = Color(0xFFE5E5E5)
-private val ChatCopy = Color(0xFFF7FAF9)
-private val ChatMuted = Color(0xFF9B9B9B)
-private val ChatHairline = Color(0xFF303030)
+private val ChatInk = OrionUiPalette.background
+private val ChatPanel = OrionUiPalette.panel
+private val ChatPanelRaised = OrionUiPalette.raised
+private val ChatMint = OrionUiPalette.accent
+private val ChatCopy = OrionUiPalette.text
+private val ChatMuted = OrionUiPalette.muted
+private val ChatHairline = OrionUiPalette.border
 
 data class OrionChatLine(
     val id: Long,
@@ -486,6 +551,13 @@ internal fun OrionComposeChatScreen(
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
     var editingOriginal by rememberSaveable { mutableStateOf<String?>(null) }
+    val latestActivityEvent = activityEvents.maxByOrNull { it.timestampMs }
+    val activeActivityEvent = activityEvents
+        .filter { it.status == OrionActivityStatus.ACTIVE || it.status == OrionActivityStatus.WAITING }
+        .maxByOrNull { it.timestampMs }
+    val displayStatus = activeActivityEvent?.let(::companionStatusForEvent) ?: status
+    val companionActivity = activeActivityEvent?.let(::companionActivityForEvent)
+        ?: companionActivityForChatStatus(status)
     var menuExpanded by remember { mutableStateOf(false) }
     var showModelSheet by remember { mutableStateOf(false) }
     var sheetTick by remember { mutableStateOf(0) }
@@ -496,17 +568,51 @@ internal fun OrionComposeChatScreen(
     val composerFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val listState = rememberLazyListState()
+    fun submitDraft() {
+        if (listOf("think", "work", "act", "brows", "build", "draw", "run", "delegat").any { displayStatus.contains(it, true) }) {
+            onStop()
+            return
+        }
+        if (draft.isBlank() && selectedImages.isEmpty()) return
+        val value = draft.trim()
+        val original = editingOriginal
+        if (original != null) {
+            if (value.isNotBlank()) onEditSend(original, value)
+        } else {
+            onSend(value)
+        }
+        draft = ""
+        editingOriginal = null
+    }
     val statusDotColor by animateColorAsState(
         targetValue = when {
-            status.contains("listen", true) || status.contains("speak", true) -> ChatMint
-            status.contains("think", true) || status.contains("work", true) -> Color(0xFFD0D0D0)
-            else -> Color(0xFF777777)
+            displayStatus.contains("listen", true) || displayStatus.contains("speak", true) -> ChatMint
+            displayStatus.contains("warning", true) || displayStatus.contains("error", true) -> OrionUiPalette.warning
+            listOf("think", "work", "act", "brows", "build", "draw", "run", "delegat").any { displayStatus.contains(it, true) } -> OrionUiPalette.secondaryText
+            else -> OrionUiPalette.muted
         },
         animationSpec = tween(durationMillis = 260),
         label = "chat-status-dot"
     )
+    // A restrained pulse gives Orion visible presence while it is listening, thinking,
+    // speaking or acting. Idle stays still so the interface never feels artificially busy.
+    val presenceActive = listOf("listen", "think", "speak", "work", "act", "brows", "build", "draw", "run", "delegat")
+        .any { displayStatus.contains(it, true) }
+    val presenceTransition = rememberInfiniteTransition(label = "orion-presence")
+    val presenceAlpha by presenceTransition.animateFloat(
+        initialValue = if (presenceActive) 0.22f else 0f,
+        targetValue = if (presenceActive) 0.72f else 0f,
+        animationSpec = infiniteRepeatable(tween(1050), repeatMode = RepeatMode.Reverse),
+        label = "orion-presence-alpha"
+    )
+    val presenceScale by presenceTransition.animateFloat(
+        initialValue = 0.78f,
+        targetValue = 1.18f,
+        animationSpec = infiniteRepeatable(tween(1050), repeatMode = RepeatMode.Reverse),
+        label = "orion-presence-scale"
+    )
     val modeChipFill by animateColorAsState(
-        targetValue = if (commandMode) Color(0xFF303030) else Color(0xFF121212),
+        targetValue = if (commandMode) OrionUiPalette.border else OrionUiPalette.panel,
         animationSpec = tween(durationMillis = 220),
         label = "chat-mode-fill"
     )
@@ -531,28 +637,73 @@ internal fun OrionComposeChatScreen(
             }
         }
     }
-    val busy = status.contains("think", true) || status.contains("work", true) || status.contains("act", true)
-    Column(Modifier.fillMaxSize().background(Color(0xFF000000)).imePadding()) {
+    val busy = listOf("think", "work", "act", "brows", "build", "draw", "run", "delegat")
+        .any { displayStatus.contains(it, true) }
+    Column(Modifier.fillMaxSize().background(OrionUiPalette.background).imePadding()) {
         // Editorial header: quiet branding, no oversized pill around every element.
         Row(
             Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                Modifier.size(34.dp).clip(CircleShape).background(Color(0xFF121212))
-                    .border(1.dp, ChatHairline, CircleShape).clickable(onClick = onBack),
+                Modifier.size(44.dp).clip(CircleShape).background(OrionUiPalette.panel)
+                    .border(1.dp, ChatHairline, CircleShape)
+                    .semantics { contentDescription = "Back to chat list"; role = Role.Button }
+                    .clickable(role = Role.Button, onClick = onBack),
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Rounded.ArrowBack, null, tint = ChatCopy, modifier = Modifier.size(18.dp)) }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
+            AndroidView(
+                factory = { context -> CompanionView(context) },
+                modifier = Modifier.size(44.dp).semantics {
+                    contentDescription = "Orion companion. Tap to change character."
+                    role = Role.Button
+                },
+                update = { view ->
+                    view.character = companionLook
+                    view.activity = companionActivity
+                    view.onCharacterChanged = onCompanionLookChanged
+                    val event = latestActivityEvent
+                    val eventKey = event?.let { "${it.eventId}:${it.status}" } ?: "no-activity-event"
+                    if (view.tag != eventKey) {
+                        view.tag = eventKey
+                        val recent = event != null && System.currentTimeMillis() - event.timestampMs in 0L..15_000L
+                        if (recent) {
+                            when (event!!.status) {
+                                OrionActivityStatus.WAITING -> { view.setMood(CompanionMood.Mood.WORRIED); view.react(CompanionLife.Reaction.ALARM) }
+                                OrionActivityStatus.FAILED -> { view.setMood(CompanionMood.Mood.ALERT); view.react(CompanionLife.Reaction.ALARM) }
+                                OrionActivityStatus.SUCCEEDED -> { view.setMood(CompanionMood.Mood.HAPPY); view.react(CompanionLife.Reaction.CELEBRATE) }
+                                OrionActivityStatus.CANCELLED, OrionActivityStatus.INTERRUPTED -> { view.setMood(CompanionMood.Mood.CALM); view.react(CompanionLife.Reaction.FLINCH) }
+                                OrionActivityStatus.ACTIVE -> view.setMood(CompanionMood.Mood.CALM)
+                            }
+                        } else {
+                            view.setMood(CompanionMood.Mood.CALM)
+                        }
+                    }
+                }
+            )
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(chatTitle, color = ChatCopy, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.size(5.dp).clip(CircleShape).background(statusDotColor))
-                    Text(status.replaceFirstChar { it.uppercase() }.take(24), color = ChatMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Box(Modifier.size(12.dp), contentAlignment = Alignment.Center) {
+                        if (presenceActive) {
+                            Box(
+                                Modifier.size(12.dp).scale(presenceScale).clip(CircleShape)
+                                    .background(statusDotColor.copy(alpha = presenceAlpha))
+                            )
+                        }
+                        Box(
+                            Modifier.size(5.dp).clip(CircleShape).background(statusDotColor)
+                                .semantics { contentDescription = "Orion state: $displayStatus" }
+                        )
+                    }
+                    Text(displayStatus.replaceFirstChar { it.uppercase() }.take(24), color = ChatMuted, fontSize = 11.sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             Box(
-                Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
+                Modifier.size(44.dp).clip(RoundedCornerShape(10.dp))
                     .semantics { contentDescription = "Start a new chat"; role = Role.Button }
                     .clickable(onClick = onNewChat),
                 contentAlignment = Alignment.Center
@@ -575,7 +726,7 @@ internal fun OrionComposeChatScreen(
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
-                    modifier = Modifier.background(Color(0xFF101010))
+                    modifier = Modifier.background(OrionUiPalette.panel)
                 ) {
                     fun choose(action: String) {
                         menuExpanded = false
@@ -584,7 +735,7 @@ internal fun OrionComposeChatScreen(
                     DropdownMenuItem(text = { Text("New Chat", color = ChatCopy) }, onClick = { choose("new_chat") })
                     DropdownMenuItem(text = { Text("Rename chat", color = ChatCopy) }, onClick = { choose("rename_chat") })
                     DropdownMenuItem(text = { Text("Model", color = ChatCopy) }, onClick = { choose("model") })
-                    DropdownMenuItem(text = { Text("Clear Chat", color = Color(0xFFE8A6A6)) }, onClick = { choose("clear_chat") })
+                    DropdownMenuItem(text = { Text("Clear Chat", color = OrionUiPalette.danger) }, onClick = { choose("clear_chat") })
                     DropdownMenuItem(text = { Text("Open Terminal", color = ChatCopy) }, onClick = { choose("terminal") })
                     DropdownMenuItem(text = { Text("Open Browser", color = ChatCopy) }, onClick = { choose("browser") })
                     DropdownMenuItem(text = { Text("Browse Chat Files", color = ChatCopy) }, onClick = { choose("chat_files") })
@@ -599,11 +750,11 @@ internal fun OrionComposeChatScreen(
                 }
             }
             Box(
-                Modifier.clip(RoundedCornerShape(9.dp)).background(modeChipFill)
+                Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(9.dp)).background(modeChipFill)
                     .border(1.dp, ChatHairline, RoundedCornerShape(9.dp))
                     .semantics { contentDescription = if (commandMode) "Switch to Talk mode" else "Switch to Command mode"; role = Role.Button }
-                    .clickable { onModeChange(!commandMode) }
-                    .padding(horizontal = 8.dp, vertical = 7.dp)
+                    .clickable(role = Role.Button) { onModeChange(!commandMode) }
+                    .padding(horizontal = 8.dp, vertical = 9.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Icon(if (commandMode) Icons.Rounded.Tune else Icons.Rounded.Waves, null,
@@ -670,8 +821,8 @@ internal fun OrionComposeChatScreen(
                     Box(Modifier.size(46.dp)) {
                         ImageThumbnail(uri, Modifier.fillMaxSize())
                         Box(
-                            Modifier.align(Alignment.TopEnd).size(24.dp).clip(CircleShape)
-                                .background(Color(0xFF080808))
+                            Modifier.align(Alignment.TopEnd).size(32.dp).clip(CircleShape)
+                                .background(OrionUiPalette.background)
                                 .semantics { contentDescription = "Remove attached image ${index + 1}"; role = Role.Button }
                                 .clickable { onRemoveImage(index) },
                             contentAlignment = Alignment.Center
@@ -683,27 +834,55 @@ internal fun OrionComposeChatScreen(
                     Text("${selectedImages.size} image${if (selectedImages.size == 1) "" else "s"} attached", color = ChatCopy, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                     Text("Ready to analyse together", color = ChatMuted, fontSize = 11.sp)
                 }
-                Text("Clear", color = ChatMuted, fontSize = 10.sp, modifier = Modifier.clickable { selectedImages.indices.reversed().forEach(onRemoveImage) }.padding(5.dp))
+                Text("Clear", color = ChatMuted, fontSize = 10.sp, modifier = Modifier.heightIn(min = 44.dp)
+                    .clickable(role = Role.Button) { selectedImages.indices.reversed().forEach(onRemoveImage) }
+                    .semantics { contentDescription = "Remove all attached images"; role = Role.Button }
+                    .padding(horizontal = 8.dp, vertical = 10.dp))
             }
         }
 
         // Composer is the primary surface; provider and model switching stay beside the input.
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
+            AnimatedVisibility(
+                visible = editingOriginal != null,
+                enter = fadeIn(animationSpec = tween(150)) + slideInVertically(animationSpec = tween(150)) { it / 3 },
+                exit = androidx.compose.animation.fadeOut(animationSpec = tween(120))
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 7.dp).clip(RoundedCornerShape(9.dp))
+                        .background(OrionUiPalette.panel).border(1.dp, OrionUiPalette.border, RoundedCornerShape(9.dp))
+                        .padding(start = 11.dp, end = 5.dp, top = 5.dp, bottom = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text("EDITING MESSAGE", color = OrionUiPalette.accent, fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold, letterSpacing = .7.sp)
+                        Text("Your revised message will replace the previous one", color = ChatMuted,
+                            fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text("CANCEL", color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(7.dp))
+                            .clickable(role = Role.Button) { editingOriginal = null; draft = "" }
+                            .semantics { contentDescription = "Cancel message editing"; role = Role.Button }
+                            .padding(horizontal = 10.dp, vertical = 12.dp))
+                }
+            }
             Row(
                 Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, bottom = 7.dp),
                 horizontalArrangement = Arrangement.spacedBy(7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF1C1C1E))
-                        .border(1.dp, if (providerReady) Color(0x40545458) else Color(0xFF8A5D42), RoundedCornerShape(10.dp))
-                        .clickable { showModelSheet = true }
+                    Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(10.dp))
+                        .background(OrionUiPalette.panel)
+                        .border(1.dp, if (providerReady) OrionUiPalette.border.copy(alpha = 0.6f) else OrionUiPalette.warning, RoundedCornerShape(10.dp))
+                        .clickable(role = Role.Button) { showModelSheet = true }
+                        .semantics { contentDescription = "Choose provider; $shownProvider"; role = Role.Button }
                         .padding(horizontal = 10.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(if (providerReady) Color(0xFFDADADA) else Color(0xFFE2A16F)))
+                    Box(Modifier.size(6.dp).clip(CircleShape).background(if (providerReady) OrionUiPalette.accent else OrionUiPalette.warning))
                     Column(Modifier.weight(1f)) {
                         Text("PROVIDER", color = ChatMuted, fontSize = 8.sp, letterSpacing = .8.sp, fontWeight = FontWeight.SemiBold)
                         Text(shownProvider, color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -711,10 +890,11 @@ internal fun OrionComposeChatScreen(
                     Icon(Icons.Rounded.ChevronRight, null, tint = ChatMuted, modifier = Modifier.size(14.dp))
                 }
                 Row(
-                    Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF1C1C1E))
-                        .border(1.dp, Color(0x40545458), RoundedCornerShape(10.dp))
-                        .clickable(onClick = onModelClick)
+                    Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(10.dp))
+                        .background(OrionUiPalette.panel)
+                        .border(1.dp, OrionUiPalette.border.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                        .clickable(role = Role.Button, onClick = onModelClick)
+                        .semantics { contentDescription = "Choose model; $modelLabel"; role = Role.Button }
                         .padding(horizontal = 10.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -729,8 +909,8 @@ internal fun OrionComposeChatScreen(
             }
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
-                    .background(Color(0xFF2C2C30))
-                    .border(1.dp, Color(0x40545458), RoundedCornerShape(28.dp))
+                    .background(OrionUiPalette.raised)
+                    .border(1.dp, OrionUiPalette.border.copy(alpha = 0.6f), RoundedCornerShape(28.dp))
                     .padding(start = 16.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
@@ -740,18 +920,14 @@ internal fun OrionComposeChatScreen(
                         value = draft, onValueChange = { draft = it },
                         modifier = Modifier.fillMaxWidth().focusRequester(composerFocusRequester).semantics { contentDescription = if (commandMode) "Describe a task for Orion" else "Message Orion" },
                         textStyle = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 21.sp),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(onSend = {
-                            if (busy) {
-                                onStop()
-                            } else if (draft.isNotBlank() || selectedImages.isNotEmpty()) {
-                                val value = draft.trim()
-                                val original = editingOriginal
-                                if (original != null && value.isNotBlank()) onEditSend(original, value) else onSend(value)
-                                draft = ""
-                                editingOriginal = null
-                            }
-                        }), maxLines = 5
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = if (commandMode) androidx.compose.ui.text.input.KeyboardCapitalization.None else androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
+                            autoCorrect = !commandMode,
+                            // Keep this as a multiline editor: Enter inserts a newline.
+                            // Sending is explicit through the on-screen Send button only.
+                            imeAction = ImeAction.Default
+                        ),
+                        maxLines = 5
                     )
                 }
                 ComposerButton(Icons.Rounded.AddPhotoAlternate, "Attach file or image", onPickImage, secondary = true)
@@ -759,17 +935,7 @@ internal fun OrionComposeChatScreen(
                 ComposerButton(
                     if (busy) Icons.Rounded.Stop else Icons.Rounded.Send,
                     if (busy) "Stop response" else "Send message",
-                    {
-                        if (busy) {
-                            onStop()
-                        } else if (draft.isNotBlank() || selectedImages.isNotEmpty()) {
-                            val value = draft.trim()
-                            val original = editingOriginal
-                            if (original != null && value.isNotBlank()) onEditSend(original, value) else onSend(value)
-                            draft = ""
-                            editingOriginal = null
-                        }
-                    },
+                    { submitDraft() },
                     secondary = busy
                 )
             }
@@ -778,17 +944,17 @@ internal fun OrionComposeChatScreen(
                 horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Live voice", color = ChatMuted, fontSize = 11.sp,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                    modifier = Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(8.dp))
                         .semantics { contentDescription = "Start live voice"; role = Role.Button }
-                        .clickable(onClick = onVoice).padding(horizontal = 5.dp, vertical = 7.dp))
+                        .clickable(role = Role.Button, onClick = onVoice).padding(horizontal = 7.dp, vertical = 10.dp))
                 Text("Browser", color = ChatMuted, fontSize = 11.sp,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                    modifier = Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(8.dp))
                         .semantics { contentDescription = "Open browser preview in chat"; role = Role.Button }
-                        .clickable { inlineBrowserUrl = "https://duckduckgo.com/" }.padding(horizontal = 5.dp, vertical = 7.dp))
+                        .clickable(role = Role.Button) { inlineBrowserUrl = "https://duckduckgo.com/" }.padding(horizontal = 7.dp, vertical = 10.dp))
                 Text("Tasks", color = ChatMuted, fontSize = 11.sp,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                    modifier = Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(8.dp))
                         .semantics { contentDescription = "Open tasks"; role = Role.Button }
-                        .clickable(onClick = onTasks).padding(horizontal = 5.dp, vertical = 7.dp))
+                        .clickable(role = Role.Button, onClick = onTasks).padding(horizontal = 7.dp, vertical = 10.dp))
                 Spacer(Modifier.weight(1f))
                 Text(if (busy) "WORKING" else if (commandMode) "COMMAND MODE" else "TALK MODE",
                     color = ChatMuted, fontSize = 9.sp, letterSpacing = .6.sp, maxLines = 1)
@@ -824,7 +990,7 @@ private fun ChatInlineBrowserDialog(
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier.fillMaxSize().padding(10.dp).clip(RoundedCornerShape(18.dp))
-                .background(Color(0xFF101010)).border(1.dp, Color(0xFF383838), RoundedCornerShape(18.dp)).padding(10.dp)
+                .background(OrionUiPalette.panel).border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(18.dp)).padding(10.dp)
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("BROWSER", color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(1f))
@@ -835,7 +1001,7 @@ private fun ChatInlineBrowserDialog(
                 Text("DONE", color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onDismiss).padding(6.dp))
             }
             Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0xFF1D1D1D)).padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(OrionUiPalette.panel).padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BasicTextField(value = address, onValueChange = { address = it }, modifier = Modifier.weight(1f), singleLine = true,
                     textStyle = TextStyle(color = ChatCopy, fontSize = 12.sp), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                     keyboardActions = KeyboardActions(onGo = { safeWebUrl(address)?.let { currentUrl = it; webView?.loadUrl(it); loading = true } })

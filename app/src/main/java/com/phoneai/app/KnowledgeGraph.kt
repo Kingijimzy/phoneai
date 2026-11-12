@@ -31,7 +31,7 @@ internal object GraphPolicy {
         val out = ArrayList<Triple<String, String, String>>()
         val sentences = text.split(Regex("(?<=[.!?\\n])\\s+|;\\s+")).map { it.trim().trimEnd('.', '!') }
         for (raw in sentences) {
-            if (raw.isEmpty() || raw.endsWith("?") || SafetyGate.containsSensitiveCredentialText(raw)) continue
+            if (raw.isEmpty() || raw.endsWith("?")) continue
             val s = raw.lowercase()
             val attr = Regex("^my ([a-z ]{2,30}?) (?:is|are) (.{2,40})$").find(s)
             val me = Regex("^i (?:am|'m) (?:a |an )?(.{2,40})$").find(s)
@@ -121,7 +121,7 @@ internal object GraphPolicy {
 /**
  * Legacy graph API retained for older callers, but no longer owns a second trust store.
  * Every graph observation is routed into MemoryStore as a pending owner-review proposal.
- * Retrieval is rebuilt only from approved, non-sensitive, active memories on every call.
+ * Retrieval is rebuilt only from approved, active memories on every call.
  */
 object KnowledgeGraph {
     private fun approvedFacts(c: Context): List<GraphFact> {
@@ -140,7 +140,7 @@ object KnowledgeGraph {
     /** A direct graph write is an observation, never an implicit approval. */
     fun link(c: Context, a: String, rel: String, b: String): Boolean {
         val text = "$a $rel $b".trim()
-        if (text.isBlank() || SafetyGate.containsSensitiveCredentialText(text)) return false
+        if (text.isBlank()) return false
         return MemoryStore.addObservedProposal(
             c, "fact", text, 0.55, "knowledge graph observation requires owner review"
         ) != null

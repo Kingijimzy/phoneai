@@ -54,7 +54,8 @@ internal interface OrionModelProvider {
         temperature: Double = 0.2,
         fastResponse: Boolean = false,
         tools: List<ToolDefinition> = emptyList(),
-        onDelta: ((String) -> Unit)? = null
+        onDelta: ((String) -> Unit)? = null,
+        onToolCall: ((String, org.json.JSONObject) -> String)? = null
     ): OrionModelTurn = OrionModelTurn(
         chat(messages, vision, maxTokens, temperature, fastResponse, onDelta)
     )

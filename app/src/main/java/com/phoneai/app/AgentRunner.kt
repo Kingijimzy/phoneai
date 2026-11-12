@@ -166,7 +166,6 @@ object AgentRunner {
     private fun delegatedTaskContext(c: Context): String = try {
         val active = TaskStore.all(c)
             .filter { it.status !in setOf("completed", "done", "cancelled", "failed") }
-            .filterNot { SafetyGate.containsSensitiveCredentialText(it.title) }
             .take(6)
         if (active.isEmpty()) "Delegated task summary: no shareable active tasks."
         else buildString {
@@ -195,8 +194,7 @@ object AgentRunner {
         val safe = MemoryStore.all(c).filter { memory ->
             memory.category in allowedCategories &&
                 MemoryGovernancePolicy.canUseInPrompt(memory.reviewStatus, memory.sensitivity) &&
-                OrionMemoryLifecycle.isActive(c, memory.id) &&
-                !SafetyGate.containsSensitiveCredentialText(memory.text)
+                OrionMemoryLifecycle.isActive(c, memory.id)
         }
         val selected = MemoryRanking.selectCategories(safe, allowedCategories, userText, limit = 6, relevantLimit = 4)
         if (selected.isEmpty()) return "(no shareable fact memories match this request)"

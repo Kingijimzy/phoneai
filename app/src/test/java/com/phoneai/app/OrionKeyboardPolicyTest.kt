@@ -44,4 +44,19 @@ class OrionKeyboardPolicyTest {
         assertFalse(OrionKeyboardPolicy.canReplaceField(false))
         assertTrue(OrionKeyboardPolicy.canReplaceField(true))
     }
+
+    @Test fun restoresPreviousImeOnlyWhenOrionIsStillSelected() {
+        assertTrue(OrionKeyboardPolicy.shouldRestorePreviousIme(
+            "com.phoneai.app/com.phoneai.app.OrionKeyboardService",
+            "com.phoneai.app/com.phoneai.app.OrionKeyboardService"
+        ))
+        assertFalse(OrionKeyboardPolicy.shouldRestorePreviousIme(
+            "com.google.android.inputmethod.latin/.LatinIME",
+            "com.phoneai.app/com.phoneai.app.OrionKeyboardService"
+        ))
+        assertFalse(OrionKeyboardPolicy.shouldRestorePreviousIme(
+            null,
+            "com.phoneai.app/com.phoneai.app.OrionKeyboardService"
+        ))
+    }
 }

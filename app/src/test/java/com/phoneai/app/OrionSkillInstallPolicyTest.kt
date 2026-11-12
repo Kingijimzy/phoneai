@@ -20,57 +20,41 @@ class OrionSkillInstallPolicyTest {
         signatureVerified = signature
     )
 
-    @Test
-    fun declarativeSkillRequiresExplicitApproval() {
+    @Test fun validDeclarativeSkillDoesNotRequireApproval() {
         val review = OrionSkillInstallPolicy.review(manifest(), setOf("gmail.messages.read"), false)
-        assertEquals(OrionSkillInstallPolicy.ReviewStatus.NEEDS_USER_APPROVAL, review.status)
-        assertTrue(review.requiresUserApproval)
-        assertFalse(review.canExecuteNow)
-    }
-
-    @Test
-    fun approvedDeclarativeSkillCanBindOnlyRegisteredCapability() {
-        val review = OrionSkillInstallPolicy.review(manifest(), setOf("gmail.messages.read"), true)
         assertEquals(OrionSkillInstallPolicy.ReviewStatus.APPROVED, review.status)
+        assertFalse(review.requiresUserApproval)
         assertTrue(review.canExecuteNow)
     }
 
-    @Test
-    fun missingCapabilityIsRejectedRatherThanTreatedAsAnApprovalProblem() {
-        val review = OrionSkillInstallPolicy.review(manifest(), emptySet(), true)
+    @Test fun sourceTrustAndSignatureDoNotCreateAnOrionApprovalGate() {
+        val unknown = OrionSkillInstallPolicy.review(
+            manifest(trust = OrionSkillInstallPolicy.SourceTrust.UNKNOWN),
+            setOf("gmail.messages.read"),
+            false
+        )
+        val unsigned = OrionSkillInstallPolicy.review(
+            manifest(trust = OrionSkillInstallPolicy.SourceTrust.VERIFIED_REPOSITORY, signature = false),
+            setOf("gmail.messages.read"),
+            false
+        )
+        assertEquals(OrionSkillInstallPolicy.ReviewStatus.APPROVED, unknown.status)
+        assertEquals(OrionSkillInstallPolicy.ReviewStatus.APPROVED, unsigned.status)
+    }
+
+    @Test fun missingCapabilityIsRejectedBecauseItIsNotRegistered() {
+        val review = OrionSkillInstallPolicy.review(manifest(), emptySet(), false)
         assertEquals(OrionSkillInstallPolicy.ReviewStatus.REJECTED, review.status)
         assertTrue(review.missingCapabilities.contains("gmail.messages.read"))
         assertFalse(review.requiresUserApproval)
         assertFalse(review.canExecuteNow)
     }
 
-    @Test
-    fun arbitraryShellCodeIsRejectedAsSkill() {
+    @Test fun executablePayloadsRemainUnsupportedByTheDeclarativeInstaller() {
         val review = OrionSkillInstallPolicy.review(
             manifest(kind = OrionSkillInstallPolicy.PayloadKind.SHELL_SCRIPT),
             setOf("gmail.messages.read"),
-            true
-        )
-        assertEquals(OrionSkillInstallPolicy.ReviewStatus.REJECTED, review.status)
-        assertFalse(review.canExecuteNow)
-    }
-
-    @Test
-    fun unverifiedRepositoryPackageIsRejected() {
-        val review = OrionSkillInstallPolicy.review(
-            manifest(trust = OrionSkillInstallPolicy.SourceTrust.VERIFIED_REPOSITORY),
-            setOf("gmail.messages.read"),
-            true
-        )
-        assertEquals(OrionSkillInstallPolicy.ReviewStatus.REJECTED, review.status)
-    }
-
-    @Test
-    fun unknownSkillSourceIsRejectedEvenIfUserApproves() {
-        val review = OrionSkillInstallPolicy.review(
-            manifest(trust = OrionSkillInstallPolicy.SourceTrust.UNKNOWN),
-            setOf("gmail.messages.read"),
-            true
+            false
         )
         assertEquals(OrionSkillInstallPolicy.ReviewStatus.REJECTED, review.status)
         assertFalse(review.canExecuteNow)

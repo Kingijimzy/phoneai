@@ -7,8 +7,10 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
+import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.HorizontalScrollView
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
@@ -21,28 +23,81 @@ import android.widget.Toast
 class CapabilityBoardActivity : Activity() {
     private lateinit var page: LinearLayout
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
-    private fun text(v: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
+    private fun text(v: String, size: Float, color: Int = Theme.MUTED, bold: Boolean = false) = TextView(this).apply {
         text = v; textSize = size; setTextColor(color); if (bold) typeface = Typeface.DEFAULT_BOLD; setPadding(0, dp(4), 0, dp(4))
     }
     private fun chip(caption: String, action: () -> Unit) = TextView(this).apply {
-        text = caption; textSize = 13f; typeface = Typeface.DEFAULT_BOLD; setTextColor(0xFFE4E4E4.toInt()); gravity = Gravity.CENTER
-        setPadding(dp(12), dp(9), dp(12), dp(9))
-        background = GradientDrawable().apply { setColor(0xFF242424.toInt()); cornerRadius = dp(11).toFloat(); setStroke(dp(1), 0xFF444444.toInt()) }
-        isClickable = true; setOnClickListener { action() }
+        text = caption; textSize = 13f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Theme.TEXT); gravity = Gravity.CENTER
+        setPadding(dp(12), dp(9), dp(12), dp(9)); minHeight = dp(48)
+        background = GradientDrawable().apply {
+            setColor(Theme.PANEL2); cornerRadius = dp(Theme.CORNER_SMALL_DP).toFloat()
+            setStroke(dp(1), Theme.LINE_STRONG)
+        }
+        isClickable = true; isFocusable = true
+        setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> view.animate().scaleX(.985f).scaleY(.985f).setDuration(Theme.MOTION_PRESS_MS.toLong()).start()
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1f).scaleY(1f).setDuration(Theme.MOTION_PRESS_MS.toLong()).start()
+            }
+            false
+        }
+        setOnClickListener { action() }
     }
     private fun card() = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(12), dp(14), dp(12))
-        background = GradientDrawable().apply { setColor(0xFF171717.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF343434.toInt()) }
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) }
+        orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(14), dp(16), dp(15))
+        background = GradientDrawable().apply {
+            setColor(Theme.PANEL); cornerRadius = dp(Theme.CORNER_MEDIUM_DP).toFloat()
+            setStroke(dp(1), Theme.LINE)
+        }
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) }
     }
+
+    private fun addCard(view: View) {
+        page.addView(view)
+        view.alpha = 0f
+        view.translationY = dp(6).toFloat()
+        view.post {
+            view.animate().alpha(1f).translationY(0f)
+                .setDuration(Theme.MOTION_MEDIUM_MS.toLong()).start()
+        }
+    }
+
+    private fun field(hintText: String, value: String = "", secret: Boolean = false, email: Boolean = false) =
+        EditText(this).apply {
+            hint = hintText
+            setText(value)
+            setTextColor(Theme.TEXT)
+            setHintTextColor(Theme.MUTED)
+            background = GradientDrawable().apply {
+                setColor(Theme.PANEL2); cornerRadius = dp(Theme.CORNER_SMALL_DP).toFloat()
+                setStroke(dp(1), Theme.LINE_STRONG)
+            }
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            minHeight = dp(50)
+            setSingleLine(true)
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+            inputType = when {
+                secret -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                email -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+                else -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            }
+        }
+
+    private fun horizontalActions(row: LinearLayout): HorizontalScrollView =
+        HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(row)
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = 0xFF090909.toInt(); window.navigationBarColor = 0xFF090909.toInt()
+        window.statusBarColor = Theme.BG; window.navigationBarColor = Theme.BG
+        window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         // Tokens are typed here: block screenshots, screen recording and the recents thumbnail.
         window.setFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE, android.view.WindowManager.LayoutParams.FLAG_SECURE)
-        val scroll = ScrollView(this).apply { setBackgroundColor(0xFF090909.toInt()) }
-        page = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(40), dp(18), dp(30)) }
+        val scroll = ScrollView(this).apply { setBackgroundColor(Theme.BG); isFillViewport = true; overScrollMode = View.OVER_SCROLL_NEVER; clipToPadding = false }
+        page = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(17), dp(20), dp(17), dp(28)); setBackgroundColor(Theme.BG) }
         scroll.addView(page); setContentView(scroll)
         render()
         intent.getStringExtra("vault_name")?.let { vaultDialog(it, intent.getStringExtra("vault_host").orEmpty(), intent.getStringExtra("vault_style").orEmpty()) }
@@ -53,36 +108,36 @@ class CapabilityBoardActivity : Activity() {
 
     private fun render() {
         page.removeAllViews()
-        page.addView(text("ORION / CAPABILITY BOARD", 10f, 0xFFAAAAAA.toInt(), true))
-        page.addView(text("What Orion can reach", 26f, 0xFFF2F2F2.toInt(), true))
-        page.addView(text("Credentials stay encrypted on this phone and are sent only to the service you configure. Orion may summarize returned data in chat. Never paste passwords or API keys into chat.", 12f, 0xFF9A9A9A.toInt()))
+        page.addView(text("ORION  /  CAPABILITIES", 10f, Theme.SILVER, true))
+        page.addView(text("What Orion can reach", 27f, Theme.TEXT, true))
+        page.addView(text("Credentials stay encrypted on this phone and are sent only to the service you configure. Orion may summarize returned data in chat. Never paste passwords or API keys into chat.", 12f, Theme.MUTED))
 
         val pack = Switch(this).apply {
-            text = "Allow Orion to use connected services"; setTextColor(0xFFE4E4E4.toInt())
+            text = "Allow Orion to use connected services"; setTextColor(Theme.TEXT); minHeight = dp(48); thumbTintList = android.content.res.ColorStateList.valueOf(Theme.SILVER); trackTintList = android.content.res.ColorStateList.valueOf(Theme.LINE_STRONG)
             isChecked = AgentPolicy.enabled(this@CapabilityBoardActivity, "connected_services")
             setOnCheckedChangeListener { _, on -> AgentPolicy.setEnabled(this@CapabilityBoardActivity, "connected_services", on) }
         }
         val watch = Switch(this).apply {
-            text = "Let Orion watch for new mail and GitHub activity"; setTextColor(0xFFE4E4E4.toInt())
+            text = "Let Orion watch for new mail and GitHub activity"; setTextColor(Theme.TEXT); minHeight = dp(48); thumbTintList = android.content.res.ColorStateList.valueOf(Theme.SILVER); trackTintList = android.content.res.ColorStateList.valueOf(Theme.LINE_STRONG)
             isChecked = SoulWatch.enabled(this@CapabilityBoardActivity)
             setOnCheckedChangeListener { _, on -> SoulWatch.setEnabled(this@CapabilityBoardActivity, on) }
         }
         val settings = card(); settings.addView(pack); settings.addView(watch)
-        settings.addView(text("Read-only checks run while Orion’s accessibility service is alive. Android battery restrictions may delay them. No AI call is used; notifications are sent only for new results.", 11f, 0xFF8A8A8A.toInt()))
-        page.addView(settings)
+        settings.addView(text("Read-only checks run while Orion’s accessibility service is alive. Android battery restrictions may delay them. No AI call is used; notifications are sent only for new results.", 11f, Theme.MUTED))
+        addCard(settings)
 
-        page.addView(text("SERVICES", 10f, 0xFFAAAAAA.toInt(), true).apply { setPadding(0, dp(16), 0, 0) })
+        page.addView(text("SERVICES", 10f, Theme.SILVER, true).apply { setPadding(0, dp(16), 0, 0) })
         ServiceCatalog.all.forEach { s ->
             val conn = OrionConnectionStore.get(this, s.id)
             val c = card()
-            c.addView(text(s.title, 16f, 0xFFF2F2F2.toInt(), true))
+            c.addView(text(s.title, 16f, Theme.TEXT, true))
             val status = when {
                 conn?.verified == true && conn.secretAvailable -> "Verified" + (if (s.needsAccount) " as ${conn.accountLabel}" else "")
                 conn?.secretAvailable == true -> "Saved · not verified"
                 else -> "Not connected"
             }
-            c.addView(text(status, 12f, if (conn?.verified == true && conn.secretAvailable) 0xFF8FD18F.toInt() else 0xFF9A9A9A.toInt()))
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            c.addView(text(status, 12f, if (conn?.verified == true && conn.secretAvailable) Theme.OK else Theme.MUTED))
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             if (conn?.secretAvailable == true && conn.verified != true) {
                 row.addView(chip("Verify saved access") { verifyConnection(s) })
             }
@@ -90,30 +145,30 @@ class CapabilityBoardActivity : Activity() {
             if (conn != null) row.addView(chip("Disconnect") {
                 OrionConnectionStore.disconnect(this, s.id); Toast.makeText(this, "${s.title} disconnected and its token erased.", Toast.LENGTH_SHORT).show(); render()
             }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) })
-            c.addView(row); page.addView(c)
+            c.addView(horizontalActions(row)); addCard(c)
         }
 
-        page.addView(text("OTHER APPS AND SITES", 10f, 0xFFAAAAAA.toInt(), true).apply { setPadding(0, dp(16), 0, 0) })
+        page.addView(text("OTHER APPS AND SITES", 10f, Theme.SILVER, true).apply { setPadding(0, dp(16), 0, 0) })
         val vc = card()
         val entries = AppVault.list(this)
-        if (entries.isEmpty()) vc.addView(text("Nothing saved. Ask Orion to connect an app, or add one here. Each token is locked to the one site you name.", 12f, 0xFF9A9A9A.toInt()))
+        if (entries.isEmpty()) vc.addView(text("Nothing saved. Ask Orion to connect an app, or add one here. Each token is locked to the one site you name.", 12f, Theme.MUTED))
         entries.forEach { e ->
-            vc.addView(text(e.name, 15f, 0xFFF2F2F2.toInt(), true))
-            vc.addView(text("${e.host} · " + if (AppVault.hasSecret(this, e)) "token saved" else "no token", 12f, 0xFF9A9A9A.toInt()))
-            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            vc.addView(text(e.name, 15f, Theme.TEXT, true))
+            vc.addView(text("${e.host} · " + if (AppVault.hasSecret(this, e)) "token saved" else "no token", 12f, Theme.MUTED))
+            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             r.addView(chip("Replace token") { vaultDialog(e.name, e.host, e.style) })
             r.addView(chip("Remove") { AppVault.remove(this, e); render() }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) })
-            vc.addView(r)
+            vc.addView(horizontalActions(r))
         }
         vc.addView(chip("Add app or site") { vaultDialog("", "", "") })
-        page.addView(vc)
+        addCard(vc)
 
-        page.addView(text("THINGS YOU ASKED FOR THAT ORION COULD NOT DO YET", 10f, 0xFFAAAAAA.toInt(), true).apply { setPadding(0, dp(16), 0, 0) })
+        page.addView(text("THINGS YOU ASKED FOR THAT ORION COULD NOT DO YET", 10f, Theme.SILVER, true).apply { setPadding(0, dp(16), 0, 0) })
         val gaps = CapabilityBoard.open(this)
         val gc = card()
-        if (gaps.isEmpty()) gc.addView(text("Nothing waiting. When you ask for something Orion can't do, it is remembered here with a plan.", 12f, 0xFF9A9A9A.toInt()))
-        gaps.forEach { g -> gc.addView(text("• ${g.goal}  (${g.provider.ifBlank { "general" }}, asked ${g.count}x, ${g.status})", 13f, 0xFFE4E4E4.toInt())) }
-        page.addView(gc)
+        if (gaps.isEmpty()) gc.addView(text("Nothing waiting. When you ask for something Orion can't do, it is remembered here with a plan.", 12f, Theme.MUTED))
+        gaps.forEach { g -> gc.addView(text("• ${g.goal}  (${g.provider.ifBlank { "general" }}, asked ${g.count}x, ${g.status})", 13f, Theme.TEXT)) }
+        addCard(gc)
     }
 
     private fun verifyConnection(s: ServiceCatalog.Service) {
@@ -146,14 +201,11 @@ class CapabilityBoardActivity : Activity() {
 
     private fun connectDialog(s: ServiceCatalog.Service) {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(8), dp(18), 0) }
-        box.addView(text(s.howTo, 12f, 0xFF444444.toInt()))
-        val account = EditText(this).apply { hint = "Your Gmail address"; inputType = InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS or InputType.TYPE_CLASS_TEXT }
+        box.addView(text(s.howTo, 12f, Theme.MUTED))
+        val account = field("Your Gmail address", email = true)
         if (s.needsAccount) box.addView(account)
-        val secret = EditText(this).apply {
-            hint = s.secretLabel
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-        }
-        box.addView(secret)
+        val secret = field(s.secretLabel, secret = true)
+        box.addView(secret, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         AlertDialog.Builder(this).setTitle("Connect ${s.title}").setView(box).setNegativeButton("Cancel", null)
             .setPositiveButton("Save securely") { _, _ ->
                 val label = if (s.needsAccount) account.text.toString().trim() else s.title
@@ -172,12 +224,12 @@ class CapabilityBoardActivity : Activity() {
 
     private fun vaultDialog(name0: String, host0: String, style0: String) {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(8), dp(18), 0) }
-        box.addView(text("Save a token or API key for an app or site. It is locked to the site address you enter and only used for read-only requests. Raw account passwords are not accepted: create an API token or app password in that app.", 12f, 0xFF444444.toInt()))
-        val name = EditText(this).apply { hint = "Name (e.g. Notion)"; setText(name0) }
-        val host = EditText(this).apply { hint = "API address (e.g. api.notion.com)"; setText(host0) }
-        val style = EditText(this).apply { hint = "bearer  or  header:X-Api-Key"; setText(style0.ifBlank { "bearer" }) }
-        val secret = EditText(this).apply { hint = "Token / API key"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS }
-        listOf(name, host, style, secret).forEach { box.addView(it) }
+        box.addView(text("Save a token or API key for an app or site. It is locked to the site address you enter and only used for read-only requests. Raw account passwords are not accepted: create an API token or app password in that app.", 12f, Theme.MUTED))
+        val name = field("Name (e.g. Notion)", name0)
+        val host = field("API address (e.g. api.notion.com)", host0)
+        val style = field("bearer  or  header:X-Api-Key", style0.ifBlank { "bearer" })
+        val secret = field("Token / API key", secret = true)
+        listOf(name, host, style, secret).forEach { box.addView(it, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) }) }
         AlertDialog.Builder(this).setTitle("Add app or site").setView(box).setNegativeButton("Cancel", null)
             .setPositiveButton("Save securely") { _, _ ->
                 val err = AppVault.save(this, name.text.toString(), host.text.toString(), style.text.toString(), secret.text.toString())

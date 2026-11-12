@@ -5,7 +5,7 @@ import org.json.JSONObject
 /**
  * Owns Android-facing capability execution.
  *
- * Agent retains planning, live policy/approval gates, task evidence and recovery. This executor
+ * Agent retains planning, cancellation, task evidence and recovery. This executor
  * owns the actual Android/app/accessibility/notification/media dispatch and receives only the
  * small Agent callbacks needed for higher-level verification flows.
  */
@@ -14,7 +14,7 @@ internal object OrionDeviceCapabilityExecutor {
         "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications",
         "media_status", "media_control", "play_media", "chrome_search", "resolve_contact", "list_apps",
         "list_app_deeplinks", "read_screen", "validate_action", "verify_action", "verify_send",
-        "click", "click_text", "wait_for", "tap", "long_press", "swipe", "swipe_path",
+        "click", "click_text", "point_at", "sketch_screen", "wait_for", "tap", "long_press", "swipe", "swipe_path",
         "scroll", "type", "key", "look", "play", "record_screen",
         "chronos_awareness", "calendar_events", "voice_speak", "voice_listen",
         "routine_run", "routine_resume"
@@ -60,6 +60,16 @@ internal object OrionDeviceCapabilityExecutor {
             else service.clickId(id)
         }
         "click_text" -> tools.clickText(args.optString("text"))
+        "point_at" -> service.pointAt(args.optInt("id", -1), args.optLong("duration_ms", 2400L))
+        "sketch_screen" -> service.sketchScreen(
+            id = args.optInt("id", -1),
+            shape = args.optString("shape", "circle"),
+            labelText = args.optString("label"),
+            durationMs = args.optLong("duration_ms", 4200L),
+            x = args.optInt("x", -1),
+            y = args.optInt("y", -1),
+            radius = args.optInt("radius", 48)
+        )
         "wait_for" -> tools.waitFor(args.optString("text"), args.optDouble("seconds", 8.0))
         "tap" -> withCoordinates(args, "x", "y") { x, y -> service.tap(x, y) }
         "long_press" -> withCoordinates(args, "x", "y") { x, y -> service.longPress(x, y) }
