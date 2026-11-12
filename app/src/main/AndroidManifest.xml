@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <!-- Optional Shizuku/Sui integration; permission is granted separately by its manager. -->
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
     <!-- Optional explicit bridge to a user-installed Termux terminal; user must enable its external-command setting. -->
