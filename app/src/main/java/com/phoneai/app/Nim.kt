@@ -98,8 +98,16 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             current = current.cause
         }
         val message = messages.joinToString(" ").lowercase()
-        return message.contains("400") &&
-            (message.contains("tool") || message.contains("function"))
+        val explicitUnsupported = listOf(
+            "does not support tools", "doesn't support tools",
+            "does not support tool calling", "doesn't support tool calling",
+            "tool calling is not supported", "tool calls are not supported",
+            "function calling is not supported", "tools are not supported",
+            "tool use is not supported", "tool_choice is not supported",
+            "unsupported tool type", "unknown parameter: tools",
+            "unrecognized request argument: tools", "tools is not supported"
+        )
+        return message.contains("400") && explicitUnsupported.any { message.contains(it) }
     }
 
     override fun chatTurn(
@@ -120,10 +128,23 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 OrionModelTurn(text, nativeToolCalls.get().orEmpty())
             } catch (failure: Exception) {
                 if (tools.isEmpty() || cancelled || !nativeToolsRejected(failure)) throw failure
-                // Keep ordinary conversation available, but never translate native-tool
-                // failure into the legacy ACTION/JSON planner. The caller receives an explicit
-                // capability flag and must not claim it executed a requested action.
-                onStatus?.invoke("This provider does not support Orion native tool calls; continuing in chat-only mode.")
+                val priorToolResults = (0 until messages.length()).any { index ->
+                    messages.optJSONObject(index)?.optString("role") == "tool"
+                }
+                if (priorToolResults) {
+                    throw AiException(
+                        "The selected provider rejected a follow-up tool-call request after earlier tool results. Those completed results are preserved; no further actions were dispatched. Provider detail: ${failure.message.orEmpty().take(500)}",
+                        400
+                    )
+                }
+                if (!Prefs.autoSwitch(ctx)) {
+                    throw AiException(
+                        "The selected provider/model rejected Orion tool calling. Auto-switch is off, so Orion did not change models or dispatch a chat-only substitute. Choose a tool-capable model or enable Auto-switch.",
+                        400
+                    )
+                }
+                // When rotation is enabled, preserve normal chat availability after the
+                // provider explicitly rejects native tools; the result is marked chat-only.
                 activeNativeTools.set(emptyList())
                 nativeToolCalls.set(emptyList())
                 val fallbackMessages = JSONArray(messages.toString())
@@ -155,7 +176,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
     @Volatile internal var tier: ModelRouter.Tier? = null
 
     private fun selectedModel(p: Provider, vision: Boolean): String {
-        tier?.let { t -> ModelRouter.modelFor(t, p.id, vision, Prefs.modelRouting(ctx), Prefs.cachedModels(ctx, p.id).toSet())?.let { return it } }
+        tier?.let { t -> ModelRouter.modelFor(t, p.id, vision, Prefs.modelRouting(ctx) && Prefs.autoSwitch(ctx), Prefs.cachedModels(ctx, p.id).toSet())?.let { return it } }
         if (commandMode && !vision && Prefs.commandProviderId(ctx) == p.id) {
             Prefs.commandModelId(ctx)?.let { return it }
         }
@@ -916,12 +937,17 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         }
         fun usable(p: Provider): Boolean = configured(p) && modelAllowed(p)
 
-        var primary = if (configured(selected)) selected else Providers.all.firstOrNull { usable(it) }
-            ?: if (Providers.all.any { configured(it) }) {
-                throw IllegalStateException("Only paid or metered providers are configured. Orion blocked the request because paid-provider use is off; enable the explicit setting in Settings only if you accept possible charges.")
-            } else {
-                throw IllegalStateException("No compatible AI provider is configured. Add a key for a provider that supports ${if (vision) "vision" else "chat"} in Settings.")
-            }
+        var primary: Provider = if (configured(selected)) selected
+        else if (!Prefs.autoSwitch(ctx)) {
+            throw IllegalStateException("${selected.label} is selected but not configured for ${if (vision) "vision" else "chat"}. Auto-switch is off, so Orion will not silently use another provider.")
+        } else {
+            Providers.all.firstOrNull { usable(it) }
+                ?: if (Providers.all.any { configured(it) }) {
+                    throw IllegalStateException("Only paid or metered providers are configured. Orion blocked the request because paid-provider use is off; enable the explicit setting in Settings only if you accept possible charges.")
+                } else {
+                    throw IllegalStateException("No compatible AI provider is configured. Add a key for a provider that supports ${if (vision) "vision" else "chat"} in Settings.")
+                }
+        }
 
         // --- Offline detection (Requirement 11) ---
         // When offline mode is on, or the device has no reachable network, skip cloud
@@ -929,7 +955,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         val offline = Prefs.offlineMode(ctx) || !OrionNetworkMonitor.isOnline(ctx)
         if (offline && !OrionNetworkMonitor.isOfflineCapable(primary.id)) {
             val local = Providers.find(OrionNetworkMonitor.offlinePreferredProviderId())
-            if (local != null && usable(local)) {
+            if (local != null && usable(local) && (Prefs.offlineMode(ctx) || Prefs.autoSwitch(ctx))) {
                 onStatus?.invoke("Offline: switching to local model (${local.label})...")
                 // Force the local provider as primary; backups are irrelevant offline.
                 primary = local
@@ -1120,7 +1146,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 // NVIDIA may accept a request but fail to return a first response in time.
                 // Try one alternate catalog model, even in quota-saver mode, then report a
                 // useful timeout diagnostic rather than silently abandoning the provider.
-                if (p.id == "nvidia" && !refilled) {
+                if (Prefs.autoSwitch(ctx) && p.id == "nvidia" && !refilled) {
                     refilled = true
                     val backups = candidates(p, vision).filter { it != model && it !in tried }
                     if (backups.isNotEmpty()) {
@@ -1128,7 +1154,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                         onStatus?.invoke("NVIDIA response timed out; trying one alternate model...")
                         continue
                     }
-                } else if (!Prefs.quotaSaver(ctx) && !refilled) {
+                } else if (Prefs.autoSwitch(ctx) && !Prefs.quotaSaver(ctx) && !refilled) {
                     refilled = true
                     queue.addAll(candidates(p, vision))
                     continue
@@ -1165,7 +1191,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 // OpenRouter may rate-limit one model while another model on the same
                 // account remains available. Try another unattempted model before cooling
                 // down the whole provider, including models already queued after a 404/410.
-                if (p.id == "openrouter" && attempts < maxAttempts) {
+                if (Prefs.autoSwitch(ctx) && p.id == "openrouter" && attempts < maxAttempts) {
                     val alternatives = (queue + candidates(p, vision))
                         .filter { it != model && it !in tried }
                         .distinct()
@@ -1207,11 +1233,16 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 // Retired catalog models must never be persisted as the provider's active choice.
                 // Put distinct known fallbacks immediately after the failed model so quota-saver mode
                 // still makes a real recovery attempt instead of failing on a single stale default.
-                if (!refilled) {
+                if (Prefs.autoSwitch(ctx) && !refilled) {
                     refilled = true
                     val backups = candidates(p, vision).filter { it != model && it !in tried }
                     queue.addAll(0, backups)
                 }
+                if (queue.isEmpty()) throw AiException(
+                    if (Prefs.autoSwitch(ctx)) "${p.label}: selected model $model returned HTTP ${r.code}; no eligible alternate model was available."
+                    else "${p.label}: selected model $model returned HTTP ${r.code}; Auto-switch is off, so Orion kept the selected model.",
+                    r.code
+                )
                 continue
             }
             if (r.code in listOf(500, 502, 503, 504)) {
@@ -1219,7 +1250,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 // Temporary provider overload is not proof that the key or model is invalid.
                 // Try one alternate model from the same provider before moving to a backup provider.
                 lastNote = "$model -> HTTP ${r.code} ${r.body.replace("\n", " ").take(100)}"
-                if (!refilled) {
+                if (Prefs.autoSwitch(ctx) && !refilled) {
                     refilled = true
                     val backups = candidates(p, vision).filter { it != model && it !in tried }
                     if (backups.isNotEmpty()) {
@@ -1228,7 +1259,10 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                         continue
                     }
                 }
-                throw AiException("${p.label}: service temporarily busy (HTTP ${r.code}). Try again shortly or use another saved provider.")
+                throw AiException(
+                    if (Prefs.autoSwitch(ctx)) "${p.label}: service temporarily busy (HTTP ${r.code}). Try again shortly or use another saved provider."
+                    else "${p.label}: selected model $model is temporarily busy (HTTP ${r.code}); Auto-switch is off, so Orion did not change models."
+                )
             }
             if (r.code !in 200..299) throw AiException("${p.label}: error ${r.code} ${r.body.take(120)}")
             val requestedTools = activeNativeTools.get().orEmpty()
@@ -1266,7 +1300,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 // A selected catalog model can return HTTP 200 but no usable text.
                 // Allow one bounded alternate-model attempt even in quota-saver mode;
                 // never loop through the entire catalog or retry the same model.
-                if (!refilled) {
+                if (Prefs.autoSwitch(ctx) && !refilled) {
                     refilled = true
                     val backups = candidates(p, vision).filter { it != model && it !in tried }
                     queue.addAll(0, backups)
@@ -1275,7 +1309,11 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                         continue
                     }
                 }
-                throw AiException(p.label + ": model returned an empty response. Auto-rotation will try the next saved provider when enabled; also verify this model's API access.", 502)
+                throw AiException(
+                    if (Prefs.autoSwitch(ctx)) p.label + ": model returned an empty response. Auto-switch may try another eligible model or provider."
+                    else p.label + ": selected model $model returned an empty response; Auto-switch is off, so Orion kept the selected model.",
+                    502
+                )
             }
             Prefs.setModel(ctx, p, vision, model)
             // Decision log: record this model call and its verified outcome (Requirement 12)
