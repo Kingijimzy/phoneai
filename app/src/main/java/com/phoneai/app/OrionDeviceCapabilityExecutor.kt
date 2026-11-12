@@ -64,15 +64,18 @@ internal object OrionDeviceCapabilityExecutor {
         }
         "click_text" -> expectedPackageError(args, service) ?: tools.clickText(args.optString("text"))
         "point_at" -> expectedPackageError(args, service) ?: service.pointAt(args.optInt("id", -1), args.optLong("duration_ms", 2400L))
-        "sketch_screen" -> if (expectedPackageError(args, service) != null) expectedPackageError(args, service)!! else service.sketchScreen(
-            id = args.optInt("id", -1),
-            shape = args.optString("shape", "circle"),
-            labelText = args.optString("label"),
-            durationMs = args.optLong("duration_ms", 4200L),
-            x = args.optInt("x", -1),
-            y = args.optInt("y", -1),
-            radius = args.optInt("radius", 48)
-        )
+        "sketch_screen" -> {
+            val mismatch = expectedPackageError(args, service)
+            if (mismatch != null) mismatch else service.sketchScreen(
+                id = args.optInt("id", -1),
+                shape = args.optString("shape", "circle"),
+                labelText = args.optString("label"),
+                durationMs = args.optLong("duration_ms", 4200L),
+                x = args.optInt("x", -1),
+                y = args.optInt("y", -1),
+                radius = args.optInt("radius", 48)
+            )
+        }
         "wait_for" -> tools.waitFor(args.optString("text"), args.optDouble("seconds", 8.0))
         "tap" -> expectedPackageError(args, service) ?: withCoordinates(args, "x", "y") { x, y -> service.tap(x, y) }
         "long_press" -> expectedPackageError(args, service) ?: withCoordinates(args, "x", "y") { x, y -> service.longPress(x, y) }
