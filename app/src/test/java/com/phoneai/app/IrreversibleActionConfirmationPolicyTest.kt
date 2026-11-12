@@ -56,6 +56,19 @@ class IrreversibleActionConfirmationPolicyTest {
         ))
     }
 
+    @Test fun pythonPhoneShellChecksEveryEmbeddedCommandNotOnlyTheFirst() {
+        val safeThenDelete = """phone.shell("ls /sdcard/Download")
+phone.shell("rm -rf /sdcard/Download/old")"""
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction(
+            "python_exec", JSONObject().put("code", safeThenDelete)
+        ))
+        val readsOnly = """phone.shell("ls /sdcard/Download")
+phone.shell("cat /sdcard/Download/notes.txt")"""
+        assertNull(IrreversibleActionConfirmationPolicy.destructiveAction(
+            "python_exec", JSONObject().put("code", readsOnly)
+        ))
+    }
+
     @Test fun destructiveShellVariantsAreFlaggedWithoutFlaggingReadOnlyCommands() {
         listOf(
             "find /sdcard/Download -type f -delete",
