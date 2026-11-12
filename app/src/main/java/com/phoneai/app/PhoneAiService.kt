@@ -1435,10 +1435,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        heading.addView(label(categoryLabel, 9f, Theme.MUTED, true), LinearLayout.LayoutParams(0, WRAP, 1f))
-        heading.addView(label(state, 9f, accent, true))
+        val categoryView = label(categoryLabel, 9f, Theme.MUTED).apply { typeface = Typeface.DEFAULT_BOLD }
+        heading.addView(categoryView, LinearLayout.LayoutParams(0, WRAP, 1f))
+        val stateView = label(state, 9f, accent).apply { typeface = Typeface.DEFAULT_BOLD }
+        heading.addView(stateView)
         card.addView(heading)
-        card.addView(label(preview.ifBlank { categoryLabel }, 11f, Theme.TEXT, true).apply {
+        card.addView(label(preview.ifBlank { categoryLabel }, 11f, Theme.TEXT).apply {
+            typeface = Typeface.DEFAULT_BOLD
             setPadding(0, dp(5), 0, 0)
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
