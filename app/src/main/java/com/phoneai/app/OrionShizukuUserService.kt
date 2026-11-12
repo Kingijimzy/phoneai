@@ -65,7 +65,7 @@ internal class OrionShizukuUserService : IOrionDeviceService.Stub() {
         }
         reader.join(250)
         val text = synchronized(output) { output.toString().trim() }.take(8_000)
-        if (process.exitValue() != 0) "error: command exited " + process.exitValue() + ": " + text
+        return if (process.exitValue() != 0) "error: command exited " + process.exitValue() + ": " + text
         else text.ifBlank { "ok" }
     }
 }
