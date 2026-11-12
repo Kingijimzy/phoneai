@@ -24,8 +24,10 @@ internal object ApiAnythingManager {
     fun status(context: Context): String {
         val enabled = context.getSharedPreferences(PREFS, 0).getBoolean(ENABLED, false)
         val alive = server?.isAlive() == true
-        val healthy = alive && healthVerified
+        val connected = McpConnector.endpoint(context) == ENDPOINT
+        val healthy = alive && healthVerified && connected
         return when {
+            alive && !connected -> "API Anything is running locally, but Orion is connected to a different MCP server. Stop API Anything or switch the MCP endpoint back to API Anything."
             healthy -> "API Anything is running locally. Its MCP tools are connected to Orion. Health is verified; website write operations are exposed and remain subject to Orion's MCP scopes."
             enabled && !alive -> "API Anything is enabled but its local server is not running. Orion will try to restart it when the app process starts; use Start / repair to start it now."
             lastError.isNotBlank() -> "API Anything: $lastState. Last error: $lastError"
@@ -131,7 +133,8 @@ internal object ApiAnythingManager {
     /** Restarts the managed server after Android recreates the application process. */
     fun resumeIfEnabled(context: Context) {
         val app = context.applicationContext
-        if (!app.getSharedPreferences(PREFS, 0).getBoolean(ENABLED, false) || server?.isAlive() == true) return
+        if (!app.getSharedPreferences(PREFS, 0).getBoolean(ENABLED, false) ||
+            McpConnector.endpoint(app) != ENDPOINT || server?.isAlive() == true) return
         Thread({
             synchronized(this) {
                 if (server?.isAlive() == true) return@synchronized
