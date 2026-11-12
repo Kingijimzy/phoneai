@@ -141,15 +141,17 @@ internal object TelegramBridge {
                 when (text.trim().uppercase()) {
                     "YES", "/YES", "APPROVE" -> {
                         awaiting.approved.set(true)
+                        synchronized(approvalLock) { if (pendingApproval === awaiting) pendingApproval = null }
                         awaiting.latch.countDown()
                         send(app, "Confirmation received. Orion is continuing the destructive action you were warned about.")
                     }
                     "NO", "/NO", "CANCEL" -> {
                         awaiting.approved.set(false)
+                        synchronized(approvalLock) { if (pendingApproval === awaiting) pendingApproval = null }
                         awaiting.latch.countDown()
                         send(app, "Cancelled. Orion will not delete or wipe the selected data.")
                     }
-                    else -> send(app, "A destructive action is waiting for your decision. Reply YES to continue or NO to cancel. Other commands will be handled after this decision.")
+                    else -> send(app, "A destructive action is waiting for your decision. Reply YES to continue or NO to cancel. Please reply YES or NO first, then send your next instruction.")
                 }
                 continue
             }
@@ -207,9 +209,8 @@ internal object TelegramBridge {
         return !send(context, message).startsWith("error", ignoreCase = true)
     }
 
-    fun notifyProactive(context: Context, title: String, message: String) {
+    fun notifyProactive(context: Context, title: String, message: String): Boolean =
         postLocalNotification(context, title, message)
-    }
 
     /** Deduplicated watcher alert: local notification is independent from optional Telegram delivery. */
     fun notifyFinding(context: Context, key: String, title: String, message: String) {
@@ -221,8 +222,7 @@ internal object TelegramBridge {
         val prefs = context.getSharedPreferences("orion_telegram_outreach", Context.MODE_PRIVATE)
         val localKey = "local_finding_" + cleanKey
         if (prefs.getString(localKey, "") != fingerprint) {
-            notifyProactive(context, title, message)
-            prefs.edit().putString(localKey, fingerprint).commit()
+            if (notifyProactive(context, title, message)) prefs.edit().putString(localKey, fingerprint).commit()
         }
         val telegramKey = "telegram_finding_" + cleanKey
         if (TelegramListenerService.isEnabled(context) && isConfigured(context) &&
@@ -238,11 +238,11 @@ internal object TelegramBridge {
         postLocalNotification(context, "Orion finished your Telegram request", result)
     }
 
-    private fun postLocalNotification(context: Context, title: String, result: String) {
+    private fun postLocalNotification(context: Context, title: String, result: String): Boolean {
         if (Build.VERSION.SDK_INT >= 33 &&
-            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
-        val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        if (!androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()) return
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return false
+        if (!androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
         val channel = "orion_telegram_task_results"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(NotificationChannel(channel, "Orion task results and proactive alerts", NotificationManager.IMPORTANCE_DEFAULT))
@@ -261,6 +261,7 @@ internal object TelegramBridge {
             .setContentIntent(open)
             .build()
         manager.notify((System.currentTimeMillis() % Int.MAX_VALUE).toInt(), notification)
+        return true
     }
 
     private fun api(botToken: String, method: String, body: JSONObject): JSONObject {
