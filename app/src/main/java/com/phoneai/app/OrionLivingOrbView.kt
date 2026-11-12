@@ -44,7 +44,7 @@ class OrionLivingOrbView(context: Context) : View(context) {
         frameDelay = if (saver) 67L else 34L
         if (Build.VERSION.SDK_INT >= 29) {
             try {
-                if (power?.currentThermalStatus ?: 0 >= PowerManager.THERMAL_STATUS_SEVERE) frameDelay = 100L
+                if ((power?.currentThermalStatus ?: 0) >= PowerManager.THERMAL_STATUS_SEVERE) frameDelay = 100L
             } catch (_: Exception) { }
         }
         val t = if (reducedMotion) 0f else android.os.SystemClock.elapsedRealtime() / 1000f
