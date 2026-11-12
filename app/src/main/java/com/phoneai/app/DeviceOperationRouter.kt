@@ -216,7 +216,7 @@ internal object DeviceOperationRouter {
     private fun openSettings(context: Context, kind: String): String {
         val intent = when (kind) {
             "wifi" -> if (Build.VERSION.SDK_INT >= 29) Intent(Settings.Panel.ACTION_WIFI) else Intent(Settings.ACTION_WIFI_SETTINGS)
-            "bluetooth" -> if (Build.VERSION.SDK_INT >= 29) Intent(Settings.Panel.ACTION_BLUETOOTH) else Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+            "bluetooth" -> Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
             "dnd" -> Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
             else -> Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
         }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
