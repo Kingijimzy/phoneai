@@ -71,6 +71,10 @@ internal object DeviceOperationRouter {
             ?: return "error: unsupported device operation. Supported: " + DeviceOperation.values().joinToString(", ") { it.wireName }
         val app = context.applicationContext
         if (operation == DeviceOperation.CAPABILITIES) return capabilityReport(app)
+        if (operation == DeviceOperation.SET_BRIGHTNESS && argument.toIntOrNull()?.let { it in 0..255 } != true)
+            return "error: brightness must be an integer from 0 to 255"
+        if (operation == DeviceOperation.SET_SCREEN_TIMEOUT && argument.toLongOrNull()?.let { it in 15_000L..1_800_000L } != true)
+            return "error: screen timeout must be 15000..1800000 milliseconds"
         val nativeCanExecute = when (operation) {
             DeviceOperation.SET_BRIGHTNESS, DeviceOperation.SET_SCREEN_TIMEOUT -> Settings.System.canWrite(app)
             DeviceOperation.LIST_USER_PACKAGES -> false
@@ -80,7 +84,19 @@ internal object DeviceOperationRouter {
         val route = DeviceOperationRoutePolicy.choose(operation, nativeCanExecute, shizuku.ready)
         return when (route.backend) {
             DeviceBackend.NATIVE_ANDROID -> executeNative(app, operation, argument)
-            DeviceBackend.SHIZUKU_USER_SERVICE -> OrionShizukuBridge.execute(app, operation.wireName, argument)
+            DeviceBackend.SHIZUKU_USER_SERVICE -> {
+                val result = OrionShizukuBridge.execute(app, operation.wireName, argument)
+                val shellWriteRejected = result.startsWith("error: command exited") ||
+                    result.startsWith("error: command could not start") || result.contains("write was not verified")
+                if (shellWriteRejected && operation in setOf(DeviceOperation.SET_BRIGHTNESS, DeviceOperation.SET_SCREEN_TIMEOUT)) {
+                    runCatching {
+                        app.startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS)
+                            .setData(android.net.Uri.parse("package:" + app.packageName))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                    "Shizuku could not apply this setting on this Android/OEM build. I opened Android's Modify system settings page as the native fallback. Original result: " + result
+                } else result
+            }
             DeviceBackend.ACCESSIBILITY_HANDOFF -> {
                 if (operation == DeviceOperation.SET_BRIGHTNESS || operation == DeviceOperation.SET_SCREEN_TIMEOUT) {
                     if (shizuku.installedAndRunning && !shizuku.permissionGranted) {
