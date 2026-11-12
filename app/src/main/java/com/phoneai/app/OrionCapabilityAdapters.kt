@@ -33,7 +33,7 @@ internal object OrionCapabilityAdapters {
         Backend.DIAGNOSTICS to setOf("self_diagnose", "repair_apply"),
         Backend.MCP to setOf("mcp_status", "mcp_list_tools", "mcp_call", "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt"),
         Backend.DEVICE to setOf(
-            "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications",
+            "lookup_app", "open_app", "system_intent", "open_deep_link", "whatsapp_compose", "read_notifications",
             "media_status", "media_control", "play_media", "chrome_search", "resolve_contact",
             "list_apps", "list_app_deeplinks", "read_screen", "validate_action", "verify_action",
             "verify_send", "click", "click_text", "point_at", "sketch_screen", "wait_for", "tap", "long_press", "swipe",
