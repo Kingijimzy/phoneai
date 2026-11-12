@@ -11,18 +11,17 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Explicit, cancellable installer for the English Piper voice.
- * The app never downloads this model in the background or on first launch.
+ * Explicit, cancellable installer for Kokoro's quantized British-English voice model.
+ * The model is downloaded only after the owner asks to install it; it is never bundled in the APK.
  */
 object NeuralVoiceInstaller {
     private const val MODEL_URL =
-        "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-amy-low-int8.tar.bz2"
-    private const val MODEL_SHA256 = "93070ac9fadf512e56c46bdd0c5d2ce96b424fdc4e683d560167410bd2c4df7d"
-    private const val MAX_ARCHIVE_BYTES = 30L * 1024L * 1024L
-    private const val MAX_EXTRACTED_FILE_BYTES = 80L * 1024L * 1024L
+        "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-int8-en-v0_19.tar.bz2"
+    private const val MODEL_SHA256 = "c9f0dd393615805b0bab050c340834d5e684e732aec91c0e860cd30e982c08bd"
+    private const val MAX_ARCHIVE_BYTES = 150L * 1024L * 1024L
+    private const val MAX_EXTRACTED_FILE_BYTES = 180L * 1024L * 1024L
     private const val MAX_ESPEAK_BYTES = 60L * 1024L * 1024L
 
-    /** Returns the path below espeak-ng-data/ for a safe archive entry, or null if it is not that data. */
     internal fun espeakRelativePath(entryName: String): String? {
         val parts = entryName.replace('\\', '/').split('/').filter { it.isNotEmpty() && it != "." }
         val index = parts.indexOf("espeak-ng-data")
@@ -36,28 +35,33 @@ object NeuralVoiceInstaller {
         File(context.filesDir, "orion-neural-voice")
 
     fun modelFile(context: Context): File =
-        File(modelDirectory(context), "amy.onnx")
+        File(modelDirectory(context), "model.int8.onnx")
+
+    fun voicesFile(context: Context): File =
+        File(modelDirectory(context), "voices.bin")
+
+    fun espeakDataDirectory(context: Context): File =
+        File(modelDirectory(context), "espeak-ng-data")
 
     fun isInstalled(context: Context): Boolean {
         val dir = modelDirectory(context)
+        val model = modelFile(context)
+        val voices = voicesFile(context)
+        val tokens = File(dir, "tokens.txt")
         return File(dir, ".installed").isFile &&
-            modelFile(context).isFile && modelFile(context).length() > 1_000_000L &&
-            File(dir, "tokens.txt").isFile && File(dir, "tokens.txt").length() > 100L &&
+            model.isFile && model.length() > 30_000_000L &&
+            voices.isFile && voices.length() > 1_000_000L &&
+            tokens.isFile && tokens.length() > 100L &&
             hasEspeakData(dir)
     }
 
-    /** Piper voices phonemize with espeak-ng; without this folder the engine cannot start and speech is silent. */
-    fun espeakDataDirectory(context: Context): File = File(modelDirectory(context), "espeak-ng-data")
-
     private fun hasEspeakData(dir: File): Boolean {
         val data = File(dir, "espeak-ng-data")
-        return data.isDirectory && File(data, "phontab").isFile && File(data, "phondata").isFile
+        return data.isDirectory &&
+            File(data, "phontab").isFile &&
+            File(data, "phondata").isFile
     }
 
-    /**
-     * progress receives (description, percent). completion receives null on success,
-     * or the failure/cancellation cause. Callbacks run on the installer worker thread.
-     */
     fun install(
         context: Context,
         isCancelled: () -> Boolean,
@@ -66,7 +70,7 @@ object NeuralVoiceInstaller {
     ) {
         val app = context.applicationContext
         Thread({
-            val archive = File(app.cacheDir, "orion-piper-amy-int8.tar.bz2")
+            val archive = File(app.cacheDir, "orion-kokoro-int8-en.tar.bz2")
             val stage = File(app.filesDir, "orion-neural-voice-stage")
             var failure: Throwable? = null
             try {
@@ -75,25 +79,37 @@ object NeuralVoiceInstaller {
                 if (!stage.mkdirs() && !stage.isDirectory) {
                     throw IOException("Could not create the neural voice directory.")
                 }
-                progress("Downloading compact Piper model (about 21 MB)…", 0)
+                progress("Downloading Kokoro British neural voice (about 104 MB)…", 0)
                 download(MODEL_URL, archive, MAX_ARCHIVE_BYTES, MODEL_SHA256, isCancelled) { value ->
-                    progress("Downloading compact Piper model…", (value * 0.72f).toInt())
+                    progress("Downloading verified Kokoro model…", (value * 0.72f).toInt())
                 }
                 checkCancelled(isCancelled)
-                progress("Extracting model, vocabulary and pronunciation data…", 80)
+                progress("Extracting voice model and pronunciation data…", 80)
                 extractModel(archive, stage, isCancelled)
                 archive.delete()
                 checkCancelled(isCancelled)
 
-                val model = File(stage, "amy.onnx")
+                val model = File(stage, "model.int8.onnx")
+                val voices = File(stage, "voices.bin")
                 val tokens = File(stage, "tokens.txt")
-                if (!model.isFile || model.length() < 1_000_000L) throw IOException("The downloaded ONNX voice model is missing or incomplete.")
-                if (!tokens.isFile || tokens.length() < 100L) throw IOException("The Piper token vocabulary is missing or incomplete.")
-                if (!hasEspeakData(stage)) throw IOException("The Piper pronunciation data (espeak-ng-data) is missing or incomplete.")
-                File(stage, ".installed").writeText("sherpa-onnx 1.13.8\npiper amy low int8 espeak-ng-data\n")
+                if (!model.isFile || model.length() < 30_000_000L) {
+                    throw IOException("The Kokoro INT8 ONNX model is missing or incomplete.")
+                }
+                if (!voices.isFile || voices.length() < 1_000_000L) {
+                    throw IOException("Kokoro's multi-speaker voice embeddings are missing or incomplete.")
+                }
+                if (!tokens.isFile || tokens.length() < 100L) {
+                    throw IOException("Kokoro's token vocabulary is missing or incomplete.")
+                }
+                if (!hasEspeakData(stage)) {
+                    throw IOException("Kokoro's pronunciation data is missing or incomplete.")
+                }
+                File(stage, ".installed").writeText(
+                    "sherpa-onnx 1.13.8\nkokoro int8 en-v0.19\nvoice=bf_emma\n"
+                )
 
                 checkCancelled(isCancelled)
-                progress("Finalizing the on-device voice…", 99)
+                progress("Activating the British neural voice…", 99)
                 val destination = modelDirectory(app)
                 val backup = File(app.filesDir, "orion-neural-voice-backup")
                 backup.deleteRecursively()
@@ -102,10 +118,10 @@ object NeuralVoiceInstaller {
                 }
                 if (!stage.renameTo(destination)) {
                     backup.renameTo(destination)
-                    throw IOException("Could not activate the downloaded neural voice.")
+                    throw IOException("Could not activate the downloaded Kokoro voice.")
                 }
                 backup.deleteRecursively()
-                progress("Neural voice installed.", 100)
+                progress("Kokoro British neural voice installed.", 100)
             } catch (error: Throwable) {
                 failure = error
             } finally {
@@ -113,7 +129,7 @@ object NeuralVoiceInstaller {
                 if (failure != null) stage.deleteRecursively()
                 completion(failure)
             }
-        }, "Orion-Neural-Voice-Install").apply { isDaemon = true }.start()
+        }, "Orion-Kokoro-Voice-Install").apply { isDaemon = true }.start()
     }
 
     private fun checkCancelled(isCancelled: () -> Boolean) {
@@ -135,7 +151,7 @@ object NeuralVoiceInstaller {
         var received = 0L
         try {
             connection.connectTimeout = 25_000
-            connection.readTimeout = 60_000
+            connection.readTimeout = 90_000
             connection.instanceFollowRedirects = true
             connection.setRequestProperty("User-Agent", "Orion-Android/1.0 (on-device voice installer)")
             connection.connect()
@@ -146,16 +162,20 @@ object NeuralVoiceInstaller {
             if (expected > maxBytes) throw IOException("The voice asset is larger than expected; download cancelled.")
             connection.inputStream.buffered().use { input ->
                 temporary.outputStream().buffered().use { output ->
-                    val buffer = ByteArray(16 * 1024)
+                    val buffer = ByteArray(32 * 1024)
                     var lastPercent = -1
                     while (true) {
                         checkCancelled(isCancelled)
                         val count = input.read(buffer)
                         if (count < 0) break
                         received += count
-                        if (received > maxBytes) throw IOException("The downloaded voice asset exceeded its safety size limit.")
+                        if (received > maxBytes) {
+                            throw IOException("The downloaded voice asset exceeded its safety size limit.")
+                        }
                         output.write(buffer, 0, count)
-                        val percent = if (expected > 0L) ((received * 100L) / expected).toInt().coerceIn(0, 100) else 0
+                        val percent = if (expected > 0L) {
+                            ((received * 100L) / expected).toInt().coerceIn(0, 100)
+                        } else 0
                         if (percent != lastPercent) {
                             progress(percent)
                             lastPercent = percent
@@ -163,10 +183,12 @@ object NeuralVoiceInstaller {
                     }
                 }
             }
-            if (expected > 0L && received != expected) throw IOException("Download ended before the entire voice asset arrived.")
+            if (expected > 0L && received != expected) {
+                throw IOException("Download ended before the entire Kokoro model arrived.")
+            }
             checkCancelled(isCancelled)
             if (!AssetIntegrity.matchesSha256(temporary, expectedSha256)) {
-                throw IOException("SHA-256 verification failed for a Piper voice asset; the download was rejected.")
+                throw IOException("SHA-256 verification failed for the Kokoro model; the download was rejected.")
             }
             if (destination.exists()) destination.delete()
             if (!temporary.renameTo(destination)) {
@@ -181,6 +203,7 @@ object NeuralVoiceInstaller {
 
     private fun extractModel(archive: File, destination: File, isCancelled: () -> Boolean) {
         var modelExtracted = false
+        var voicesExtracted = false
         var tokensExtracted = false
         var espeakBytes = 0L
         TarArchiveInputStream(
@@ -190,28 +213,34 @@ object NeuralVoiceInstaller {
                 checkCancelled(isCancelled)
                 val entry = tar.nextTarEntry ?: break
                 if (!entry.isFile || entry.size <= 0L || entry.size > MAX_EXTRACTED_FILE_BYTES) continue
-                // Only extract the expected files; never trust file paths supplied by the tar.
                 val base = File(entry.name).name
                 val espeakRelative = espeakRelativePath(entry.name)
                 val target = when {
                     espeakRelative != null -> {
                         espeakBytes += entry.size
-                        if (espeakBytes > MAX_ESPEAK_BYTES) throw IOException("The pronunciation data exceeded its safety size limit.")
+                        if (espeakBytes > MAX_ESPEAK_BYTES) {
+                            throw IOException("The pronunciation data exceeded its safety size limit.")
+                        }
                         File(destination, "espeak-ng-data/" + espeakRelative).also { file ->
                             val root = File(destination, "espeak-ng-data").canonicalPath + File.separator
-                            if (!file.canonicalPath.startsWith(root)) throw IOException("Unsafe path in the voice archive.")
+                            if (!file.canonicalPath.startsWith(root)) {
+                                throw IOException("Unsafe path in the voice archive.")
+                            }
                             file.parentFile?.mkdirs()
                         }
                     }
-                    base.endsWith(".onnx", ignoreCase = true) && base.contains("amy", ignoreCase = true) ->
-                        File(destination, "amy.onnx")
-                    base.equals("tokens.txt", ignoreCase = true) -> File(destination, "tokens.txt")
+                    base.equals("model.int8.onnx", ignoreCase = true) ->
+                        File(destination, "model.int8.onnx")
+                    base.equals("voices.bin", ignoreCase = true) ->
+                        File(destination, "voices.bin")
+                    base.equals("tokens.txt", ignoreCase = true) ->
+                        File(destination, "tokens.txt")
                     else -> null
                 } ?: continue
 
                 var remaining = entry.size
                 target.outputStream().buffered().use { output ->
-                    val buffer = ByteArray(16 * 1024)
+                    val buffer = ByteArray(32 * 1024)
                     while (remaining > 0L) {
                         checkCancelled(isCancelled)
                         val count = tar.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
@@ -220,13 +249,16 @@ object NeuralVoiceInstaller {
                         remaining -= count
                     }
                 }
-                if (remaining != 0L) throw IOException("The downloaded model archive contains a truncated file.")
-                if (target.name == "amy.onnx") modelExtracted = true
-                if (target.name == "tokens.txt") tokensExtracted = true
+                if (remaining != 0L) throw IOException("The Kokoro archive contains a truncated file.")
+                when (target.name) {
+                    "model.int8.onnx" -> modelExtracted = true
+                    "voices.bin" -> voicesExtracted = true
+                    "tokens.txt" -> tokensExtracted = true
+                }
             }
         }
-        if (!modelExtracted || !tokensExtracted || espeakBytes <= 0L) {
-            throw IOException("The official Piper archive did not contain the expected ONNX model, tokens and pronunciation data.")
+        if (!modelExtracted || !voicesExtracted || !tokensExtracted || espeakBytes <= 0L) {
+            throw IOException("The official Kokoro archive did not contain the expected model, voices, tokens and pronunciation data.")
         }
     }
 }
