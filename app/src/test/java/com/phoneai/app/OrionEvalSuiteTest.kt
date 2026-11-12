@@ -126,6 +126,18 @@ class OrionEvalSuiteTest {
             { OrionEntityIndex.linked(owner, "status of the Lagos trip").containsKey(7) }),
         Scenario("no entity means no links", "paraphrase", "entity-link", "empty-links",
             { OrionEntityIndex.linked(owner, "what should I eat").isEmpty() }),
+        // ----- live memory graph and automatic owner extraction -----
+        Scenario("captures an explicit forex trader role", "paraphrase", "memory_extract", "user-is-forex-trader",
+            { MemoryAutoIndexer.extract("I am a forex trader")?.let { GraphPolicy.extract(it.text).contains(Triple("user", "is", "forex trader")) } == true }),
+        Scenario("captures explicit trading activity", "paraphrase", "memory_extract", "user-trades-forex-crypto",
+            { MemoryAutoIndexer.extract("I trade forex and crypto")?.let { GraphPolicy.extract(it.text).contains(Triple("user", "trade", "forex and crypto")) } == true }),
+        Scenario("captures favourite facts as graph relationships", "paraphrase", "memory_extract", "favourite-team",
+            { MemoryAutoIndexer.extract("My favourite team is Arsenal")?.let { GraphPolicy.extract(it.text).contains(Triple("user", "favourite team", "arsenal")) } == true }),
+        Scenario("captures ongoing projects as graph relationships", "paraphrase", "memory_extract", "project-relation",
+            { MemoryAutoIndexer.extract("I am building an Android assistant")?.let { GraphPolicy.extract(it.text).any { fact -> fact.first == "user" && fact.second == "works on" } } == true }),
+        Scenario("legacy fact triplets use canonical graph parsing", "paraphrase", "memory_graph", "triplet",
+            { GraphPolicy.extract("Kingi Jimzy — favourite_sport — football").contains(Triple("kingi jimzy", "favourite sport", "football")) }),
+
         // ----- original 40: slot reading and consolidation -----
         Scenario("reads a city", "paraphrase", "slot", "Slot(city, lagos)",
             { slot("I live in Lagos.") == OrionMemoryConsolidation.Slot("city", "lagos") }),
