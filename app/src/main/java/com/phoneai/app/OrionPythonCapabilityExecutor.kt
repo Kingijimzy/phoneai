@@ -38,7 +38,8 @@ internal class OrionPythonCapabilityExecutor(
                     ?: "error: Python tool bridge is unavailable in this execution context."
             }
             "workspace_list" -> OrionPythonWorkspace(context).list()
-            "extension_list" -> listExtensions()\n            "extension_policy" -> extensionPolicy()\n            "extension_auto_activation" -> setExtensionAutoActivation(args)
+            "extension_list" -> listExtensions()
+            "extension_policy" -> extensionPolicy()\n            "extension_auto_activation" -> setExtensionAutoActivation(args)
             "extension_history" -> extensionHistory(args)
             "extension_rollback" -> rollbackExtension(args)
             "extension_create" -> createDraft(args)
