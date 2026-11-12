@@ -47,8 +47,11 @@ internal class CodexSessionVault(context: Context) {
         private const val LEGACY_KEY = "codex_account_auth"
 
         internal fun configToml(): String =
-            "approval_policy = \"on-request\"\n" +
-                "sandbox_mode = \"workspace-write\"\n" +
+            // Codex runs inside Orion's Alpine PRoot guest. Bubblewrap/user namespaces
+            // are unavailable on many Android kernels; PRoot already confines execution
+            // to the guest plus the explicitly mounted Orion workspace and app cache.
+            "approval_policy = \"never\"\n" +
+                "sandbox_mode = \"danger-full-access\"\n" +
                 "cli_auth_credentials_store = \"file\"\n" +
                 "\n[features]\n" +
                 "shell_tool = false\n" +
