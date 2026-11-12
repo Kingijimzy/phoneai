@@ -1,14 +1,11 @@
 package com.phoneai.app
 
 import android.content.Context
-import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioRecord
-import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.util.Base64
-import android.util.Log
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -22,7 +19,6 @@ import java.net.URL
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.time.Instant
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.sqrt
@@ -57,19 +53,15 @@ internal class GeminiLiveSession(
         .build()
     private val stopped = AtomicBoolean(false)
     private val audioStarted = AtomicBoolean(false)
-    private val playbackQueue = LinkedBlockingQueue<ByteArray>(GeminiLivePolicy.PLAYBACK_QUEUE_CAPACITY)
-    private val playbackStop = ByteArray(0)
     private val modelTextBuffer = StringBuilder()
-    private val audioLock = Any()
+    @Volatile private var localSpeechActive = false
 
     @Volatile private var socket: WebSocket? = null
     @Volatile private var setupConfig: JSONObject? = null
     @Volatile private var recorder: AudioRecord? = null
-    @Volatile private var speaker: AudioTrack? = null
     @Volatile private var microphoneEnabled = true
     @Volatile private var echoCanceler: AcousticEchoCanceler? = null
     private var recordingThread: Thread? = null
-    private var playbackThread: Thread? = null
 
     fun start() {
         if (stopped.get()) return
@@ -137,6 +129,12 @@ internal class GeminiLiveSession(
         if (enabled) listener.onInputLevel(0f)
     }
 
+    /** Keep the silence watchdog aware of speech rendered by Orion's local Kokoro engine. */
+    fun setLocalSpeechActive(active: Boolean) {
+        localSpeechActive = active
+        if (active) lastActivityAtMs = System.currentTimeMillis()
+    }
+
     fun stop() {
         if (!stopped.compareAndSet(false, true)) return
         // Only send realtime input when setup completed and microphone capture actually started.
@@ -151,16 +149,7 @@ internal class GeminiLiveSession(
         try { recorder?.stop() } catch (_: Exception) { }
         try { recorder?.release() } catch (_: Exception) { }
         recorder = null
-        try {
-            playbackQueue.clear()
-            playbackQueue.offer(playbackStop)
-        } catch (_: Exception) { }
-        synchronized(audioLock) {
-            try { speaker?.pause() } catch (_: Exception) { }
-            try { speaker?.flush() } catch (_: Exception) { }
-            try { speaker?.release() } catch (_: Exception) { }
-            speaker = null
-        }
+        localSpeechActive = false
         try { echoCanceler?.release() } catch (_: Exception) { }
         echoCanceler = null
         listener.onInputLevel(0f)
@@ -323,7 +312,7 @@ internal class GeminiLiveSession(
         }
         val serverContent = message.optJSONObject("serverContent") ?: return
         if (serverContent.optBoolean("interrupted", false)) {
-            clearPlaybackQueue()
+            localSpeechActive = false
             synchronized(modelTextBuffer) { modelTextBuffer.setLength(0) }
             listener.onOutputInterrupted()
         }
@@ -360,36 +349,6 @@ internal class GeminiLiveSession(
     private fun startAudioIo() {
         if (stopped.get() || !audioStarted.compareAndSet(false, true)) return
         try {
-            val outputMin = AudioTrack.getMinBufferSize(
-                GeminiLivePolicy.OUTPUT_SAMPLE_RATE,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            )
-            if (outputMin <= 0) throw IOException("Android could not initialize the Gemini Live audio output.")
-            val track = AudioTrack.Builder()
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ASSISTANT)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build()
-                )
-                .setAudioFormat(
-                    AudioFormat.Builder()
-                        .setSampleRate(GeminiLivePolicy.OUTPUT_SAMPLE_RATE)
-                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                        .build()
-                )
-                .setBufferSizeInBytes(maxOf(outputMin, GeminiLivePolicy.OUTPUT_SAMPLE_RATE * 2))
-                .setTransferMode(AudioTrack.MODE_STREAM)
-                .build()
-            if (track.state != AudioTrack.STATE_INITIALIZED) {
-                track.release()
-                throw IOException("Android could not initialize audio playback for Gemini Live.")
-            }
-            speaker = track
-            track.play()
-
             val inputMin = AudioRecord.getMinBufferSize(
                 GeminiLivePolicy.INPUT_SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO,
@@ -418,10 +377,6 @@ internal class GeminiLiveSession(
                 } catch (_: Exception) { }
             }
 
-            playbackThread = Thread({ playbackLoop(track) }, "OrionGeminiLivePlayback").apply {
-                isDaemon = true
-                start()
-            }
             recordingThread = Thread({ captureLoop(input) }, "OrionGeminiLiveMicrophone").apply {
                 isDaemon = true
                 start()
@@ -464,7 +419,7 @@ internal class GeminiLiveSession(
                 val rms = sqrt(power / count).toFloat().coerceIn(0f, 1f)
                 listener.onInputLevel(rms)
                 val nowMs = System.currentTimeMillis()
-                if (rms >= GeminiLivePolicy.SPEECH_RMS || playbackQueue.isNotEmpty()) lastActivityAtMs = nowMs
+                if (rms >= GeminiLivePolicy.SPEECH_RMS || localSpeechActive) lastActivityAtMs = nowMs
                 if (microphoneEnabled && GeminiLivePolicy.silenceExceeded(nowMs, lastActivityAtMs)) {
                     fail("Gemini Live ended after two minutes of silence to save quota. Start the microphone again when you are ready.")
                     break
@@ -490,65 +445,6 @@ internal class GeminiLiveSession(
             try { input.stop() } catch (_: Exception) { }
             try { input.release() } catch (_: Exception) { }
             if (recorder === input) recorder = null
-        }
-    }
-
-    private fun playbackLoop(track: AudioTrack) {
-        try {
-            while (!stopped.get()) {
-                val bytes = playbackQueue.poll(250L, TimeUnit.MILLISECONDS)
-                if (bytes == null) {
-                    listener.onOutputLevel(0f)
-                    continue
-                }
-                if (bytes === playbackStop) break
-                var offset = 0
-                while (offset < bytes.size && !stopped.get()) {
-                    val written = synchronized(audioLock) {
-                        val active = speaker ?: return
-                        active.write(bytes, offset, bytes.size - offset, AudioTrack.WRITE_BLOCKING)
-                    }
-                    if (written <= 0) break
-                    listener.onOutputLevel(pcm16Rms(bytes, offset, written))
-                    offset += written
-                }
-            }
-        } catch (error: Throwable) {
-            if (!stopped.get()) Log.w("OrionGeminiLive", "Audio output stopped", error)
-        } finally {
-            synchronized(audioLock) {
-                try { track.stop() } catch (_: Exception) { }
-                try { track.release() } catch (_: Exception) { }
-                if (speaker === track) speaker = null
-            }
-        }
-    }
-
-    private fun pcm16Rms(bytes: ByteArray, offset: Int, length: Int): Float {
-        val end = (offset + length).coerceAtMost(bytes.size)
-        var index = offset
-        var energy = 0.0
-        var samples = 0
-        while (index + 1 < end) {
-            val low = bytes[index].toInt() and 0xff
-            val high = bytes[index + 1].toInt()
-            val sample = ((high shl 8) or low).toShort().toInt()
-            val normalized = sample.toDouble() / 32768.0
-            energy += normalized * normalized
-            samples++
-            index += 2
-        }
-        return if (samples == 0) 0f else kotlin.math.sqrt(energy / samples).toFloat().coerceIn(0f, 1f)
-    }
-
-    private fun clearPlaybackQueue() {
-        playbackQueue.clear()
-        synchronized(audioLock) {
-            try {
-                speaker?.pause()
-                speaker?.flush()
-                speaker?.play()
-            } catch (_: Exception) { }
         }
     }
 
