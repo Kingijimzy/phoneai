@@ -51,14 +51,6 @@ print("hello.world")
         assertEquals("I'm on it.", OrionVoiceOutputPolicy.progressCue("New task"))
     }
 
-    @Test fun progressCueIsEmittedOnlyOncePerOwnerTurn() {
-        OrionVoiceOutputPolicy.beginTask()
-        assertEquals("I'm on it.", OrionVoiceOutputPolicy.progressCue("Starting work"))
-        assertNull(OrionVoiceOutputPolicy.progressCue("Still working"))
-        OrionVoiceOutputPolicy.beginTask()
-        assertEquals("I'm on it.", OrionVoiceOutputPolicy.progressCue("New task"))
-    }
-
     @Test fun voicePersonaSeparatesSpeechFromVisibleTechnicalDetails() {
         val prompt = OrionVoicePersona.INSTRUCTIONS
         assertTrue(prompt.contains("one to three useful sentences"))
