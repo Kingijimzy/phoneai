@@ -69,9 +69,16 @@ internal class CodexAppServerClient(
         activeTurnId = turnStart.optJSONObject("turn")?.optString("id")?.takeIf { it.isNotBlank() }
         val answer = StringBuilder()
         val deadline = System.currentTimeMillis() + timeoutMs
+        var lastEvent = "none"
         while (true) {
             val remaining = deadline - System.currentTimeMillis()
-            if (remaining <= 0L) error("Codex turn timed out before turn/completed")
+            if (remaining <= 0L) {
+                val diagnostics = session.stderrSnapshot().takeLast(8).joinToString("\\n").takeLast(1_200)
+                error(
+                    "Codex turn timed out before turn/completed (thread=$threadId, turn=${activeTurnId ?: "unknown"}, last event=$lastEvent)" +
+                        if (diagnostics.isBlank()) "" else "; app-server stderr: $diagnostics"
+                )
+            }
             val queued = events.poll()
             val event = if (queued != null) queued else {
                 val line = session.readLine(remaining.coerceAtMost(500L))
@@ -88,6 +95,8 @@ internal class CodexAppServerClient(
                 if (!CodexAppServerProtocol.isNotification(message)) continue
                 message
             }
+            if (!belongsToActiveTurn(event)) continue
+            lastEvent = event.optString("method").ifBlank { "unknown notification" }
             when (event.optString("method")) {
                 "item/agentMessage/delta" -> {
                     val delta = event.optJSONObject("params")?.optString("delta").orEmpty()
@@ -99,11 +108,30 @@ internal class CodexAppServerClient(
                 "turn/completed" -> {
                     val turn = event.optJSONObject("params")?.optJSONObject("turn")
                     val status = turn?.optString("status").orEmpty()
-                    check(status == "completed") { "Codex turn ended with status: ${status.ifBlank { "unknown" }}" }
+                    val detail = turn?.optJSONObject("error")?.optString("message").orEmpty()
+                    check(status == "completed") {
+                        "Codex turn ended with status: ${status.ifBlank { "unknown" }}" +
+                            if (detail.isBlank()) "" else " ($detail)"
+                    }
                     return answer.toString()
+                }
+                "turn/failed", "turn/cancelled", "turn/canceled" -> {
+                    val detail = event.optJSONObject("params")?.optJSONObject("error")?.optString("message").orEmpty()
+                    error("Codex turn ended with ${event.optString("method")}" +
+                        if (detail.isBlank()) "" else ": $detail")
                 }
             }
         }
+    }
+
+    private fun belongsToActiveTurn(event: JSONObject): Boolean {
+        val params = event.optJSONObject("params") ?: return true
+        val eventThread = params.optString("threadId")
+        if (eventThread.isNotBlank() && eventThread != activeThreadId) return false
+        val turn = params.optJSONObject("turn")
+        val eventTurn = params.optString("turnId").ifBlank { turn?.optString("id").orEmpty() }
+        val expectedTurn = activeTurnId
+        return eventTurn.isBlank() || expectedTurn.isNullOrBlank() || eventTurn == expectedTurn
     }
 
     private fun request(request: CodexAppServerProtocol.Request): JSONObject {
