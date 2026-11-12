@@ -97,6 +97,8 @@ class AgentChatActivity : Activity() {
     private fun voiceOut(): Voice = voice ?: Voice(applicationContext).also { v ->
         v.onSpeaking = { on -> speakingNow = on; postUiIfAlive { setLive(if (on) CompanionView.Activity.SPEAKING else CompanionView.Activity.IDLE) } }
         v.onLevel = { l -> postUiIfAlive { orb?.level = l; holo?.mic(l) } }
+        v.onAudioAmplitude = { level -> postUiIfAlive { orb?.speechAmplitude = level } }
+        v.onWord = { postUiIfAlive { orb?.pulseMouth() } }
         voice = v
     }
 
