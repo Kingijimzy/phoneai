@@ -231,7 +231,7 @@ object McpConnector {
         return "Remote MCP tool discovery failed: $refreshed"
     }
 
-    /** Executes only a currently advertised tool after endpoint pairing and scope validation; caller enforces only the shared restart/shutdown/Wi-Fi confirmation policy. */
+    /** Executes only a currently advertised tool after endpoint pairing and scope validation; the shared Agent dispatch enforces confirmation only for destructive delete/wipe operations. */
     fun callTool(c: Context, name: String, arguments: JSONObject): String {
         if (!configured(c)) return "error: no MCP server configured."
         if (!isPaired(c)) return "error: MCP endpoint has not been locally approved. Open Orion Settings > MCP permissions and complete PIN confirmation first."
