@@ -51,11 +51,19 @@ internal object DeviceOperationRouter {
             DeviceBackend.NATIVE_ANDROID -> executeNative(app, operation, argument)
             DeviceBackend.SHIZUKU_USER_SERVICE -> OrionShizukuBridge.execute(app, operation.wireName, argument)
             DeviceBackend.ACCESSIBILITY_HANDOFF -> {
-                val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS)
-                    .setData(android.net.Uri.parse("package:" + app.packageName))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                runCatching { app.startActivity(intent) }
-                "Android has not granted Orion 'Modify system settings'. I opened the system access page. Grant it, or start Shizuku and grant Orion access, then retry."
+                if (shizuku.installedAndRunning && !shizuku.permissionGranted) {
+                    runCatching {
+                        app.startActivity(Intent(app, OrionShizukuPermissionActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                    "Shizuku is running but Orion permission is missing. I opened the Shizuku permission prompt; approve it, then retry."
+                } else {
+                    val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS)
+                        .setData(android.net.Uri.parse("package:" + app.packageName))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    runCatching { app.startActivity(intent) }
+                    "Android has not granted Orion 'Modify system settings'. I opened the system access page. Grant it, or start Shizuku and grant Orion access, then retry."
+                }
             }
             DeviceBackend.UNAVAILABLE -> "error: " + route.reason
         }
