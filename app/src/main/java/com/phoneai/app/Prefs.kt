@@ -515,6 +515,22 @@ object Prefs {
         sp(c).edit().putString("character_profile", safe).apply()
     }
 
+    /** Owner-editable identity fields. These affect presentation and prompt guidance only. */
+    fun orionEntityName(c: Context): String =
+        sp(c).getString("orion_entity_name", "Orion")?.trim()?.take(40)?.ifBlank { "Orion" } ?: "Orion"
+    fun setOrionEntityName(c: Context, value: String) =
+        sp(c).edit().putString("orion_entity_name", value.trim().replace(Regex("\\s+"), " ").take(40).ifBlank { "Orion" }).apply()
+
+    fun orionEntityDescription(c: Context): String =
+        sp(c).getString("orion_entity_description", "")?.take(1200).orEmpty()
+    fun setOrionEntityDescription(c: Context, value: String) =
+        sp(c).edit().putString("orion_entity_description", value.trim().take(1200)).apply()
+
+    fun orionEntityPhilosophy(c: Context): String =
+        sp(c).getString("orion_entity_philosophy", "")?.take(2400).orEmpty()
+    fun setOrionEntityPhilosophy(c: Context, value: String) =
+        sp(c).edit().putString("orion_entity_philosophy", value.trim().take(2400)).apply()
+
     /** Quiet period: Orion will not speak up proactively between startHour and endHour (local 24h). */
     fun quietPeriodStartHour(c: Context): Int = sp(c).getInt("quiet_start_hour", 22).coerceIn(0, 23)
     fun setQuietPeriodStartHour(c: Context, v: Int) = sp(c).edit().putInt("quiet_start_hour", v.coerceIn(0, 23)).apply()
