@@ -4,13 +4,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AntigravityCliProtocolTest {
-    @Test fun promptInvocationUsesOfficialHeadlessJsonModeAndFullPermissionFlag() {
+    @Test fun promptInvocationUsesHeadlessJsonModeWithSandboxAndNoPermissionBypass() {
         val call = AntigravityCliProtocol.headlessPrompt("summarize this project", "gemini-4-carbon-high")
         assertEquals(
             listOf("agy", "-p", "summarize this project", "--output-format", "stream-json",
-                "--dangerously-skip-permissions", "--model", "gemini-4-carbon-high"),
+                "--sandbox", "--model", "gemini-4-carbon-high"),
             call.argv
         )
+        assertFalse(call.argv.contains("--dangerously-skip-permissions"))
         assertTrue(call.requiresExistingLogin)
     }
 
