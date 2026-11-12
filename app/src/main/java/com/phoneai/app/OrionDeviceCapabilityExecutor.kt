@@ -11,7 +11,7 @@ import org.json.JSONObject
  */
 internal object OrionDeviceCapabilityExecutor {
     private val supportedTools = setOf(
-        "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications",
+        "lookup_app", "open_app", "system_intent", "open_deep_link", "whatsapp_compose", "read_notifications",
         "media_status", "media_control", "play_media", "chrome_search", "resolve_contact", "list_apps",
         "list_app_deeplinks", "read_screen", "validate_action", "verify_action", "verify_send",
         "click", "click_text", "point_at", "sketch_screen", "wait_for", "tap", "long_press", "swipe", "swipe_path",
