@@ -88,8 +88,15 @@ internal class AccountAwareModelProvider(
             val account = client.readAccount()
             check(account?.isChatGptAccount == true) { "Sign in with your ChatGPT account in Account Connections first." }
             val catalogue = runCatching { client.availableModels() }.getOrDefault(emptyList())
-            val model = if (catalogue.isEmpty()) null else requestedModel?.takeIf { it in catalogue }
-                ?: catalogue.firstOrNull()
+            val model = when {
+                requestedModel.isNullOrBlank() -> catalogue.firstOrNull()
+                catalogue.isEmpty() -> requestedModel
+                requestedModel != null && requestedModel in catalogue -> requestedModel
+                !Prefs.autoSwitch(app) -> throw AiException(
+                    "The selected Codex model '$requestedModel' is not in the current account catalogue. Auto-switch is off, so Orion kept your selection."
+                )
+                else -> catalogue.firstOrNull()
+            }
             val thread = client.startThread(model, tools)
             val answer = client.runTurnAndAwait(thread, prompt, model, onDelta = onDelta, onToolCall = onToolCall)
             check(answer.isNotBlank()) { "Codex returned an empty model response." }
