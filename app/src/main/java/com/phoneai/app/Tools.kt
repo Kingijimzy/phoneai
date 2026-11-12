@@ -523,7 +523,13 @@ class Tools(
                 if (hour !in 0..23 || minute !in 0..59) return "error: alarm time is outside 24-hour range"
                 val alarm = Intent(AlarmClock.ACTION_SET_ALARM).putExtra(AlarmClock.EXTRA_HOUR, hour)
                     .putExtra(AlarmClock.EXTRA_MINUTES, minute).putExtra(AlarmClock.EXTRA_MESSAGE, uriText)
-                return try { alarm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); svc.startActivity(alarm); "alarm request handed to the clock app; verify it was saved" }
+                    // Ask compatible clock apps to create the alarm without presenting their setup UI.
+                    .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+                return try {
+                    alarm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    svc.startActivity(alarm)
+                    "alarm request sent to the clock app with skip-UI enabled; Android/OEM clock support varies, so do not claim it was saved until verified"
+                } catch (e: Exception) { "error: clock app could not accept the alarm request (" + e.javaClass.simpleName + ")" }
                     catch (e: Exception) { "error: clock app could not set alarm (" + e.javaClass.simpleName + ")" }
             }
             "timer" -> {
