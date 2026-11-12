@@ -58,7 +58,7 @@ class KnowledgeGraphActivity : Activity() {
         host.addView(label("Search and inspect entity → relationship → entity facts stored locally on this phone. These facts are reviewable and do not retrain the base model.", 12f, Theme.MUTED))
         query = EditText(this).apply {
             hint = "Search people, projects, preferences…"
-            setSingleLine(true); setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED)
+            setSingleLine(true); imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH; setOnEditorActionListener { v, _, _ -> v.clearFocus(); (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(v.windowToken, 0); true }; setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED)
             background = GradientDrawable().apply { setColor(Theme.PANEL2); cornerRadius = dp(12).toFloat(); setStroke(dp(1), Theme.LINE_STRONG) }
             setPadding(dp(13), dp(10), dp(13), dp(10))
         }

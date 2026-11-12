@@ -50,7 +50,7 @@ class MemoryActivity : Activity() {
         top.addView(button("＋ Add") { editMemory(null) }); root.addView(top)
         root.addView(text("Search saved facts, preferences, decisions and project notes.", 13f, Theme.MUTED).apply { setPadding(0, dp(12), 0, dp(10)) })
         val search = EditText(this).apply {
-            hint = "Search local memory"; setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED); textSize = 14f; setSingleLine(true)
+            hint = "Search local memory"; setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED); textSize = 14f; setSingleLine(true); imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH; setOnEditorActionListener { v, _, _ -> v.clearFocus(); (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(v.windowToken, 0); true }
             setPadding(dp(13), dp(11), dp(13), dp(11)); background = GradientDrawable().apply { setColor(Theme.PANEL); cornerRadius = dp(12).toFloat(); setStroke(dp(1), Theme.LINE) }
         }
         root.addView(search)
