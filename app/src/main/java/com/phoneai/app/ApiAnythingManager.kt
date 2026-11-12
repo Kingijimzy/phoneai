@@ -102,6 +102,10 @@ internal object ApiAnythingManager {
             check(token.matches(Regex("^[a-fA-F0-9]{64}$"))) {
                 "API Anything returned an unexpected token-file value; refusing to configure MCP."
             }
+            val existingEndpoint = McpConnector.endpoint(app)
+            check(existingEndpoint.isBlank() || existingEndpoint == ENDPOINT) {
+                "Another MCP endpoint is already configured ($existingEndpoint). Disconnect it in MCP settings before enabling the managed API Anything endpoint; Orion will not silently replace an existing integration."
+            }
             val saved = McpConnector.saveManagedLocal(app, ENDPOINT, token)
             check(saved.startsWith("MCP endpoint saved")) { saved }
             check(healthCheck()) { "API Anything health endpoint did not become ready." }
@@ -167,7 +171,9 @@ internal object ApiAnythingManager {
             context.applicationContext.getSharedPreferences(PREFS, 0).edit().putBoolean(ENABLED, false).commit()
             lastState = "Stopped by owner"
         }
-        McpConnector.clear(context.applicationContext)
+        if (McpConnector.endpoint(context.applicationContext) == ENDPOINT) {
+            McpConnector.clear(context.applicationContext)
+        }
     }
 
     private fun isInstalled(runtime: LinuxRuntimeInstaller, workspace: String): Boolean {
