@@ -373,9 +373,9 @@ class AccountConnectionsActivity : Activity() {
                             if (url != null) {
                                 val normalized = AntigravityOAuthUrlPolicy.normalizeAuthorizationUrl(url)
                                 if (normalized == null) {
-                                    appendAntigravityLog("Ignored an authorization URL that was not a Google OAuth sign-in endpoint.")
+                                    antigravityOutput.append("\nIgnored an authorization URL that was not a Google OAuth sign-in endpoint.")
                                 } else {
-                                    if (normalized != url) appendAntigravityLog("Removed Google's unsupported bare userinfo OAuth scope; valid sign-in scopes were preserved.")
+                                    if (normalized != url) antigravityOutput.append("\nRemoved Google's unsupported bare userinfo OAuth scope; valid sign-in scopes were preserved.")
                                     runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(normalized))) }
                                 }
                             }
