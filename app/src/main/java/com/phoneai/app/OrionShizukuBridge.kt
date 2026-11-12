@@ -61,6 +61,9 @@ internal object OrionShizukuBridge {
                 }
             }
         }.onFailure { listenersRegistered = false }
+        if (runCatching { Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED }.getOrDefault(false)) {
+            appContext?.let { bindUserService(it) }
+        }
     }
 
     fun state(): State {
