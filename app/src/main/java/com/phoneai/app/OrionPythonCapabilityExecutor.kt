@@ -57,10 +57,11 @@ internal class OrionPythonCapabilityExecutor(
             ". Activation still requires passing tests for the exact source hash; generated code receives no Android, filesystem, network, or shell capabilities."
 
     private fun setExtensionAutoActivation(args: JSONObject): String {
-        if (!args.has("enabled") || args.isNull("enabled")) {
-            return "error: provide enabled=true or enabled=false"
+        val rawEnabled = args.opt("enabled")
+        if (rawEnabled !is Boolean) {
+            return "error: enabled must be a JSON boolean (true or false)"
         }
-        val enabled = args.optBoolean("enabled")
+        val enabled = rawEnabled
         ExtensionAutonomySettings.setAutoActivationEnabled(context, enabled)
         AgentPolicy.log(context, "extension-policy", "auto-activation", true, if (enabled) "enabled by owner" else "disabled by owner")
         return extensionPolicy()
