@@ -12,7 +12,8 @@ internal enum class DeviceOperation(val wireName: String, val requiresWrite: Boo
     READ_AIRPLANE_MODE("read_airplane_mode", false),
     READ_BRIGHTNESS("read_brightness", false),
     READ_SCREEN_TIMEOUT("read_screen_timeout", false),
-    LIST_USER_APPS("list_user_apps", false),
+    LIST_LAUNCHABLE_APPS("list_launchable_apps", false),
+    LIST_USER_PACKAGES("list_user_packages", false),
     CAPABILITIES("capabilities", false),
     SET_BRIGHTNESS("set_brightness", true),
     SET_SCREEN_TIMEOUT("set_screen_timeout", true);
@@ -45,6 +46,7 @@ internal object DeviceOperationRouter {
         if (operation == DeviceOperation.CAPABILITIES) return capabilityReport(app)
         val nativeCanExecute = when (operation) {
             DeviceOperation.SET_BRIGHTNESS, DeviceOperation.SET_SCREEN_TIMEOUT -> Settings.System.canWrite(app)
+            DeviceOperation.LIST_USER_PACKAGES -> false
             else -> true
         }
         val shizuku = OrionShizukuBridge.state()
@@ -87,6 +89,7 @@ internal object DeviceOperationRouter {
         return buildString {
             appendLine("ORION DEVICE CAPABILITY INVENTORY")
             appendLine("Native Android: battery, airplane-mode state, screen brightness, screen timeout, launchable app inventory")
+            appendLine("Full third-party package inventory: " + if (shizuku.ready) "Shizuku UserService" else "unavailable without Shizuku permission")
             appendLine("System-setting writes: " + settingBackend)
             appendLine("Accessibility: " + if (enabledAccessibility) "enabled in Android settings" else "not enabled")
             appendLine("Shizuku/Sui: " + shizuku.detail)
@@ -112,12 +115,13 @@ internal object DeviceOperationRouter {
                 "screen_brightness=" + Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, -1)
             DeviceOperation.READ_SCREEN_TIMEOUT ->
                 "screen_timeout_ms=" + Settings.System.getLong(context.contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, -1L)
-            DeviceOperation.LIST_USER_APPS -> {
+            DeviceOperation.LIST_LAUNCHABLE_APPS -> {
                 val pm = context.packageManager
                 val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
                 val apps = pm.queryIntentActivities(intent, 0).map { it.loadLabel(pm).toString() }.distinct().sorted()
                 apps.take(100).joinToString("\n").ifBlank { "No launchable apps found." }
             }
+            DeviceOperation.LIST_USER_PACKAGES -> "error: full package inventory requires Shizuku shell identity"
             DeviceOperation.CAPABILITIES -> "error: capability inventory must be handled before native dispatch"
             DeviceOperation.SET_BRIGHTNESS -> {
                 val value = argument.toIntOrNull()?.takeIf { it in 0..255 }
