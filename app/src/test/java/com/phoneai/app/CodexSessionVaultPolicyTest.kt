@@ -4,7 +4,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CodexSessionVaultPolicyTest {
-    @Test fun codexUsesWorkspaceSandboxAndOnlyOrionDynamicToolsForExecution() {
+    @Test fun codexUsesPRootGuestExecutionAndOnlyOrionDynamicToolsForExecution() {
         val config = CodexSessionVault.configToml()
         assertTrue(config.contains("approval_policy = \"never\""))
         assertTrue(config.contains("sandbox_mode = \"danger-full-access\""))
