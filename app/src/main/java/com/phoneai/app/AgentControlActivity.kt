@@ -327,7 +327,7 @@ class AgentControlActivity : Activity() {
             test("Selected AI provider") {
                 if (!Prefs.hasKey(this, p.id) && !p.noKey) "SKIP: ${p.label} has no saved API key"
                 else {
-                    val error = Nim(this).testModel(p, Prefs.model(this, p, false), false)
+                    val error = OrionModelProviderFactories.create(this).testModel(p, Prefs.model(this, p, false), false)
                     if (error.isBlank()) "PASS: ${p.label} returned a usable response"
                     else "FAIL: ${p.label} probe failed: ${error.take(170)}"
                 }
