@@ -101,6 +101,11 @@ object McpConnector {
     fun scopeForTool(name: String): String {
         val n = name.lowercase().replace('-', '_').replace('.', '_')
         return when {
+            n in setOf("take_screenshot", "list_windows", "read_window", "read_file", "list_files",
+                "search_files", "fetch_url", "see_photo", "list_commitments", "show_list") -> "read"
+            n == "act_in_app" -> "communication"
+            n in setOf("write_file", "remember_commitment", "update_commitment", "forget_fact") -> "write"
+            n in setOf("run_command", "open") -> "system"
             Regex("(^|_)(send|message|email|telegram|post|publish|reply|notify|share|call|sms)(_|$)").containsMatchIn(n) -> "communication"
             Regex("(^|_)(delete|remove|update|create|write|edit|save|submit|purchase|pay|transfer|trade|order|execute|run|deploy)(_|$)").containsMatchIn(n) -> "write"
             Regex("(^|_)(settings|system|shell|terminal|command|device|install|uninstall|permission|admin)(_|$)").containsMatchIn(n) -> "system"
