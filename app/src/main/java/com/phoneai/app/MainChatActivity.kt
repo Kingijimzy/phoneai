@@ -76,6 +76,10 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private val composeChatTitle get() = chatUiState.chatTitle
     private val composeCommandMode get() = chatUiState.commandMode
     private val composeCompanionLook = mutableStateOf(0)
+    private val composeOrbMode = mutableStateOf(OrbView.Mode.IDLE)
+    private val composeOrbMicLevel = mutableStateOf(0f)
+    private val composeOrbSpeechAmplitude = mutableStateOf(0f)
+    private val composeOrbWordPulse = mutableStateOf(0f)
     private val composeActivityEvents = mutableStateOf<List<OrionActivityEvent>>(emptyList())
     private val composeSelectedImages get() = chatUiState.selectedImages
     private var composeChatActive = false
@@ -1505,6 +1509,10 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     lines = composeLines,
                     activityEvents = composeActivityEvents.value,
                     status = composeStatus.value,
+                    orbMode = composeOrbMode.value,
+                    orbMicLevel = composeOrbMicLevel.value,
+                    orbSpeechAmplitude = composeOrbSpeechAmplitude.value,
+                    orbWordPulse = composeOrbWordPulse.value,
                     companionLook = composeCompanionLook.value,
                     onCompanionLookChanged = { look ->
                         val safeLook = look.coerceIn(0, 2)
@@ -2207,10 +2215,25 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }
     }
 
+    override fun onAudioLevel(level: Float) {
+        runOnUiThread { composeOrbMicLevel.value = level.coerceIn(0f, 1f) }
+    }
+
+    override fun onAudioAmplitude(amplitude: Float) {
+        runOnUiThread { composeOrbSpeechAmplitude.value = amplitude.coerceIn(0f, 1f) }
+    }
+
+    override fun onSpeechWord() {
+        runOnUiThread { composeOrbWordPulse.value = 1f }
+    }
+
     override fun onStatus(text: String, mode: OrbView.Mode) {
         runOnUiThread {
             val changed = lastMode != mode
             lastMode = mode
+            composeOrbMode.value = mode
+            if (mode != OrbView.Mode.SPEAKING) composeOrbSpeechAmplitude.value = 0f
+            if (mode != OrbView.Mode.LISTENING) composeOrbMicLevel.value = 0f
             val state: Triple<String, Int, Pair<Int, Int>> = when (mode) {
                 OrbView.Mode.IDLE -> Triple("READY", Theme.MUTED, Pair(Theme.BG, Theme.LINE))
                 OrbView.Mode.LISTENING -> Triple("LISTENING", Theme.CYAN, Pair(Theme.BG, Theme.LINE))
