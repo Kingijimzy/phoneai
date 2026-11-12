@@ -14,6 +14,8 @@ class OrionExecutionCoordinatorTest {
     private fun context(): Context = RuntimeEnvironment.getApplication().also { c ->
         c.filesDir.listFiles()?.filter { it.name.startsWith("orion_distributed") || it.name.startsWith("orion_worker_lease") || it.name == "orion_agent_checkpoint.json" || it.name == "orion_agent_checkpoint.json.bak" || it.name == "orion_task_checkpoints" }?.forEach { it.deleteRecursively() }
         AgentCheckpointStore.clear(c)
+        c.getSharedPreferences("orion_master_control", Context.MODE_PRIVATE).edit()
+            .putBoolean("brain_enabled", true).commit()
     }
     private fun worker(result: OrionWorkerResult = OrionWorkerResult.Success("evidence:ok")) =
         object : OrionTaskWorker {
