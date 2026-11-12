@@ -220,6 +220,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             mainChatListener?.onAudioLevel(l)
         }
         voice.onAudioAmplitude = { amplitude ->
+            for (o in orbs()) o.speechAmplitude = amplitude
             mainChatListener?.onAudioAmplitude(amplitude)
         }
         voice.onProblem = { message ->
