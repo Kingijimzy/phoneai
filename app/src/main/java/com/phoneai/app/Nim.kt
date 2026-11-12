@@ -1222,7 +1222,11 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                     val backups = candidates(p, vision).filter { it != model && it !in tried }
                     queue.addAll(0, backups)
                 }
-                if (queue.isEmpty()) throw AiException("${p.label}: selected model $model returned HTTP ${r.code}; Auto-switch is off, so Orion kept the selected model.", r.code)
+                if (queue.isEmpty()) throw AiException(
+                    if (Prefs.autoSwitch(ctx)) "${p.label}: selected model $model returned HTTP ${r.code}; no eligible alternate model was available."
+                    else "${p.label}: selected model $model returned HTTP ${r.code}; Auto-switch is off, so Orion kept the selected model.",
+                    r.code
+                )
                 continue
             }
             if (r.code in listOf(500, 502, 503, 504)) {
