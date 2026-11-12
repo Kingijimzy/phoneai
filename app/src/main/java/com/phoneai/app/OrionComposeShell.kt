@@ -54,6 +54,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.ui.Alignment
@@ -141,6 +142,8 @@ private fun HomePage(
     onOpenAgents: () -> Unit,
     onOpenMemory: () -> Unit
 ) {
+    val context = LocalContext.current
+    val entityName = Prefs.orionEntityName(context)
     val setupNeeded = status.contains("0 AI provider", true)
     val controlOff = status.contains("not enabled", true)
     Column(
@@ -156,7 +159,7 @@ private fun HomePage(
             ) { Icon(Icons.Rounded.AutoAwesome, null, tint = Silver, modifier = Modifier.size(21.dp)) }
             Spacer(Modifier.width(11.dp))
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("ORION", color = Copy, fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                Text(entityName.uppercase(), color = Copy, fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                 Text("YOUR PERSONAL COMPANION", color = Muted, fontSize = 9.sp, letterSpacing = 1.sp)
             }
             Spacer(Modifier.weight(1f))
