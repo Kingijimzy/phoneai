@@ -16,14 +16,13 @@ internal class AntigravityRuntimeInstaller(context: Context) {
             bash /tmp/orion-agy-install.sh --skip-aliases --skip-path
             test -x /root/.local/bin/agy
             /root/.local/bin/agy --version
-            settings=/root/.gemini/antigravity-cli/settings.json
             rm -f /tmp/orion-agy-install.sh
         """
     }
 
     private val configureCommand = """
         set -eu
-        apk add --no-cache jq
+        if ! command -v jq >/dev/null 2>&1; then apk add --no-cache jq; fi
         settings=/root/.gemini/antigravity-cli/settings.json
         mkdir -p /root/.gemini/antigravity-cli
         if [ -f "$settings" ]; then
