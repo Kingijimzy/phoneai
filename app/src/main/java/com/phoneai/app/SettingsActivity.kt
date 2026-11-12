@@ -756,7 +756,7 @@ class SettingsActivity : Activity() {
             true
         ) { installNeuralVoice() }, 8)
         add(s3, text(
-            "Piper currently supplies an English voice. Each sentence is synthesized separately and audio streams to the speaker as the model generates it. Other languages continue using Android's voice; the neural model is downloaded only when you press Install.",
+            "Kokoro supplies Orion's British English voice locally. Each sentence is synthesized separately and real PCM audio streams to the speaker as the model generates it. Other languages continue using Android's voice; the neural model is downloaded only when you press Install.",
             12f, Theme.MUTED
         ), 8)
         switchRow(s3, "Hands-free: keep listening after each answer", Prefs.hands(this)) { Prefs.setHands(this, it) }
