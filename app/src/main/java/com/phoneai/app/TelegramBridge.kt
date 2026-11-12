@@ -191,8 +191,17 @@ internal object TelegramBridge {
     private fun api(botToken: String, method: String, body: JSONObject): JSONObject {
         var connection: HttpURLConnection? = null
         return try {
-            connection = (URL("https://api.telegram.org/bot" + botToken + "/" + method).openConnection() as HttpURLConnection).apply {
-                requestMethod = if (method == "getMe" || method == "getUpdates") "GET" else "POST"
+            val getMethod = method == "getMe" || method == "getUpdates"
+            val endpoint = "https://api.telegram.org/bot" + botToken + "/" + method
+            val requestUrl = if (getMethod && body.length() > 0) {
+                val query = body.keys().asSequence().map { key ->
+                    java.net.URLEncoder.encode(key, "UTF-8") + "=" +
+                        java.net.URLEncoder.encode(body.opt(key).toString(), "UTF-8")
+                }.joinToString("&")
+                endpoint + "?" + query
+            } else endpoint
+            connection = (URL(requestUrl).openConnection() as HttpURLConnection).apply {
+                requestMethod = if (getMethod) "GET" else "POST"
                 connectTimeout = 8_000
                 readTimeout = 12_000
                 doInput = true
