@@ -12,7 +12,7 @@ internal class OrionShizukuUserService : IOrionDeviceService.Stub() {
             "read_screen_timeout" -> runFixed("settings", "get", "system", "screen_off_timeout")
             "read_airplane_mode" -> runFixed("settings", "get", "global", "airplane_mode_on")
             "read_battery" -> runFixed("dumpsys", "battery")
-            "list_user_apps" -> runFixed("cmd", "package", "list", "packages", "-3")
+            "list_user_packages" -> runFixed("cmd", "package", "list", "packages", "-3")
             "set_brightness" -> {
                 val value = argument.toIntOrNull()?.takeIf { it in 0..255 }
                     ?: return "error: brightness must be an integer from 0 to 255"
