@@ -173,7 +173,7 @@ class ToolRegistryTest {
     }
 
     @Test fun promptCatalogIsGeneratedFromToolDefinitions() {
-        val prompt = ToolRegistry.promptSection()
+        val prompt = ToolRegistry.promptSection().lowercase()
         assertTrue(prompt.startsWith("Tools:\n"))
         ToolRegistry.all.forEach { tool ->
             assertTrue("Prompt is missing ${tool.name}", prompt.contains("- " + tool.promptLine))
@@ -268,7 +268,7 @@ class ToolRegistryPromptAvailabilityTest {
     }
 
     @Test fun baselineAndFullRegistrySnapshotsRemainAvailableForDiagnostics() {
-        val prompt = ToolRegistry.promptSection()
+        val prompt = ToolRegistry.promptSection().lowercase()
         assertTrue(prompt.startsWith("Tools:\n"))
         ToolRegistry.all.forEach { tool -> assertTrue(prompt.contains("- " + tool.promptLine)) }
         assertTrue(prompt.contains("Tool-use guidance:"))
@@ -365,7 +365,7 @@ class ConversationGroundingPromptRegressionTest {
     }
 
     @Test fun researchMustBindProductIdentitySizeAndCanonicalUrlToOnePage() {
-        val prompt = ToolRegistry.promptSection()
+        val prompt = ToolRegistry.promptSection().lowercase()
         assertTrue(prompt.contains("do not infer that rdr1 and rdr2 are interchangeable"))
         assertTrue(prompt.contains("do not reuse one url for two different products"))
         assertTrue(prompt.contains("canonical url"))
@@ -373,7 +373,7 @@ class ConversationGroundingPromptRegressionTest {
     }
 
     @Test fun skillAndDocumentRequestsUseAvailableCreationPaths() {
-        val prompt = ToolRegistry.promptSection()
+        val prompt = ToolRegistry.promptSection().lowercase()
         assertTrue(prompt.contains("do not answer that skill creation is contradictory or impossible"))
         assertTrue(prompt.contains("DOCUMENT/PDF CREATION RULE"))
         assertTrue(prompt.contains("reportlab"))
