@@ -194,7 +194,12 @@ internal object OrionKnowledgeGraph {
                     val target = cursor.getString(1)
                     result.add(cursor.getInt(2))
                     val neighbor = if (source in batch) target else source
-                    if ((neighbor.startsWith("entity:") || neighbor.startsWith("term:")) && neighbor !in visited) next.add(neighbor)
+                    // The canonical owner subject is shared by every first-person fact.
+                    // Traversing through it would turn "I trade forex" into a bridge to
+                    // every unrelated owner fact (e.g. "I like football").
+                    if (neighbor != "entity:fact:user" &&
+                        (neighbor.startsWith("entity:") || neighbor.startsWith("term:")) &&
+                        neighbor !in visited) next.add(neighbor)
                 }
             }
             current = next
