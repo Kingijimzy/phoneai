@@ -708,7 +708,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
     }
 
     /** Converts OpenAI-style messages to Anthropic's format. */
-    private fun anthropicBody(model: String, messages: JSONArray, tokens: Int, temperature: Double, tools: List<ToolDefinition> = emptyList()): String {
+    private fun anthropicBody(model: String, messages: JSONArray, tokens: Int, temperature: Double, tools: List<ToolDefinition> = emptyList(), descriptionLimit: Int = 1000): String {
         val system = StringBuilder()
         val out = JSONArray()
         fun appendMessage(role: String, content: Any) {
@@ -788,7 +788,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         messages: JSONArray,
         tokens: Int,
         temperature: Double,
-        tools: List<ToolDefinition>
+        tools: List<ToolDefinition>,
+        descriptionLimit: Int = 1000
     ): String {
         val system = StringBuilder()
         val contents = JSONArray()
