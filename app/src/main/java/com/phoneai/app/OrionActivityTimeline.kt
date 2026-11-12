@@ -32,6 +32,52 @@ internal data class OrionActivityEvent(
     }
 }
 
+/** User-facing copy for execution events. Internal checkpoint keys and correlation IDs stay out of chat. */
+internal object OrionActivityPresentation {
+    private val internalTrace = Regex("(?i)(work=|checkpoint=|attempt=|key=notification:|RUNNING=|DONE=|task(session|id)[-:=])")
+
+    fun clean(raw: String): String? {
+        val value = raw.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() && !internalTrace.containsMatchIn(it) }
+            .filterNot { it.startsWith("Task session-", ignoreCase = true) }
+            .joinToString(" ")
+            .replace(Regex("\\s+"), " ")
+            .take(220)
+            .trim()
+        return value.takeIf { it.isNotBlank() }
+    }
+
+    fun title(event: OrionActivityEvent): String =
+        clean(event.title) ?: when {
+            event.title.contains("notification", true) || event.summary.contains("notification", true) -> "System notification"
+            event.kind == OrionActivityKind.TOOL -> "Phone activity"
+            else -> when (event.kind) {
+                OrionActivityKind.THINKING -> "Thinking"
+                OrionActivityKind.RESEARCH -> "Research"
+                OrionActivityKind.CODING -> "Coding"
+                OrionActivityKind.TOOL -> "Phone activity"
+                OrionActivityKind.DELEGATION -> "Specialist work"
+                OrionActivityKind.APPROVAL -> "Approval required"
+                OrionActivityKind.ERROR -> "Action failed"
+                OrionActivityKind.COMPLETION -> "Completed"
+                OrionActivityKind.INTERRUPTED -> "Interrupted"
+                OrionActivityKind.CANCELLED -> "Cancelled"
+            }
+        }
+
+    fun summary(event: OrionActivityEvent): String = clean(event.summary) ?: when (event.status) {
+        OrionActivityStatus.ACTIVE -> "Orion is working on this step."
+        OrionActivityStatus.WAITING -> "Waiting for your decision."
+        OrionActivityStatus.SUCCEEDED -> "This step completed."
+        OrionActivityStatus.FAILED -> "This step failed. Open task details for the error."
+        OrionActivityStatus.CANCELLED -> "This step was cancelled."
+        OrionActivityStatus.INTERRUPTED -> "This step was interrupted."
+    }
+
+    fun evidence(items: List<String>): List<String> = items.mapNotNull(::clean).takeLast(6)
+}
+
 /**
  * In-memory ordered projection. Persistence belongs to the conversation repository; this class
  * provides deterministic deduplication/replay semantics and never fabricates progress.
