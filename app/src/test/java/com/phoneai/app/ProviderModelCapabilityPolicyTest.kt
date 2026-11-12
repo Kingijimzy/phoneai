@@ -12,9 +12,10 @@ class ProviderModelCapabilityPolicyTest {
         )
     }
 
-    @Test fun customEndpointCatalogueRefreshesAfterModelFailureInQuotaSaverMode() {
+    @Test fun customAndVolatileProviderCataloguesRefreshAfterModelFailureInQuotaSaverMode() {
         assertTrue(ProviderModelCapabilityPolicy.shouldDiscoverAfterFailure("custom_repa", true))
         assertTrue(ProviderModelCapabilityPolicy.shouldDiscoverAfterFailure("nvidia", true))
+        assertTrue(ProviderModelCapabilityPolicy.shouldDiscoverAfterFailure("gemini", true))
         assertFalse(ProviderModelCapabilityPolicy.shouldDiscoverAfterFailure("groq", true))
         assertTrue(ProviderModelCapabilityPolicy.shouldDiscoverAfterFailure("groq", false))
     }
