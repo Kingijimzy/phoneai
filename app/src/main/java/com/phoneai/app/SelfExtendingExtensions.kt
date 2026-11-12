@@ -56,6 +56,25 @@ internal object SelfExtendingExtensionPolicy {
         testPassed && sourceHash.isNotBlank() && sourceHash == testedHash && userApproved
 }
 
+/**
+ * Owner-controlled promotion policy for generated, capability-free data transforms.
+ * Defaults on to honor the owner's autonomous self-evolution preference; the owner can
+ * disable it at any time through the extension_auto_activation tool.
+ */
+internal object ExtensionAutonomySettings {
+    private const val PREFS = "orion_extension_autonomy"
+    private const val KEY_AUTO_ACTIVATE = "auto_activate_after_tests"
+
+    fun autoActivationEnabled(context: Context): Boolean =
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_AUTO_ACTIVATE, true)
+
+    fun setAutoActivationEnabled(context: Context, enabled: Boolean) {
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_AUTO_ACTIVATE, enabled).apply()
+    }
+}
+
 internal data class GeneratedExtension(
     val id: String,
     val displayName: String,
