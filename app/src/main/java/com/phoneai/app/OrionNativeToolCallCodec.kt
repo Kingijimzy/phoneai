@@ -59,7 +59,7 @@ internal object OrionNativeToolCallCodec {
                     val part = parts.optJSONObject(i) ?: continue
                     if (part.has("text")) text.append(part.optString("text"))
                     val call = part.optJSONObject("functionCall") ?: continue
-                    add(call.optString("id").ifBlank { "gemini-${i + 1}" }, call.optString("name"), call.opt("args"), part.optString("thoughtSignature").ifBlank { part.optString("thought_signature").ifBlank { null } })
+                    add(call.optString("id").ifBlank { "gemini-${i + 1}" }, call.optString("name"), call.opt("args"), part.optString("thoughtSignature").ifBlank { part.optString("thought_signature").ifBlank { call.optString("thoughtSignature").ifBlank { call.optString("thought_signature").ifBlank { null } } } })
                 }
             }
             providerId == "opencode-zen" -> {
