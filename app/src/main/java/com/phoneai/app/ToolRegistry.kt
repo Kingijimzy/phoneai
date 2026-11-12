@@ -312,7 +312,7 @@ internal object ToolRegistry {
         "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt"
     )
     private val phoneNativeTools = listOf(
-        "device_operation", "lookup_app", "open_app", "read_screen", "point_at", "sketch_screen", "validate_action", "verify_action",
+        "device_operation", "lookup_app", "open_app", "whatsapp_compose", "read_screen", "point_at", "sketch_screen", "validate_action", "verify_action",
         "verify_send", "click", "click_text", "tap", "type", "wait_for", "routine_run", "routine_resume",
         "open_deep_link", "system_intent", "device_info", "look"
     )
