@@ -395,6 +395,17 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         }
     }
 
+    override fun onOutputLevel(level: Float) {
+        runOnUiThread {
+            if (::visual.isInitialized) {
+                val energy = level.coerceIn(0f, 1f)
+                visual.speechAmplitude = energy
+                if (active) visual.mode = if (energy > 0.012f) OrbView.Mode.SPEAKING
+                    else if (microphoneEnabled) OrbView.Mode.LISTENING else OrbView.Mode.IDLE
+            }
+        }
+    }
+
     override fun onUsage(message: String) {
         runOnUiThread { if (!isFinishing) usageView.text = message.take(260) }
     }
