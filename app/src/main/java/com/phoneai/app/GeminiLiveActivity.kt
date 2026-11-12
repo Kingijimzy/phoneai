@@ -43,8 +43,10 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         if (active) {
             session?.stop()
             session = null
+            orionVoice?.stopSpeaking()
             active = false
             visual.mode = OrbView.Mode.IDLE
+            visual.speechAmplitude = 0f
             statusView.text = "SESSION LIMIT REACHED"
             transcriptView.text = "The five-minute Gemini Live session limit has been reached. End this call or start another session after reviewing the quota warning."
             Toast.makeText(this, "Gemini Live session ended at the five-minute limit.", Toast.LENGTH_LONG).show()
@@ -455,7 +457,9 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             active = false
             liveConnected = false
             session = null
+            orionVoice?.stopSpeaking()
             visual.mode = OrbView.Mode.IDLE
+            visual.speechAmplitude = 0f
             visual.errorState = true
             statusView.text = "GEMINI LIVE ERROR"
             transcriptView.text = message
