@@ -3024,30 +3024,36 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     fun clickId(id: Int): String {
-        if (id >= nodes.size + ocrElements.size) {
-            val item = visualElements.getOrNull(id - nodes.size - ocrElements.size)
-                ?: return "error: no element $id. Call read_screen first."
-            return tap(item.bounds.centerX().toFloat(), item.bounds.centerY().toFloat())
-        }
-        if (id >= nodes.size) {
-            val item = ocrElements.getOrNull(id - nodes.size)
-                ?: return "error: no element $id. Call read_screen first."
-            return tap(item.bounds.centerX().toFloat(), item.bounds.centerY().toFloat())
-        }
-        val n = nodes.getOrNull(id) ?: return "error: no element $id. Call read_screen first."
-        var cur: AccessibilityNodeInfo? = n
-        var hops = 0
-        while (cur != null && hops < 6) {
-            if (cur.isClickable && cur.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-                Thread.sleep(600)
-                return "clicked $id"
+        // IDs are valid only for the exact, recent window snapshot that produced them.
+        val resolved = boundsForScreenId(id)
+            ?: return "error: target $id is stale, hidden, protected, or belongs to a different app/window. Run read_screen again."
+        if (id in 0 until nodes.size) {
+            val node = nodes.getOrNull(id)
+                ?: return "error: target $id disappeared. Run read_screen again."
+            if (!node.isVisibleToUser || node.isPassword) {
+                return "error: target is hidden or password-protected; refusing interaction."
             }
-            cur = cur.parent
-            hops++
+            var current: AccessibilityNodeInfo? = node
+            var hops = 0
+            while (current != null && hops < 6) {
+                if (current.isVisibleToUser && current.isClickable &&
+                    current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                    Thread.sleep(350)
+                    val active = rootInActiveWindow
+                    val activePackage = active?.packageName?.toString().orEmpty()
+                    return "click dispatched for target $id in $activePackage; verify the resulting screen before the next action"
+                }
+                current = current.parent
+                hops++
+            }
         }
-        val r = Rect()
-        n.getBoundsInScreen(r)
-        return tap(r.centerX().toFloat(), r.centerY().toFloat())
+        val bounds = resolved.first
+        val size = screenSize()
+        if (bounds.centerX() !in 0..size.first || bounds.centerY() !in 0..size.second) {
+            return "error: target bounds are outside the current display; refusing tap."
+        }
+        val result = tap(bounds.centerX().toFloat(), bounds.centerY().toFloat())
+        return if (result == "ok") "click dispatched for target $id; verify the resulting screen before the next action" else result
     }
 
     private fun findEditable(n: AccessibilityNodeInfo): AccessibilityNodeInfo? {
