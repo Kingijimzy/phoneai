@@ -211,7 +211,7 @@ internal object IrreversibleActionConfirmationPolicy {
         if (normalized == "standing_order" && payload.optString("action").equals("remove", ignoreCase = true)) {
             return "Orion is about to remove the standing order '" + payload.optString("kind").take(80) + "'."
         }
-        if (normalized in setOf("shell", "termux_command")) {
+        if (normalized in setOf("shell", "termux_command", "run_command")) {
             val command = payload.optString("command").ifBlank { payload.optString("cmd") }.ifBlank { payload.optString("script") }.trim()
             if (command.isNotBlank() && destructiveShell.containsMatchIn(command)) {
                 return "Orion is about to run a destructive shell command: " + command.take(240) + ". This may permanently delete or wipe data."
