@@ -266,6 +266,7 @@ internal class OrionExecutionCoordinator(
         }
 
         if (!OrionMasterControl.isEnabled(context) || tasks.isCancellationRequested(taskId)) {
+            if (!tasks.isCancellationRequested(taskId)) tasks.cancel(taskId, "orion_master_shutdown")
             leases.release(lease)
             tasks.markRecovered(taskId)
             return OrionCoordinatedResult.Deferred(taskId, "cancelled_before_execution")
