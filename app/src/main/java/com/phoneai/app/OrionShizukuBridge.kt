@@ -27,7 +27,8 @@ internal object OrionShizukuBridge {
         val userServiceConnected: Boolean,
         val detail: String
     ) {
-        val ready: Boolean get() = installedAndRunning && permissionGranted
+        val supportedIdentity: Boolean get() = uid == 0 || uid == 2000
+        val ready: Boolean get() = installedAndRunning && permissionGranted && supportedIdentity
         val canExecute: Boolean get() = ready && userServiceConnected
     }
 
@@ -83,6 +84,7 @@ internal object OrionShizukuBridge {
         }
         val detail = when {
             !granted -> "Shizuku is running as $identity, but Orion permission is not granted."
+            uid != 0 && uid != 2000 -> "Shizuku reports unsupported execution identity $identity. Orion allows only ADB shell (UID 2000) or root (UID 0) for this UserService."
             uid == 2000 -> "Shizuku is ready with ADB shell identity. The shell permission set is limited and Android-version dependent."
             uid == 0 -> "Shizuku is ready with root identity; each operation remains allowlisted and verified."
             else -> "Shizuku binder is active as $identity; each operation must still pass its own capability check."
@@ -113,6 +115,7 @@ internal object OrionShizukuBridge {
         val current = state()
         if (!current.installedAndRunning) return "error: " + current.detail
         if (!current.permissionGranted) return "error: Orion has not been granted Shizuku permission. Open Orion's Shizuku setting and grant it first."
+        if (!current.supportedIdentity) return "error: " + current.detail
         initialize(context)
         bindUserService(context.applicationContext)
         val latch = connectionLatch
