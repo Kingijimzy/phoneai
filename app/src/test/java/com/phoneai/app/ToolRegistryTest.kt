@@ -352,3 +352,31 @@ class ToolRegistryNativeSelectionTest {
         assertTrue("Combined task must expose all relevant tool families", selected.containsAll(required))
     }
 }
+
+
+class ConversationGroundingPromptRegressionTest {
+    @Test fun contactResolutionUsesUniqueMatchesAndDoesNotAskForRedundantApproval() {
+        val contract = ToolRegistry.find("resolve_contact")!!.promptLine.lowercase()
+        assertTrue(contract.contains("single exact or unambiguous normalized match"))
+        assertTrue(contract.contains("without asking the owner to repeat"))
+        assertTrue(contract.contains("zero or multiple plausible matches"))
+        assertTrue(contract.contains("explicit send/call request is authorization"))
+        assertTrue(contract.contains("verify_send"))
+    }
+
+    @Test fun researchMustBindProductIdentitySizeAndCanonicalUrlToOnePage() {
+        val prompt = ToolRegistry.promptSection()
+        assertTrue(prompt.contains("do not infer that rdr1 and rdr2 are interchangeable"))
+        assertTrue(prompt.contains("do not reuse one url for two different products"))
+        assertTrue(prompt.contains("canonical url"))
+        assertTrue(prompt.contains("withhold the disputed figure/link"))
+    }
+
+    @Test fun skillAndDocumentRequestsUseAvailableCreationPaths() {
+        val prompt = ToolRegistry.promptSection()
+        assertTrue(prompt.contains("do not answer that skill creation is contradictory or impossible"))
+        assertTrue(prompt.contains("DOCUMENT/PDF CREATION RULE"))
+        assertTrue(prompt.contains("reportlab"))
+        assertTrue(prompt.contains("python-docx"))
+    }
+}
