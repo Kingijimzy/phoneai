@@ -645,7 +645,9 @@ internal class Nim internal constructor(private val ctx: Context, private val co
 
     fun isVision(id: String): Boolean = visionKeys.any { id.lowercase().contains(it) }
 
-    private fun toolDescriptionLimit(recoveryPass: Int): Int = when (recoveryPass) { 0 -> 1000; 1 -> 300; else -> 120 }\n\n    private fun candidates(p: Provider, vision: Boolean): List<String> {
+    private fun toolDescriptionLimit(recoveryPass: Int): Int = when (recoveryPass) { 0 -> 1000; 1 -> 300; else -> 120 }
+
+    private fun candidates(p: Provider, vision: Boolean): List<String> {
         // Normally quota-saver mode avoids the extra /models request. NVIDIA's catalog
         // retires model IDs frequently (410 Gone), so discover IDs currently exposed to this
         // key after a model failure even in quota-saver mode rather than retrying retired IDs.
