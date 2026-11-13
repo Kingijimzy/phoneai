@@ -1,30 +1,35 @@
 # Orion reliability repair audit
 
-This branch contains the two bounded code fixes below. The remaining work is deliberately marked open until the relevant Android/provider integration can be changed and exercised; this document is not a claim that the full reliability list is complete.
+This branch contains source-level reliability changes plus explicit remaining device/provider acceptance work. This document is not a claim that physical-device validation has passed.
 
 ## Implemented in this branch
 
 - **Native tool argument validation:** `OrionNativeToolDispatcher` now resolves each call against `ToolRegistry` and validates its JSON arguments with `OrionToolContractCodec` before invoking the executor. Unknown keys, missing required values, and type mismatches are rejected before dispatch. Antigravity's MCP bridge already performs the same contract validation at its separate provider boundary.
-- **Explicit media-app routing:** if the user names YouTube Music or Spotify and that app cannot accept the request, Orion returns an explicit error. It no longer silently falls through to a YouTube web search, which can make an app-launch request appear to have opened the installed app.
+- **Explicit media-app routing:** if the user names YouTube Music or Spotify and that app cannot accept the request, Orion returns an explicit error. It no longer silently falls through to a YouTube web search.
+- **Answer-oriented web research:** `web_search` and `live_web_search` now search first, safely extract up to three public HTTPS source pages, and return source URLs plus bounded page text in the chat. They do not launch browser UI. `chrome_search`, `browser_navigate`, and `open_url` are documented as explicit navigation/interacting routes.
+- **Neural playback focus:** Kokoro `AudioTrack` playback now requests transient Android audio focus, ducks on a competing transient duck request, stops on exclusive/transient loss, and abandons focus after completion or interruption.
+- **Antigravity context recovery:** prompt size is capped at 32,000 characters, compaction preserves the newest tail, and a context-overflow retry at 12,000 characters is allowed only before any Orion tool callback has dispatched.
+- **Read-only retry:** Agent dispatch now applies `RecoveryPolicy.retryRead` with bounded exponential backoff to READ-only tool failures. Writes and consequential operations are not automatically replayed.
 
 ## Still requires implementation and validation
 
 ### Voice echo / unnatural playback
 - Current `Voice.listen()` stops TTS before starting `SpeechRecognizer`, preventing intentional playback/listening overlap.
 - Android `SpeechRecognizer` owns its capture pipeline here; Orion cannot attach `AcousticEchoCanceler` to that hidden recorder. A true AEC fix requires moving to an owned `AudioRecord` capture pipeline with an audio session, attaching AEC where supported, and testing device-specific audio routes.
-- Neural PCM is streamed to `AudioTrack` on a serialized worker, but this branch does not yet add a complete audio-focus lifecycle or measured capture-to-first-audio latency telemetry.
+- Neural PCM is streamed to `AudioTrack` on a serialized worker and now owns transient playback focus.
+- AEC remains unresolved: Android `SpeechRecognizer` owns the capture pipeline, so app-level `AcousticEchoCanceler` cannot be attached to that hidden recorder. A true AEC fix requires an owned `AudioRecord` capture path and a compatible recognition transport. This requires device-specific implementation and testing.
 
 ### Slow / unstable voice
 - Current Kokoro telemetry measures total generation-plus-streaming time and real-time factor, not separate model inference, first-PCM latency, and playback drain. Split metrics and sentence scheduling changes need device measurements before tuning buffer sizes or chunk boundaries.
 - Must test interruption, Bluetooth/speaker route changes, long replies and concurrent playback on the POCO F3.
 
 ### Antigravity context overflow
-- Existing branch already bounds recent transcript to 60,000 characters and retains complete recent messages. Antigravity CLI has no native persistent thread/compaction API equivalent to Codex App Server.
-- Still required: provider-specific token/character budget tests, process/session recovery tests and clear recovery behavior for oversized single messages. Do not claim native compaction for Antigravity.
+- Antigravity CLI has no native persistent thread/compaction API equivalent to Codex App Server. Orion now sends a conservative 32k-character compacted prompt and retries a provider-declared overflow once at 12k, only if no Orion tool callback has dispatched.
+- Still required: verify the CLI's server-side conversation/session state on the actual account, oversized single-message behavior, and process/session recovery. This is bounded prompt recovery, not native session compaction.
 
 ### Tool argument validation
 - Shared native dispatch validation added here; Antigravity MCP bridge validation exists on the parent branch.
-- Still required: audit and test every provider/transport adapter and every alternate executor entry point, including Codex callbacks, API-provider native calls, delegated agents and extension/MCP routes.
+- Shared native dispatch validation and Antigravity MCP bridge validation are present. Still required: audit and test every provider/transport adapter and alternate executor entry point, including Codex callbacks, API-provider native calls, delegated agents and extension/MCP routes.
 
 ### Installed app launching
 - Explicitly named media apps now fail closed instead of falling back to web search.
@@ -34,12 +39,13 @@ This branch contains the two bounded code fixes below. The remaining work is del
 - Still required: trace the actual tool-call ID/name/arguments through dispatch, evidence receipt, service events and chat activity rendering. UI status must derive from the selected call and final dispatch/verification outcome, not inferred assistant text. This branch does not yet alter the chat UI state pipeline.
 
 ### Retry/backoff
-- Existing `RecoveryPolicy` already classifies transient, ambiguous, permission, unsupported-route and target-missing failures; it allows bounded read-only retries with exponential backoff and does not retry ambiguous writes.
-- `AgentHooks.FailedCallGuard` additionally blocks exact repeated tool/argument pairs within a task. The user-reported three-retry behavior has not yet been traced to a single authoritative retry gate; changing this without tracing all call paths risks duplicate writes. Still required: locate every retry counter/guard, consolidate policy, and test transient reads, permanent errors, permission failures, ambiguous writes, cancellation and budget exhaustion.
+- Agent dispatch now actually invokes `RecoveryPolicy.retryRead` for READ-only tool calls after transient/ambiguous failures, with bounded exponential backoff. Permission failures and non-transient failures stop without retry; WRITE and CONSEQUENTIAL calls are never automatically replayed.
+- `AgentHooks.FailedCallGuard` still blocks an exact failed tool/argument pair after the retry policy is exhausted. This is intentional loop protection, not a global three-retry cap. The separate `TaskLifecycle.MAX_RECOVERIES=3` still bounds full task replans; it is not a tool retry count. Tests must verify the distinction and that users can resume a BLOCKED task safely.
 
 ## Required verification
 
 - Run all unit tests and assemble/validate the debug APK for this branch head.
 - Test on the physical POCO F3 with the installed voice model, speech service, YouTube Music/Spotify packages and actual configured Codex/Antigravity accounts.
-- Record voice latency distributions and audio route behavior; test app launch package/activity; verify tool UI event receipts; exercise retries under injected transient/permanent/ambiguous failures.
+- Record voice latency distributions and audio route behavior; test AEC capability and echo behavior on POCO F3; test app launch package/activity; verify tool UI event receipts; exercise retries under injected transient/permanent/ambiguous failures.
+- Verify the web search source extraction against live result layouts and connected API Anything operation discovery/calls. Browser navigation should be reserved for explicit site interaction.
 - No merge or physical-device pass is implied by this audit.
