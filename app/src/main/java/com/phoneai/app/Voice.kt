@@ -44,6 +44,12 @@ class Voice(private val ctx: Context) {
             lastKokoroPerformance = value
             lastKokoroPerformanceAtMs = SystemClock.elapsedRealtime()
         }
+
+        /** Returns audio samples not already delivered through Sherpa's streaming callback. */
+        internal fun pcmNotDeliveredByCallback(samples: FloatArray, callbackFrames: Int): FloatArray {
+            val delivered = callbackFrames.coerceIn(0, samples.size)
+            return if (delivered == samples.size) FloatArray(0) else samples.copyOfRange(delivered, samples.size)
+        }
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -319,7 +325,8 @@ class Voice(private val ctx: Context) {
                         sid = Prefs.kokoroSpeakerId(ctx),
                         speed = (speeds?.getOrNull(index) ?: Prefs.rate(ctx)).coerceIn(0.85f, 1.15f)
                     )
-                    engine.generateWithConfigAndCallback(
+                    var callbackFrames = 0
+                    val generatedAudio = engine.generateWithConfigAndCallback(
                         text = chunks[index],
                         config = generation,
                         callback = { samples ->
@@ -329,6 +336,7 @@ class Voice(private val ctx: Context) {
                                 val activeTrack = track
                                 if (activeTrack == null || !writeNeuralSamples(activeTrack, samples, token)) 0
                                 else {
+                                    callbackFrames += samples.size
                                     if (samples.isNotEmpty()) {
                                         for (sample in samples) peakSampleAmplitude = maxOf(peakSampleAmplitude, kotlin.math.abs(sample))
                                         var sumSquares = 0.0
@@ -347,6 +355,31 @@ class Voice(private val ctx: Context) {
                         }
                     )
                     if (token != playbackGeneration.get()) return@execute
+
+                    // Sherpa returns the complete GeneratedAudio even when its streaming
+                    // callback delivers no PCM (or only a partial stream on some JNI builds).
+                    // Recover only the missing tail so callback audio is never duplicated.
+                    check(generatedAudio.sampleRate == engine.sampleRate()) {
+                        "Kokoro returned audio at an unexpected sample rate."
+                    }
+                    val missingPcm = pcmNotDeliveredByCallback(generatedAudio.samples, callbackFrames)
+                    if (missingPcm.isNotEmpty()) {
+                        val activeTrack = track
+                            ?: throw IllegalStateException("Neural audio output was not initialized.")
+                        check(writeNeuralSamples(activeTrack, missingPcm, token)) {
+                            "Kokoro PCM recovery was interrupted."
+                        }
+                        for (sample in missingPcm) peakSampleAmplitude = maxOf(peakSampleAmplitude, kotlin.math.abs(sample))
+                        var sumSquares = 0.0
+                        for (sample in missingPcm) sumSquares += sample.toDouble() * sample.toDouble()
+                        val rms = kotlin.math.sqrt(sumSquares / missingPcm.size).toFloat().coerceIn(0f, 1f)
+                        main.post {
+                            if (token == playbackGeneration.get()) {
+                                onAudioAmplitude?.invoke(rms)
+                                onWord?.invoke()
+                            }
+                        }
+                    }
                     fallbackStart = index + 1
                     if (index < chunks.lastIndex) {
                         val gapMs = pausesMs?.getOrNull(index) ?: 0
