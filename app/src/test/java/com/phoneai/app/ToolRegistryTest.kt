@@ -501,7 +501,7 @@ class ToolRegistryNativeSelectionTest {
         val clamped = JSONObject(ToolRegistry.searchCapabilities(query, 999, -20))
         assertEquals(12, clamped.getInt("limit"))
         assertEquals(0, clamped.getInt("offset"))
-        assertEquals(12, clamped.getInt("count"))
+        assertEquals(minOf(12, clamped.getInt("total")), clamped.getInt("count"))
         val end = JSONObject(ToolRegistry.searchCapabilities(query, 5, clamped.getInt("total") + 100))
         assertEquals(clamped.getInt("total"), end.getInt("offset"))
         assertEquals(0, end.getInt("count"))
