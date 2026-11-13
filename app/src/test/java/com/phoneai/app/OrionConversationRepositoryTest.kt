@@ -181,6 +181,26 @@ class OrionConversationRepositoryTest {
         assertTrue(safeSummary.contains("[redacted]"))
     }
 
+    @Test fun archivedSessionRestoresItsOwnActivityReceiptsByStableSessionId() {
+        val transcript = listOf("me" to "run a build", "ai" to "I will verify the build")
+        repository.saveActive(context, transcript)
+        val sessionId = repository.activeSessionId(context)!!
+        repository.recordEvent(
+            context, messageId = "build-step-1", type = "terminal",
+            status = "completed", summary = "Gradle assembleDebug completed"
+        )
+        repository.archiveAndClear(context, transcript)
+
+        repository.saveActive(context, listOf("me" to "new conversation", "ai" to "ready"))
+        assertTrue(repository.eventsForActive(context).isEmpty())
+
+        val archivedEvents = repository.eventsForSession(context, sessionId)
+        assertEquals(1, archivedEvents.size)
+        assertEquals("terminal", archivedEvents.single().type)
+        assertEquals("completed", archivedEvents.single().status)
+        assertEquals("Gradle assembleDebug completed", archivedEvents.single().summary)
+    }
+
     @Test fun lifecycleEventsFollowTheirSessionAcrossSwitchAndDeletion() {
         val first = listOf("me" to "first task", "ai" to "first result")
         repository.saveActive(context, first)
