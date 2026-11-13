@@ -7,7 +7,7 @@ import java.io.File
 
 /**
  * Full Python execution uses CPython installed in Orion's pinned Alpine/PRoot guest.
- * Generated extensions intentionally remain on the restricted Chaquopy data-transform runtime.
+ * Generated extensions select either the restricted Chaquopy transform runtime or full CPython.
  *
  * PRoot runs under the app UID (it is not a kernel security boundary). The project workspace
  * is bind-mounted; Android app permissions and the OS sandbox govern any other host access.
