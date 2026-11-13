@@ -2290,6 +2290,10 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
 
     /** Shared preflight runs before every backend, including extracted executors. */
     private fun preflightTool(tool: String, a: JSONObject): String? {
+        // Catalog inspection/loading only changes the current model's callable declarations;
+        // it does not execute the selected capability. The selected tool still passes the
+        // active skill allowlist, owner policy, permissions and normal execution preflight.
+        if (tool == "capability_search" || tool == "capability_load") return null
         // Sensitive-app, credential-field and sensitive-page classifications are advisory only.
         // They must not veto an owner-requested action. Platform permissions still apply.
         val skillId = activeSkillId
