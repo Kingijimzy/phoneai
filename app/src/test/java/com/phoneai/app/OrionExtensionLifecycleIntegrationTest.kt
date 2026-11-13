@@ -208,7 +208,7 @@ class OrionExtensionLifecycleIntegrationTest {
         }
         val guarded = OrionPythonCapabilityExecutor(context, null, extensionSandbox = fullRuntimeSandbox)
         val id = "full_python_tool"
-        val source = "import math\\nRESULT = math.sqrt(16)"
+        val source = "import math\nRESULT = math.sqrt(16)"
         val created = guarded.execute("extension_create", JSONObject()
             .put("id", id).put("name", "Full Python tool").put("runtime", "python_full")
             .put("source", source).put("description", "Requires full CPython"), confirm, stopped)
