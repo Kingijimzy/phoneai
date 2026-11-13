@@ -835,3 +835,52 @@ internal fun OrionPersistedActivityCard(event: OrionConversationRepository.ChatE
         }
     }
 }
+
+
+
+@Composable
+internal fun OrionChatAttachmentCard(
+    attachment: OrionChatAttachmentStore.Attachment,
+    onOpen: (OrionChatAttachmentStore.Attachment) -> Unit
+) {
+    val extension = attachment.name.substringAfterLast('.', "").uppercase().ifBlank { "FILE" }
+    val sizeLabel = when {
+        attachment.sizeBytes >= 1024L * 1024L -> String.format(java.util.Locale.ROOT, "%.1f MB", attachment.sizeBytes / (1024f * 1024f))
+        attachment.sizeBytes >= 1024L -> String.format(java.util.Locale.ROOT, "%.0f KB", attachment.sizeBytes / 1024f)
+        else -> attachment.sizeBytes.toString() + " B"
+    }
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
+            .background(OrionUiPalette.panel)
+            .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(13.dp))
+            .clickable { onOpen(attachment) }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(11.dp)
+    ) {
+        Box(
+            Modifier.size(42.dp).clip(RoundedCornerShape(10.dp))
+                .background(OrionUiPalette.raised)
+                .border(1.dp, OrionUiPalette.border, RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                when (extension) {
+                    "PDF" -> "PDF"
+                    "DOCX", "DOC" -> "DOC"
+                    "XLSX", "XLS", "CSV" -> "XLS"
+                    "PPTX", "PPT" -> "PPT"
+                    "PNG", "JPG", "JPEG", "WEBP" -> "IMG"
+                    else -> "FILE"
+                },
+                color = OrionUiPalette.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold
+            )
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(attachment.name, color = OrionUiPalette.text, fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(extension + " · " + sizeLabel, color = OrionUiPalette.muted, fontSize = 10.sp)
+        }
+        Text("OPEN", color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+    }
+}
