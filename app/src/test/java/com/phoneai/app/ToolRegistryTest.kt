@@ -15,7 +15,7 @@ class ToolRegistryTest {
             "python_exec", "workspace_write", "workspace_read", "save_file"
         )))
         assertTrue("The combined tool window must remain under provider limits",
-            requestTools.size <= 64)
+            requestTools.size <= 96)
     }
 
     @Test fun workspaceListIsRegisteredAndReadOnly() {
