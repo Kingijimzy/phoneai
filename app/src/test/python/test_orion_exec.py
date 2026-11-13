@@ -9,6 +9,16 @@ SPEC.loader.exec_module(orion_exec)
 
 
 class OrionExecTests(unittest.TestCase):
+    def test_bundled_full_python_runner_executes_imports_and_workspace_files(self):
+        import tempfile
+        import orion_full
+        with tempfile.TemporaryDirectory() as workdir:
+            code = "import os\\nfrom pathlib import Path\\nPath('full.txt').write_text('ready')\\nprint(os.path.exists('full.txt'))"
+            result = orion_full.run_full(code, workdir, 5)
+            self.assertIn("exit=0", result)
+            self.assertIn("True", result)
+            self.assertEqual((pathlib.Path(workdir) / "full.txt").read_text(), "ready")
+
     def test_restricted_runner_deadline_is_enforced_and_trace_restored(self):
         import sys
         original = orion_exec.MAX_RUN_SECONDS
