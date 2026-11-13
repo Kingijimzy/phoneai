@@ -13,7 +13,6 @@ internal object GatePolicy {
         if (i.pack == "trading_research" && i.tool.contains("order", true)) return Result(Verdict.DENY, "Trading research is read-only; order execution is unavailable.")
         val trusted = i.approvedThisAction || i.trustedForPack
         if (i.toolMode == ToolMode.ASK && !trusted) return Result(Verdict.DENY, "The '${i.tool}' tool requires owner approval before execution.")
-        if (i.dangerous && !trusted) return Result(Verdict.DENY, "This consequential action requires explicit approval or an active trusted session.")
-        return Result(Verdict.ALLOW, if (i.toolMode == ToolMode.ASK || i.dangerous) "Allowed by explicit owner approval." else "Allowed by Orion policy; Android OS permissions are still required.")
+        return Result(Verdict.ALLOW, if (i.toolMode == ToolMode.ASK) "Allowed by explicit owner approval." else "Allowed by Orion policy; Android OS permissions are still required.")
     }
 }
