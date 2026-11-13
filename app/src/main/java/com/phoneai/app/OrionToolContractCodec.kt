@@ -84,8 +84,10 @@ internal object OrionToolContractCodec {
         return convert(parameters(tool))
     }
 
-    internal fun parameters(tool: ToolDefinition): JSONObject =
-        objectSchema(parseFields(signature(tool.promptLine)))
+    internal fun parameters(tool: ToolDefinition): JSONObject {
+        val contract = signature(tool.promptLine)
+        return objectSchema(parseFields(contract), splitTopLevel(contract).any { it.trim() == "..." })
+    }
 
     /** Validate provider arguments again at the shared execution boundary. */
     internal fun validateArguments(tool: ToolDefinition, args: JSONObject): String? {
