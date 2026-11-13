@@ -443,7 +443,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun recordDispatchBlocked(tool: String, args: JSONObject, category: String) {
         runCatching { OrionEvidenceLedger.recordBlocked(svc, evidenceTaskId(), tool, category) }
     }
-    private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
+    private fun executeWithRecoveryGuard(tool: String, args: JSONObject, specialDispatch: ((String, JSONObject) -> String?)? = null): String {
         ToolRegistry.find(tool)?.let { definition ->
             OrionToolContractCodec.validateArguments(definition, args)?.let { reason ->
                 val blocked = "error: invalid arguments for '$tool': $reason. No action was dispatched."
@@ -702,9 +702,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     val validationArgs = JSONObject(args.toString()).put("tool", tool)
                     val validation = validateAction(validationArgs)
                     if (validation.startsWith("INVALID:")) "error: preflight blocked action. $validation"
-                    else exec(tool, executionArgs)
+                    else specialDispatch?.invoke(tool, executionArgs) ?: exec(tool, executionArgs)
                 } else {
-                    exec(tool, executionArgs)
+                    specialDispatch?.invoke(tool, executionArgs) ?: exec(tool, executionArgs)
                 }
             }
         }
@@ -1203,16 +1203,16 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         var callbackDiscoveryRounds = 0
         val callbackToolReceipts = JSONArray()
         fun dispatchNativeTool(name: String, args: JSONObject): String {
-            if (name == "capability_load") {
-                val result = ToolRegistry.loadCapability(nativeTools, args.optString("tool_name"))
+            return executeWithRecoveryGuard(name, args) { dispatchedName, dispatchedArgs ->
+                if (dispatchedName != "capability_load") return@executeWithRecoveryGuard null
+                val result = ToolRegistry.loadCapability(nativeTools, dispatchedArgs.optString("tool_name"))
                 val loaded = runCatching { JSONObject(result).optBoolean("loaded") }.getOrDefault(false)
                 if (loaded) {
                     discoveredToolVersion++
                     ui.note("[CAPABILITIES] Loaded the selected registered capability; preparing a provider turn with its exact callable schema.")
                 }
-                return result
+                result
             }
-            return executeWithRecoveryGuard(name, args)
         }
 
         fun chatTurnWithNativeTools(): OrionModelTurn {
