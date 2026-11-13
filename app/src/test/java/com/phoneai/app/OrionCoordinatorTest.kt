@@ -4,6 +4,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OrionCoordinatorTest {
+    @Test fun typedRequestsKeepTheirActualSurfaceWithoutSplittingTheAgentLoop() {
+        assertEquals(OrionCoordinator.Surface.CHAT, OrionCoordinator.surfaceForTypedRequest(conversationOnly = true))
+        assertEquals(OrionCoordinator.Surface.COMMAND, OrionCoordinator.surfaceForTypedRequest(conversationOnly = false))
+    }
+
     @Test fun ownerSurfacesAreMarkedAndSelfStartedOnesAreNot() {
         assertTrue(OrionCoordinator.Surface.CHAT.ownerInitiated)
         assertTrue(OrionCoordinator.Surface.VOICE.ownerInitiated)
