@@ -436,22 +436,6 @@ internal object ToolRegistry {
             .put("already_callable", alreadyCallable).toString()
     }
 
-    /** Add only exact registry names returned by capability_search to the next provider turn. */
-    internal fun addDiscoveredTools(target: MutableList<ToolDefinition>, result: String): Int {
-        val rows = runCatching { org.json.JSONObject(result).optJSONArray("results") }.getOrNull() ?: return 0
-        var added = 0
-        for (index in 0 until rows.length()) {
-            if (target.size >= 128) break
-            val name = rows.optJSONObject(index)?.optString("name").orEmpty()
-            val definition = find(name) ?: continue
-            if (target.none { it.name == name }) {
-                target += definition
-                added++
-            }
-        }
-        return added
-    }
-
     /** Names from the most recent assistant tool-call group, not the entire chat history. */
     internal fun recentToolNames(history: org.json.JSONArray, maxNames: Int = 8): Set<String> {
         val names = LinkedHashSet<String>()
