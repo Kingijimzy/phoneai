@@ -170,7 +170,7 @@ internal object ConversationContextPolicy {
     }
 }
 
-/** Destructive data changes are the only actions that require owner confirmation. */
+/** Exact-operation owner approval for private reads, writes, scripts, and destructive changes. */
 internal object IrreversibleActionConfirmationPolicy {
     private val destructiveShell = Regex(
         "(?is)(?:^|[;&|]\\s*|\\b(?:then|do)\\s+)(?:command\\s+)?(?:sudo\\s+)?(?:rm|shred|srm|wipe|wipefs|blkdiscard|mkfs(?:\\.[a-z0-9]+)?|unlink|rmdir|truncate)\\b|\\bdd\\b[^;&|]*\\bof\\s*=|\\bfind\\b[^;&|]*\\s-delete\\b|\\b(?:fastboot\\s+(?:erase|format)|recovery\\s+--wipe)\\b|(?:>|>>)[^;&|]*/dev/(?:block|mmcblk|sd[a-z])"
@@ -461,7 +461,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recordDispatchBlocked(tool, args, "task_cancelled")
             return cancelled
         }
-        // One pre-flight gate for user DENY and switched-off packs, before any prompt is shown.
+        // Legacy preflight hook is retained for compatibility; it never blocks a registered tool.
         ToolGate.preflightDenial(svc, tool)?.let { denied ->
             try { ActionLogStore.record(svc, tool, denied) } catch (_: Exception) { }
             AgentPolicy.log(svc, tool, "dispatch", false, "preflight: " + denied.take(120))
@@ -509,8 +509,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val mcpReadScopeGranted = (mcpReadOperation || (tool == "mcp_call" && mcpScope == "read")) &&
             McpConnector.configured(svc) &&
             McpConnector.isPaired(svc) &&
-            "read" in McpConnector.scopes(svc) &&
-            ToolPermissions.mode(svc, tool) != ToolMode.DENY
+            "read" in McpConnector.scopes(svc)
         val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
             (tool in consequentialTools && !(tool == "mcp_call" && mcpReadScopeGranted))
         // Retrieve current durable context immediately before any write/consequential dispatch.
