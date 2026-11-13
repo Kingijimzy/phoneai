@@ -122,6 +122,55 @@ class OrionPythonCapabilityExecutorTest {
         assertTrue(afterVerification.contains("EXTENSION RESULT"))
         assertEquals("Only the exact source that passed the sandbox may auto-activate", v2, executedSource)
     }
+
+    @Test fun replacingAnActiveExtensionArchivesThePreviousSourceBeforeSavingTheDraft() {
+        val v1 = source(1)
+        assertTrue(create(v1).contains("disabled extension draft"))
+        assertTrue(test(v1).contains("AUTO-ACTIVATED"))
+
+        val v2 = source(2)
+        val replacement = executor.execute(
+            "extension_create",
+            JSONObject().put("id", "live_helper").put("name", "Live helper v2")
+                .put("runtime", "python").put("source", v2).put("description", "replacement"),
+            { true }, { false }
+        ).orEmpty()
+
+        assertTrue(replacement, replacement.contains("Replaced the existing extension"))
+        val registry = SelfExtendingExtensionStore(context)
+        assertNull("new revision must remain a draft until tested", registry.enabled("live_helper"))
+        val archived = ExtensionVersionHistory(context).all("live_helper")
+        assertTrue("previous active source must be retained", archived.any {
+            it.sourceSha256 == SelfExtendingExtensionPolicy.sha256(v1)
+        })
+        assertTrue(executor.execute(
+            "extension_test",
+            JSONObject().put("id", "live_helper").put("tests",
+                org.json.JSONArray().put(JSONObject().put("input", JSONObject()).put("expect", v2))),
+            { true }, { false }
+        ).orEmpty().contains("AUTO-ACTIVATED"))
+    }
+
+    @Test fun failedVersionArchiveLeavesTheCurrentActiveExtensionUntouched() {
+        val v1 = source(1)
+        assertTrue(create(v1).contains("disabled extension draft"))
+        assertTrue(test(v1).contains("AUTO-ACTIVATED"))
+
+        // Simulate an unavailable/corrupt history store. A failed archive must not discard
+        // the only active copy while a revision is being written.
+        File(context.filesDir, "orion_extension_versions.json").writeText("{corrupt")
+        val update = executor.execute(
+            "extension_update",
+            JSONObject().put("id", "live_helper").put("name", "Live helper v2")
+                .put("runtime", "python").put("source", source(2)).put("description", "revision"),
+            { true }, { false }
+        ).orEmpty()
+
+        assertTrue(update, update.contains("could not archive active version"))
+        val stillActive = SelfExtendingExtensionStore(context).enabled("live_helper")
+        assertNotNull("the original extension must remain active", stillActive)
+        assertEquals(SelfExtendingExtensionPolicy.sha256(v1), stillActive!!.sourceSha256)
+    }
 }
 
 
