@@ -844,6 +844,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     }
 
     private fun showArchivedConversation(sessionId: String, title: String, messages: List<Pair<String, String>>, date: String) {
+        val persistedEvents = runCatching {
+            OrionConversationRepository.get(this).eventsForSession(this, sessionId)
+        }.getOrDefault(emptyList())
         val dialog = android.app.Dialog(this)
         val content = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
@@ -852,13 +855,14 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     title = title,
                     date = date,
                     messages = messages,
+                    activityEvents = persistedEvents,
                     onBack = {
                         dialog.dismiss()
                         showChatHistory()
                     },
                     onCopy = {
-                        val body = messages.joinToString("\\n\\n") { (kind, text) ->
-                            (if (kind == "me") "YOU" else "ORION") + "\\n" + text
+                        val body = messages.joinToString("\n\n") { (kind, text) ->
+                            (if (kind == "me") "YOU" else "ORION") + "\n" + text
                         }
                         val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                         clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Orion chat history", body))
