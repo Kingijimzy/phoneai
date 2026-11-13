@@ -16,7 +16,7 @@ class OrionNativeToolDispatcherTest {
             execute = { name, _ -> executed += name; "result:$name" }
         )
         assertEquals(listOf("media_status", "device_operation"), executed)
-        assertEquals(listOf("result:media_status", "result:read_battery"), outcomes.map { it.content })
+        assertEquals(listOf("result:media_status", "result:device_operation"), outcomes.map { it.content })
         assertTrue(outcomes.all { it.dispatched })
     }
 
@@ -33,6 +33,18 @@ class OrionNativeToolDispatcherTest {
         assertTrue(outcomes[0].content.contains("malformed arguments"))
         assertFalse(outcomes[1].dispatched)
         assertTrue(outcomes[1].content.contains("not registered"))
+    }
+
+    @Test fun schemaInvalidArgumentsAreRejectedBeforeExecutor() {
+        var executions = 0
+        val outcomes = OrionNativeToolDispatcher.dispatch(
+            listOf(call("1", "media_status", JSONObject().put("unexpected", true))),
+            cancelled = { false }, isRegistered = { true },
+            execute = { _, _ -> executions++; "must not run" }
+        )
+        assertEquals(0, executions)
+        assertFalse(outcomes.single().dispatched)
+        assertTrue(outcomes.single().content.contains("unknown argument"))
     }
 
     @Test fun deniedPermissionResultIsReturnedWithoutBypassingGuard() {
