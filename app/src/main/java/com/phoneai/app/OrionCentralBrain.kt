@@ -52,6 +52,18 @@ internal object OrionCentralBrain {
     fun contextFor(context: Context, request: String): String {
         val app = context.applicationContext
         val sections = mutableListOf<String>()
+        // Reconcile the installed capability inventory at the shared brain boundary.
+        // This detects newly registered tools, skills, extensions, providers and enabled packs
+        // for Talk, Command, voice and other callers that use this context builder.
+        val capabilityDelta = runCatching { OrionCapabilityAwareness.scan(app) }.getOrNull()
+        if (capabilityDelta != null && (capabilityDelta.added.isNotEmpty() || capabilityDelta.removed.isNotEmpty())) {
+            sections += buildString {
+                appendLine("ORION ENVIRONMENT CHANGE DETECTED")
+                if (capabilityDelta.added.isNotEmpty()) appendLine("New installed capabilities: " + capabilityDelta.added.joinToString())
+                if (capabilityDelta.removed.isNotEmpty()) appendLine("Capabilities no longer present: " + capabilityDelta.removed.joinToString())
+                appendLine("These are registry changes, not proof of live readiness. Inspect each capability's actual prerequisites before using it.")
+            }
+        }
         sections += OrionGraspProtocol.contextBlock()
         sections += OrionAmbientAwareness.systemContext()
         sections += OrionPlatformSelfKnowledge.promptBlock(app)
