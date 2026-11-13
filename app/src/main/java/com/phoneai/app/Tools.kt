@@ -478,6 +478,11 @@ class Tools(
         if (!SystemIntentPolicy.isAllowed(action)) {
             return "error: unsupported system intent. Allowed: " + SystemIntentPolicy.actions().sorted().joinToString(", ")
         }
+        if (action == "camera" &&
+            svc.checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            return "error: Android has not granted Orion Camera permission. Enable Camera for Orion in Android app settings, then retry."
+        }
         val i: Intent = when (action) {
             "settings" -> Intent(Settings.ACTION_SETTINGS)
             "wifi_settings" -> Intent(Settings.ACTION_WIFI_SETTINGS)
