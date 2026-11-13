@@ -64,7 +64,10 @@ class OrionExecutiveStoreIntegrationTest {
             JSONObject().put("command", "whoami"), 101L
         )!!
         assertNotEquals(first.attemptId, second.attemptId)
-        assertEquals(2, OrionExecutiveStore.dispatchAttempts(context, first.objectiveId).size)
+        // Each tool invocation owns an independent executive objective; never merge receipts.
+        assertNotEquals(first.objectiveId, second.objectiveId)
+        assertEquals(1, OrionExecutiveStore.dispatchAttempts(context, first.objectiveId).size)
+        assertEquals(1, OrionExecutiveStore.dispatchAttempts(context, second.objectiveId).size)
     }
 
     @Test fun verifiedTerminalDispatchReceiptRemainsVisibleToCentralBrain() {
