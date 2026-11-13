@@ -76,6 +76,14 @@ class OrionConversationRepositoryTest {
 
         // Recreate the pre-v6 schema exactly as an existing install would have it.
         val legacy = context.openOrCreateDatabase("orion_conversations.db", Context.MODE_PRIVATE, null)
+        legacy.execSQL("""CREATE TABLE messages (
+            id TEXT PRIMARY KEY NOT NULL,
+            session_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            sort_order INTEGER NOT NULL
+        )""")
         legacy.execSQL("""CREATE TABLE chat_events (
             id TEXT PRIMARY KEY NOT NULL,
             session_id TEXT NOT NULL,
@@ -106,7 +114,38 @@ class OrionConversationRepositoryTest {
             assertTrue(it.moveToFirst())
             assertEquals("preserve me", it.getString(0))
         }
-        assertEquals(6, upgraded.version)
+        val messageColumns = mutableSetOf<String>()
+        upgraded.rawQuery("PRAGMA table_info(messages)", null).use { cursor ->
+            while (cursor.moveToNext()) messageColumns += cursor.getString(1)
+        }
+        assertTrue(messageColumns.contains("content_json"))
+        assertEquals(7, upgraded.version)
+    }
+
+    @Test fun typedMessageBlocksSurviveRestartAndArchivedSessionRestore() {
+        val lines = listOf(
+            OrionChatLine(1L, "me", "Keep my exact words intact."),
+            OrionChatLine(2L, "ai", """Here is the implementation:
+
+```kotlin
+fun main() = Unit
+```""")
+        )
+        repository.saveActiveStructured(context, lines)
+        val sessionId = repository.activeSessionId(context)!!
+        repository.close()
+        resetRepositorySingleton()
+        repository = OrionConversationRepository.get(context)
+
+        val restored = repository.loadActiveStructured(context)
+        assertEquals(2, restored.size)
+        assertEquals(lines[0].content, restored[0].content)
+        assertEquals(lines[1].content, restored[1].content)
+
+        repository.archiveAndClearStructured(context, restored)
+        val archived = repository.structuredMessagesForSession(context, sessionId)
+        assertEquals(lines[0].content, archived[0].content)
+        assertEquals(lines[1].content, archived[1].content)
     }
 
     @Test fun savedActiveConversationSurvivesRepositoryRecreationLikeProcessRestart() {
