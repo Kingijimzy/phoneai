@@ -63,23 +63,29 @@ internal class AccountAwareModelProvider(
         // Antigravity's CLI rejects prompts above 100k characters; unknown account models
         // deliberately receive the conservative 16k-token policy rather than an assumed
         // large context window. This keeps the newest user turn and complete tool exchanges.
-        val contextCapabilities = OrionProviderContextPolicy.capabilities(
-            provider.id, model.orEmpty(), transport = "chat"
-        )
-        val budgetedMessages = OrionProviderContextPolicy.fitMessages(
-            messages, contextCapabilities, maxTokens
-        )
-        val prompt = transcript(budgetedMessages)
-        require(prompt.isNotBlank()) { "No text content was supplied to the account model." }
-        require(prompt.length <= 100_000) {
-            "The conversation is still too large after context compaction (" + prompt.length + " characters). " +
-                "Start a new chat or reduce attached content; Orion preserved the latest user request."
-        }
         val answer = synchronized(lock) {
             check(!cancelled) { "Account model request was cancelled." }
             when (provider.id) {
-                "codex" -> runCodex(prompt, model, tools, onDelta, onToolCall)
-                "antigravity" -> runAntigravity(prompt, model, tools, onDelta, onToolCall)
+                // Codex owns durable conversation history. Sending Orion's entire transcript
+                // on every request creates a new, oversized, stateless Codex session.
+                "codex" -> runCodex(messages, model, tools, onDelta, onToolCall)
+                // Antigravity's headless CLI is prompt-oriented, so it still receives a
+                // bounded transcript rather than Codex's native thread lifecycle.
+                "antigravity" -> {
+                    val contextCapabilities = OrionProviderContextPolicy.capabilities(
+                        provider.id, model.orEmpty(), transport = "chat"
+                    )
+                    val budgetedMessages = OrionProviderContextPolicy.fitMessages(
+                        messages, contextCapabilities, maxTokens
+                    )
+                    val prompt = transcript(budgetedMessages)
+                    require(prompt.isNotBlank()) { "No text content was supplied to the account model." }
+                    require(prompt.length <= 100_000) {
+                        "The conversation is too large for Antigravity's CLI payload (" + prompt.length + " characters). " +
+                            "Orion kept the latest user request; reduce attached content or start a fresh chat."
+                    }
+                    runAntigravity(prompt, model, tools, onDelta, onToolCall)
+                }
                 else -> error("Unsupported account provider: " + provider.id)
             }
         }
@@ -90,7 +96,7 @@ internal class AccountAwareModelProvider(
     }
 
     private fun runCodex(
-        prompt: String,
+        messages: JSONArray,
         requestedModel: String?,
         tools: List<ToolDefinition>,
         onDelta: ((String) -> Unit)?,
@@ -99,6 +105,7 @@ internal class AccountAwareModelProvider(
         val installer = CodexRuntimeInstaller(app)
         val client = installer.openAppServer(app.filesDir.absolutePath)
         activeCodex = client
+        val preferences = app.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
         try {
             check(client.initialize()) { "Codex app-server initialization failed." }
             val account = client.readAccount()
@@ -113,8 +120,56 @@ internal class AccountAwareModelProvider(
                 )
                 else -> catalogue.firstOrNull()
             }
-            val thread = client.startThread(model, tools)
-            val answer = client.runTurnAndAwait(thread, prompt, model, onDelta = onDelta, onToolCall = onToolCall)
+
+            // Bind the durable Codex thread to its model and exact dynamic-tool contract.
+            // If either changes, create a fresh native thread rather than resuming a thread
+            // whose provider/model or callable schema no longer matches Orion's current turn.
+            val toolFingerprint = tools.sortedBy { it.name }.joinToString("|") {
+                it.name + ":" + it.inputSchema.toString()
+            }
+            val storedThread = preferences.getString("codex_native_thread_id", null)
+            val storedModel = preferences.getString("codex_native_thread_model", null)
+            val storedTools = preferences.getString("codex_native_thread_tools", null)
+            val canResume = !storedThread.isNullOrBlank() &&
+                storedModel == model.orEmpty() && storedTools == toolFingerprint
+
+            val thread = if (canResume) {
+                try {
+                    client.resumeThread(storedThread!!)
+                } catch (failure: Exception) {
+                    val detail = failure.message.orEmpty().lowercase()
+                    val staleThread = detail.contains("not found") ||
+                        detail.contains("unknown thread") ||
+                        detail.contains("no such thread") ||
+                        detail.contains("does not exist")
+                    if (!staleThread) throw failure
+                    client.startThread(model, tools)
+                }
+            } else {
+                client.startThread(model, tools)
+            }
+
+            preferences.edit()
+                .putString("codex_native_thread_id", thread)
+                .putString("codex_native_thread_model", model.orEmpty())
+                .putString("codex_native_thread_tools", toolFingerprint)
+                .apply()
+
+            // A resumed thread already contains its own prior user/assistant/tool history.
+            // Send only the newest user turn. Seed a newly-created thread with a bounded
+            // recent transcript once, so existing Orion context is not discarded.
+            val input = if (canResume && thread == storedThread) {
+                latestUserText(messages)
+            } else {
+                transcript(messages).takeLast(60_000)
+            }
+            require(input.isNotBlank()) { "No current user text was supplied to Codex." }
+            val answer = client.runTurnAndAwait(
+                thread, input, model,
+                timeoutMs = 600_000L,
+                onDelta = onDelta,
+                onToolCall = onToolCall
+            )
             check(answer.isNotBlank()) { "Codex returned an empty model response." }
             Prefs.setAccountConnected(app, "codex", true)
             accountRequests++
@@ -129,6 +184,27 @@ internal class AccountAwareModelProvider(
             activeCodex = null
             client.close()
         }
+    }
+
+    private fun latestUserText(messages: JSONArray): String {
+        for (index in messages.length() - 1 downTo 0) {
+            val message = messages.optJSONObject(index) ?: continue
+            if (!message.optString("role").equals("user", ignoreCase = true)) continue
+            val content = message.opt("content")
+            val text = when (content) {
+                is String -> content
+                is JSONArray -> buildString {
+                    for (i in 0 until content.length()) {
+                        val part = content.optJSONObject(i) ?: continue
+                        if (part.optString("type") == "text") append(part.optString("text")).append('\n')
+                    }
+                }
+                is JSONObject -> content.optString("text")
+                else -> ""
+            }.trim()
+            if (text.isNotBlank()) return text
+        }
+        return ""
     }
 
     private fun runAntigravity(
