@@ -82,8 +82,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         override fun run() {
             if (OrionAutonomyRunPolicy.canRun(
                     mode = OrionAutonomySettings.read(this@PhoneAiService).mode,
-                    coreEnabled = AgentPolicy.enabled(this@PhoneAiService, "orion_core"),
-                    proactiveEnabled = AgentPolicy.enabled(this@PhoneAiService, "proactive"),
+                    coreEnabled = AgentPolicy.backgroundEnabled(this@PhoneAiService, "orion_core"),
+                    proactiveEnabled = AgentPolicy.backgroundEnabled(this@PhoneAiService, "proactive"),
                     serviceConnected = instance === this@PhoneAiService,
                     agentReady = ::agent.isInitialized,
                     userTaskRunning = running
@@ -291,7 +291,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     internal fun onExternalPresenceEvent(eventKey: String, safeDescription: String): Boolean {
         if (!OrionMasterControl.isEnabled(this)) return false
         val runtime = orionRuntime ?: return false
-        if (!AgentPolicy.enabled(this, "orion_core")) return false
+        if (!AgentPolicy.backgroundEnabled(this, "orion_core")) return false
         val decision = decisionScheduler?.onExternalPresenceEvent(eventKey, safeDescription) ?: return false
         if (decision.accepted) scheduleRuntimeDrain()
         return decision.accepted
@@ -358,8 +358,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         synchronized(this) {
             val elapsed = if (lastContinuousWatcherAt == 0L) Long.MAX_VALUE else now - lastContinuousWatcherAt
             val shouldObserve = OrionContinuousWatcherPolicy.shouldObserve(
-                coreEnabled = AgentPolicy.enabled(this, "orion_core"),
-                proactiveEnabled = AgentPolicy.enabled(this, "proactive"),
+                coreEnabled = AgentPolicy.backgroundEnabled(this, "orion_core"),
+                proactiveEnabled = AgentPolicy.backgroundEnabled(this, "proactive"),
                 serviceConnected = instance === this,
                 elapsedSinceLastObservationMs = elapsed
             )
@@ -368,8 +368,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         worker.execute {
             if (!OrionMasterControl.isEnabled(this) || instance !== this ||
-                !AgentPolicy.enabled(this, "orion_core") ||
-                !AgentPolicy.enabled(this, "proactive")) return@execute
+                !AgentPolicy.backgroundEnabled(this, "orion_core") ||
+                !AgentPolicy.backgroundEnabled(this, "proactive")) return@execute
             val gate = runCatching { OrionProactiveGate.decide(OrionProactiveGate.gather(this)) }
                 .getOrElse { OrionProactiveGate.Decision(false, 0.0, "gate unavailable: ${it.javaClass.simpleName}") }
             AgentPolicy.log(this, "soul_watcher", "continuous_gate", null,
@@ -2115,8 +2115,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun runDueAutonomyGoal() {
         if (!OrionAutonomyRunPolicy.canRun(
                 mode = OrionAutonomySettings.read(this).mode,
-                coreEnabled = AgentPolicy.enabled(this, "orion_core"),
-                proactiveEnabled = AgentPolicy.enabled(this, "proactive"),
+                coreEnabled = AgentPolicy.backgroundEnabled(this, "orion_core"),
+                proactiveEnabled = AgentPolicy.backgroundEnabled(this, "proactive"),
                 serviceConnected = instance === this,
                 agentReady = ::agent.isInitialized,
                 userTaskRunning = running
