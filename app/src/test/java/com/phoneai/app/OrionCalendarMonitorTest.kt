@@ -69,7 +69,7 @@ class OrionCalendarMonitorTest {
     @Test fun notEnabledWithoutConsent() {
         assertFalse(OrionCalendarMonitor.isEnabled(context))
         assertTrue(OrionCalendarMonitor.upcoming(context, 24).isEmpty())
-        assertTrue(OrionCalendarMonitor.soon(context, 24).isBlank())
+        assertTrue(OrionCalendarMonitor.soon(context, 24).contains("switched off"))
     }
 
     @Test fun enabledWithConsent() {
