@@ -280,7 +280,7 @@ internal object ToolRegistry {
     private val alwaysDetailed = setOf(
         "task_list", "task_add", "task_update", "ask_user", "remember", "update_memory", "recall",
         "ask_agent", "queue_agent", "agent_jobs", "agent_cancel", "agent_reassign", "create_agent",
-        "service_status", "skills_list", "extension_list", "extension_policy", "extension_auto_activation", "capability_note", "capability_search", "capability_load",
+        "service_status", "skills_list", "extension_list", "extension_policy", "extension_auto_activation", "extension_create", "extension_update", "extension_test", "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback", "capability_note", "capability_search", "capability_load",
         "proactive_check", "proactive_status", "followup_add", "followup_list", "followup_done", "quiet_period_set",
         "chronos_awareness", "soul_state", "calendar_events",
         "model_decision_log", "model_decision_search", "model_status", "model_offline_mode",
