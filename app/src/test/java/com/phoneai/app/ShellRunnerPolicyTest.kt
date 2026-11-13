@@ -34,4 +34,12 @@ class ShellRunnerPolicyTest {
         assertEquals("cwd: /", ShellRunner.runBuiltin(context, "cd /"))
         assertEquals("/", ShellRunner.runBuiltin(context, "pwd"))
     }
+
+    @Test fun shellExitReceiptsPreserveSuccessFailureAndUnknownStates() {
+        assertEquals(0, ShellRunner.exitCodeFromResult("EXIT 0 · SUCCESS\\ncommand output"))
+        assertEquals(17, ShellRunner.exitCodeFromResult("exit=17\\ncompile failed"))
+        assertEquals(23, ShellRunner.exitCodeFromResult("error: EXIT 23 · FAILED\\ncommand failed"))
+        assertEquals(null, ShellRunner.exitCodeFromResult("command output says exit=0"))
+        assertEquals(null, ShellRunner.exitCodeFromResult("error: command timed out"))
+    }
 }
