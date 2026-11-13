@@ -241,7 +241,7 @@ object ShellRunner {
 
     /** Parse only backend-owned exit receipts, never arbitrary command output. */
     internal fun exitCodeFromResult(result: String): Int? = when {
-        result.startsWith("EXIT 0 · SUCCESS\\n") -> 0
+        result.startsWith("EXIT 0 · SUCCESS\n") -> 0
         result.startsWith("exit=") -> result.lineSequence().first()
             .removePrefix("exit=").takeWhile { it == '-' || it.isDigit() }.toIntOrNull()
         result.startsWith("error: EXIT ") -> result.substringAfter("error: EXIT ")
