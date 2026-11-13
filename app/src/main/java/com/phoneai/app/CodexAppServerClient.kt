@@ -52,6 +52,18 @@ internal class CodexAppServerClient(
             ?: error("Codex app-server did not return a thread id")
     }
 
+    fun resumeThread(threadId: String): String {
+        check(initialized) { "Codex app-server has not been initialized" }
+        val result = request(CodexAppServerProtocol.resumeThread(ids.getAndIncrement(), threadId))
+        return result.optJSONObject("thread")?.optString("id")?.takeIf { it.isNotBlank() }
+            ?: error("Codex app-server did not resume thread '$threadId'")
+    }
+
+    fun compactThread(threadId: String) {
+        check(initialized) { "Codex app-server has not been initialized" }
+        request(CodexAppServerProtocol.compactThread(ids.getAndIncrement(), threadId))
+    }
+
     fun startTurn(threadId: String, text: String, model: String? = null): JSONObject =
         request(CodexAppServerProtocol.startTurn(ids.getAndIncrement(), threadId, text, model))
 
@@ -73,6 +85,18 @@ internal class CodexAppServerClient(
         while (true) {
             val remaining = deadline - System.currentTimeMillis()
             if (remaining <= 0L) {
+                // Interrupt the active turn but leave its durable thread intact. The next
+                // request can resume it and inspect the interrupted terminal status.
+                val turnId = activeTurnId
+                if (!turnId.isNullOrBlank()) {
+                    runCatching {
+                        session.writeLine(
+                            CodexAppServerProtocol.interruptTurn(
+                                ids.getAndIncrement(), threadId, turnId
+                            ).toJson().toString()
+                        )
+                    }
+                }
                 val diagnostics = session.stderrSnapshot().takeLast(8).joinToString("\\n").takeLast(1_200)
                 error(
                     "Codex turn timed out before turn/completed (thread=$threadId, turn=${activeTurnId ?: "unknown"}, last event=$lastEvent)" +

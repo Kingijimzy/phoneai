@@ -89,6 +89,21 @@ internal object CodexAppServerProtocol {
         return Request(id, "thread/start", params)
     }
 
+    /** Resume the durable native Codex conversation without loading its entire history into the client. */
+    fun resumeThread(id: Int, threadId: String): Request = Request(
+        id, "thread/resume", JSONObject().put("threadId", threadId).put("excludeTurns", true)
+    )
+
+    /** Ask Codex itself to compact its persisted thread history. */
+    fun compactThread(id: Int, threadId: String): Request = Request(
+        id, "thread/compact/start", JSONObject().put("threadId", threadId)
+    )
+
+    /** Cancel only the identified in-flight turn; the durable thread remains resumable. */
+    fun interruptTurn(id: Int, threadId: String, turnId: String): Request = Request(
+        id, "turn/interrupt", JSONObject().put("threadId", threadId).put("turnId", turnId)
+    )
+
     fun startTurn(id: Int, threadId: String, text: String, model: String? = null): Request {
         require(threadId.isNotBlank()) { "Codex thread id is required" }
         require(text.isNotBlank()) { "Codex turn input is required" }

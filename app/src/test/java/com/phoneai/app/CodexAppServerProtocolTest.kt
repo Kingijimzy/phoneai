@@ -117,4 +117,24 @@ class CodexAppServerProtocolTest {
             "turn-1"
         ))
     }
+    @Test fun resumeUsesPersistentThreadWithoutHydratingFullHistory() {
+        val request = CodexAppServerProtocol.resumeThread(21, "thr_existing").toJson()
+        assertEquals("thread/resume", request.getString("method"))
+        assertEquals("thr_existing", request.getJSONObject("params").getString("threadId"))
+        assertTrue(request.getJSONObject("params").getBoolean("excludeTurns"))
+    }
+
+    @Test fun manualCompactionTargetsOnlyTheSelectedThread() {
+        val request = CodexAppServerProtocol.compactThread(22, "thr_existing").toJson()
+        assertEquals("thread/compact/start", request.getString("method"))
+        assertEquals("thr_existing", request.getJSONObject("params").getString("threadId"))
+    }
+
+    @Test fun timeoutInterruptTargetsOnlyTheActiveTurn() {
+        val request = CodexAppServerProtocol.interruptTurn(23, "thr_existing", "turn_active").toJson()
+        assertEquals("turn/interrupt", request.getString("method"))
+        assertEquals("thr_existing", request.getJSONObject("params").getString("threadId"))
+        assertEquals("turn_active", request.getJSONObject("params").getString("turnId"))
+    }
+
 }
