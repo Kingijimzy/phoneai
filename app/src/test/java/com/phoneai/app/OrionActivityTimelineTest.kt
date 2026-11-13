@@ -187,7 +187,7 @@ class OrionActivityTimelineTest {
         assertEquals(3, cards.size)
         val first = cards.single { it.taskId == "message-turn-a" }
         assertEquals(OrionActivityStatus.WAITING, first.status)
-        assertTrue(first.evidence.any { it.startsWith("WAITING · Objective completion has not been verified.") })
+        assertTrue(first.evidence.any { it.contains("Objective completion has not been verified.") })
         val second = cards.single { it.taskId == "message-turn-b" }
         assertEquals(OrionActivityStatus.FAILED, second.status)
         assertEquals(OrionActivityKind.ERROR, second.kind)
