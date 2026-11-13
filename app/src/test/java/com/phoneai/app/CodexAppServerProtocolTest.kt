@@ -98,4 +98,20 @@ class CodexAppServerProtocolTest {
         assertTrue(CodexAppServerProtocol.isNotification(JSONObject().put("method", "account/login/completed")))
         assertFalse(CodexAppServerProtocol.isNotification(JSONObject().put("id", 1).put("method", "account/login/completed")))
     }
+
+    @Test fun validatesCodexDynamicToolCallsAgainstTheActiveTurnWithoutRequiringThreadId() {
+        val actualServerPayload = JSONObject()
+            .put("callId", "call-1")
+            .put("turnId", "turn-1")
+            .put("tool", "battery")
+            .put("arguments", JSONObject().put("detail", "full"))
+        assertTrue(CodexAppServerProtocol.toolCallBelongsToActiveTurn(actualServerPayload, "thread-1", "turn-1"))
+        assertFalse(CodexAppServerProtocol.toolCallBelongsToActiveTurn(actualServerPayload, "thread-1", "turn-2"))
+        assertFalse(CodexAppServerProtocol.toolCallBelongsToActiveTurn(actualServerPayload, null, "turn-1"))
+        assertFalse(CodexAppServerProtocol.toolCallBelongsToActiveTurn(
+            JSONObject(actualServerPayload.toString()).put("threadId", "other-thread"),
+            "thread-1",
+            "turn-1"
+        ))
+    }
 }
