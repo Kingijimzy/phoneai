@@ -535,16 +535,18 @@ class ToolRegistryNativeSelectionTest {
     }
 
     @Test fun capabilityLoadRespectsProviderDeclarationLimit() {
-        val exposed = ToolRegistry.all.toMutableList()
+        val exposed = ToolRegistry.nativeToolsFor("hello").toMutableList()
+        val existingNames = exposed.map { it.name }.toSet()
         val candidate = ToolRegistry.all.firstOrNull { tool ->
             val route = OrionCapabilityAdapters.route(tool.name)
-            tool.name !in exposed.map { it.name } && route != null && OrionRuntimeCapabilityExecutor.supports(route.backend, tool.name)
-        }
-        if (candidate != null) {
-            val result = JSONObject(ToolRegistry.loadCapability(exposed, candidate.name))
-            assertFalse(result.getBoolean("loaded"))
-            assertEquals("provider_tool_declaration_limit", result.getString("error"))
-        }
+            tool.name !in existingNames && route != null && OrionRuntimeCapabilityExecutor.supports(route.backend, tool.name)
+        } ?: error("expected at least one implemented capability outside the initial callable set")
+        val fillers = ToolRegistry.all.filter { it.name != candidate.name && it.name !in existingNames }
+        exposed.addAll(fillers.take(128 - exposed.size))
+        assertEquals(128, exposed.size)
+        val result = JSONObject(ToolRegistry.loadCapability(exposed, candidate.name))
+        assertFalse(result.getBoolean("loaded"))
+        assertEquals("provider_tool_declaration_limit", result.getString("error"))
     }
 
 }
