@@ -19,6 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 40
+
+      - name: Bundle Orion changelog
+        shell: bash
+        run: |
+          mkdir -p app/src/main/assets
+          git log -30 --no-merges --pretty='%ad %s' --date=short > app/src/main/assets/orion_changelog.txt || true
 
       - name: Set up Android SDK for pinned PRoot build
         uses: android-actions/setup-android@v3
