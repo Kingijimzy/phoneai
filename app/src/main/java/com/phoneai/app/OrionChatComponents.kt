@@ -702,8 +702,7 @@ private fun TaskActivityCard(raw: String) {
     }
 }
 
-@Composable
-internal internal fun orionWorkingPhrase(status: String): String {
+internal fun orionWorkingPhrase(status: String): String {
     val value = status.lowercase()
     return when {
         "recover" in value || "retry" in value -> "Recovering and trying another route"

@@ -36,9 +36,23 @@ print('ok')
 Done"""
         val content = OrionMessageContent.fromLegacy("ai", source)
         assertTrue(content.blocks.any { it is OrionMessageBlock.Code && it.language == "python" })
-        assertEquals("Intro\\n\\n", (content.blocks[0] as OrionMessageBlock.Text).markdown)
-        assertEquals("print('ok')\\n", (content.blocks[1] as OrionMessageBlock.Code).source)
-        assertEquals("\\nDone", (content.blocks[2] as OrionMessageBlock.Text).markdown)
+        assertEquals("""Intro
+
+""", (content.blocks[0] as OrionMessageBlock.Text).markdown)
+        assertEquals("""print('ok')
+""", (content.blocks[1] as OrionMessageBlock.Code).source)
+        assertEquals("""
+Done""", (content.blocks[2] as OrionMessageBlock.Text).markdown)
+    }
+
+    @Test fun legacyShellAndApprovalNotesBecomeTypedBlocks() {
+        val shell = OrionMessageContent.fromLegacy("note", "[SHELL:FAILED]\\n$ python broken.py\\n\\u2063OUT\\nTraceback")
+        val terminal = shell.blocks.single() as OrionMessageBlock.Terminal
+        assertEquals("failed", terminal.state)
+        assertEquals("python broken.py", terminal.command)
+
+        val approval = OrionMessageContent.fromLegacy("note", "[TASK:APPROVAL]\\nInstall the extension?")
+        assertTrue(approval.blocks.single() is OrionMessageBlock.Approval)
     }
 
     @Test fun userTextIsNeverReinterpretedAsAnExecutionBlock() {

@@ -7,7 +7,7 @@ import org.json.JSONObject
  * Versioned, typed conversation payload. The transcript string remains the canonical
  * human-readable fallback, while blocks carry semantic meaning for renderers and storage.
  */
-internal data class OrionMessageContent(
+data class OrionMessageContent(
     val version: Int = CURRENT_VERSION,
     val blocks: List<OrionMessageBlock>
 ) {
@@ -97,7 +97,7 @@ internal data class OrionMessageContent(
     }
 }
 
-internal sealed interface OrionMessageBlock {
+sealed interface OrionMessageBlock {
     data class Text(val markdown: String) : OrionMessageBlock
     data class Code(val language: String, val filename: String?, val source: String) : OrionMessageBlock
     data class Terminal(
