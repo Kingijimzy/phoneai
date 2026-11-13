@@ -1326,7 +1326,10 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                                 type = "*/*"
                                 putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
                                     "text/plain", "text/markdown", "text/csv", "text/tab-separated-values",
-                                    "application/json", "application/xml", "text/xml", "text/html"
+                                    "application/json", "application/xml", "text/xml", "text/html",
+                                    "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
                                 ))
                             }
                         }
