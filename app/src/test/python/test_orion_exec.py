@@ -11,9 +11,16 @@ SPEC.loader.exec_module(orion_exec)
 class OrionExecTests(unittest.TestCase):
     def test_bundled_full_python_runner_executes_imports_and_workspace_files(self):
         import tempfile
-        import orion_full
+        full_module = pathlib.Path(__file__).parents[2] / "main" / "python" / "orion_full.py"
+        full_spec = importlib.util.spec_from_file_location("orion_full", full_module)
+        orion_full = importlib.util.module_from_spec(full_spec)
+        full_spec.loader.exec_module(orion_full)
         with tempfile.TemporaryDirectory() as workdir:
-            code = "import os\\nfrom pathlib import Path\\nPath('full.txt').write_text('ready')\\nprint(os.path.exists('full.txt'))"
+            code = """import os
+from pathlib import Path
+Path('full.txt').write_text('ready')
+print(os.path.exists('full.txt'))
+"""
             result = orion_full.run_full(code, workdir, 5)
             self.assertIn("exit=0", result)
             self.assertIn("True", result)
