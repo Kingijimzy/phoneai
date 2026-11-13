@@ -145,21 +145,21 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
                 val status = event.status.lowercase()
                 val kind = when {
                     type.contains("approval") -> OrionActivityKind.APPROVAL
+                    type.contains("cancel") || status in setOf("cancelled", "canceled") -> OrionActivityKind.CANCELLED
+                    type.contains("interrupt") || status == "interrupted" -> OrionActivityKind.INTERRUPTED
+                    type.contains("error") || status in setOf("failed", "error", "denied", "rejected") -> OrionActivityKind.ERROR
                     type.contains("tool") || type.contains("terminal") || type.contains("python") || type.contains("file") -> OrionActivityKind.TOOL
                     type.contains("browser") || type.contains("research") -> OrionActivityKind.RESEARCH
                     type.contains("agent") || type.contains("specialist") || type.contains("delegate") -> OrionActivityKind.DELEGATION
-                    type.contains("error") || status in setOf("failed", "error", "denied") -> OrionActivityKind.ERROR
-                    type.contains("cancel") -> OrionActivityKind.CANCELLED
-                    type.contains("interrupt") -> OrionActivityKind.INTERRUPTED
-                    type.contains("complete") || status in setOf("completed", "success", "succeeded", "result") -> OrionActivityKind.COMPLETION
+                    type.contains("complete") || status in setOf("completed", "success", "succeeded", "result", "approved", "accepted") -> OrionActivityKind.COMPLETION
                     else -> OrionActivityKind.THINKING
                 }
                 val eventStatus = when {
-                    status in setOf("pending", "waiting", "needs_approval", "approval_required") -> OrionActivityStatus.WAITING
-                    status in setOf("failed", "error", "denied") -> OrionActivityStatus.FAILED
+                    status in setOf("pending", "waiting", "needs_approval", "approval_required", "needs_review") -> OrionActivityStatus.WAITING
+                    status in setOf("failed", "error", "denied", "rejected") -> OrionActivityStatus.FAILED
                     status in setOf("cancelled", "canceled") -> OrionActivityStatus.CANCELLED
                     status == "interrupted" -> OrionActivityStatus.INTERRUPTED
-                    status in setOf("completed", "success", "succeeded", "result") -> OrionActivityStatus.SUCCEEDED
+                    status in setOf("completed", "success", "succeeded", "result", "approved", "accepted") -> OrionActivityStatus.SUCCEEDED
                     else -> OrionActivityStatus.ACTIVE
                 }
                 OrionActivityEvent(
