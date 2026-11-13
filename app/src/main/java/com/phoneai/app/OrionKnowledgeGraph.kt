@@ -22,6 +22,15 @@ internal object OrionKnowledgeGraph {
     private const val INDEX_VERSION = 3
     private const val PREFS = "orion_knowledge_graph_index"
     private val rebuildLock = Any()
+    @Volatile private var graphHelper: GraphDb? = null
+
+    /** Keep one application-scoped helper; constructing one per operation leaks SQLite handles. */
+    private fun graphHelper(context: Context): GraphDb {
+        graphHelper?.let { return it }
+        return synchronized(rebuildLock) {
+            graphHelper ?: GraphDb(context.applicationContext).also { graphHelper = it }
+        }
+    }
 
     private class GraphDb(context: Context) : SQLiteOpenHelper(context, "orion_knowledge_graph.db", null, 2) {
         override fun onCreate(db: SQLiteDatabase) {
@@ -67,7 +76,7 @@ internal object OrionKnowledgeGraph {
         val entities = OrionEntityIndex.extract(memory.text).distinctBy { it.key }.take(12)
         if (terms.isEmpty() && facts.isEmpty() && entities.isEmpty()) return 0
 
-        val db = GraphDb(context.applicationContext).writableDatabase
+        val db = graphHelper(context.applicationContext).writableDatabase
         var inserted = 0
         db.beginTransaction()
         try {
@@ -145,7 +154,7 @@ internal object OrionKnowledgeGraph {
             MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) &&
                 OrionMemoryLifecycle.isActive(app, it.id)
         }
-        val db = GraphDb(app).writableDatabase
+        val db = graphHelper(app).writableDatabase
         db.beginTransaction()
         try {
             db.delete("edges", null, null)
@@ -166,7 +175,7 @@ internal object OrionKnowledgeGraph {
         ensureIndexed(context)
         val terms = normalize(query).split(" ").filter { it.length >= 3 }.distinct().take(8)
         if (terms.isEmpty()) return emptySet()
-        val db = GraphDb(context.applicationContext).readableDatabase
+        val db = graphHelper(context.applicationContext).readableDatabase
         val frontier = linkedSetOf<String>()
         terms.forEach { term ->
             db.rawQuery(
@@ -209,7 +218,7 @@ internal object OrionKnowledgeGraph {
 
     fun snapshot(context: Context): Snapshot {
         ensureIndexed(context)
-        val db = GraphDb(context.applicationContext).readableDatabase
+        val db = graphHelper(context.applicationContext).readableDatabase
         fun count(sql: String): Int = db.rawQuery(sql, null).use { if (it.moveToFirst()) it.getInt(0) else 0 }
         val indexed = count("SELECT COUNT(DISTINCT memory_id) FROM edges")
         val entities = count("SELECT COUNT(*) FROM nodes WHERE kind='entity'")
@@ -240,14 +249,14 @@ internal object OrionKnowledgeGraph {
     }
 
     fun forgetMemory(context: Context, memoryId: Int) {
-        val db = GraphDb(context.applicationContext).writableDatabase
+        val db = graphHelper(context.applicationContext).writableDatabase
         db.delete("edges", "memory_id=?", arrayOf(memoryId.toString()))
         db.delete("nodes", "id=?", arrayOf("memory:$memoryId"))
         db.execSQL("DELETE FROM nodes WHERE id NOT IN (SELECT source_id FROM edges UNION SELECT target_id FROM edges)")
     }
 
     fun clear(context: Context) {
-        val db = GraphDb(context.applicationContext).writableDatabase
+        val db = graphHelper(context.applicationContext).writableDatabase
         db.delete("edges", null, null)
         db.delete("nodes", null, null)
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt("version", 0).apply()
