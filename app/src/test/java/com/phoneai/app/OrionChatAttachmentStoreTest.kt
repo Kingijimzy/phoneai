@@ -50,7 +50,7 @@ class OrionChatAttachmentStoreTest {
         val keep = OrionChatAttachmentStore.import(context, "session-b", Uri.fromFile(b))
         assertEquals(1, OrionChatAttachmentStore.deleteSession(context, "session-a"))
         assertTrue(OrionChatAttachmentStore.forSession(context, "session-a").isEmpty())
-        assertFalse(OrionChatAttachmentStore.file(context, keep).exists().not())
+        assertTrue(OrionChatAttachmentStore.file(context, keep).exists())
         assertEquals(keep.id, OrionChatAttachmentStore.forSession(context, "session-b").single().id)
     }
 }
