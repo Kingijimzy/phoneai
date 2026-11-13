@@ -198,7 +198,7 @@ internal class GeminiLiveSession(
         // Gemini supplies the conversation intelligence; Orion's selected local Kokoro
         // voice supplies the actual sound. This keeps one consistent voice identity in every mode.
         val generationConfig = JSONObject()
-            .put("responseModalities", JSONArray().put("TEXT"))
+            .put("responseModalities", JSONArray().put(GeminiLivePolicy.RESPONSE_MODALITY))
             .put("maxOutputTokens", 1024)
         return JSONObject()
             .put("model", GeminiLivePolicy.MODEL)
@@ -206,6 +206,7 @@ internal class GeminiLiveSession(
             .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", boundedInstructions))))
             .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection", activityDetectionConfig()))
             .put("inputAudioTranscription", JSONObject())
+            .put("outputAudioTranscription", JSONObject())
             .put("sessionResumption", JSONObject())
             .put(
                 "contextWindowCompression",
@@ -263,7 +264,7 @@ internal class GeminiLiveSession(
             body.put("liveConnectConstraints", JSONObject()
                 .put("model", GeminiLivePolicy.MODEL)
                 .put("config", JSONObject()
-                    .put("responseModalities", JSONArray().put("TEXT"))
+                    .put("responseModalities", JSONArray().put(GeminiLivePolicy.RESPONSE_MODALITY))
                     .put("sessionResumption", JSONObject())))
         }
         val connection = (URL("https://generativelanguage.googleapis.com/v1beta/auth_tokens").openConnection() as HttpURLConnection)
@@ -321,15 +322,26 @@ internal class GeminiLiveSession(
         serverContent.optJSONObject("interimInputTranscription")?.optString("text").orEmpty()
             .takeIf { it.isNotBlank() }?.let { listener.onInterimTranscript(it) }
 
-        val parts = serverContent.optJSONObject("modelTurn")?.optJSONArray("parts")
-        if (parts != null) {
+        // Gemini 3.8 Live returns native audio. The configured output transcription is the
+        // authoritative text stream that is handed to Orion's shared local Kokoro voice.
+        val outputTranscript = serverContent.optJSONObject("outputTranscription")?.optString("text").orEmpty().trim()
+        if (outputTranscript.isNotEmpty()) {
             synchronized(modelTextBuffer) {
-                for (i in 0 until parts.length()) {
-                    val part = parts.optJSONObject(i) ?: continue
-                    val delta = part.optString("text").trim()
-                    if (delta.isNotEmpty()) {
-                        if (modelTextBuffer.isNotEmpty()) modelTextBuffer.append(' ')
-                        modelTextBuffer.append(delta)
+                if (modelTextBuffer.isNotEmpty()) modelTextBuffer.append(' ')
+                modelTextBuffer.append(outputTranscript)
+            }
+        } else {
+            // Keep compatibility with Live models that emit text parts directly.
+            val parts = serverContent.optJSONObject("modelTurn")?.optJSONArray("parts")
+            if (parts != null) {
+                synchronized(modelTextBuffer) {
+                    for (i in 0 until parts.length()) {
+                        val part = parts.optJSONObject(i) ?: continue
+                        val delta = part.optString("text").trim()
+                        if (delta.isNotEmpty()) {
+                            if (modelTextBuffer.isNotEmpty()) modelTextBuffer.append(' ')
+                            modelTextBuffer.append(delta)
+                        }
                     }
                 }
             }
