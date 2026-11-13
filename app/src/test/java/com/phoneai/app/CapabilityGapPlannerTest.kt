@@ -7,32 +7,40 @@ class CapabilityGapPlannerTest {
     private fun tool(name: String, description: String) =
         ToolDefinition(name, "$name {}: $description", description, ToolAccess.READ)
 
-    @Test fun reusesExistingToolInsteadOfSuggestingDuplicateExtension() {
-        val result = CapabilityGapPlanner.assess(
+    @Test fun modelAssessesSemanticFitInsteadOfLexicalToolScoring() {
+        val tools = listOf(tool("live_news", "retrieve recent public news headlines and URLs"))
+        val news = CapabilityGapPlanner.assess(
             request = "summarize recent public news headlines",
-            registeredTools = listOf(tool("live_news", "retrieve recent public news headlines and URLs")),
+            registeredTools = tools,
             enabledSkills = emptyList(),
             extensions = emptyList()
         )
-        assertEquals(CapabilityGapRoute.REUSE_TOOL, result.route)
-        assertTrue(result.candidates.contains("live_news"))
-        assertTrue(result.nextActions.any { it.contains("existing") || it.contains("registered") })
+        val unrelated = CapabilityGapPlanner.assess(
+            request = "news headlines public recent summarize",
+            registeredTools = tools,
+            enabledSkills = emptyList(),
+            extensions = emptyList()
+        )
+        assertEquals(CapabilityGapRoute.MODEL_DECIDES, news.route)
+        assertEquals(CapabilityGapRoute.MODEL_DECIDES, unrelated.route)
+        assertTrue(news.reason.contains("No lexical similarity score"))
+        assertTrue(news.nextActions.any { it.contains("semantic fit") || it.contains("objective-level") })
     }
 
-    @Test fun recommendsResearchAndRealTestsOnlyWhenNoLocalRouteMatches() {
+    @Test fun capabilityGapContextRequiresReuseAndVerifiedExtensionLifecycle() {
         val result = CapabilityGapPlanner.assess(
             request = "convert irregular recipe ingredients into a normalized shopping list",
             registeredTools = listOf(tool("battery", "report device battery status")),
             enabledSkills = emptyList(),
             extensions = emptyList()
         )
-        assertEquals(CapabilityGapRoute.INVESTIGATE_THEN_DRAFT, result.route)
-        assertTrue(result.nextActions.any { it.contains("public documentation") || it.contains("open-source") })
-        assertTrue(result.nextActions.any { it.contains("extension_test") && it.contains("expected-output") })
-        assertTrue(result.nextActions.any { it.contains("explicit approval") })
+        assertEquals(CapabilityGapRoute.MODEL_DECIDES, result.route)
+        assertTrue(result.nextActions.any { it.contains("Reuse registered tools") })
+        assertTrue(result.nextActions.any { it.contains("genuine capability gap") })
+        assertTrue(result.nextActions.any { it.contains("Android framework") })
     }
 
-    @Test fun onlyVerifiedHashMatchingExtensionsAreCandidates() {
+    @Test fun onlyVerifiedHashMatchingExtensionsAppearInInventory() {
         val source = "RESULT = INPUT['value']"
         val ext = GeneratedExtension(
             id = "recipe_helper",
@@ -51,8 +59,8 @@ class CapabilityGapPlannerTest {
             enabledSkills = emptyList(),
             extensions = listOf(ext)
         )
-        assertEquals(CapabilityGapRoute.INVESTIGATE_THEN_DRAFT, result.route)
-        assertFalse(result.candidates.contains("recipe_helper"))
+        assertEquals(CapabilityGapRoute.MODEL_DECIDES, result.route)
+        assertFalse(result.candidates.any { it.contains("recipe_helper") })
     }
 
     @Test fun blankGoalRequestsClarificationInsteadOfInventingAGap() {
