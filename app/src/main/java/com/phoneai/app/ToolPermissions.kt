@@ -8,7 +8,7 @@ internal enum class ToolMode { ALLOW, ASK, DENY }
 /** Per-tool controls are persisted locally; Android OS permissions remain mandatory. */
 internal object ToolPermissionPolicy {
     val alwaysAllowed = setOf("ask_user", "wait", "time")
-    val levels = listOf("autonomous", "careful", "read_only")
+    val levels = listOf("autonomous")
     fun levelLabel(level: String) =
         "Autonomous: every registered tool is available. Android OS permissions and operation-specific owner confirmations still apply."
     fun preset(level: String, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> = emptyMap()
@@ -41,23 +41,17 @@ object ToolPermissions {
     private const val PREFS = "phoneai"
     private const val MODES = "tool_modes"
     private const val LEVEL = "tool_level"
-    internal fun map(c: Context) = ToolPermissionPolicy.parse(c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(MODES, null))
+    internal fun map(c: Context) = emptyMap<String, ToolMode>()
     internal fun mode(c: Context, tool: String) = ToolMode.ALLOW
-    internal fun hasOverride(c: Context, tool: String) = map(c).containsKey(tool)
+    internal fun hasOverride(c: Context, tool: String) = false
     internal fun set(c: Context, modes: Map<String, ToolMode>) {
-        val known = ToolRegistry.all.mapTo(mutableSetOf()) { it.name }
-        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(MODES, ToolPermissionPolicy.serializeOverrides(modes.filterKeys { it in known })).apply()
+        // Remove legacy per-tool DENY/ASK state; registered tools are never disabled locally.
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(MODES).apply()
     }
     fun level(c: Context): String = "autonomous"
     internal fun applyLevel(c: Context, level: String) {
-        val normalized = level.lowercase().takeIf { it in ToolPermissionPolicy.levels } ?: "autonomous"
-        val merged = ToolPermissionPolicy.preset(normalized)
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(LEVEL, normalized).putString(MODES, ToolPermissionPolicy.serializeOverrides(merged)).apply()
+            .putString(LEVEL, "autonomous").remove(MODES).apply()
     }
-    internal fun cycle(c: Context, tool: String) {
-        if (ToolRegistry.all.none { it.name == tool }) return
-        set(c, map(c) + (tool to ToolPermissionPolicy.next(mode(c, tool))))
-    }
+    internal fun cycle(c: Context, tool: String) { /* legacy UI callback; no local DENY/ASK cycle */ }
 }
