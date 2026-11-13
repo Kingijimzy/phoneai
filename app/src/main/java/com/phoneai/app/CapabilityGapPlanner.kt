@@ -56,7 +56,7 @@ internal object CapabilityGapPlanner {
             inventory,
             listOf(
                 "Interpret the requested outcome, context, constraints and observable success condition; do not infer a tool from matching words.",
-                "Inspect the full registered tool contracts already supplied in the system context. Use capability_search with an objective-level description if the required callable is outside the current function declarations.",
+                "Inspect the full registered tool contracts already supplied in the system context. Use capability_search with an objective-level description if the required callable is outside the current function declarations; paginate until a compatible implemented route is found or has_more=false, then use capability_load with that exact tool_name before invoking it.",
                 "Check live prerequisites through the relevant status/readiness tool and use the existing executor; registration alone is not proof of service health or permission.",
                 "If a call fails, classify the actual error, inspect current state, and select a semantically equivalent route only when evidence supports it.",
                 "Reuse registered tools, enabled skills and verified hash-matching extensions before creating anything new.",
