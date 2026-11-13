@@ -37,6 +37,7 @@ class OrionExtensionLifecycleIntegrationTest {
 
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
+        ExtensionAutonomySettings.setAutoActivationEnabled(context, false)
         listOf(
             "orion_generated_extensions.json",
             "orion_extension_versions.json",
