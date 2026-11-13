@@ -200,18 +200,28 @@ internal class AccountAwareModelProvider(
     private fun boundedRecentTranscript(messages: JSONArray, maxChars: Int): String {
         val selected = ArrayList<String>()
         var used = 0
+        var omittedOlderMessages = false
         for (index in messages.length() - 1 downTo 0) {
             val message = messages.optJSONObject(index) ?: continue
             val body = contentText(message.opt("content")).trim()
             if (body.isBlank()) continue
             val role = message.optString("role").ifBlank { "user" }.uppercase()
             val chunk = "$role: $body"
-            if (selected.isNotEmpty() && used + chunk.length + 2 > maxChars) break
+            if (selected.isNotEmpty() && used + chunk.length + 2 > maxChars) {
+                omittedOlderMessages = true
+                break
+            }
             selected.add(if (chunk.length > maxChars) chunk.takeLast(maxChars) else chunk)
             used += chunk.length + 2
-            if (used >= maxChars) break
+            if (used >= maxChars) {
+                omittedOlderMessages = index > 0
+                break
+            }
         }
-        return selected.asReversed().joinToString("\n\n")
+        val recent = selected.asReversed().joinToString("\n\n")
+        return if (omittedOlderMessages) {
+            "[Orion compacted older chat history to fit the provider's prompt limit. Continue from the recent messages below.]\n\n$recent"
+        } else recent
     }
 
     private fun contentText(content: Any?): String = when (content) {
