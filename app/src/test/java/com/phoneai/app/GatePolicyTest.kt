@@ -45,11 +45,8 @@ class GatePolicyTest {
         assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(hardBlock = "blocked")).verdict)
     }
 
-    @Test fun consequentialActionRequiresApproval() {
-        assertEquals(GatePolicy.Verdict.DENY,
-            GatePolicy.decide(input(dangerous = true)).verdict)
-        assertEquals(GatePolicy.Verdict.ALLOW,
-            GatePolicy.decide(input(dangerous = true, approved = true)).verdict)
+    @Test fun consequentialActionsUseDedicatedConfirmationPolicyWithoutGlobalAutonomyVeto() {
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(dangerous = true)).verdict)
     }
 
     @Test fun tradingResearchOrderRestrictionRemains() {
