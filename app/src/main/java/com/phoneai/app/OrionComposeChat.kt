@@ -540,7 +540,9 @@ data class OrionChatLine(
     val id: Long,
     val kind: String,
     val text: String,
-    val imageUri: Uri? = null
+    val imageUri: Uri? = null,
+    /** Typed at the message boundary; legacy rows are adapted once when restored. */
+    val content: OrionMessageContent = OrionMessageContent.fromLegacy(kind, text)
 )
 
 @Composable

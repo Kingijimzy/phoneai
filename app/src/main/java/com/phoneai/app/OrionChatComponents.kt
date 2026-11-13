@@ -169,22 +169,15 @@ private enum class OrionReplyType { NORMAL, RESEARCH, CODE, TASK, MCP, DIAGRAM }
 
 private fun classifyOrionReply(item: OrionChatLine): OrionReplyType {
     if (item.kind == "note") return OrionReplyType.TASK
-    val text = item.text
-    val lower = text.lowercase()
-    if (parseOrionDiagram(text) != null) return OrionReplyType.DIAGRAM
-    if (lower.contains("mcp tool result") || lower.contains("mcp discovery result") || lower.contains("mcp discovery failed")) {
-        return OrionReplyType.MCP
-    }
-    if (Regex("(?s)```(?:kotlin|java|python|py|javascript|js|typescript|ts|bash|sh|json|xml|html|css|sql|rust|go)?\\s*\\n").containsMatchIn(text) ||
-        (text.count { it == '\u0060' } >= 2 && (lower.contains("fun main") || lower.contains("def ") || lower.contains("import ") || lower.contains("class ")))) {
-        return OrionReplyType.CODE
-    }
-    if (lower.contains("research summary") || lower.contains("sources:") || lower.contains("source list") ||
-        (Regex("https?://").findAll(text).count() >= 2) ||
-        (lower.contains("findings") && lower.contains("source"))) return OrionReplyType.RESEARCH
-    if (Regex("(?m)^\\s*\\|?\\s*[-:]{3,}\\s*\\|\\s*[-:]{3,}.*$").containsMatchIn(text)) return OrionReplyType.RESEARCH
-    if (lower.contains("task status") || lower.contains("execution result:") ||
-        lower.contains("steps completed") || lower.contains("verification:")) return OrionReplyType.TASK
+    // New messages carry explicit block types. Legacy text is adapted at restoration time;
+    // ordinary prose is never promoted to a tool/task card because it contains a keyword.
+    val blocks = item.content.blocks
+    if (blocks.any { it is OrionMessageBlock.Code }) return OrionReplyType.CODE
+    if (blocks.any { it is OrionMessageBlock.Terminal || it is OrionMessageBlock.Approval ||
+            it is OrionMessageBlock.TaskReceipt || it is OrionMessageBlock.GeneratedFile }) return OrionReplyType.TASK
+    if (blocks.any { it is OrionMessageBlock.ToolResult }) return OrionReplyType.MCP
+    if (blocks.any { it is OrionMessageBlock.Research }) return OrionReplyType.RESEARCH
+    if (parseOrionDiagram(item.text) != null) return OrionReplyType.DIAGRAM
     return OrionReplyType.NORMAL
 }
 
