@@ -1194,6 +1194,15 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         val nativeTools = (baseNativeTools + skillNativeTools)
             .distinctBy { it.name }
             .take(128)
+            .toMutableList()
+        fun dispatchNativeTool(name: String, args: JSONObject): String {
+            val result = executeWithRecoveryGuard(name, args)
+            if (name == "capability_search") {
+                val added = ToolRegistry.addDiscoveredTools(nativeTools, result)
+                if (added > 0) ui.note("[CAPABILITIES] Discovered $added additional callable tool(s) for the next model turn.")
+            }
+            return result
+        }
         val toolTranscriptStart = messages.length()
         var toolRounds = 0
         fun preserveToolTranscript(note: String) {
@@ -1208,12 +1217,18 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             var turn = activeModel.chatTurn(
                 messages, false, 32768, 0.7, tools = nativeTools,
                 onToolCall = { name, args ->
-                    OrionNativeToolDispatcher.dispatchCallback(
+                    val result = OrionNativeToolDispatcher.dispatchCallback(
+
                         name = name,
+
                         args = args,
+
                         cancelled = { stopped },
+
                         isRegistered = { candidate -> nativeTools.any { it.name == candidate } && ToolRegistry.find(candidate) != null },
-                        execute = { candidate, validatedArgs -> executeWithRecoveryGuard(candidate, validatedArgs) }
+
+                        execute = ::dispatchNativeTool
+
                     )
                     ui.note(activityNote(name, args, result))
                     result
@@ -1247,8 +1262,8 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 val outcomes = OrionNativeToolDispatcher.dispatch(
                     calls = turn.toolCalls,
                     cancelled = { stopped },
-                    isRegistered = { name -> ToolRegistry.find(name) != null },
-                    execute = { name, args -> executeWithRecoveryGuard(name, args) }
+                    isRegistered = { name -> nativeTools.any { it.name == name } && ToolRegistry.find(name) != null },
+                    execute = ::dispatchNativeTool
                 )
                 outcomes.forEach { outcome ->
                     ui.note(activityNote(outcome.call.name, outcome.call.arguments, outcome.content))
@@ -1262,12 +1277,18 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                     turn = activeModel.chatTurn(
                         messages, false, 32768, 0.7, tools = nativeTools,
                         onToolCall = { name, args ->
-                            OrionNativeToolDispatcher.dispatchCallback(
+                            val result = OrionNativeToolDispatcher.dispatchCallback(
+
                                 name = name,
+
                                 args = args,
+
                                 cancelled = { stopped },
+
                                 isRegistered = { candidate -> nativeTools.any { it.name == candidate } && ToolRegistry.find(candidate) != null },
-                                execute = { candidate, validatedArgs -> executeWithRecoveryGuard(candidate, validatedArgs) }
+
+                                execute = ::dispatchNativeTool
+
                             )
                             ui.note(activityNote(name, args, result))
                             result
