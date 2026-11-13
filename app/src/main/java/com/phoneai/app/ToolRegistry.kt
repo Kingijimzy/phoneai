@@ -426,13 +426,14 @@ internal object ToolRegistry {
             !OrionRuntimeCapabilityExecutor.supports(route.backend, name)) {
             return org.json.JSONObject().put("loaded", false).put("error", "capability_not_implemented").put("tool_name", name).toString()
         }
-        if (target.none { it.name == name }) {
+        val alreadyCallable = target.any { it.name == name }
+        if (!alreadyCallable) {
             if (target.size >= 128) return org.json.JSONObject().put("loaded", false).put("error", "provider_tool_declaration_limit").put("tool_name", name).toString()
             target += definition
         }
         return org.json.JSONObject().put("loaded", true).put("tool_name", name)
             .put("backend", route.backend.name.lowercase()).put("schema", definition.inputSchema)
-            .put("already_callable", target.count { it.name == name } > 0).toString()
+            .put("already_callable", alreadyCallable).toString()
     }
 
     /** Add only exact registry names returned by capability_search to the next provider turn. */
