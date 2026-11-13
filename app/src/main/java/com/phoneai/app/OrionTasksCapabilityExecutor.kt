@@ -12,7 +12,7 @@ import java.util.Locale
  */
 internal object OrionTasksCapabilityExecutor {
     private val supportedTools = setOf(
-        "agent_jobs", "agent_cancel", "agent_reassign", "ask_agent", "queue_agent", "specialist_job_status", "create_agent", "task_list", "task_add", "task_update", "task_delete", "ask_user",
+        "agent_jobs", "agent_cancel", "agent_reassign", "ask_agent", "queue_agent", "specialist_job_status", "create_agent", "task_list", "task_add", "task_update", "complete_objective", "task_delete", "ask_user",
         "morning_brief", "standing_order", "goal_add", "goal_list", "goal_remove", "goal_toggle",
         "proactive_check", "proactive_status", "followup_add", "followup_list", "followup_done", "quiet_period_set"
     )
@@ -212,7 +212,7 @@ internal object OrionTasksCapabilityExecutor {
             val id = args.optInt("id", -1)
             when {
                 stopped() -> "error: task was stopped before updating the saved task."
-                id <= 0 -> "error: task_update requires a real positive Task Centre task id; it cannot update an objective-graph node. Use complete_objectives with its executor evidence_id to complete a graph objective."
+                id <= 0 -> "error: task_update requires a real positive Task Centre task id; it cannot update an objective-graph node. Use complete_objective with the exact objective_id and trusted evidence_id to complete a graph node."
                 else -> {
                 val dueAt = if (args.has("dueAt") && !args.isNull("dueAt")) args.optLong("dueAt") else null
                 val ok = TaskStore.update(
@@ -226,6 +226,19 @@ internal object OrionTasksCapabilityExecutor {
                 )
                 if (ok) "Updated task #$id." else "error: task #$id was not updated; it may not exist or device storage may be unavailable"
                 }
+            }
+        }
+        "complete_objective" -> {
+            val objectiveId = args.optString("objective_id").trim()
+            val evidenceId = args.optString("evidence_id").trim()
+            when {
+                stopped() -> "error: objective completion was stopped."
+                objectiveId.isBlank() || evidenceId.isBlank() ->
+                    "error: complete_objective requires the exact objective_id and evidence_id from a trusted executor receipt."
+                OrionObjectiveGraph.completeFromEvidence(service, objectiveId, evidenceId) ->
+                    "PASS: objective node '$objectiveId' is complete; its latest trusted successful executor receipt and dependency state were verified."
+                else ->
+                    "error: objective '$objectiveId' was not completed. The evidence ID may be stale, untrusted, from another session, or a dependency may still be incomplete."
             }
         }
         "task_delete" -> {
