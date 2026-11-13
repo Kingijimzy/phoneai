@@ -83,11 +83,7 @@ internal class AntigravityOrionMcpBridge(
                 val method = message.optString("method")
                 val params = message.optJSONObject("params") ?: JSONObject()
                 if (id == null || id == JSONObject.NULL) {
-                    if (method == "notifications/initialized" || method.startsWith("notifications/")) {
-                        respond(client, 202, null)
-                    } else {
-                        respond(client, 202, null)
-                    }
+                    respond(client, 202, null)
                     return@runCatching
                 }
                 if (method != "initialize" && !initialized.get()) {
@@ -136,6 +132,17 @@ internal class AntigravityOrionMcpBridge(
             ?: return toolResult("error: tool '$name' is not registered for this Orion turn.", true)
         val args = params.optJSONObject("arguments")
             ?: return toolResult("error: invalid JSON arguments for '$name'.", true)
+
+        // Antigravity is an independent provider boundary. Never assume its arguments
+        // passed native model-call validation before they reach an Android capability.
+        val validationError = OrionToolContractCodec.validateArguments(tool, args)
+        if (validationError != null) {
+            return toolResult(
+                "error: invalid arguments for '$name': $validationError. No action was dispatched; correct the arguments and retry.",
+                true
+            )
+        }
+
         val result = runCatching { execute(tool.name, JSONObject(args.toString())) }
             .getOrElse { "error: " + (it.message ?: it.javaClass.simpleName) }
         return toolResult(result, result.startsWith("error:", ignoreCase = true))
