@@ -57,4 +57,11 @@ class OrionSpokenLineTest {
         assertTrue(OrionSpokenLine.needsComposing("See https://example.com"))
         assertTrue(OrionSpokenLine.needsComposing("x ".repeat(100)))
     }
+
+    @Test fun spokenComposerSupportsTypedChatWithoutARequiredLiveCall() {
+        assertTrue(OrionSpokenLine.SYSTEM.contains("ordinary typed chat"))
+        assertTrue(OrionSpokenLine.SYSTEM.contains("no live call or microphone is required"))
+        assertTrue(OrionSpokenLine.SYSTEM.contains("visible chat"))
+        assertFalse(OrionSpokenLine.SYSTEM.contains("only for live voice calls"))
+    }
 }
