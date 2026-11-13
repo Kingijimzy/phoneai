@@ -386,6 +386,19 @@ class ToolRegistryNativeSelectionTest {
         assertNull(OrionToolContractCodec.validateArguments(tool, org.json.JSONObject().put("name", "read_status").put("arguments", org.json.JSONObject().put("detail", "full"))))
     }
 
+    @Test fun validatesNestedOpenJsonObjectsInsideExtensionTestArrays() {
+        val tool = ToolDefinition(
+            "extension_test",
+            "extension_test {id, tests:[{input:{...}, expect:<json>}]}: test extension source",
+            "test",
+            ToolAccess.WRITE
+        )
+        val args = org.json.JSONObject().put("id", "sample").put("tests", org.json.JSONArray().put(
+            org.json.JSONObject().put("input", org.json.JSONObject().put("value", 2)).put("expect", 4)
+        ))
+        assertNull(OrionToolContractCodec.validateArguments(tool, args))
+    }
+
     @Test fun derivesTypedSchemasFromToolSignatures() {
         val tool = ToolDefinition(
             "demo",
