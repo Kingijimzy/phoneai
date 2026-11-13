@@ -61,7 +61,7 @@ class OrionPythonCapabilityExecutorTest {
     ).orEmpty()
 
     @Test fun extensionCreateDefaultsToFullPythonAndUsesTheFullRuntimeLabel() {
-        val source = "import os\\nRESULT = os.getcwd()"
+        val source = "import os\nRESULT = os.getcwd()"
         val created = executor.execute(
             "extension_create",
             JSONObject().put("id", "full_helper").put("name", "Full helper")
