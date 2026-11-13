@@ -60,7 +60,8 @@ internal class OrionDevAgent(
                 summary = "Repository understanding requires an owner-selected workspace."
             )
         }
-        val listing = workspace.list()
+        val listing = if (workspacePath.isBlank() || workspacePath == ".") workspace.list()
+            else workspace.list(workspacePath)
         if (listing.startsWith("error:")) {
             return DevResult(action = "understand_repository", blocker = listing, summary = "Could not list the workspace.")
         }
