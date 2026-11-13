@@ -769,6 +769,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }.getOrNull()
             if (trustedVerification && objectiveReceipt.isNullOrBlank()) {
                 verifiedResult += "\nOBJECTIVE GRAPH WARNING: the action was verified, but its objective evidence receipt could not be persisted. The objective remains incomplete."
+            } else if (trustedVerification && !objectiveReceipt.isNullOrBlank()) {
+                verifiedResult += "\nOBJECTIVE EVIDENCE RECEIPT: objective_id=$dispatchGraphStep; evidence_id=$objectiveReceipt. This proves this executor step only. Use complete_objective only when the entire objective node is finished and its dependencies are satisfied."
             }
         }
         if (trustedVerification) taskProofs.recordVerified(tool, verifiedResult)
