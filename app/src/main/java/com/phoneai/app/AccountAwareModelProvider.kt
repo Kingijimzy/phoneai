@@ -161,7 +161,7 @@ internal class AccountAwareModelProvider(
             val input = if (canResume && thread == storedThread) {
                 latestUserText(messages)
             } else {
-                transcript(messages).takeLast(60_000)
+                boundedRecentTranscript(messages, 60_000)
             }
             require(input.isNotBlank()) { "No current user text was supplied to Codex." }
             val answer = client.runTurnAndAwait(
@@ -190,21 +190,43 @@ internal class AccountAwareModelProvider(
         for (index in messages.length() - 1 downTo 0) {
             val message = messages.optJSONObject(index) ?: continue
             if (!message.optString("role").equals("user", ignoreCase = true)) continue
-            val content = message.opt("content")
-            val text = when (content) {
-                is String -> content
-                is JSONArray -> buildString {
-                    for (i in 0 until content.length()) {
-                        val part = content.optJSONObject(i) ?: continue
-                        if (part.optString("type") == "text") append(part.optString("text")).append('\n')
-                    }
-                }
-                is JSONObject -> content.optString("text")
-                else -> ""
-            }.trim()
+            val text = contentText(message.opt("content")).trim()
             if (text.isNotBlank()) return text
         }
         return ""
+    }
+
+
+    /** Keep whole recent messages when seeding a new native thread; never cut through a message. */
+    private fun boundedRecentTranscript(messages: JSONArray, maxChars: Int): String {
+        val selected = ArrayList<String>()
+        var used = 0
+        for (index in messages.length() - 1 downTo 0) {
+            val message = messages.optJSONObject(index) ?: continue
+            val body = contentText(message.opt("content")).trim()
+            if (body.isBlank()) continue
+            val role = message.optString("role").ifBlank { "user" }.uppercase()
+            val chunk = "$role: $body"
+            if (selected.isNotEmpty() && used + chunk.length + 2 > maxChars) break
+            selected.add(if (chunk.length > maxChars) chunk.takeLast(maxChars) else chunk)
+            used += chunk.length + 2
+            if (used >= maxChars) break
+        }
+        return selected.asReversed().joinToString("\n\n")
+    }
+
+    private fun contentText(content: Any?): String = when (content) {
+        is String -> content
+        is JSONArray -> buildString {
+            for (i in 0 until content.length()) {
+                val part = content.optJSONObject(i) ?: continue
+                if (part.optString("type") in setOf("text", "input_text", "output_text")) {
+                    append(part.optString("text")).append('\n')
+                }
+            }
+        }
+        is JSONObject -> content.optString("text")
+        else -> ""
     }
 
     private fun runAntigravity(
