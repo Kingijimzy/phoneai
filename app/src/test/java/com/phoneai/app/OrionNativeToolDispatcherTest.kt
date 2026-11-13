@@ -80,4 +80,45 @@ class OrionNativeToolDispatcherTest {
         assertEquals("error: temporary service failure", outcomes.single().content)
         assertTrue(outcomes.single().dispatched)
     }
+    @Test fun callbackRejectsInvalidArgumentsBeforeExecutor() {
+        var executions = 0
+        val result = OrionNativeToolDispatcher.dispatchCallback(
+            name = "media_status",
+            args = JSONObject().put("unexpected", true),
+            cancelled = { false },
+            isRegistered = { true },
+            execute = { _, _ -> executions++; "must not run" }
+        )
+        assertEquals(0, executions)
+        assertTrue(result.contains("unknown argument"))
+    }
+
+    @Test fun callbackUsesTheSameContractAndPreservesExecutorFeedback() {
+        var received: JSONObject? = null
+        val result = OrionNativeToolDispatcher.dispatchCallback(
+            name = "device_operation",
+            args = JSONObject().put("operation", "read_battery"),
+            cancelled = { false },
+            isRegistered = { it == "device_operation" },
+            execute = { _, args -> received = args; "battery read" }
+        )
+        assertEquals("read_battery", received?.optString("operation"))
+        assertEquals("battery read", result)
+    }
+
+    @Test fun callbackRejectsUnregisteredAndCancelledCalls() {
+        var executions = 0
+        val unavailable = OrionNativeToolDispatcher.dispatchCallback(
+            "not_registered", JSONObject(), { false }, { false },
+            { _, _ -> executions++; "must not run" }
+        )
+        val cancelled = OrionNativeToolDispatcher.dispatchCallback(
+            "media_status", JSONObject(), { true }, { true },
+            { _, _ -> executions++; "must not run" }
+        )
+        assertTrue(unavailable.contains("not registered"))
+        assertTrue(cancelled.contains("cancelled"))
+        assertEquals(0, executions)
+    }
+
 }
