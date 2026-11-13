@@ -46,10 +46,12 @@ class OrionExecutiveTest {
         assertTrue(OrionExperience.relevant(list, "zzzz qqqq", now).isEmpty())
     }
 
-    @Test fun priorFailureMatchesOnSignature() {
-        val list = listOf(r("shell", false, "permission denied", key = "shell|command=ls /root"))
-        assertNotNull(OrionExperience.priorFailure(list, "shell|command=ls /root", now))
-        assertNull(OrionExperience.priorFailure(list, "shell|command=ls /tmp", now))
+    @Test fun priorFailureMatchesHashedSignature() {
+        val rootKey = OrionExperience.signature("shell", JSONObject().put("command", "ls /root"))
+        val tmpKey = OrionExperience.signature("shell", JSONObject().put("command", "ls /tmp"))
+        val list = listOf(r("shell", false, "permission denied", key = rootKey))
+        assertNotNull(OrionExperience.priorFailure(list, rootKey, now))
+        assertNull(OrionExperience.priorFailure(list, tmpKey, now))
     }
 
     @Test fun failureDirectiveOrdersDiagnoseRerouteVerifyAndNeverApology() {
