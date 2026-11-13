@@ -148,6 +148,26 @@ fun main() = Unit
         assertEquals(lines[1].content, archived[1].content)
     }
 
+    @Test fun plainServiceTranscriptRefreshDoesNotEraseExistingTypedBlocks() {
+        val original = listOf(
+            OrionChatLine(1L, "me", "Create a report."),
+            OrionChatLine(2L, "ai", "Report ready.", content = OrionMessageContent(blocks = listOf(
+                OrionMessageBlock.GeneratedFile("artifact-1", "report.pdf", "application/pdf", 120, "sha256", "available")
+            )))
+        )
+        repository.saveActiveStructured(context, original)
+
+        // PhoneAiService still owns a legacy role/text transcript; a refresh must retain
+        // the typed artifact block when the human-readable text has not changed.
+        val legacyRefresh = listOf(
+            OrionChatLine(3L, "me", "Create a report."),
+            OrionChatLine(4L, "ai", "Report ready.")
+        )
+        repository.saveActiveStructured(context, legacyRefresh)
+        val restored = repository.loadActiveStructured(context)
+        assertTrue(restored[1].content.blocks.single() is OrionMessageBlock.GeneratedFile)
+    }
+
     @Test fun savedActiveConversationSurvivesRepositoryRecreationLikeProcessRestart() {
         val saved = listOf("me" to "persist this", "ai" to "persisted answer")
         repository.saveActive(context, saved)

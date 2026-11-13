@@ -501,8 +501,16 @@ class OrionConversationRepository private constructor(context: Context) :
     fun saveActiveStructured(context: Context, lines: List<OrionChatLine>) {
         val persisted = lines.filter { (it.kind == "me" || it.kind == "ai") && it.text.isNotBlank() }
             .takeLast(MAX_TURNS).map { it.copy(text = it.text.take(6000)) }
-        saveActive(context, persisted.map { it.kind to it.text })
-        activeSessionId(context)?.let { persistStructuredMessages(it, persisted) }
+        val previous = loadActiveStructured(context)
+        val merged = persisted.mapIndexed { index, line ->
+            val old = previous.getOrNull(index)
+            if (old != null && old.kind == line.kind && old.text == line.text &&
+                line.content.blocks.all { it is OrionMessageBlock.Text } &&
+                old.content.blocks.any { it !is OrionMessageBlock.Text }) line.copy(content = old.content)
+            else line
+        }
+        saveActive(context, merged.map { it.kind to it.text })
+        activeSessionId(context)?.let { persistStructuredMessages(it, merged) }
     }
 
     @Synchronized
@@ -548,8 +556,16 @@ class OrionConversationRepository private constructor(context: Context) :
         val sessionId = activeSessionId(context)
         val persisted = lines.filter { (it.kind == "me" || it.kind == "ai") && it.text.isNotBlank() }
             .takeLast(MAX_TURNS).map { it.copy(text = it.text.take(6000)) }
-        archiveAndClear(context, persisted.map { it.kind to it.text })
-        if (sessionId != null) persistStructuredMessages(sessionId, persisted)
+        val previous = loadActiveStructured(context)
+        val merged = persisted.mapIndexed { index, line ->
+            val old = previous.getOrNull(index)
+            if (old != null && old.kind == line.kind && old.text == line.text &&
+                line.content.blocks.all { it is OrionMessageBlock.Text } &&
+                old.content.blocks.any { it !is OrionMessageBlock.Text }) line.copy(content = old.content)
+            else line
+        }
+        archiveAndClear(context, merged.map { it.kind to it.text })
+        if (sessionId != null) persistStructuredMessages(sessionId, merged)
     }
 
     @Synchronized
