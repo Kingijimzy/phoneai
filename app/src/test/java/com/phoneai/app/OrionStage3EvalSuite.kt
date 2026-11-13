@@ -44,6 +44,8 @@ internal class OrionStage3EvalSuite {
         // TaskStore keeps a process-wide cache that survives Robolectric resets; isolate each test.
         TaskStore.all(context).toList().forEach { TaskStore.delete(context, it.id) }
         OrionFollowUpStore.pending(context).toList().forEach { OrionFollowUpStore.done(context, it.id) }
+        // Robolectric reuses application preferences across test methods; ambient grants must not leak.
+        OrionSensorScope.values().forEach { OrionSensorConsent.revoke(context, it) }
     }
 
     /* ========================================================================
