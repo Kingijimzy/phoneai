@@ -546,6 +546,11 @@ class Voice(private val ctx: Context) {
         // cannot be attached here; stopping playback is the reliable platform-safe guard.
         stopSpeaking()
         stopListening()
+        if (ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            onProblem?.invoke("Android has not granted microphone permission. Open Orion's app settings, allow Microphone, then try listening again.")
+            onText(null)
+            return
+        }
         if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
             onProblem?.invoke("No speech recognition on this phone. Install or enable Google voice typing.")
             onText(null)
