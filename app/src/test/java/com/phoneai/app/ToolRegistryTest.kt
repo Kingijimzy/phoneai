@@ -505,16 +505,46 @@ class ToolRegistryNativeSelectionTest {
         assertFalse(end.getBoolean("has_more"))
     }
 
-    @Test fun discoveredToolsAreAddedToTheNextTurnOnlyByExactRegistryName() {
+    @Test fun capabilityLoadExposesOnlyTheExactSelectedRegisteredTool() {
         val exposed = ToolRegistry.nativeToolsFor("hello").toMutableList()
-        assertTrue(!exposed.any { it.name == "trade_history_summary" })
-        val result = JSONObject(ToolRegistry.searchCapabilities("trade_history_summary", 8)).toString()
-        val added = ToolRegistry.addDiscoveredTools(exposed, result)
-        assertTrue(added > 0)
-        assertTrue(exposed.any { it.name == "trade_history_summary" })
+        assertFalse(exposed.any { it.name == "trade_history_summary" })
         val before = exposed.size
-        assertEquals(0, ToolRegistry.addDiscoveredTools(exposed, """{"results":[{"name":"invented_tool"}]}"""))
+        val search = JSONObject(ToolRegistry.searchCapabilities("trade_history_summary", 8))
+        assertTrue(search.getJSONArray("results").length() > 0)
         assertEquals(before, exposed.size)
+        val loaded = JSONObject(ToolRegistry.loadCapability(exposed, "trade_history_summary"))
+        assertTrue(loaded.getBoolean("loaded"))
+        assertFalse(loaded.getBoolean("already_callable"))
+        assertEquals("trade_history_summary", loaded.getString("tool_name"))
+        assertTrue(exposed.any { it.name == "trade_history_summary" })
+        assertEquals(before + 1, exposed.size)
+        val duplicate = JSONObject(ToolRegistry.loadCapability(exposed, "trade_history_summary"))
+        assertTrue(duplicate.getBoolean("loaded"))
+        assertTrue(duplicate.getBoolean("already_callable"))
+        assertEquals(before + 1, exposed.size)
+    }
+
+    @Test fun capabilityLoadRejectsUnknownAndUnimplementedTools() {
+        val exposed = ToolRegistry.nativeToolsFor("hello").toMutableList()
+        val unknown = JSONObject(ToolRegistry.loadCapability(exposed, "invented_tool"))
+        assertFalse(unknown.getBoolean("loaded"))
+        assertEquals("unknown_registered_tool", unknown.getString("error"))
+        val internal = JSONObject(ToolRegistry.loadCapability(exposed, "capability_search"))
+        assertFalse(internal.getBoolean("loaded"))
+        assertEquals("capability_not_implemented", internal.getString("error"))
+    }
+
+    @Test fun capabilityLoadRespectsProviderDeclarationLimit() {
+        val exposed = ToolRegistry.all.toMutableList()
+        val candidate = ToolRegistry.all.firstOrNull { tool ->
+            val route = OrionCapabilityAdapters.route(tool.name)
+            tool.name !in exposed.map { it.name } && route != null && OrionRuntimeCapabilityExecutor.supports(route.backend, tool.name)
+        }
+        if (candidate != null) {
+            val result = JSONObject(ToolRegistry.loadCapability(exposed, candidate.name))
+            assertFalse(result.getBoolean("loaded"))
+            assertEquals("provider_tool_declaration_limit", result.getString("error"))
+        }
     }
 
 }
