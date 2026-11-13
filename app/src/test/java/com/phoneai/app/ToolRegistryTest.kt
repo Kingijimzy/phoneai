@@ -191,6 +191,8 @@ class ToolRegistryTest {
         assertTrue(prompt.contains("LIVE RESEARCH RULE"))
         assertTrue(prompt.contains("DOWNLOAD SIZE RULE"))
         assertTrue(prompt.contains("GOAL COMPLETION RULE"))
+        assertTrue(prompt.contains("ROUTE SELECTION AND CAPABILITY CREATION RULE"))
+        assertTrue(prompt.contains("Do not pretend a Python extension can add Android framework"))
     }
 
     @Test fun toolAccessMetadataIsAvailableToTheScopeGuard() {
