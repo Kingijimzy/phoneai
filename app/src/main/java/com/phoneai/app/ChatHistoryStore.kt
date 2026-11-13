@@ -80,7 +80,10 @@ object ChatHistoryStore {
     fun deleteArchived(context: Context, timestamp: Long): Boolean {
         val session = archived(context).firstOrNull { it.timestamp == timestamp }?.sessionId
         val deleted = repo(context).deleteArchived(context, timestamp)
-        if (deleted && session != null) OrionMultimodalEvidenceStore.deleteSession(context, session)
+        if (deleted && session != null) {
+            OrionMultimodalEvidenceStore.deleteSession(context, session)
+            OrionChatAttachmentStore.deleteSession(context, session)
+        }
         return deleted
     }
 
