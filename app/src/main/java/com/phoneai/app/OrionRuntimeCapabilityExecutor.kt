@@ -86,7 +86,7 @@ internal object OrionRuntimeCapabilityExecutor {
         // RUNTIME_STATE tools (model_status, model_offline_mode, model_decision_*, soul_state) are implemented in this block.
         OrionCapabilityAdapters.Backend.FILES, OrionCapabilityAdapters.Backend.RUNTIME_STATE -> when (tool) {
             "capability_search" -> ToolRegistry.searchCapabilities(args.optString("query"), args.optInt("limit", 8), args.optInt("offset", 0)),
-            "capability_load" -> ToolRegistry.loadCapability(nativeTools, args.optString("tool_name"))
+            "capability_load" -> null
 
             "find_files" -> tools.findFiles(args.optString("query"))
             "open_file" -> tools.openFile(args.optString("id"))
