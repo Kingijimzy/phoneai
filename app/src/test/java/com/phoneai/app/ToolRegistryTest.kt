@@ -374,7 +374,13 @@ class ToolRegistryNativeSelectionTest {
 
 
     @Test fun derivesTypedSchemasFromToolSignatures() {
-        val schema = ToolInputSchema.fromContract("demo {name:string, enabled:boolean, count?:integer, mode:enum['fast'|'safe'], items:[{id:string}]}: test")
+        val tool = ToolDefinition(
+            "demo",
+            "demo {name:string, enabled:boolean, count?:integer, mode:enum['fast'|'safe'], items:[{id:string}]}: test",
+            "test",
+            ToolAccess.READ
+        )
+        val schema = tool.inputSchema
         val properties = schema.getJSONObject("properties")
         assertEquals("string", properties.getJSONObject("name").getString("type"))
         assertEquals("boolean", properties.getJSONObject("enabled").getString("type"))
