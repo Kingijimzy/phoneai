@@ -134,9 +134,10 @@ internal class OrionPythonCapabilityExecutor(
         if (stopped()) return "error: task stopped before extension tests began."
         val report = extensionSandbox.test(extension, cases)
         if (stopped()) return "error: task stopped during extension tests; no promotion was attempted."
+        val testLabel = if (extension.runtime == "python_full") "FULL CPYTHON TEST" else "SANDBOX TEST"
         if (!report.passed) {
             testReceipts.remove(id, extension.sourceSha256)
-            return "error: SANDBOX TEST FAILED for $id: ${report.summary} Fix the source (create a new draft id) and test again; the extension is not enabled."
+            return "error: $testLabel FAILED for $id: ${report.summary} Fix the source and test again; the extension is not enabled."
         }
 
         if (!testReceipts.record(id, report)) {
@@ -152,9 +153,9 @@ internal class OrionPythonCapabilityExecutor(
         )
         if (autoActivated) runCatching { OrionLessons.learn(context, "Built and activated tool '$id' (${extension.displayName}): ${extension.description.take(100)}. Reuse it via extension_run before building anything similar.") }
         return if (autoActivated) {
-            "SANDBOX TEST PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
+            "$testLabel PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
         } else {
-            "SANDBOX TEST PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} " +
+            "$testLabel PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} " +
                 if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use explicit extension_enable approval."
                 else "Next: extension_enable (requires an explicit extension_enable tool request)."
         }
