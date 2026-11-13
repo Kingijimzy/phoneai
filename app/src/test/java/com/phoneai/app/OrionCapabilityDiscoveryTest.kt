@@ -21,13 +21,14 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(snapshot.tools.single().available)
     }
 
-    @Test fun enabledPackDoesNotMakeTermuxReadyByItself() {
+    @Test fun unreadyTermuxBridgeDoesNotDisableRegisteredTool() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("termux_command", ToolAccess.WRITE)),
             setOf("termux_bridge"),
             termuxReady = false
         )
-        assertFalse(snapshot.tools.single().available)
+        assertTrue(snapshot.tools.single().available)
+        assertEquals(CapabilityRegistry.State.SETUP_REQUIRED, snapshot.tools.single().state)
         assertTrue(snapshot.tools.single().reason.contains("not ready"))
     }
 
@@ -115,17 +116,17 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(snapshot.tools.single().reason.contains("location"))
     }
 
-    @Test fun availableToolRequiresRegistryAndEnabledPack() {
+    @Test fun registeredToolIsDispatchEligibleRegardlessOfPack() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("weather")),
             setOf("trading_research"),
             termuxReady = true
         )
         assertEquals(1, snapshot.availableCount)
-        assertTrue(snapshot.promptLines().any { it.contains("weather(read,available_limited,not-live-tested)") })
+        assertTrue(snapshot.promptLines().any { it.contains("weather(read,dispatch-eligible,not-live-tested)") })
     }
 
-    @Test fun mcpCallIsBlockedUntilEndpointIsConfiguredAndPaired() {
+    @Test fun mcpToolRemainsDispatchEligibleUntilEndpointIsConfiguredAndPaired() {
         val pack = AgentPolicy.packForTool("mcp_call") ?: "connectors"
         val unconfigured = OrionCapabilityDiscovery.discover(
             listOf(tool("mcp_call", ToolAccess.WRITE)),
@@ -133,7 +134,8 @@ class OrionCapabilityDiscoveryTest {
             termuxReady = true,
             integrationStates = mapOf("mcp_endpoint" to "not-configured", "mcp_pairing" to "not-paired")
         )
-        assertFalse(unconfigured.tools.single().available)
+        assertTrue(unconfigured.tools.single().available)
+        assertEquals(CapabilityRegistry.State.SETUP_REQUIRED, unconfigured.tools.single().state)
         assertTrue(unconfigured.tools.single().reason.contains("endpoint"))
         val configuredButUnpaired = OrionCapabilityDiscovery.discover(
             listOf(tool("mcp_call", ToolAccess.WRITE)),
@@ -141,7 +143,8 @@ class OrionCapabilityDiscoveryTest {
             termuxReady = true,
             integrationStates = mapOf("mcp_endpoint" to "configured", "mcp_pairing" to "not-paired")
         )
-        assertFalse(configuredButUnpaired.tools.single().available)
+        assertTrue(configuredButUnpaired.tools.single().available)
+        assertEquals(CapabilityRegistry.State.SETUP_REQUIRED, configuredButUnpaired.tools.single().state)
         assertTrue(configuredButUnpaired.tools.single().reason.contains("paired"))
     }
 
@@ -168,7 +171,7 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(prompt.contains("use it fully"))
         assertTrue(prompt.contains("Do not invent extra application-level restrictions"))
         assertTrue(prompt.contains("actual Android OS/runtime permissions"))
-        assertTrue(prompt.contains("explicit confirmations required for consequential actions"))
+        assertTrue(prompt.contains("operation-specific owner confirmations"))
     }
 
     @Test fun promptNeverConfusesEligibilityWithLiveExecutionVerification() {
@@ -178,7 +181,7 @@ class OrionCapabilityDiscoveryTest {
             termuxReady = true
         )
         val prompt = snapshot.promptLines().joinToString("\n")
-        assertTrue(prompt.contains("eligible under current settings"))
+        assertTrue(prompt.contains("Registered tools eligible for dispatch"))
         assertTrue(prompt.contains("runtime health verified=0"))
         assertTrue(prompt.contains("not proof of live execution"))
         assertTrue(prompt.contains("Never describe an eligible tool as tested"))
