@@ -25,7 +25,7 @@ object AgentPolicy {
         Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; exact-source sandbox test required, then owner auto-activation setting or explicit extension_enable request", true)
     )
     private fun p(c: Context) = c.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE)
-    /** PLAN is the only global execution stop; legacy saved modes resolve to ALLOW. */
+    /** PLAN is a global execution stop; ALLOW permits policy-approved dispatch. */
     fun mode(c: Context): Mode {
         val saved = p(c).getString("mode", null)
         return if (saved.equals("PLAN", ignoreCase = true)) Mode.PLAN else Mode.ALLOW
@@ -45,7 +45,12 @@ object AgentPolicy {
     internal fun defaultOn(id: String) = id in defaultOnPacks
 
     /** An explicit user choice always wins; only a never-set pack falls back to its default. */
-    fun enabled(c: Context, id: String): Boolean {\n        val pack = packs.firstOrNull { it.id == id } ?: return false\n        if (!pack.implemented) return false\n        val prefs = p(c)\n        return if (prefs.contains("pack_$id")) prefs.getBoolean("pack_$id", false) else defaultOn(id)\n    }.
+    fun enabled(c: Context, id: String): Boolean {
+        val pack = packs.firstOrNull { it.id == id } ?: return false
+        if (!pack.implemented) return false
+        val prefs = p(c)
+        return if (prefs.contains("pack_$id")) prefs.getBoolean("pack_$id", false) else defaultOn(id)
+    }
     fun setEnabled(c: Context, id: String, on: Boolean) {
         val pack = packs.firstOrNull { it.id == id }
         p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
