@@ -4,6 +4,10 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class GeminiLivePolicyTest {
+    @Test fun gemini38LiveUsesNativeAudioWithTextTranscriptionForOrionVoice() {
+        assertEquals("AUDIO", GeminiLivePolicy.RESPONSE_MODALITY)
+    }
+
     @Test fun sessionHasHardFiveMinuteLimit() {
         assertEquals(300_000L, GeminiLivePolicy.SESSION_LIMIT_MS)
         assertTrue(GeminiLivePolicy.SESSION_LIMIT_MS <= 5 * 60 * 1000L)
