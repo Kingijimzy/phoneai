@@ -19,6 +19,7 @@ class SelfExtendingExtensionsTest {
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
         context.filesDir.resolve("orion_generated_extensions.json").delete()
+        ExtensionAutonomySettings.setAutoActivationEnabled(context, false)
         store = SelfExtendingExtensionStore(context)
     }
 
@@ -45,6 +46,33 @@ class SelfExtendingExtensionsTest {
 
         assertTrue(store.promote(extension.id, ExtensionTestReport(true, extension.sourceSha256, "passed"), userApproved = true))
         assertEquals(extension.source, store.enabled(extension.id)?.source)
+    }
+
+    @Test fun safeRestrictedPythonAutoActivatesOnlyAfterHashBoundPassingTestsWhenEnabled() {
+        ExtensionAutonomySettings.setAutoActivationEnabled(context, true)
+        val extension = draft()
+        assertTrue(store.saveDraft(extension))
+        assertFalse(store.promote(extension.id, ExtensionTestReport(false, extension.sourceSha256, "failed"), userApproved = false))
+        assertTrue(store.promote(extension.id, ExtensionTestReport(true, extension.sourceSha256, "passed"), userApproved = false))
+        assertEquals(extension.source, store.enabled(extension.id)?.source)
+    }
+
+    @Test fun fullCpythonStillRequiresExplicitOwnerApprovalEvenWhenAutoActivationIsEnabled() {
+        ExtensionAutonomySettings.setAutoActivationEnabled(context, true)
+        val source = "import os\\nRESULT = os.getcwd()"
+        val extension = GeneratedExtension(
+            id = "full_python_tool",
+            displayName = "Full Python tool",
+            runtime = "python_full",
+            source = source,
+            sourceSha256 = SelfExtendingExtensionPolicy.sha256(source),
+            description = "Full CPython extension",
+            createdAtMillis = 101L
+        )
+        assertTrue(store.saveDraft(extension))
+        val report = ExtensionTestReport(true, extension.sourceSha256, "passed")
+        assertFalse(store.promote(extension.id, report, userApproved = false))
+        assertTrue(store.promote(extension.id, report, userApproved = true))
     }
 
     @Test fun changedSourceCannotBePromotedUsingStaleTestReport() {
