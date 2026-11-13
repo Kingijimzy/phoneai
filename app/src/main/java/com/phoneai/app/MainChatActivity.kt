@@ -845,58 +845,41 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     private fun showArchivedConversation(sessionId: String, title: String, messages: List<Pair<String, String>>, date: String) {
         val dialog = android.app.Dialog(this)
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(16), dp(16), dp(12))
-            setBackgroundColor(0xFF090909.toInt())
-        }
-        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val back = historyActionButton("‹ History") { dialog.dismiss(); showChatHistory() }
-        header.addView(back)
-        val titleBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(10), 0, dp(8), 0) }
-        titleBox.addView(label(title.ifBlank { "Conversation" }, 16f, 0xFFF4F4F4.toInt(), true).apply { maxLines = 2 })
-        titleBox.addView(label(date, 11f, 0xFF929292.toInt()))
-        header.addView(titleBox, LinearLayout.LayoutParams(0, -2, 1f))
-        root.addView(header)
-        root.addView(View(this).apply { setBackgroundColor(0xFF292929.toInt()) }, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(12); bottomMargin = dp(10) })
-        val scrollView = ScrollView(this).apply { isFillViewport = true; clipToPadding = false }
-        val transcript = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(2), dp(4), dp(2), dp(14)) }
-        messages.forEachIndexed { index, item ->
-            val mine = item.first == "me"
-            val bubble = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(13), dp(10), dp(13), dp(10))
-                background = rounded(if (mine) 0xFF292929.toInt() else 0xFF151515.toInt(), 16, if (mine) 0xFF454545.toInt() else 0xFF2B2B2B.toInt())
+        val content = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+            setContent {
+                OrionArchivedConversationScreen(
+                    title = title,
+                    date = date,
+                    messages = messages,
+                    onBack = {
+                        dialog.dismiss()
+                        showChatHistory()
+                    },
+                    onCopy = {
+                        val body = messages.joinToString("\\n\\n") { (kind, text) ->
+                            (if (kind == "me") "YOU" else "ORION") + "\\n" + text
+                        }
+                        val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Orion chat history", body))
+                        Toast.makeText(this@MainChatActivity, "Transcript copied", Toast.LENGTH_SHORT).show()
+                    },
+                    onContinue = {
+                        PhoneAiService.instance?.restoreArchivedChat(sessionId)
+                            ?: Toast.makeText(this@MainChatActivity, "Open Orion assistant service first, then try again.", Toast.LENGTH_LONG).show()
+                        dialog.dismiss()
+                    },
+                    onOpenBrowser = { url ->
+                        showChatBrowserPopup(url ?: "https://duckduckgo.com/")
+                    }
+                )
             }
-            bubble.addView(label(if (mine) "YOU" else "ORION", 10f, if (mine) 0xFFBDBDBD.toInt() else 0xFFE4E4E4.toInt(), true))
-            bubble.addView(label(item.second, 14f, 0xFFF0F0F0.toInt()).apply { setPadding(0, dp(5), 0, 0) })
-            val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = if (mine) Gravity.END else Gravity.START }
-            line.addView(bubble, LinearLayout.LayoutParams((resources.displayMetrics.widthPixels - dp(68)).coerceAtLeast(dp(180)), -2))
-            transcript.addView(line, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
-            animateIn(line, (index.coerceAtMost(5) * 25L))
         }
-        scrollView.addView(transcript)
-        root.addView(scrollView, LinearLayout.LayoutParams(-1, 0, 1f))
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        actions.addView(historyActionButton("Copy transcript") {
-            val body = messages.joinToString("\\n\\n") { (kind, text) -> (if (kind == "me") "YOU" else "ORION") + "\\n" + text }
-            val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-            clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Orion chat history", body))
-            Toast.makeText(this@MainChatActivity, "Transcript copied", Toast.LENGTH_SHORT).show()
-        }, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(8) })
-        actions.addView(historyActionButton("Continue chat") {
-            PhoneAiService.instance?.restoreArchivedChat(sessionId)
-                ?: Toast.makeText(this@MainChatActivity, "Open Orion assistant service first, then try again.", Toast.LENGTH_LONG).show()
-            dialog.dismiss()
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        root.addView(actions)
-        dialog.setContentView(root)
+        dialog.setContentView(content)
         dialog.show()
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.window?.setLayout(-1, -1)
         dialog.window?.setBackgroundDrawable(rounded(0xFF090909.toInt(), 0))
         dialog.window?.setLayout(-1, -1)
-        animateIn(root)
     }
 
         private fun showPersonalityPicker() {
