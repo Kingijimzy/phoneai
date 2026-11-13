@@ -1262,9 +1262,13 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                     turn = activeModel.chatTurn(
                         messages, false, 32768, 0.7, tools = nativeTools,
                         onToolCall = { name, args ->
-                            val result = if (ToolRegistry.find(name) == null || nativeTools.none { it.name == name }) {
-                                "error: tool '$name' is not registered in this request's Orion tool set; no action was dispatched."
-                            } else executeWithRecoveryGuard(name, args)
+                            OrionNativeToolDispatcher.dispatchCallback(
+                                name = name,
+                                args = args,
+                                cancelled = { stopped },
+                                isRegistered = { candidate -> nativeTools.any { it.name == candidate } && ToolRegistry.find(candidate) != null },
+                                execute = { candidate, validatedArgs -> executeWithRecoveryGuard(candidate, validatedArgs) }
+                            )
                             ui.note(activityNote(name, args, result))
                             result
                         }
