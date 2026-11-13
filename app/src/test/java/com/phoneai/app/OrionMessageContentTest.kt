@@ -46,7 +46,10 @@ Done""", (content.blocks[2] as OrionMessageBlock.Text).markdown)
     }
 
     @Test fun legacyShellAndApprovalNotesBecomeTypedBlocks() {
-        val shell = OrionMessageContent.fromLegacy("note", "[SHELL:FAILED]\\n$ python broken.py\\n\\u2063OUT\\nTraceback")
+        val shell = OrionMessageContent.fromLegacy("note", """[SHELL:FAILED]
+$ python broken.py
+⁣OUT
+Traceback""")
         val terminal = shell.blocks.single() as OrionMessageBlock.Terminal
         assertEquals("failed", terminal.state)
         assertEquals("python broken.py", terminal.command)
