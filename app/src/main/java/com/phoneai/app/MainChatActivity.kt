@@ -1771,7 +1771,12 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                             contentResolver.openInputStream(uri)?.use { input -> dest.outputStream().use { out -> input.copyTo(out, 8192) } }
                             val text = OrionMediaTools.readDocument(this, "uploads/$name")
                             name0 = name0 ?: name
-                            notes.add("[Uploaded file: uploads/$name, ${dest.length()} bytes. It is in your workspace; use document_extract, python_exec or show_file on it.]\n" +
+                            val fileNote = if (name.endsWith(".pdf", true)) {
+                                "[PDF saved at uploads/$name, ${dest.length()} bytes. PDF text extraction is not available in this flow; do not claim to have read its contents.]"
+                            } else {
+                                "[Uploaded file: uploads/$name, ${dest.length()} bytes. It is in the workspace; inspect it with a supported file tool before describing its contents.]"
+                            }
+                            notes.add(fileNote + "\n" +
                                 (if (text.startsWith("error")) "" else text.take(12000)))
                         } catch (e: Exception) { notes.add("[Could not copy a file: ${e.message}]") }
                     }
