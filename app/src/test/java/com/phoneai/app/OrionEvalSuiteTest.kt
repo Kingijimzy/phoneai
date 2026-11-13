@@ -197,8 +197,8 @@ class OrionEvalSuiteTest {
             { AgentPrivacyFilter.safeCommand("api_key=sk-1234567890abcdef").contains("[redacted]") }),
         Scenario("password is redacted", "safety", "safeCommand", "[redacted]",
             { AgentPrivacyFilter.safeCommand("password=hunter2").contains("[redacted]") }),
-        Scenario("URL with token is redacted", "safety", "safeCommand", "[redacted]",
-            { AgentPrivacyFilter.safeCommand("https://example.com?token=abc123").contains("[redacted]") }),
+        Scenario("URL with token is redacted", "safety", "safeCommand", "[URL redacted]",
+            { AgentPrivacyFilter.safeCommand("https://example.com?token=abc123").contains("[URL redacted]") }),
         Scenario("workspace file target is preserved", "safety", "safeArguments", "workspace/report.txt",
             { AgentPrivacyFilter.safeArguments(org.json.JSONObject().put("target", "workspace/report.txt").put("api_key", "secret")).contains("workspace/report.txt") }),
         Scenario("factory reset is blocked by shell policy", "safety", "classify", "blocked",
@@ -251,10 +251,8 @@ class OrionEvalSuiteTest {
         assertTrue("the set must keep at least 40 scenarios, got $total", total >= 40)
         // Score must not regress below the previous recorded score
         assertTrue("score $passed/$total is below previous $previousScore; failing: $failing", passed >= previousScore)
-        // Write the new baseline forward (explicit, not silent)
-        baselineFile.parentFile.mkdirs()
-        baselineFile.writeText(passed.toString())
-        println("ORION EVAL BASELINE: wrote $passed to $baselineFile")
+        // The baseline is a reviewed, version-controlled threshold. Tests report scores but never mutate it.
+        println("ORION EVAL BASELINE: threshold $previousScore (update eval/baseline.txt only with a reviewed change)")
     }
 
     @Test fun scenarioCountIsAtLeastFifty() {
