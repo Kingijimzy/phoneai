@@ -2148,6 +2148,17 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         OrionProactiveGate.recordAction(this)
         running = true
         try {
+            runCatching { OrionMissions.importFollowUps(this) }
+            val mission = runCatching { OrionMissions.claimNext(this) }.getOrNull()
+            if (mission != null) {
+                try {
+                    OrionCoordinator.run(this, OrionCoordinator.Surface.INITIATIVE, "mission: " + mission.title) { agent.run(OrionMissions.prompt(mission)) }
+                } finally {
+                    val reply = transcript.lastOrNull { it.first == "ai" }?.second.orEmpty()
+                    OrionMissions.finish(this, mission.id, reply)
+                }
+                return
+            }
             val initiativePrompt = (
                 "[ORION INITIATIVE — Kingi did not ask for this; you are acting on your own judgment] Review your mood, lessons, " +
                     "memory and recent failures. Decide whether there is something worth doing now for Kingi or for yourself " +

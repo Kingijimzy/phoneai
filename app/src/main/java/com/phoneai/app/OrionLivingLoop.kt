@@ -104,8 +104,10 @@ object OrionLivingLoop {
     fun promptBlock(c: Context, maxLessons: Int = 5): String {
         val lessons = OrionLessons.all(c).takeLast(maxLessons)
         val broken = OrionSelfModel.degraded(c).take(4)
-        if (lessons.isEmpty() && broken.isEmpty()) return ""
+        val missions = OrionMissions.promptBlock(c)
+        if (lessons.isEmpty() && broken.isEmpty() && missions.isEmpty()) return ""
         return buildString {
+            if (missions.isNotEmpty()) append(missions).append("\n")
             append("SELF-AWARENESS (from your own recent history):")
             if (broken.isNotEmpty()) {
                 append("\nCurrently failing tools — avoid or work around: ").append(broken.joinToString("; ") { "${it.tool} (${it.consecutive}x: ${it.lastReason})" })
