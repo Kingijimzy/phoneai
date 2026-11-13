@@ -57,7 +57,7 @@ internal class OrionPythonCapabilityExecutor(
     private fun extensionPolicy(): String =
         "Generated-extension auto-activation is " +
             (if (ExtensionAutonomySettings.autoActivationEnabled(context)) "ON" else "OFF") +
-            ". Activation still requires passing tests for the exact source hash; generated code receives no Android, filesystem, network, or shell capabilities."
+            ". Restricted python receives no Android, filesystem, network, or shell capabilities. Full CPython runs with the Android app UID and may access resources available to the app; it requires separate owner approval to test and activate. Every activation requires a passing receipt for the exact source hash."
 
     private fun setExtensionAutoActivation(args: JSONObject): String {
         val rawEnabled = args.opt("enabled")
@@ -173,7 +173,7 @@ internal class OrionPythonCapabilityExecutor(
         AgentPolicy.log(
             context, "extension:$id", "auto-activate", autoActivated,
             if (autoActivated) "owner pre-approval promoted exact-hash sandbox-tested extension"
-            else if (ownerAutoActivation) "owner auto-activation was enabled but promotion failed validation"
+            else if (ownerAutoActivation && extension.runtime == "python_full") "full CPython requires separate owner-confirmed activation; safe-Python auto-activation does not apply"
             else "owner auto-activation is off; awaiting an explicit extension_enable tool request"
         )
         if (autoActivated) runCatching { OrionLessons.learn(context, "Built and activated tool '$id' (${extension.displayName}): ${extension.description.take(100)}. Reuse it via extension_run before building anything similar.") }
