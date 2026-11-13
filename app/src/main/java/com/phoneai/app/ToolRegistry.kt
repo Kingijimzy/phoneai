@@ -376,19 +376,27 @@ internal object ToolRegistry {
         val stopWords: Set<String> = setOf("the", "and", "for", "you", "please", "what", "when", "where", "how", "can", "could", "with", "from", "that", "this")
         val tokens: Set<String> = Regex("[a-zA-Z0-9_]{3,}").findAll(query.lowercase()).map { it.value }.filterNot { it in stopWords }.toSet()
         // Relevance is an ordering hint only. Every implemented, routed tool remains reachable by pagination.
-        val candidates: List<Triple<ToolDefinition, Int, Int>> = all.mapIndexedNotNull { index, tool ->
+        val candidates = mutableListOf<Triple<ToolDefinition, Int, Int>>()
+        all.forEachIndexed { index, tool ->
             val route = OrionCapabilityAdapters.route(tool.name)
-            if (tool.name == "capability_search" || route == null || !OrionRuntimeCapabilityExecutor.supports(route.backend, tool.name)) null
-            else {
+            if (tool.name != "capability_search" && route != null &&
+                OrionRuntimeCapabilityExecutor.supports(route.backend, tool.name)) {
                 val searchable = (tool.name + " " + tool.description + " " + tool.promptLine).lowercase()
-                val score = tokens.sumOf { token -> when {
-                    tool.name == token || tool.name.split('_').contains(token) -> 8
-                    searchable.contains(token) -> 1
-                    else -> 0
-                } }
-                Triple(tool, score, index)
+                var score = 0
+                for (token in tokens) {
+                    score += when {
+                        tool.name == token || tool.name.split('_').contains(token) -> 8
+                        searchable.contains(token) -> 1
+                        else -> 0
+                    }
+                }
+                candidates.add(Triple(tool, score, index))
             }
-        }.sortedWith(compareByDescending<Triple<ToolDefinition, Int, Int>> { it.second }.thenBy { it.third })
+        }
+        candidates.sortWith(Comparator { left, right ->
+            val relevance = right.second.compareTo(left.second)
+            if (relevance != 0) relevance else left.third.compareTo(right.third)
+        })
         val limit = requestedLimit.coerceIn(1, 12)
         val offset = requestedOffset.coerceAtLeast(0).coerceAtMost(candidates.size)
         val page = candidates.drop(offset).take(limit)
