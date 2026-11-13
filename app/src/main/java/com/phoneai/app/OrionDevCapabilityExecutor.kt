@@ -68,7 +68,7 @@ internal class OrionDevCapabilityExecutor(
                 if (command.isBlank()) "error: command is required"
                 else devAgent.runShellCommand(command, args.optString("verification", "other"), confirm, stopped).let { r ->
                     if (!r.blocker.isNullOrBlank()) "error: ${r.blocker}" else
-                        "DEV VERIFICATION: ${r.statusLine()}\\n${r.summary}\\nEvidence: ${r.evidence}"
+                        "DEV VERIFICATION: ${r.statusLine()}\n${r.summary}\nEvidence: ${r.evidence}"
                 }
             }
             "dev_plan" -> {
