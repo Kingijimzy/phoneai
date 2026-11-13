@@ -71,9 +71,9 @@ object AgentPolicy {
     fun setBudgets(c: Context, steps: Int, calls: Int, minutes: Int) {
         p(c).edit().putInt("budget_steps_v5", steps.coerceIn(1, 1_000_000)).putInt("budget_calls_v5", calls.coerceIn(1, 1_000_000)).putInt("budget_minutes_v5", minutes.coerceIn(1, 100_000)).apply()
     }
-    /** The one wording for "this pack is off", shared by the pre-flight check, the pack gate and the prompt status. */
+    /** Legacy compatibility text: pack state is informational and never disables a registered tool. */
     fun packOffMessage(pack: String): String =
-        "The '$pack' capability pack is switched off, so this tool is unavailable right now. The feature exists: tell the user which pack to switch on (${ToolGate.howToEnable(pack)}) instead of saying Orion lacks it."
+        "The '$pack' label is organisational only. Registered tools remain available to Orion; check the actual Android permission, service, connection or executor result instead."
 
     /** Central decision adapter; owner settings flow through GatePolicy. */
     internal fun gate(
