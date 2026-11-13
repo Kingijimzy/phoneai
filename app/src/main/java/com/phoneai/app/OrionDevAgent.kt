@@ -10,8 +10,8 @@ import org.json.JSONObject
  * The Dev Agent understands repositories, reads and modifies multiple files, plans code
  * changes, executes tests, diagnoses build failures, repairs code, verifies changes and
  * generates project summaries. It is read-only-by-default on user workspaces: code edits
- * require an explicit workspace folder selection, and no generated code executes without
- * a separate owner-approved Python extension workflow.
+ * require an explicit workspace folder selection, and code execution uses the same
+ * operation-specific owner approval and runtime policy as every other execution surface.
  *
  * Honesty contract: the Dev Agent reports four distinct states — code written, code
  * compiled, tests passed, software installed — and never conflates one with another.
@@ -120,8 +120,8 @@ internal class OrionDevAgent(
     }
 
     /**
-     * Execute Python code in the restricted sandbox. Returns a DevResult that clearly
-     * distinguishes execution from compilation or test success.
+     * Execute Python code using the owner's configured GUARDED, DEVELOPER or FULL runtime
+     * profile. Returns a DevResult that distinguishes execution from compilation or test success.
      */
     fun runPythonCode(code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }): DevResult {
         if (code.isBlank()) {
@@ -138,7 +138,7 @@ internal class OrionDevAgent(
         return DevResult(
             action = "run_python_code",
             evidence = result.take(8_000),
-            summary = "Python code executed in the sandbox. Output above is execution evidence, not proof of compilation or test success."
+            summary = "Python code executed in Orion's configured runtime. Output is execution evidence, not proof of compilation or test success."
         )
     }
 
