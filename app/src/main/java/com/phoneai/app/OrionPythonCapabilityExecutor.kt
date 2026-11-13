@@ -66,7 +66,7 @@ internal class OrionPythonCapabilityExecutor(
     private fun createDraft(args: JSONObject): String {
         val id = args.optString("id").trim()
         val name = args.optString("name").trim()
-        val runtime = args.optString("runtime", "python").trim().lowercase()
+        val runtime = args.optString("runtime", "python_full").trim().lowercase()
         val source = args.optString("source")
         val invalid = SelfExtendingExtensionPolicy.validateIdentity(id, name)
             ?: SelfExtendingExtensionPolicy.validateSource(runtime, source)
@@ -92,7 +92,10 @@ internal class OrionPythonCapabilityExecutor(
     private fun updateDraft(args: JSONObject): String {
         val id = args.optString("id").trim()
         val name = args.optString("name").trim()
-        val runtime = args.optString("runtime", "python").trim().lowercase()
+        val requestedRuntime = args.optString("runtime").trim().lowercase()
+        val runtime = requestedRuntime.ifBlank {
+            runCatching { extensionStore.all().firstOrNull { it.id == id }?.runtime }.getOrNull() ?: "python_full"
+        }
         val source = args.optString("source")
         val invalid = SelfExtendingExtensionPolicy.validateIdentity(id, name)
             ?: SelfExtendingExtensionPolicy.validateSource(runtime, source)
