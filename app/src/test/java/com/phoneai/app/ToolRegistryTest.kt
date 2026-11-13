@@ -444,7 +444,7 @@ class ToolRegistryNativeSelectionTest {
         assertEquals(ToolAccess.READ, ToolRegistry.find("capability_load")?.access)
     }
 
-    @Test fun capabilitySearchReturnsExactSchemasOnlyForImplementedTools() {
+    @Test fun capabilitySearchReturnsSimpleCandidatesAndLoadReturnsTheExactSchema() {
         val result = JSONObject(ToolRegistry.searchCapabilities("inspect MCP resources", 8))
         val rows = result.getJSONArray("results")
         assertTrue(rows.length() > 0)
@@ -455,7 +455,7 @@ class ToolRegistryNativeSelectionTest {
             val name = row.getString("name")
             val definition = ToolRegistry.find(name) ?: error("discovery returned unregistered tool $name")
             assertEquals(definition.access.name.lowercase(), row.getString("access"))
-            assertEquals("object", row.getJSONObject("schema").getString("type"))
+            assertFalse("Search should not flood the model with unused schemas", row.has("schema"))
             val route = OrionCapabilityAdapters.route(name) ?: error("discovery returned unrouted tool $name")
             assertTrue(OrionRuntimeCapabilityExecutor.supports(route.backend, name))
         }
@@ -471,7 +471,7 @@ class ToolRegistryNativeSelectionTest {
         val seen = mutableListOf<String>()
         val firstRows = first.getJSONArray("results")
         for (i in 0 until firstRows.length()) {
-            assertEquals(0, firstRows.getJSONObject(i).getInt("match_score"))
+            assertFalse("Search results should stay compact", firstRows.getJSONObject(i).has("schema"))
             seen += firstRows.getJSONObject(i).getString("name")
         }
         var offset = first.getInt("next_offset")
@@ -517,6 +517,7 @@ class ToolRegistryNativeSelectionTest {
         assertEquals(before, exposed.size)
         val loaded = JSONObject(ToolRegistry.loadCapability(exposed, "trade_history_summary"))
         assertTrue(loaded.getBoolean("loaded"))
+        assertEquals("object", loaded.getJSONObject("schema").getString("type"))
         assertFalse(loaded.getBoolean("already_callable"))
         assertEquals("trade_history_summary", loaded.getString("tool_name"))
         assertTrue(exposed.any { it.name == "trade_history_summary" })
