@@ -1598,10 +1598,14 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             }
             found
         }.getOrDefault("")
+        val context = recentConversationTurns().takeLast(6).joinToString("\\n") { (role, content) ->
+            val label = if (role.equals("user", true)) "Kingi" else "Orion"
+            "$label: ${content.trim().take(420)}"
+        }
         return runCatching {
             val msgs = JSONArray()
                 .put(msg("system", OrionSpokenLine.SYSTEM))
-                .put(msg("user", OrionSpokenLine.userMessage(written, heard)))
+                .put(msg("user", OrionSpokenLine.userMessage(written, heard, context)))
             OrionSpokenLine.parse(talkNim.chat(msgs, false, 220, 0.4))
         }.getOrNull() ?: OrionSpokenLine.fallback(written)
     }
