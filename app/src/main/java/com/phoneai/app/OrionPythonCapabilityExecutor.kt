@@ -77,8 +77,8 @@ internal class OrionPythonCapabilityExecutor(
         val existing = runCatching { extensionStore.all().firstOrNull { it.id == id } }.getOrNull()
         if (existing != null) {
             if (existing.sourceSha256 == extension.sourceSha256) return "Extension $id already exists with this exact source. Call extension_test (or extension_run if it is enabled)."
-            runCatching { extensionStore.enabled(id) }.getOrNull()?.let { versionHistory.record(it) }
-            return if (extensionStore.saveRevision(extension)) "Replaced the existing draft $id with your new source (disabled). Next call extension_test."
+            archiveActiveVersionBeforeRevision(id)?.let { return it }
+            return if (extensionStore.saveRevision(extension)) "Replaced the existing extension $id with your new source (disabled). Next call extension_test."
             else "error: could not replace existing extension $id; choose a new id."
         }
         return if (extensionStore.saveDraft(extension)) {
@@ -100,10 +100,25 @@ internal class OrionPythonCapabilityExecutor(
             id, name, runtime, source, SelfExtendingExtensionPolicy.sha256(source),
             args.optString("description").take(240), System.currentTimeMillis()
         )
-        runCatching { extensionStore.enabled(id) }.getOrNull()?.let { versionHistory.record(it) }
+        archiveActiveVersionBeforeRevision(id)?.let { return it }
         return if (extensionStore.saveRevision(extension)) {
             "Saved new disabled revision for $id. Run extension_test before activation; the previous activated version remains archived."
-        } else "error: revision rejected; disable the active extension first, use a new source hash, and check registry integrity"
+        } else "error: revision rejected; use a new source hash and check that the extension registry is available"
+    }
+
+    /**
+     * Preserve the currently active source before replacing it. A failed history write must
+     * leave the live extension untouched; silently dropping the only active copy loses rollback.
+     */
+    private fun archiveActiveVersionBeforeRevision(id: String): String? {
+        val active = try {
+            extensionStore.enabled(id)
+        } catch (e: Exception) {
+            return "error: could not read the current extension state (${e.javaClass.simpleName}); no revision was changed"
+        } ?: return null
+
+        return if (versionHistory.record(active)) null
+        else "error: could not archive active version $id; the existing extension remains unchanged"
     }
 
     private fun testDraft(args: JSONObject, stopped: () -> Boolean): String {
