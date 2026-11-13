@@ -4,9 +4,14 @@ Updated: 2026-11-01
 
 ## Runtime contract
 
-Orion bundles CPython 3.11 through Chaquopy. Direct `python_exec` scripts run in-process with a deliberately small AST-validated builtins/module surface and a typed `phone` facade. This is a capability-restricted interpreter, **not** a hostile-code OS container. Do not run arbitrary third-party packages or untrusted extensions with the direct phone facade.
+Orion includes a Chaquopy CPython fallback and a pinned Alpine/PRoot CPython workspace runtime. Direct `python_exec` follows the owner's selected profile:
 
-### Available standard-library surface
+- **RESTRICTED** uses an AST-validated builtins/module surface and a typed `phone` facade. This is capability-restricted, not an OS container.
+- **FULL** runs normal CPython in the Alpine/PRoot workspace. Standard-library imports, normal Python filesystem operations and network APIs available to the guest process are not filtered by the restricted AST policy.
+
+Generated extensions select their runtime explicitly: `python` uses the restricted data-transform interpreter; `python_full` uses full CPython by default. Full CPython runs under the Android app UID inside PRoot. PRoot is not a kernel security boundary; Android's app sandbox, SELinux and native permission enforcement remain authoritative. Do not describe it as root or OS-isolated execution.
+
+### Available standard-library surface — RESTRICTED profile
 
 - `json`: bounded `loads` / `dumps`.
 - `datetime`: date/time primitives and approved conversion/formatting methods.
@@ -19,25 +24,27 @@ The restricted `python` generated-extension runtime uses the same bounded interp
 
 Generated extensions may also select `runtime=python_full`. Those extensions run through the full CPython workspace runtime (Alpine/PRoot, with the bundled Chaquopy CPython fallback), receive the `INPUT` JSON object and return their result through `RESULT`. They can use normal Python imports, standard-library facilities, filesystem and network APIs available to that CPython process. This is full interpreter execution, not an OS-isolated container: PRoot runs as the Android app UID, and Android's app sandbox and granted platform permissions remain authoritative.
 
-### Scoped files
+### Scoped files — RESTRICTED phone facade
 
-Python file operations are restricted to:
+Restricted-profile `phone` file operations are restricted to:
 
 `filesDir/orion-python/workspace`
 
 Limits: 2 MiB per file, 20 MiB total, 180-character relative paths, no traversal and no symlink traversal. Writes use a temporary file and atomic replacement where supported. The shell wrapper checks workspace integrity before running a command.
 
-### Controlled system commands
+### Controlled system commands — shell capability
 
 The shell capability is an argv-only `ProcessBuilder` wrapper. It does not invoke `sh`, `su`, root, command substitution, pipes, redirection or arbitrary executable paths. Only a fixed read-only set is registered: `ls`, `cat`, `head`, `tail`, `grep`, `wc`, `date`, `uname`, `df`, and `pwd`. File operands must be workspace-relative. Commands have a four-second timeout and bounded output.
 
 This is intentionally not a general shell. If a future capability needs a mutating command, add a typed app-owned adapter with explicit scope, preflight, evidence, approval policy, verification and rollback; do not add arbitrary command strings.
 
-### HTTP and WebSocket network access
+### HTTP and WebSocket network access — RESTRICTED phone bridge
 
-Network access requires both:
+The restricted `phone` network/WebSocket bridge requires both:
 1. the owner-granted NETWORK scope in Sensor & Context Permissions; and
 2. an exact host grant in **Manage approved Python hosts**.
+
+These per-host rules apply to the restricted bridge, not to normal Python networking in `python_full`. Full CPython can use the networking facilities available to the PRoot guest, subject to the Android app's OS-level network permission and runtime environment.
 
 Remote hosts require HTTPS/WSS. RFC1918 IPv4 addresses (10/8, 172.16/12, 192.168/16) and explicit loopback hosts may use HTTP/WS only when the owner enables the local plain-HTTP option for that exact host. Link-local, multicast, unspecified, mixed public/private DNS answers and unapproved hosts are rejected. DNS answers are pinned for each request/session; redirects are disabled for HTTP requests.
 
@@ -47,7 +54,7 @@ A WebSocket is a transport, not a complete live-audio stack. Microphone capture 
 
 ## Android Accessibility bridge
 
-The Python facade does not start or impersonate an AccessibilityService with an intent. Android binds `PhoneAiService` through the manifest's `BIND_ACCESSIBILITY_SERVICE` declaration and `accessibility_service_config.xml`. Python calls narrow methods on that already-bound service:
+The typed `phone` facade does not start or impersonate an AccessibilityService with an intent. Full CPython does not bypass these facade checks or Android's native service binding and permission rules. Android binds `PhoneAiService` through the manifest's `BIND_ACCESSIBILITY_SERVICE` declaration and `accessibility_service_config.xml`. Python calls narrow methods on that already-bound service:
 
 - `phone.accessibility_status()`: report system-enabled and service-connected state.
 - `phone.accessibility_open_settings()`: owner-confirmed navigation to Android Accessibility settings.

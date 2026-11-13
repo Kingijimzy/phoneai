@@ -12,6 +12,9 @@ import org.json.JSONObject
 @RunWith(RobolectricTestRunner::class)
 class TradingCapabilityIntegrationTest {
     private val deskTools = listOf(
+        "trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan",
+        "strategy_backtest", "market_forecast", "market_conditions", "strategy_list",
+        "strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch",
         "positions_monitor", "bybit_sync", "habit_report", "crypto_derivatives",
         "memecoin_check", "memecoin_watch", "wallet_check", "wallet_watch", "chain_overview"
     )
@@ -38,14 +41,24 @@ class TradingCapabilityIntegrationTest {
             .put("setup_type", "integration-test"))
         assertTrue(opened, opened.contains("Opened paper long EURUSD"))
 
-        val status = invoke(JSONObject().put("action", "status"))
-        assertTrue(status, status.contains("EURUSD"))
+        val openState = JSONObject(
+            context.getSharedPreferences("trading_desk", android.content.Context.MODE_PRIVATE)
+                .getString("paper", "{}")
+        )
+        assertEquals(1, openState.getJSONArray("open").length())
+        assertEquals("EURUSD", openState.getJSONArray("open").getJSONObject(0).getString("sym"))
 
         val closed = invoke(JSONObject()
             .put("action", "close")
             .put("id", 1)
             .put("price", 1.1050))
         assertTrue(closed, closed.contains("Closed paper #1"))
+        val finalState = JSONObject(
+            context.getSharedPreferences("trading_desk", android.content.Context.MODE_PRIVATE)
+                .getString("paper", "{}")
+        )
+        assertEquals(0, finalState.getJSONArray("open").length())
+        assertEquals(1, finalState.getJSONArray("closed").length())
     }
 
     @Test fun everyAdoptedTradingToolHasOneRegisteredCentralRouteAndExecutor() {
