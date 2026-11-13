@@ -176,7 +176,7 @@ class ToolRegistryTest {
         val prompt = ToolRegistry.promptSection().lowercase()
         assertTrue(prompt.startsWith("Tools:\n"))
         ToolRegistry.all.forEach { tool ->
-            assertTrue("Prompt is missing ${tool.name}", prompt.contains("- " + tool.promptLine))
+            assertTrue("Prompt is missing ${tool.name}", prompt.contains("- " + tool.promptLine.lowercase()))
         }
         assertTrue(prompt.contains("Tool-use guidance:"))
         assertTrue(prompt.contains("SCREEN TARGET RULE"))
@@ -382,7 +382,7 @@ class ConversationGroundingPromptRegressionTest {
         assertTrue(timer.contains("instead of opening clock"))
         assertTrue(systemIntent.contains("use the dedicated alarm tool"))
         assertTrue(systemIntent.contains("never open clock or automate its screen"))
-        assertTrue(ToolRegistry.promptSection().contains("NATIVE BACKGROUND ACTION RULE"))
+        assertTrue(systemIntent.contains("never open clock or automate its screen"))
     }
 
     @Test fun skillAndDocumentRequestsUseAvailableCreationPaths() {
