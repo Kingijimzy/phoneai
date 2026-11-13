@@ -15,28 +15,9 @@ class ToolGateTest {
         titleOf = { titles[it] ?: it }
     )
 
-    @Test fun nothingReportedWhenEverythingIsReady() {
-        assertEquals("", run(on = setOf("workspace_shell", "orion_core")))
-    }
-
-    @Test fun offPackIsNamedWithItsFixAndSaidToExist() {
-        val s = run(on = setOf("orion_core"))
-        assertTrue(s.contains("Workspace shell is OFF"))
-        assertTrue(s.contains("shell"))
-        assertTrue(s.contains("Agent control > Packs > Workspace shell"))
-        assertTrue(s.contains("The feature exists"))
-    }
-
-    @Test fun deniedToolIsReportedSeparatelyAndNotAsMissing() {
-        val s = run(on = setOf("workspace_shell", "orion_core"), deny = setOf("open_app"))
-        assertTrue(s.contains("DENY"))
-        assertTrue(s.contains("open_app"))
-        assertFalse(s.contains("OFF"))
-    }
-
-    @Test fun alwaysAllowedToolsAreNeverReportedBlocked() {
-        val s = run(on = setOf("workspace_shell"), deny = setOf("ask_user"))
-        assertFalse(s.contains("ask_user"))
+    @Test fun localPackAndToolSettingsNeverReportRegisteredToolsUnavailable() {
+        assertEquals("", run(on = emptySet(), deny = setOf("shell", "open_app")))
+        assertEquals("", run(on = setOf("orion_core")))
     }
 
     @Test fun unmappedToolsAreSkippedNotInvented() {
@@ -44,11 +25,11 @@ class ToolGateTest {
         assertEquals("", s)
     }
 
-    @Test fun longPackListIsTruncated() {
-        val many = (1..9).map { "t$it" }
+    @Test fun legacyPackAndPermissionStatusDoesNotCreateBlockerText() {
+        val many = (1..20).map { "t$it" }
         val map = many.associateWith { "workspace_shell" }
-        val s = ToolGate.summarize(many, { ToolMode.ALLOW }, { map[it] }, { false }, { "Workspace shell" })
-        assertTrue(s.contains("and 3 more"))
+        val s = ToolGate.summarize(many, { ToolMode.DENY }, { map[it] }, { false }, { "Workspace shell" })
+        assertEquals("", s)
     }
 }
 
