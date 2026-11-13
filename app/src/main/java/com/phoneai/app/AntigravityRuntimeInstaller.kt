@@ -165,6 +165,7 @@ internal class AntigravityRuntimeInstaller(context: Context) {
                 val diagnostics = StringBuilder()
                 var finalStatus = ""
                 var finalResponse = ""
+                var receivedResult = false
                 val deadline = System.currentTimeMillis() + 300_000L
                 while ((session.isAlive() || session.hasPendingOutput()) && System.currentTimeMillis() < deadline) {
                     val line = session.readLine(500L)
@@ -186,6 +187,7 @@ internal class AntigravityRuntimeInstaller(context: Context) {
                         onDelta?.invoke(event.text)
                     }
                     if (event.type == "result") {
+                        receivedResult = true
                         finalStatus = event.status
                         finalResponse = event.text
                         if (finalStatus == "ERROR") {
@@ -197,13 +199,16 @@ internal class AntigravityRuntimeInstaller(context: Context) {
                 check(session.exitCodeOrNull() == 0) {
                     "Antigravity model request failed: " + diagnostics.toString().take(500)
                 }
+                check(receivedResult) {
+                    "Antigravity exited without its required terminal result event. " + diagnostics.toString().take(500)
+                }
                 if (output.isEmpty()) {
                     output.append(finalResponse)
                     if (finalResponse.isNotBlank()) onDelta?.invoke(finalResponse)
                 }
                 val response = output.toString().trim()
                 check(response.isNotBlank()) { "Antigravity returned no model response." }
-                check(finalStatus.isBlank() || finalStatus == "SUCCESS") {
+                check(finalStatus == "SUCCESS") {
                     "Antigravity did not complete successfully: " + finalStatus
                 }
                 return response
