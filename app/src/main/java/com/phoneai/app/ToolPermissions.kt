@@ -11,8 +11,7 @@ internal object ToolPermissionPolicy {
     val levels = listOf("autonomous", "careful", "read_only")
     fun levelLabel(level: String) =
         "Autonomous: every registered tool is available. Android OS permissions and operation-specific owner confirmations still apply."
-    fun preset(level: String, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> =
-        tools.associate { it.name to ToolMode.ALLOW }
+    fun preset(level: String, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> = emptyMap()
     fun modeOf(map: Map<String, ToolMode>, tool: String): ToolMode = ToolMode.ALLOW
     fun applyPreset(level: String, overrides: Map<String, ToolMode>, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> {
         val known = tools.mapTo(mutableSetOf()) { it.name }
