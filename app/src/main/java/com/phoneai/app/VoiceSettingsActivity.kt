@@ -481,11 +481,13 @@ class VoiceSettingsActivity : Activity() {
                     if (installCancellation === cancelled) installCancellation = null
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     if (failure == null) {
-                        Toast.makeText(this, "Kokoro British neural voice installed and enabled.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, "Kokoro British neural voice installed. Testing spoken output now…", Toast.LENGTH_LONG).show()
+                        refresh()
+                        testVoice()
                     } else {
                         Toast.makeText(this, "Neural voice install failed: " + (failure.message ?: "unknown error"), Toast.LENGTH_LONG).show()
+                        refresh()
                     }
-                    refresh()
                 }
             }
         )
