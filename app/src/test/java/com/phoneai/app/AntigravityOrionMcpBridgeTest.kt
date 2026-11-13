@@ -49,6 +49,8 @@ class AntigravityOrionMcpBridgeTest {
             )
             val listResult = JSONObject(list.inputStream.bufferedReader().use { it.readText() })
             assertEquals("battery", listResult.getJSONObject("result").getJSONArray("tools").getJSONObject(0).getString("name"))
+            assertEquals("object", listResult.getJSONObject("result").getJSONArray("tools").getJSONObject(0).getJSONObject("inputSchema").getString("type"))
+            assertEquals("string", listResult.getJSONObject("result").getJSONArray("tools").getJSONObject(0).getJSONObject("inputSchema").getJSONObject("properties").getJSONObject("detail").getString("type"))
             list.disconnect()
 
             val call = post(
