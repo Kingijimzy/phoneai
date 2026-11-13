@@ -616,12 +616,16 @@ internal fun OrionComposeChatScreen(
         draft = ""
         editingOriginal = null
     }
+    val effectiveOrbMode = orionModeForStatus(displayStatus, orbMode)
     val statusDotColor by animateColorAsState(
-        targetValue = when {
-            displayStatus.contains("listen", true) || displayStatus.contains("speak", true) -> ChatMint
-            displayStatus.contains("warning", true) || displayStatus.contains("error", true) -> OrionUiPalette.warning
-            listOf("think", "work", "act", "brows", "build", "draw", "run", "delegat").any { displayStatus.contains(it, true) } -> OrionUiPalette.secondaryText
-            else -> OrionUiPalette.muted
+        targetValue = when (effectiveOrbMode) {
+            OrbView.Mode.IDLE -> OrionUiPalette.muted
+            OrbView.Mode.LISTENING -> Color(0xFF62CBE8)
+            OrbView.Mode.THINKING -> Color(0xFF9B91F2)
+            OrbView.Mode.SPEAKING -> Color(0xFF62D6C5)
+            OrbView.Mode.ACTING -> Color(0xFFFFB86B)
+            OrbView.Mode.WAITING_APPROVAL -> Color(0xFFFFC857)
+            OrbView.Mode.ERROR -> Color(0xFFFF7777)
         },
         animationSpec = tween(durationMillis = 260),
         label = "chat-status-dot"
@@ -692,7 +696,7 @@ internal fun OrionComposeChatScreen(
                     role = Role.Button
                 },
                 update = { view ->
-                    view.mode = orbMode
+                    view.mode = effectiveOrbMode
                     view.micLevel = orbMicLevel
                     view.speechAmplitude = orbSpeechAmplitude
                     view.wordPulse = orbWordPulse
@@ -715,7 +719,7 @@ internal fun OrionComposeChatScreen(
                                 .semantics { contentDescription = "Orion state: $displayStatus" }
                         )
                     }
-                    Text(displayStatus.replaceFirstChar { it.uppercase() }.take(24), color = ChatMuted, fontSize = 11.sp,
+                    Text(orionStatusLabel(displayStatus, effectiveOrbMode, busy), color = ChatMuted, fontSize = 11.sp,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -838,7 +842,7 @@ internal fun OrionComposeChatScreen(
                     it.kind == "ai" && it.text.isNotBlank()
                 } == true
                 if (busy && !assistantAlreadyStreaming) {
-                    item(key = "orion-thinking-indicator") { ThinkingIndicator(displayStatus) }
+                    item(key = "orion-thinking-indicator") { ThinkingIndicator(displayStatus, effectiveOrbMode) }
                 }
             }
         }

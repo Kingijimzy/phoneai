@@ -833,20 +833,47 @@ private fun TaskActivityCard(raw: String) {
 internal fun orionWorkingPhrase(status: String): String {
     val value = status.lowercase()
     return when {
-        "recover" in value || "retry" in value -> "Recovering and trying another route"
-        "fix" in value || "repair" in value -> "Fixing the issue"
-        "verif" in value || "test" in value -> "Checking that the result works"
-        "terminal" in value || "command" in value || "execut" in value || "run" in value -> "Running the next step"
-        "search" in value || "research" in value || "browser" in value -> "Looking for relevant information"
-        "code" in value || "build" in value || "develop" in value -> "Working on the implementation"
-        "plan" in value || "think" in value -> "Thinking through the best approach"
-        "solv" in value || "tackl" in value || "work" in value || "act" in value -> "Working through the task"
+        listOf("recover", "retry", "fallback", "rerout").any { it in value } -> "Recovering and choosing another route"
+        listOf("approval", "permission", "awaiting owner", "waiting for you").any { it in value } -> "Waiting for your approval"
+        listOf("error", "failed", "blocked", "paused").any { it in value } -> "Investigating what went wrong"
+        listOf("fix", "repair", "patch", "correct").any { it in value } -> "Fixing the issue"
+        listOf("verif", "validat", "test", "check").any { it in value } -> "Verifying that the result works"
+        listOf("debug", "diagnos", "inspect", "trace").any { it in value } -> "Investigating the problem"
+        listOf("terminal", "command", "execut", "running", " run", "tool").any { it in value } -> "Executing the next step"
+        listOf("search", "research", "browser", "look up", "find").any { it in value } -> "Finding the information needed"
+        listOf("code", "build", "develop", "implement", "write").any { it in value } -> "Building the solution"
+        listOf("plan", "think", "reason", "analyz", "decid", "route").any { it in value } -> "Thinking through the best approach"
+        listOf("solv", "tackl", "work", "act", "objective", "task").any { it in value } -> "Working through the objective"
         else -> "Working through the next step"
     }
 }
 
+internal fun orionModeForStatus(status: String, current: OrbView.Mode): OrbView.Mode {
+    if (current != OrbView.Mode.IDLE) return current
+    val value = status.lowercase()
+    return when {
+        listOf("approval", "permission", "awaiting owner", "waiting for you").any { it in value } -> OrbView.Mode.WAITING_APPROVAL
+        listOf("error", "failed", "blocked").any { it in value } -> OrbView.Mode.ERROR
+        "listen" in value -> OrbView.Mode.LISTENING
+        "speak" in value -> OrbView.Mode.SPEAKING
+        listOf("execut", "running", "tool", "build", "fix", "repair", "browser", "delegat", "act").any { it in value } -> OrbView.Mode.ACTING
+        listOf("think", "plan", "analyz", "research", "search", "work", "solve", "tackl").any { it in value } -> OrbView.Mode.THINKING
+        else -> OrbView.Mode.IDLE
+    }
+}
+
+internal fun orionStatusLabel(status: String, mode: OrbView.Mode, busy: Boolean): String = when (mode) {
+    OrbView.Mode.LISTENING -> "Listening"
+    OrbView.Mode.SPEAKING -> "Speaking"
+    OrbView.Mode.THINKING -> orionWorkingPhrase(status)
+    OrbView.Mode.ACTING -> orionWorkingPhrase(status)
+    OrbView.Mode.WAITING_APPROVAL -> "Waiting for approval"
+    OrbView.Mode.ERROR -> "Needs attention"
+    OrbView.Mode.IDLE -> if (busy) orionWorkingPhrase(status) else "Ready"
+}
+
 @Composable
-fun ThinkingIndicator(status: String = "Thinking") {
+fun ThinkingIndicator(status: String = "Thinking", mode: OrbView.Mode = OrbView.Mode.THINKING) {
     val phrase = remember(status) { orionWorkingPhrase(status) }
     val transition = rememberInfiniteTransition(label = "thinking-dots")
     val phase by transition.animateFloat(
@@ -860,7 +887,7 @@ fun ThinkingIndicator(status: String = "Thinking") {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        OrionOrb(Modifier.size(44.dp), busy = true)
+        OrionOrb(Modifier.size(44.dp), busy = true, mode = mode)
         Text(phrase, color = ChatMuted, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
             repeat(3) { index ->
