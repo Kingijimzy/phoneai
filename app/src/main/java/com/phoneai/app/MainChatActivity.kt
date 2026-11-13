@@ -517,7 +517,10 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     addCategory(Intent.CATEGORY_OPENABLE)
                     putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
                         "text/plain", "text/markdown", "text/csv", "text/tab-separated-values",
-                        "application/json", "application/xml", "text/xml", "text/html"
+                        "application/json", "application/xml", "text/xml", "text/html",
+                        "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
                     ))
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 }
@@ -1312,7 +1315,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             setOnClickListener {
                 AlertDialog.Builder(this@MainChatActivity)
                     .setTitle("Attach to chat")
-                    .setItems(arrayOf("Image or photos", "Text document (TXT, MD, CSV, JSON, XML, HTML, LOG)")) { _, which ->
+                    .setItems(arrayOf("Image or photos", "Document or PDF (TXT, MD, CSV, DOCX, XLSX, PPTX, PDF)")) { _, which ->
                         val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                             addCategory(Intent.CATEGORY_OPENABLE)
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
@@ -1719,9 +1722,15 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             }
             Thread {
                 try {
-                    val extracted = SafeDocumentExtractor.extract(contentResolver, uri)
                     val sessionId = currentChatSessionId()
                     val attachment = OrionChatAttachmentStore.import(this, sessionId, uri)
+                    val extracted = if (attachment.name.substringAfterLast('.', "").equals("pdf", true)) {
+                        SafeDocumentExtractor.Extracted(
+                            attachment.name, attachment.mimeType,
+                            "[PDF attached and saved. Its text has not been extracted, so do not claim to have read or summarized its contents.]",
+                            attachment.sizeBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                        )
+                    } else SafeDocumentExtractor.extract(contentResolver, uri)
                     runOnUiThread {
                         selectedDocumentName = extracted.name
                         selectedDocumentText = extracted.text
