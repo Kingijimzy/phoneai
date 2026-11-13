@@ -471,9 +471,9 @@ class Voice(private val ctx: Context) {
             ruleFars = "",
             numThreads = 3
         )
-        // British phonemization and speaker embeddings are explicit, not inferred
-        // from the phone locale or the Android system TTS voice.
-        config.model.kokoro.lang = "en-gb"
+        // The installed kokoro-en-v0_19 model is single-language English.
+        // Its British accent is selected by the verified speaker ID (7/8);
+        // sherpa's lang option applies to Kokoro v1.0+ models only.
         return OfflineTts(assetManager = null, config = config).also {
             neuralEngine = it
             neuralEnginePath = model.absolutePath
