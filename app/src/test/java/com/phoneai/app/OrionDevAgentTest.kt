@@ -21,7 +21,7 @@ class OrionDevAgentTest {
             shellRunner = { _: Context, command: String, backend: String ->
                 executedCommand = command
                 executedBackend = backend
-                "exit=0\\nPython 3.12.15"
+                "exit=0\nPython 3.12.15"
             }
         )
 
@@ -51,5 +51,32 @@ class OrionDevAgentTest {
         )
         assertFalse(approvalAsked)
         assertTrue(result.blocker.orEmpty().contains("cancelled"))
+    }
+
+    @Test fun devShellRejectsNonZeroLinuxExitStatus() {
+        val context = RuntimeEnvironment.getApplication()
+        val agent = OrionDevAgent(
+            context,
+            OrionPythonCapabilityExecutor(context, null),
+            shellRunner = { _, _, _ -> "exit=17\\ncompile failed" }
+        )
+
+        val result = agent.runShellCommand("gradle test", confirm = { true })
+        assertTrue(result.blocker.orEmpty().contains("exited with status 17"))
+        assertTrue(result.evidence.contains("compile failed"))
+        assertFalse(result.summary.contains("exited with status 0"))
+    }
+
+    @Test fun devShellRejectsMissingExitStatusAsUnverified() {
+        val context = RuntimeEnvironment.getApplication()
+        val agent = OrionDevAgent(
+            context,
+            OrionPythonCapabilityExecutor(context, null),
+            shellRunner = { _, _, _ -> "build finished (maybe)" }
+        )
+
+        val result = agent.runShellCommand("gradle test", confirm = { true })
+        assertTrue(result.blocker.orEmpty().contains("no verifiable exit status"))
+        assertFalse(result.summary.contains("exited with status 0"))
     }
 }
