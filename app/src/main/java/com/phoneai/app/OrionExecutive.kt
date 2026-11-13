@@ -71,7 +71,9 @@ internal object OrionExperience {
         if (tool.isBlank() || now <= 0L) return false
         return runCatching {
             synchronized(lock) {
-                val list = (load(c) + Record(tool, signature(tool, args), ok, reason.lineSequence().firstOrNull().orEmpty().take(140), now)).takeLast(MAX)
+                val safeReason = if (ok) "" else AgentPrivacyFilter.safeOutput(reason)
+                    .lineSequence().firstOrNull().orEmpty().take(140)
+                val list = (load(c) + Record(tool, signature(tool, args), ok, safeReason, now)).takeLast(MAX)
                 val arr = JSONArray()
                 list.forEach { arr.put(JSONObject().put("t", it.tool).put("k", it.key).put("ok", it.ok).put("r", it.reason).put("at", it.at)) }
                 c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, arr.toString()).commit()
@@ -140,7 +142,15 @@ internal object OrionDrives {
     fun dominant(s: State): Drive = s.pressure.maxByOrNull { it.value }!!.key
 
     private fun toJson(s: State) = JSONObject().put("at", s.at).also { o -> s.pressure.forEach { (d, p) -> o.put(d.name, p) } }
-    private fun fromJson(o: JSONObject, now: Long) = State(Drive.values().associateWith { o.optDouble(it.name, 0.3) }, o.optLong("at", now))
+    private fun fromJson(o: JSONObject, now: Long): State {
+        val pressure = Drive.values().associateWith { drive ->
+            o.optDouble(drive.name, 0.3).let { value ->
+                if (value.isNaN() || value.isInfinite()) 0.3 else value.coerceIn(0.0, 1.0)
+            }
+        }
+        val timestamp = o.optLong("at", now).takeIf { it > 0L && it <= now } ?: now
+        return State(pressure, timestamp)
+    }
 
     fun read(c: Context, now: Long = System.currentTimeMillis()): State = synchronized(lock) {
         val raw = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("state", null)
