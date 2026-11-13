@@ -8,7 +8,7 @@ Orion already deploys the official ARM64 musl Codex App Server inside its pinned
 codex-app-server --listen stdio://
 ```
 
-The Android app supplies `CODEX_HOME=/android-app/codex-session`, backed by the app-private cache directory. Do **not** install Node.js/npm or a second Codex CLI unless this acceptance test demonstrates a concrete limitation in the native App Server package.
+The Android app supplies `CODEX_HOME=/android-app/codex-session`, backed by the app-private `filesDir/codex-session` directory (not the evictable cache directory). Do **not** install Node.js/npm or a second Codex CLI unless this acceptance test demonstrates a concrete limitation in the native App Server package.
 
 ## Important isolation boundary
 
