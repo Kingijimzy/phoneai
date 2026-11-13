@@ -5,9 +5,9 @@ import org.json.JSONObject
 
 /**
  * Owns direct Python execution and the generated-extension lifecycle.
- * Generated extensions remain restricted data transforms; they receive no Android, file,
- * network, shell or device capabilities. Agent still owns the shared preflight, three-action
- * confirmation, cancellation and evidence boundary.
+ * runtime=python uses the restricted data-transform interpreter; runtime=python_full uses
+ * full CPython in Orion's workspace runtime. The latter executes with the app UID, while Android
+ * platform permissions remain authoritative for protected device resources.
  */
 internal class OrionPythonCapabilityExecutor(
     private val context: Context,
