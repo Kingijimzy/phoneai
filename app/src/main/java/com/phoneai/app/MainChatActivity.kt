@@ -1790,6 +1790,15 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 selectedImageUris.addAll(chosen.distinct().take(4))
                 composeSelectedImages.value = selectedImageUris.toList()
                 refreshImagePreview(selectedImageUris.firstOrNull())
+                val sessionId = runCatching { currentChatSessionId() }.getOrNull()
+                if (sessionId != null) Thread {
+                    chosen.distinct().take(4).forEach { uri ->
+                        runCatching { OrionChatAttachmentStore.import(this, sessionId, uri) }
+                    }
+                    runOnUiThread {
+                        composeAttachments.value = OrionChatAttachmentStore.forSession(this, sessionId)
+                    }
+                }.start()
             }
         }
     }
