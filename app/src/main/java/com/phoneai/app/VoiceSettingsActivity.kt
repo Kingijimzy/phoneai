@@ -423,6 +423,10 @@ class VoiceSettingsActivity : Activity() {
     }
 
     private fun installNeuralVoice() {
+        if (NeuralVoiceInstaller.isInstalling()) {
+            Toast.makeText(this, "Kokoro installation is already running in the background.", Toast.LENGTH_SHORT).show()
+            return
+        }
         if (installCancellation != null) {
             Toast.makeText(this, "Another voice download is still finishing.", Toast.LENGTH_SHORT).show()
             return
@@ -450,13 +454,13 @@ class VoiceSettingsActivity : Activity() {
                 }
             },
             { failure ->
+                if (failure == null) Prefs.setNeuralVoice(applicationContext, true)
                 runOnUiThread {
                     if (progress.isShowing) progress.dismiss()
                     if (activeProgress === progress) activeProgress = null
                     if (installCancellation === cancelled) installCancellation = null
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     if (failure == null) {
-                        Prefs.setNeuralVoice(this, true)
                         Toast.makeText(this, "Kokoro British neural voice installed and enabled.", Toast.LENGTH_LONG).show()
                     } else {
                         Toast.makeText(this, "Neural voice install failed: " + (failure.message ?: "unknown error"), Toast.LENGTH_LONG).show()
@@ -518,7 +522,8 @@ class VoiceSettingsActivity : Activity() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
-        installCancellation?.set(true)
+        // A settings-screen recreation must not cancel a user-requested model installation.
+        // Explicit cancellation remains available from the progress dialog itself.
         activeProgress?.let { if (it.isShowing) it.dismiss() }
         activeProgress = null
         previewVoice?.shutdown()
