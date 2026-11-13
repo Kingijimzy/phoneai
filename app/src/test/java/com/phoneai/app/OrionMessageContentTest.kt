@@ -45,6 +45,16 @@ Done"""
 Done""", (content.blocks[2] as OrionMessageBlock.Text).markdown)
     }
 
+    @Test fun mixedProseAndCodePreservesEveryBlockInOrder() {
+        val raw = "I will create the file.\n\n```kotlin\nfun main() = Unit\n```\n\nThen I will verify it."
+        val content = OrionMessageContent.fromLegacy("ai", raw)
+        assertEquals(3, content.blocks.size)
+        assertTrue(content.blocks[0] is OrionMessageBlock.Text)
+        assertTrue(content.blocks[1] is OrionMessageBlock.Code)
+        assertTrue(content.blocks[2] is OrionMessageBlock.Text)
+        assertTrue((content.blocks[2] as OrionMessageBlock.Text).markdown.contains("verify"))
+    }
+
     @Test fun legacyShellAndApprovalNotesBecomeTypedBlocks() {
         val shell = OrionMessageContent.fromLegacy("note", """[SHELL:FAILED]
 $ python broken.py

@@ -396,16 +396,27 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                     Spacer(Modifier.height(7.dp))
                 }
                 when {
-                    primaryBlock is OrionMessageBlock.Terminal -> OrionStructuredBlockCard(primaryBlock, onOpenBrowser)
-                    primaryBlock is OrionMessageBlock.Approval -> OrionStructuredBlockCard(primaryBlock, onOpenBrowser)
-                    primaryBlock is OrionMessageBlock.TaskReceipt -> OrionStructuredBlockCard(primaryBlock, onOpenBrowser)
-                    primaryBlock is OrionMessageBlock.GeneratedFile -> OrionStructuredBlockCard(primaryBlock, onOpenBrowser)
-                    primaryBlock is OrionMessageBlock.Thinking -> OrionStructuredBlockCard(primaryBlock, onOpenBrowser)
-                    primaryBlock is OrionMessageBlock.ToolResult -> OrionStructuredBlockCard(primaryBlock, onOpenBrowser)
-                    primaryBlock is OrionMessageBlock.Research -> OrionStructuredBlockCard(primaryBlock, onOpenBrowser)
-                    primaryBlock is OrionMessageBlock.Image -> OrionStructuredBlockCard(primaryBlock, onOpenBrowser)
-                    replyType == OrionReplyType.CODE -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item.content.blocks.forEach { block -> OrionStructuredBlockCard(block, onOpenBrowser) }
+                    item.content.blocks.any { it !is OrionMessageBlock.Text } -> Column(
+                        verticalArrangement = Arrangement.spacedBy(9.dp)
+                    ) {
+                        item.content.blocks.forEach { block ->
+                            when (block) {
+                                is OrionMessageBlock.Text -> {
+                                    val formattedBlock = formatOrionMarkdown(block.markdown)
+                                    ClickableText(
+                                        text = formattedBlock,
+                                        style = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 22.sp),
+                                        onClick = { offset ->
+                                            val url = formattedBlock.getStringAnnotations("URL", offset,
+                                                (offset + 1).coerceAtMost(formattedBlock.length)).firstOrNull()?.item
+                                            if (url != null && (url.startsWith("https://") || url.startsWith("http://"))) onOpenBrowser(url)
+                                            else actionsVisible = !actionsVisible
+                                        }
+                                    )
+                                }
+                                else -> OrionStructuredBlockCard(block, onOpenBrowser)
+                            }
+                        }
                     }
                     note && item.text.startsWith("[BROWSER:") -> BrowserActivityCard(item.text) { url -> onOpenBrowser(url) }
                     !mine && !note && replyType == OrionReplyType.DIAGRAM -> DiagramCard(item.text)
