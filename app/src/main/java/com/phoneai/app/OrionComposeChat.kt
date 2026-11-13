@@ -1181,8 +1181,8 @@ internal fun OrionChatHistoryScreen(
     onClose: () -> Unit,
     onClearAll: () -> Unit,
     onOpen: (OrionSavedChat) -> Unit,
-    onRename: (OrionConversationRepository.Session) -> Unit,
-    onDelete: (OrionConversationRepository.Session) -> Unit
+    onRename: (OrionSavedChat) -> Unit,
+    onDelete: (OrionSavedChat) -> Unit
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     val filtered = remember(chats, query) {
