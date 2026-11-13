@@ -801,7 +801,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     attachments = OrionChatAttachmentStore.forSession(this@MainChatActivity, sessionId),
                     onOpenAttachment = { openChatAttachment(it) },
                     onShareAttachment = { shareChatAttachment(it) },
-                    onShareAttachment = { shareChatAttachment(it) },
                     onBack = {
                         dialog.dismiss()
                         showChatHistory()
@@ -1446,6 +1445,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     activityEvents = composeActivityEvents.value,
                     attachments = composeAttachments.value,
                     onOpenAttachment = { openChatAttachment(it) },
+                    onShareAttachment = { shareChatAttachment(it) },
                     status = composeStatus.value,
                     orbMode = composeOrbMode.value,
                     orbMicLevel = composeOrbMicLevel.value,
