@@ -62,3 +62,12 @@ Source changes on the reliability candidate:
 - Added tests for callback invalid-argument rejection, cancellation, unregistered tools, executor feedback, and ordinary-language MCP/phone/developer tool exposure.
 
 Remaining architectural gap: the provider tool window is still bounded (64 by default), and non-core registered tools outside that window are not all native-callable on every turn. The human-readable prompt-signature fallback is not equivalent to a callable provider function. The contract codec still derives JSON schemas from `promptLine`; it has not yet been replaced with typed schema declarations. CI and provider-specific round-trip results for the updated head are pending; no device acceptance is claimed.
+
+
+## Follow-up: model-led tool choice and dynamic discovery
+
+- Added explicit model instructions to treat the provider's function declarations as the callable set, choose tools by objective and required result rather than keyword coincidence, and call `capability_search` when a relevant registered function is outside the current declaration window.
+- The model is instructed to use exact discovered schemas on the next provider turn, verify service connection/authentication/permission separately from implementation presence, and classify failures before choosing a safe alternative.
+- Route guidance now distinguishes public research (search/extract into chat), structured API/MCP retrieval, explicit browser interaction, native Android control, and developer/repository work. Browser UI is not the default research route.
+- Added a focused regression test that discovers and appends a trading capability outside the initial ordinary-language tool window. The previous test accidentally chose an MCP function that was already exposed in the initial set, so its expectation that a new function must be appended was invalid.
+- Discovery remains bounded and exact-name-only. It does not grant permissions, authenticate services, or bypass owner approval.
