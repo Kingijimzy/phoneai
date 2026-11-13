@@ -84,7 +84,7 @@ internal class OrionPythonCapabilityExecutor(
     private fun createDraft(args: JSONObject): String {
         val id = args.optString("id").trim()
         val name = args.optString("name").trim()
-        val runtime = args.optString("runtime", "python").trim().lowercase()
+        val runtime = args.optString("runtime", "python_full").trim().lowercase().ifBlank { "python_full" }
         val source = args.optString("source")
         val invalid = SelfExtendingExtensionPolicy.validateIdentity(id, name)
             ?: SelfExtendingExtensionPolicy.validateSource(runtime, source)
@@ -149,11 +149,6 @@ internal class OrionPythonCapabilityExecutor(
             ?: return "error: extension draft not found or registry unreadable"
         val sourceIssue = SelfExtendingExtensionPolicy.validateSource(extension.runtime, extension.source)
         if (sourceIssue != null) return "error: extension source validation failed: $sourceIssue"
-        if (extension.runtime == "python_full" && !confirm(
-                "Orion is about to execute this generated full-CPython extension with the Android app UID. " +
-                    "It may access resources available to the app. Review the source before allowing this test: " +
-                    extension.source.take(700)
-            )) return "error: owner declined full-CPython execution; the extension remains disabled and untested."
         val array = args.optJSONArray("tests")
         val cases = if (array == null) emptyList() else
             (0 until array.length()).mapNotNull { array.optJSONObject(it) }
@@ -170,15 +165,14 @@ internal class OrionPythonCapabilityExecutor(
             return "error: sandbox tests passed but their durable verification receipt could not be saved; extension remains disabled"
         }
         val ownerAutoActivation = ExtensionAutonomySettings.autoActivationEnabled(context)
-        // Only the capability-free restricted interpreter may auto-promote. Full CPython runs
-        // with the Android app UID, so it always needs a separate owner-confirmed activation.
-        val safeRuntimeAutoActivation = ownerAutoActivation && extension.runtime == "python"
+        // Orion and Kingi share the platform: an exact-source tested extension auto-promotes in either
+        // runtime when the owner's auto-activation setting is on (default on).
+        val safeRuntimeAutoActivation = ownerAutoActivation
         val autoActivated = safeRuntimeAutoActivation &&
             activateVerifiedVersion(extension, report, approved = false)
         AgentPolicy.log(
             context, "extension:$id", "auto-activate", autoActivated,
             if (autoActivated) "owner pre-approval promoted exact-hash sandbox-tested extension"
-            else if (ownerAutoActivation && extension.runtime == "python_full") "full CPython requires separate owner-confirmed activation; safe-Python auto-activation does not apply"
             else "owner auto-activation is off; awaiting an explicit extension_enable tool request"
         )
         if (autoActivated) runCatching { OrionLessons.learn(context, "Built and activated tool '$id' (${extension.displayName}): ${extension.description.take(100)}. Reuse it via extension_run before building anything similar.") }
@@ -186,8 +180,7 @@ internal class OrionPythonCapabilityExecutor(
             "$testLabel PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
         } else {
             "$testLabel PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} " +
-                if (extension.runtime == "python_full") "Full CPython extensions never auto-activate: request explicit owner approval with extension_enable."
-                else if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use explicit extension_enable approval."
+                if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use explicit extension_enable approval."
                 else "Next: extension_enable (requires an explicit extension_enable tool request)."
         }
     }

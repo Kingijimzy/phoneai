@@ -34,7 +34,7 @@ class IrreversibleActionConfirmationPolicyTest {
                     IrreversibleActionConfirmationPolicy.ownerApprovalDescription(tool, JSONObject().put("path", "private/item.txt")))
             }
         listOf("workspace_write", "dev_write", "save_file", "project_create", "project_plan",
-            "python_exec", "extension_run", "extension_test")
+            "python_exec", "extension_run")
             .forEach { tool ->
                 assertNotNull("$tool must require owner approval",
                     IrreversibleActionConfirmationPolicy.ownerApprovalDescription(tool, JSONObject().put("code", "print('test')")))
