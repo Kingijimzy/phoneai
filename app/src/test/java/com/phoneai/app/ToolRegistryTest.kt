@@ -364,6 +364,8 @@ class ToolRegistryNativeSelectionTest {
         assertNotNull("objective completion must be a real registered tool", tool)
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("complete_objective"))
         assertTrue(OrionTasksCapabilityExecutor.supports("complete_objective"))
+        assertEquals(OrionCapabilityAdapters.Backend.TASKS, OrionCapabilityAdapters.route("complete_objective")?.backend)
+        assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.TASKS, "complete_objective"))
         assertTrue(tool!!.promptLine.contains("latest trusted successful executor receipt"))
         val selected = ToolRegistry.nativeToolsFor("complete the verified objective using its evidence receipt")
             .map { it.name }.toSet()
