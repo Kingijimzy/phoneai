@@ -48,7 +48,7 @@ internal object OrionCapabilityAdapters {
         Backend.MEMORY to setOf("remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "record_decision", "knowledge_search",
             "graph_link", "graph_query", "self_review", "undo_last", "undo_status"),
         Backend.TASKS to setOf("agent_jobs", "agent_cancel", "agent_reassign", "ask_agent", "queue_agent", "specialist_job_status", "create_agent", "task_list", "task_add", "task_update",
-            "task_delete", "ask_user", "morning_brief", "standing_order",
+            "task_delete", "complete_objective", "ask_user", "morning_brief", "standing_order",
             "goal_add", "goal_list", "goal_remove", "goal_toggle",
             "proactive_check", "proactive_status", "followup_add", "followup_list", "followup_done", "quiet_period_set"),
         Backend.RESEARCH to setOf("web_search", "live_news", "live_web_search", "fetch_url", "research_web",
