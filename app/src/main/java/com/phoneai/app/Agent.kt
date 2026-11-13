@@ -1598,7 +1598,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             }
             found
         }.getOrDefault("")
-        val context = recentConversationTurns().takeLast(6).joinToString("\n") { (role, content) ->
+        val context = recentConversationTurns().dropLast(2).takeLast(6).joinToString("\n") { (role, content) ->
             val label = if (role.equals("user", true)) "Kingi" else "Orion"
             "$label: ${content.trim().take(420)}"
         }
