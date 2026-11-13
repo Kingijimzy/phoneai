@@ -188,12 +188,12 @@ internal class CodexAppServerClient(
                     else -> null
                 }
                 val result = runCatching {
-                    require(params.optString("threadId") == activeThreadId) {
-                        "Codex tool request belongs to a different thread; no Orion action was dispatched."
-                    }
-                    val expectedTurn = activeTurnId
-                    require(expectedTurn.isNullOrBlank() || params.optString("turnId") == expectedTurn) {
-                        "Codex tool request belongs to a different turn; no Orion action was dispatched."
+                    require(CodexAppServerProtocol.toolCallBelongsToActiveTurn(
+                        params,
+                        activeThreadId,
+                        activeTurnId
+                    )) {
+                        "Codex tool request is not bound to Orion's active thread and turn; no Orion action was dispatched."
                     }
                     require(name.isNotBlank()) { "Codex requested an unnamed Orion tool." }
                     require(args != null) { "Codex supplied invalid JSON arguments for Orion tool '$name'." }
