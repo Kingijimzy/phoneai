@@ -67,6 +67,7 @@
         <activity android:name=".TaskCenterActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".SettingsActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".AccountConnectionsActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".TelegramSettingsActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".SensorContextActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".SettingsFeatureActivity" android:exported="false" />
         <activity android:name=".CharacterSettingsActivity" android:exported="false" />

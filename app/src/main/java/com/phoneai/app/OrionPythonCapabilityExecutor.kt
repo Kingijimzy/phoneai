@@ -5,16 +5,17 @@ import org.json.JSONObject
 
 /**
  * Owns direct Python execution and the generated-extension lifecycle.
- * Generated extensions remain restricted data transforms; they receive no Android, file,
- * network, shell or device capabilities. Agent still owns the shared preflight, three-action
- * confirmation, cancellation and evidence boundary.
+ * runtime=python uses the restricted data-transform interpreter; runtime=python_full uses
+ * full CPython in Orion's workspace runtime. The latter executes with the app UID, while Android
+ * platform permissions remain authoritative for protected device resources.
  */
 internal class OrionPythonCapabilityExecutor(
     private val context: Context,
     private val tools: Tools?,
     private val extensionStore: SelfExtendingExtensionStore = SelfExtendingExtensionStore(context),
     private val extensionSandbox: ExtensionSandbox = FullPythonSandbox(
-        RestrictedPythonSandbox { source, inputJson -> OrionPythonRuntime.runExtension(context, source, inputJson) }
+        restricted = RestrictedPythonSandbox { source, inputJson -> OrionPythonRuntime.runExtension(context, source, inputJson) },
+        runFull = { source, inputJson -> OrionPythonRuntime.runFullExtension(context, source, inputJson) }
     )
 ) {
     private val testReceipts = ExtensionTestReceiptStore(context)
@@ -83,7 +84,7 @@ internal class OrionPythonCapabilityExecutor(
     private fun createDraft(args: JSONObject): String {
         val id = args.optString("id").trim()
         val name = args.optString("name").trim()
-        val runtime = args.optString("runtime", "python").trim().lowercase()
+        val runtime = args.optString("runtime", "python_full").trim().lowercase()
         val source = args.optString("source")
         val invalid = SelfExtendingExtensionPolicy.validateIdentity(id, name)
             ?: SelfExtendingExtensionPolicy.validateSource(runtime, source)
@@ -95,8 +96,8 @@ internal class OrionPythonCapabilityExecutor(
         val existing = runCatching { extensionStore.all().firstOrNull { it.id == id } }.getOrNull()
         if (existing != null) {
             if (existing.sourceSha256 == extension.sourceSha256) return "Extension $id already exists with this exact source. Call extension_test (or extension_run if it is enabled)."
-            runCatching { extensionStore.enabled(id) }.getOrNull()?.let { versionHistory.record(it) }
-            return if (extensionStore.saveRevision(extension)) "Replaced the existing draft $id with your new source (disabled). Next call extension_test."
+            archiveActiveVersionBeforeRevision(id)?.let { return it }
+            return if (extensionStore.saveRevision(extension)) "Replaced the existing extension $id with your new source (disabled). Next call extension_test."
             else "error: could not replace existing extension $id; choose a new id."
         }
         return if (extensionStore.saveDraft(extension)) {
@@ -109,7 +110,10 @@ internal class OrionPythonCapabilityExecutor(
     private fun updateDraft(args: JSONObject): String {
         val id = args.optString("id").trim()
         val name = args.optString("name").trim()
-        val runtime = args.optString("runtime", "python").trim().lowercase()
+        val requestedRuntime = args.optString("runtime").trim().lowercase()
+        val runtime = requestedRuntime.ifBlank {
+            runCatching { extensionStore.all().firstOrNull { it.id == id }?.runtime }.getOrNull() ?: "python_full"
+        }
         val source = args.optString("source")
         val invalid = SelfExtendingExtensionPolicy.validateIdentity(id, name)
             ?: SelfExtendingExtensionPolicy.validateSource(runtime, source)
@@ -118,10 +122,25 @@ internal class OrionPythonCapabilityExecutor(
             id, name, runtime, source, SelfExtendingExtensionPolicy.sha256(source),
             args.optString("description").take(240), System.currentTimeMillis()
         )
-        runCatching { extensionStore.enabled(id) }.getOrNull()?.let { versionHistory.record(it) }
+        archiveActiveVersionBeforeRevision(id)?.let { return it }
         return if (extensionStore.saveRevision(extension)) {
             "Saved new disabled revision for $id. Run extension_test before activation; the previous activated version remains archived."
-        } else "error: revision rejected; disable the active extension first, use a new source hash, and check registry integrity"
+        } else "error: revision rejected; use a new source hash and check that the extension registry is available"
+    }
+
+    /**
+     * Preserve the currently active source before replacing it. A failed history write must
+     * leave the live extension untouched; silently dropping the only active copy loses rollback.
+     */
+    private fun archiveActiveVersionBeforeRevision(id: String): String? {
+        val active = try {
+            extensionStore.enabled(id)
+        } catch (e: Exception) {
+            return "error: could not read the current extension state (${e.javaClass.simpleName}); no revision was changed"
+        } ?: return null
+
+        return if (versionHistory.record(active)) null
+        else "error: could not archive active version $id; the existing extension remains unchanged"
     }
 
     private fun testDraft(args: JSONObject, stopped: () -> Boolean): String {
@@ -136,9 +155,10 @@ internal class OrionPythonCapabilityExecutor(
         if (stopped()) return "error: task stopped before extension tests began."
         val report = extensionSandbox.test(extension, cases)
         if (stopped()) return "error: task stopped during extension tests; no promotion was attempted."
+        val testLabel = if (extension.runtime == "python_full") "FULL CPYTHON TEST" else "SANDBOX TEST"
         if (!report.passed) {
             testReceipts.remove(id, extension.sourceSha256)
-            return "error: SANDBOX TEST FAILED for $id: ${report.summary} Fix the source (create a new draft id) and test again; the extension is not enabled."
+            return "error: $testLabel FAILED for $id: ${report.summary} Fix the source and test again; the extension is not enabled."
         }
 
         if (!testReceipts.record(id, report)) {
@@ -154,9 +174,9 @@ internal class OrionPythonCapabilityExecutor(
         )
         if (autoActivated) runCatching { OrionLessons.learn(context, "Built and activated tool '$id' (${extension.displayName}): ${extension.description.take(100)}. Reuse it via extension_run before building anything similar.") }
         return if (autoActivated) {
-            "SANDBOX TEST PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
+            "$testLabel PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
         } else {
-            "SANDBOX TEST PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} " +
+            "$testLabel PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} " +
                 if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use explicit extension_enable approval."
                 else "Next: extension_enable (requires an explicit extension_enable tool request)."
         }

@@ -20,6 +20,8 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.sqrt
 
@@ -53,7 +55,11 @@ internal class GeminiLiveSession(
         .build()
     private val stopped = AtomicBoolean(false)
     private val audioStarted = AtomicBoolean(false)
-    private val modelTextBuffer = StringBuilder()
+    private val modelTextBuffer = GeminiLiveTranscriptBuffer()
+    private val transcriptFlushExecutor = Executors.newSingleThreadScheduledExecutor { task ->
+        Thread(task, "GeminiLiveTranscriptFlush").apply { isDaemon = true }
+    }
+    @Volatile private var transcriptFlush: ScheduledFuture<*>? = null
     @Volatile private var localSpeechActive = false
 
     @Volatile private var socket: WebSocket? = null
@@ -149,6 +155,9 @@ internal class GeminiLiveSession(
         try { recorder?.stop() } catch (_: Exception) { }
         try { recorder?.release() } catch (_: Exception) { }
         recorder = null
+        transcriptFlush?.cancel(false)
+        transcriptFlushExecutor.shutdownNow()
+        modelTextBuffer.clear()
         localSpeechActive = false
         try { echoCanceler?.release() } catch (_: Exception) { }
         echoCanceler = null
@@ -314,7 +323,8 @@ internal class GeminiLiveSession(
         val serverContent = message.optJSONObject("serverContent") ?: return
         if (serverContent.optBoolean("interrupted", false)) {
             localSpeechActive = false
-            synchronized(modelTextBuffer) { modelTextBuffer.setLength(0) }
+            transcriptFlush?.cancel(false)
+            modelTextBuffer.clear()
             listener.onOutputInterrupted()
         }
         serverContent.optJSONObject("inputTranscription")?.optString("text").orEmpty()
@@ -324,38 +334,42 @@ internal class GeminiLiveSession(
 
         // Gemini 3.8 Live returns native audio. The configured output transcription is the
         // authoritative text stream that is handed to Orion's shared local Kokoro voice.
-        val outputTranscript = serverContent.optJSONObject("outputTranscription")?.optString("text").orEmpty().trim()
-        if (outputTranscript.isNotEmpty()) {
-            synchronized(modelTextBuffer) {
-                if (modelTextBuffer.isNotEmpty()) modelTextBuffer.append(' ')
-                modelTextBuffer.append(outputTranscript)
-            }
+        val outputTranscript = serverContent.optJSONObject("outputTranscription")?.optString("text").orEmpty()
+        if (outputTranscript.isNotBlank()) {
+            appendModelTranscript(outputTranscript)
         } else {
             // Keep compatibility with Live models that emit text parts directly.
             val parts = serverContent.optJSONObject("modelTurn")?.optJSONArray("parts")
             if (parts != null) {
-                synchronized(modelTextBuffer) {
-                    for (i in 0 until parts.length()) {
-                        val part = parts.optJSONObject(i) ?: continue
-                        val delta = part.optString("text").trim()
-                        if (delta.isNotEmpty()) {
-                            if (modelTextBuffer.isNotEmpty()) modelTextBuffer.append(' ')
-                            modelTextBuffer.append(delta)
-                        }
-                    }
+                for (i in 0 until parts.length()) {
+                    val part = parts.optJSONObject(i) ?: continue
+                    appendModelTranscript(part.optString("text"))
                 }
             }
         }
         if (serverContent.optBoolean("turnComplete", false)) {
-            val completedText = synchronized(modelTextBuffer) {
-                modelTextBuffer.toString().trim().also { modelTextBuffer.setLength(0) }
-            }
-            if (completedText.isNotBlank()) listener.onTranscript(completedText, true)
+            modelTextBuffer.markTurnComplete()
+            scheduleTranscriptFlushIfReady()
             listener.onStatus("Gemini Live ready · speak naturally")
         }
         if (message.has("goAway")) {
             listener.onStatus("Google is preparing to close this Live connection. End the call and start a new session if needed.")
         }
+    }
+
+    private fun appendModelTranscript(text: String) {
+        modelTextBuffer.append(text)
+        scheduleTranscriptFlushIfReady()
+    }
+
+    private fun scheduleTranscriptFlushIfReady() {
+        if (!modelTextBuffer.isReady() || stopped.get()) return
+        transcriptFlush?.cancel(false)
+        transcriptFlush = transcriptFlushExecutor.schedule({
+            if (stopped.get()) return@schedule
+            val completed = modelTextBuffer.drain()
+            if (completed.isNotBlank()) listener.onTranscript(completed, true)
+        }, GeminiLivePolicy.TRANSCRIPT_FLUSH_QUIET_MS, TimeUnit.MILLISECONDS)
     }
 
     private fun startAudioIo() {

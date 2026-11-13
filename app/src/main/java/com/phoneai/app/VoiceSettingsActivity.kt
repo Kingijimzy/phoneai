@@ -174,9 +174,12 @@ class VoiceSettingsActivity : Activity() {
             kokoroVoiceButton = button("British voice · " + kokoroVoiceLabel()) { chooseKokoroVoice() }
             addView(kokoroVoiceButton, LinearLayout.LayoutParams(-1, -2))
             neuralInstallButton = button(
-                if (NeuralVoiceInstaller.isInstalled(this@VoiceSettingsActivity)) "Repair / reinstall Kokoro British voice"
-                else "Install Kokoro British neural voice · about 104 MB"
-            ) { installNeuralVoice() }
+                when {
+                    NeuralVoiceInstaller.isInstalling() -> "Kokoro installation running in background · reopen later"
+                    NeuralVoiceInstaller.isInstalled(this@VoiceSettingsActivity) -> "Repair / reinstall Kokoro British voice"
+                    else -> "Install Kokoro British neural voice · about 104 MB"
+                }
+            ) { installNeuralVoice() }.apply { isEnabled = !NeuralVoiceInstaller.isInstalling() }
             addView(neuralInstallButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
             addView(button("Choose Android fallback voice") { chooseAndroidVoice() },
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
@@ -341,7 +344,13 @@ class VoiceSettingsActivity : Activity() {
         neuralSwitch?.isChecked = Prefs.neuralVoice(this)
         bindingControls = false
         wakeStatus.text = wakeStatusText()
-        neuralInstallButton?.text = if (NeuralVoiceInstaller.isInstalled(this)) "Repair / reinstall Kokoro British voice" else "Install Kokoro British neural voice · about 104 MB"
+        val kokoroInstalling = NeuralVoiceInstaller.isInstalling()
+        neuralInstallButton?.text = when {
+            kokoroInstalling -> "Kokoro installation running in background · reopen later"
+            NeuralVoiceInstaller.isInstalled(this) -> "Repair / reinstall Kokoro British voice"
+            else -> "Install Kokoro British neural voice · about 104 MB"
+        }
+        neuralInstallButton?.isEnabled = !kokoroInstalling
         kokoroVoiceButton?.text = "British voice · " + kokoroVoiceLabel()
         wakeInstallButton?.text = if (WakeWordModelInstaller.isInstalled(this)) "Offline wake-word model · installed" else "Install dedicated offline wake-word model · about 16 MB"
         geminiVoiceButton?.text = "Gemini Live spoken voice · " + kokoroVoiceLabel()

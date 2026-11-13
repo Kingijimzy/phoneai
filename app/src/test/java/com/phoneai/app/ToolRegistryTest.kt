@@ -75,6 +75,13 @@ class ToolRegistryTest {
         assertEquals("phone_control", AgentPolicy.packForTool("device_location"))
     }
 
+    @Test fun telegramInboxIsWriteBecauseItCanDispatchAuthenticatedOwnerInstructions() {
+        assertEquals(ToolAccess.WRITE, ToolRegistry.access("telegram_inbox"))
+        assertTrue(ToolRegistry.find("telegram_inbox")!!.promptLine.contains("shared coordinator"))
+        assertEquals(OrionCapabilityAdapters.Backend.COMMUNICATION, OrionCapabilityAdapters.route("telegram_inbox")?.backend)
+        assertTrue(OrionCommunicationCapabilityExecutor.supports("telegram_inbox"))
+    }
+
     @Test fun registryNamesAreUniqueAndContainEveryRuntimeToolFamily() {
         val names = ToolRegistry.all.map { it.name }
         assertEquals("Each tool name must have exactly one definition.", names.size, names.toSet().size)

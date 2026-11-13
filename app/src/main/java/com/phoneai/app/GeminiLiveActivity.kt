@@ -361,7 +361,8 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             }
             if (fromModel) {
                 visual.mode = OrbView.Mode.SPEAKING
-                // Gemini supplies text only; Orion's Kokoro voice owns all audible output.
+                // Gemini output transcription enters the same Voice engine as every other Orion reply;
+                // native Gemini audio is not played, preserving the selected local Kokoro voice.
                 orionVoice?.speak(text)
             } else if (microphoneEnabled && orionVoice?.isSpeaking() != true) {
                 // The user's completed turn has arrived; show the real response-planning phase.

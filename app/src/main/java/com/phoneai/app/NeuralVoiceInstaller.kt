@@ -225,7 +225,7 @@ object NeuralVoiceInstaller {
         }
     }
 
-    private fun extractModel(
+    internal fun extractModel(
         archive: File,
         destination: File,
         isCancelled: () -> Boolean,

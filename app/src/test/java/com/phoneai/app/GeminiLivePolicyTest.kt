@@ -8,6 +8,33 @@ class GeminiLivePolicyTest {
         assertEquals("AUDIO", GeminiLivePolicy.RESPONSE_MODALITY)
     }
 
+    @Test fun outputTranscriptIsFlushedWhenItArrivesAfterTurnComplete() {
+        val buffer = GeminiLiveTranscriptBuffer()
+        buffer.markTurnComplete()
+        assertTrue(buffer.isReady().not())
+        buffer.append("Hello from Gemini")
+        assertTrue(buffer.isReady())
+        assertEquals("Hello from Gemini", buffer.drain())
+        assertTrue(buffer.isReady().not())
+    }
+
+    @Test fun outputTranscriptBeforeTurnCompleteWaitsAndThenFlushes() {
+        val buffer = GeminiLiveTranscriptBuffer()
+        buffer.append("Hello")
+        buffer.append("there")
+        assertTrue(buffer.isReady().not())
+        buffer.markTurnComplete()
+        assertEquals("Hello there", buffer.drain())
+    }
+
+    @Test fun interruptedLiveTurnClearsPendingTranscript() {
+        val buffer = GeminiLiveTranscriptBuffer()
+        buffer.append("unfinished response")
+        buffer.clear()
+        buffer.markTurnComplete()
+        assertTrue(buffer.drain().isEmpty())
+    }
+
     @Test fun sessionHasHardFiveMinuteLimit() {
         assertEquals(300_000L, GeminiLivePolicy.SESSION_LIMIT_MS)
         assertTrue(GeminiLivePolicy.SESSION_LIMIT_MS <= 5 * 60 * 1000L)

@@ -10,10 +10,9 @@ import java.security.MessageDigest
 /**
  * Lifecycle contract for self-extending tools.
  *
- * Generated source is never executed by this class. A platform sandbox must implement
- * ExtensionSandbox and enforce process isolation, no network by default, bounded CPU/time,
- * bounded memory/output, and an explicit capability bridge. A syntax check or denylist is
- * not a security boundary.
+ * Generated source is executed by the selected ExtensionSandbox runtime adapter:
+ * "python" uses the restricted data-transform interpreter; "python_full" uses full CPython.
+ * The full CPython PRoot guest shares the Android app UID and is not an OS security boundary.
  */
 internal object SelfExtendingExtensionPolicy {
     const val MAX_SOURCE_BYTES = 8_000
@@ -38,9 +37,12 @@ internal object SelfExtendingExtensionPolicy {
         if (source.isBlank()) return "Generated source is empty."
         if (runtime != "python_full" && source.toByteArray(Charsets.UTF_8).size > MAX_SOURCE_BYTES) return "Generated source exceeds the 8,000-byte runtime limit."
         if (runtime == "python_full") {
-            return "python_full generated extensions are disabled until Orion has an OS-enforced isolated worker. PRoot runs under the Android app UID and is not a security boundary. Use python_exec for an explicitly requested full-CPython task; generated extensions must use the restricted python runtime."
+            if (source.toByteArray(Charsets.UTF_8).size > MAX_FULL_SOURCE_BYTES) {
+                return "Full CPython extension source exceeds the " + MAX_FULL_SOURCE_BYTES + "-byte storage limit."
+            }
+            return null
         }
-        if (runtime != "python") return "Supported extension runtime: python (restricted pure data transform). Full CPython remains available through the explicit python_exec tool, not auto-activated extensions."
+        if (runtime != "python") return "Supported extension runtimes: python and python_full."
         OrionSecurityPolicy.findEmbeddedSecret(source)?.let { return it.message }
         if (runtime == "python" && forbiddenPython.any { it.containsMatchIn(source) }) {
             return "Source uses a restricted Python operation; request a simpler capability-scoped implementation."
@@ -95,11 +97,10 @@ internal data class ExtensionTestReport(
 )
 
 /**
- * Implementations must enforce the restricted execution contract. The current generated-extension
- * runtime is an in-process AST-validated interpreter with a cooperative two-second deadline; it is
- * NOT OS process isolation. It therefore remains capability-free: no Android Context, filesystem,
- * network, shell, or device bridge is passed to generated code. Full CPython extensions stay blocked
- * until an OS-enforced isolated worker exists.
+ * Runtime implementations: "python" is the restricted data-transform interpreter;
+ * "python_full" is the full CPython workspace runtime and runs with the app's Android UID.
+ * PRoot is not an OS security boundary. Android's own app sandbox and permission model remain
+ * authoritative for host resources.
  */
 internal interface ExtensionSandbox {
     fun test(extension: GeneratedExtension, testCases: List<JSONObject>): ExtensionTestReport
