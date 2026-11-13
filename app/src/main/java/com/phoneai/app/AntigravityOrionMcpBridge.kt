@@ -125,7 +125,7 @@ internal class AntigravityOrionMcpBridge(
                 JSONObject()
                     .put("name", tool.name)
                     .put("description", tool.promptLine.take(4_000))
-                    .put("inputSchema", JSONObject().put("type", "object").put("additionalProperties", true))
+                    .put("inputSchema", JSONObject(tool.inputSchema.toString()))
             )
         }
     }
