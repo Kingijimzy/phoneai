@@ -1078,3 +1078,82 @@ private fun ChatInlineBrowserDialog(
         }
     }
 }
+
+
+/** Archived transcripts reuse the live chat message renderer to preserve rich formatting. */
+@Composable
+internal fun OrionArchivedConversationScreen(
+    title: String,
+    date: String,
+    messages: List<Pair<String, String>>,
+    onBack: () -> Unit,
+    onCopy: () -> Unit,
+    onContinue: () -> Unit,
+    onOpenBrowser: (String?) -> Unit
+) {
+    Column(Modifier.fillMaxSize().background(OrionUiPalette.background)) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                "‹ History",
+                color = OrionUiPalette.secondaryText,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.clip(RoundedCornerShape(10.dp))
+                    .clickable(onClick = onBack)
+                    .padding(horizontal = 10.dp, vertical = 12.dp)
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title.ifBlank { "Conversation" }, color = OrionUiPalette.text,
+                    fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis)
+                Text(date, color = OrionUiPalette.muted, fontSize = 11.sp)
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(OrionUiPalette.border))
+        if (messages.isEmpty()) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text("This conversation has no saved messages.", color = OrionUiPalette.muted, fontSize = 13.sp)
+            }
+        } else {
+            LazyColumn(
+                Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 22.dp, bottom = 22.dp)
+            ) {
+                itemsIndexed(messages, key = { index, item -> "archive-$index-${item.first}" }) { index, item ->
+                    ChatBubble(
+                        item = OrionChatLine(index.toLong(), item.first, item.second),
+                        onOpenBrowser = onOpenBrowser
+                    )
+                }
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(OrionUiPalette.border))
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                    .background(OrionUiPalette.raised)
+                    .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(12.dp))
+                    .clickable(onClick = onCopy).padding(vertical = 13.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Copy transcript", color = OrionUiPalette.text, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            }
+            Box(
+                Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                    .background(OrionUiPalette.text)
+                    .clickable(onClick = onContinue).padding(vertical = 13.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Continue chat", color = OrionUiPalette.background, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
