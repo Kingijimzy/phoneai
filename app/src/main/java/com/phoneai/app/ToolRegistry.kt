@@ -346,47 +346,22 @@ internal object ToolRegistry {
         maxTools: Int = 96
     ): List<ToolDefinition> {
         val limit = maxTools.coerceIn(1, 128)
-        val query = request.orEmpty().lowercase()
-        val stopWords = setOf("the", "and", "for", "you", "please", "what", "when", "where",
-            "how", "can", "could", "me", "my", "your", "this", "that", "with", "from",
-            "about", "into", "just", "now", "tell", "show", "find", "check", "list")
-        val queryTokens = Regex("[a-zA-Z0-9_]{3,}")
-            .findAll(query).map { it.value }.filterNot { it in stopWords }.toSet()
-        val ranked = all.mapIndexed { index, tool ->
-            val name = tool.name.lowercase()
-            val contract = tool.promptLine.lowercase()
-            var score = 0
-            for (token in queryTokens) {
-                score += when {
-                    name == token || name.split('_').contains(token) -> 8
-                    Regex("(^|[^a-z0-9_])" + Regex.escape(token) + "([^a-z0-9_]|$)").containsMatchIn(contract) -> 1
-                    else -> 0
-                }
-            }
-            Triple<ToolDefinition, Int, Int>(tool, score, index)
-        }.sortedWith(compareByDescending<Triple<ToolDefinition, Int, Int>> { it.second }.thenBy { it.third })
         val selected = LinkedHashSet<String>()
         fun add(names: Iterable<String>) {
             names.forEach { if (selected.size < limit && it in byName) selected += it }
         }
-        // Universal discovery remains callable even when a specific tool is outside the bounded window.
-        add(listOf("capability_search"))
-        // Ultron coordination and execution capabilities share one model-facing tool set.
-        add(listOf("ask_user"))
+
+        // Stable callable foundation: no user-text keyword scoring or keyword-triggered routing.
+        // The model interprets the objective and uses capability_search when a specialist tool
+        // is needed. This avoids hiding/choosing capabilities based on vocabulary coincidence.
+        add(listOf("capability_search", "ask_user"))
         add(coordinatorNativeTools)
-        // Keep remote capability discovery callable for ordinary-language requests. The model
-        // decides whether to inspect the configured endpoint; runtime scope checks still gate use.
         add(mcpNativeTools)
-        // Expose the complete core phone and developer capability families on every turn.
-        // The model chooses the operation; runtime permissions, access classes and executor
-        // preflight remain authoritative. Never hide a callable tool based on user keywords.
         add(phoneNativeTools)
         add(developerNativeTools)
-        if (Regex("\\b(?:routine|teach\\s+mode|recorded\\s+gesture)\\b").containsMatchIn(query)) {
-            add(phoneNativeTools.filter { it == "routine_run" || it == "routine_resume" })
-        }
-        ranked.filter { it.second > 0 }.forEach { if (selected.size < limit) selected += it.first.name }
-        // The caller supplies only the latest tool-call group; append it after current-intent tools.
+
+        // Only the immediately preceding unfinished tool-call group is carried forward.
+        // Historical tools never displace the current turn's core capability surface.
         add(priorToolNames)
         return all.filter { it.name in selected }
     }
