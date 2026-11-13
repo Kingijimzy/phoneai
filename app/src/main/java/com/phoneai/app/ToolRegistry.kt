@@ -405,15 +405,14 @@ internal object ToolRegistry {
         for ((tool, score, _) in page) {
             val route = OrionCapabilityAdapters.route(tool.name) ?: continue
             results.put(org.json.JSONObject().put("name", tool.name).put("purpose", tool.description)
-                .put("access", tool.access.name.lowercase()).put("backend", route.backend.name.lowercase())
-                .put("schema", tool.inputSchema).put("match_score", score))
+                .put("access", tool.access.name.lowercase()))
         }
         val nextOffset = offset + page.size
         return org.json.JSONObject().put("query", query.take(240)).put("results", results)
             .put("count", results.length()).put("total", candidates.size).put("offset", offset).put("limit", limit)
             .put("next_offset", if (nextOffset < candidates.size) nextOffset else org.json.JSONObject.NULL)
             .put("has_more", nextOffset < candidates.size)
-            .put("note", "Complete implemented capability catalog. Query relevance only orders results; zero-match tools remain available on later pages. Android permissions, service authentication, policy and executor preflight still apply.")
+            .put("note", "Implemented tools only. Choose by purpose, then call capability_load with the exact name to get its callable schema. Query relevance only changes order; pagination exposes every result.")
             .toString()
     }
 
