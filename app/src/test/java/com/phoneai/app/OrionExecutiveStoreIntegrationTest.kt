@@ -84,4 +84,37 @@ class OrionExecutiveStoreIntegrationTest {
         assertTrue(brainContext.contains("Voice smoke test passed"))
     }
 
+
+    @Test fun objectiveGraphCompletionRequiresLatestTrustedReceiptAndCompletedDependencies() {
+        ChatHistoryStore.clearAll(context)
+        ChatHistoryStore.save(context, listOf("user" to "Verify objective evidence integration"))
+        assertNotNull(ChatHistoryStore.activeSessionId(context))
+
+        val graph = OrionObjectiveGraph.Graph(
+            objective = "Research then summarize",
+            nodes = listOf(
+                OrionObjectiveGraph.Objective("research", "Research", status = OrionObjectiveGraph.Status.RUNNING),
+                OrionObjectiveGraph.Objective("summarize", "Summarize", dependsOn = listOf("research"))
+            )
+        )
+        assertTrue(OrionObjectiveGraph.save(context, graph))
+
+        val firstReceipt = OrionObjectiveGraph.recordExecution(
+            context, "research", "web_search", "error-free but superseded result"
+        )
+        assertNotNull(firstReceipt)
+        val latestReceipt = OrionObjectiveGraph.recordExecution(
+            context, "research", "web_search", "latest trusted research result"
+        )
+        assertNotNull(latestReceipt)
+        assertTrue(firstReceipt != latestReceipt)
+
+        assertFalse(OrionObjectiveGraph.completeFromEvidence(context, "research", requireNotNull(firstReceipt)))
+        assertTrue(OrionObjectiveGraph.completeFromEvidence(context, "research", requireNotNull(latestReceipt)))
+        val updated = requireNotNull(OrionObjectiveGraph.load(context))
+        assertEquals(OrionObjectiveGraph.Status.COMPLETE, updated.nodes.first { it.id == "research" }.status)
+        assertNull(OrionObjectiveGraph.canExecute(updated, "summarize"))
+        assertFalse(OrionObjectiveGraph.completeFromEvidence(context, "summarize", "model-invented-evidence"))
+    }
+
 }
