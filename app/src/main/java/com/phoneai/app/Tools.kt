@@ -758,7 +758,24 @@ class Tools(
             if (!SavedFileContentVerifier.matches(expectedBytes, actualBytes)) {
                 throw IllegalStateException("read-back content did not match the requested bytes")
             }
-            "FILE SAVED AND CONTENT VERIFIED: $safeName | Downloads/$safeFolder/$safeName | ${actualBytes.size} bytes | uri=$target"
+            val attachment = runCatching {
+                val sessionId = ChatHistoryStore.activeSessionId(svc)
+                if (sessionId.isNullOrBlank()) null
+                else OrionChatAttachmentStore.saveFromUri(svc, sessionId, target)
+            }.getOrNull()
+            if (attachment != null) {
+                svc.recordChatEvent(
+                    "generated_file", "completed",
+                    "Saved and verified ${attachment.name} in Downloads/$safeFolder; a durable conversation copy is ready to open or share.",
+                    messageId = attachment.id,
+                    evidence = OrionActivityEvidence.File(
+                        "Downloads/$safeFolder/$safeName", actualBytes.size.toLong(), "generated_file"
+                    )
+                )
+            }
+            "FILE SAVED AND CONTENT VERIFIED: $safeName | Downloads/$safeFolder/$safeName | ${actualBytes.size} bytes | uri=$target" +
+                (attachment?.let { " | chat_artifact_id=${it.id}" }
+                    ?: " | chat_artifact=not_attached (no active conversation or import failed)")
         } catch (e: Exception) {
             // Do not delete a successfully written file because metadata or a later verification
             // step failed. Only remove an entry when the initial write itself did not complete.

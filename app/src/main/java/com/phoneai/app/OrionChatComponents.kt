@@ -1059,7 +1059,8 @@ internal fun OrionPersistedActivityCard(event: OrionConversationRepository.ChatE
 @Composable
 internal fun OrionChatAttachmentCard(
     attachment: OrionChatAttachmentStore.Attachment,
-    onOpen: (OrionChatAttachmentStore.Attachment) -> Unit
+    onOpen: (OrionChatAttachmentStore.Attachment) -> Unit,
+    onShare: (OrionChatAttachmentStore.Attachment) -> Unit
 ) {
     val extension = attachment.name.substringAfterLast('.', "").uppercase().ifBlank { "FILE" }
     val sizeLabel = when {
@@ -1071,10 +1072,9 @@ internal fun OrionChatAttachmentCard(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
             .background(OrionUiPalette.panel)
             .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(13.dp))
-            .clickable { onOpen(attachment) }
-            .padding(12.dp),
+            .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(11.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box(
             Modifier.size(42.dp).clip(RoundedCornerShape(10.dp))
@@ -1094,11 +1094,23 @@ internal fun OrionChatAttachmentCard(
                 color = OrionUiPalette.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold
             )
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Column(
+            Modifier.weight(1f).heightIn(min = 44.dp)
+                .clickable(role = Role.Button) { onOpen(attachment) }
+                .semantics { contentDescription = "Open ${attachment.name}"; role = Role.Button },
+            verticalArrangement = Arrangement.Center
+        ) {
             Text(attachment.name, color = OrionUiPalette.text, fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(extension + " · " + sizeLabel, color = OrionUiPalette.muted, fontSize = 10.sp)
         }
-        Text("OPEN", color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Text("OPEN", color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.heightIn(min = 44.dp).clickable(role = Role.Button) { onOpen(attachment) }
+                .semantics { contentDescription = "Open ${attachment.name}"; role = Role.Button }
+                .padding(horizontal = 5.dp, vertical = 12.dp))
+        Text("SHARE", color = OrionUiPalette.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.heightIn(min = 44.dp).clickable(role = Role.Button) { onShare(attachment) }
+                .semantics { contentDescription = "Share ${attachment.name}"; role = Role.Button }
+                .padding(horizontal = 5.dp, vertical = 12.dp))
     }
 }

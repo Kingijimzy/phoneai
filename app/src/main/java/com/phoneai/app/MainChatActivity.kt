@@ -800,6 +800,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     activityEvents = persistedEvents,
                     attachments = OrionChatAttachmentStore.forSession(this@MainChatActivity, sessionId),
                     onOpenAttachment = { openChatAttachment(it) },
+                    onShareAttachment = { shareChatAttachment(it) },
+                    onShareAttachment = { shareChatAttachment(it) },
                     onBack = {
                         dialog.dismiss()
                         showChatHistory()
@@ -1963,6 +1965,23 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             Toast.makeText(this, error.message ?: "No compatible app could open this attachment.", Toast.LENGTH_LONG).show()
         }
     }
+    private fun shareChatAttachment(attachment: OrionChatAttachmentStore.Attachment) {
+        try {
+            val file = OrionChatAttachmentStore.file(this, attachment)
+            if (!file.isFile) throw IllegalStateException("This attachment is no longer available.")
+            val uri = androidx.core.content.FileProvider.getUriForFile(this, "${packageName}.files", file)
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = attachment.mimeType
+                putExtra(Intent.EXTRA_STREAM, uri)
+                clipData = android.content.ClipData.newUri(contentResolver, attachment.name, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(intent, "Share ${attachment.name}"))
+        } catch (error: Exception) {
+            Toast.makeText(this, error.message ?: "Could not share this attachment.", Toast.LENGTH_LONG).show()
+        }
+    }
+
 
     private fun sendMessage() {
         val value = input.text.toString().trim()
@@ -2208,6 +2227,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 )
             })
             composeActivityEvents.value = projection.compactForChat()
+            refreshChatAttachments()
             // Activity events have their own compact timeline cards. Do not mirror them
             // into transcript notes: that rendered every tool twice.
         }

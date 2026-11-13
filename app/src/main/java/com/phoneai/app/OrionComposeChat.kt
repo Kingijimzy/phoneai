@@ -551,6 +551,7 @@ internal fun OrionComposeChatScreen(
     activityEvents: List<OrionActivityEvent> = emptyList(),
     attachments: List<OrionChatAttachmentStore.Attachment> = emptyList(),
     onOpenAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
+    onShareAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
     status: String,
     orbMode: OrbView.Mode = OrbView.Mode.IDLE,
     orbMicLevel: Float = 0f,
@@ -829,7 +830,7 @@ internal fun OrionComposeChatScreen(
                             fontWeight = FontWeight.Bold, letterSpacing = .9.sp)
                     }
                     itemsIndexed(attachments, key = { _, item -> "chat-attachment-${item.id}" }) { _, item ->
-                        OrionChatAttachmentCard(item, onOpenAttachment)
+                        OrionChatAttachmentCard(item, onOpenAttachment, onShareAttachment)
                     }
                 }
                 item(key = "orion-tool-pills") { OrionToolPills(lines) }
@@ -1107,6 +1108,7 @@ internal fun OrionArchivedConversationScreen(
     activityEvents: List<OrionConversationRepository.ChatEvent> = emptyList(),
     attachments: List<OrionChatAttachmentStore.Attachment> = emptyList(),
     onOpenAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
+    onShareAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
     onBack: () -> Unit,
     onCopy: () -> Unit,
     onContinue: () -> Unit,
@@ -1158,7 +1160,7 @@ internal fun OrionArchivedConversationScreen(
                         fontWeight = FontWeight.Bold, letterSpacing = .9.sp)
                 }
                 itemsIndexed(attachments, key = { _, item -> "archive-attachment-${item.id}" }) { _, item ->
-                    OrionChatAttachmentCard(item, onOpenAttachment)
+                    OrionChatAttachmentCard(item, onOpenAttachment, onShareAttachment)
                 }
             }
             if (activityEvents.isNotEmpty()) {
