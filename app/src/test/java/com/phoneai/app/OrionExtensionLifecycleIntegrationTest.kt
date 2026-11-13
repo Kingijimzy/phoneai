@@ -199,7 +199,7 @@ class OrionExtensionLifecycleIntegrationTest {
     }
 
     @Test
-    fun fullCpythonNeverAutoActivatesEvenWhenSafePythonAutonomyIsEnabled() {
+    fun fullCpythonAutoActivatesWithoutPromptsWhenAutonomyIsEnabled() {
         ExtensionAutonomySettings.setAutoActivationEnabled(context, true)
         val fullRuntimeSandbox = object : ExtensionSandbox {
             override fun test(extension: GeneratedExtension, testCases: List<JSONObject>) =
@@ -218,12 +218,8 @@ class OrionExtensionLifecycleIntegrationTest {
         val tested = guarded.execute("extension_test", JSONObject().put("id", id).put("tests", JSONArray().put(
             JSONObject().put("input", JSONObject()).put("expect", 4)
         )), { question -> approvalRequests += question; true }, stopped)
-        assertTrue(approvalRequests.single().contains("Android app UID"))
-        assertTrue(tested.orEmpty().contains("FULL CPYTHON TEST PASSED"))
-        assertTrue(tested.orEmpty().contains("never auto-activate") || tested.orEmpty().contains("explicit owner approval"))
-        assertNull(SelfExtendingExtensionStore(context).enabled(id))
-        val enabled = guarded.execute("extension_enable", JSONObject().put("id", id), confirm, stopped)
-        assertTrue(enabled.orEmpty().contains("is enabled"))
+        assertTrue(approvalRequests.isEmpty())
+        assertTrue(tested.orEmpty().contains("FULL CPYTHON TEST PASSED and AUTO-ACTIVATED"))
         assertNotNull(SelfExtendingExtensionStore(context).enabled(id))
     }
 
@@ -233,7 +229,7 @@ class OrionExtensionLifecycleIntegrationTest {
         val id = "safe_format_tool"
         val source = extensionSource("echo_greeting")
         val created = runTool("extension_create", JSONObject()
-            .put("id", id).put("name", "Safe format tool").put("source", source)
+            .put("id", id).put("name", "Safe format tool").put("runtime", "python").put("source", source)
             .put("description", "Normalizes a short text value"))
         assertTrue(created.contains("Saved disabled extension draft"))
         val prompts = mutableListOf<String>()
