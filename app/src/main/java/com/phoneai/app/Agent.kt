@@ -443,7 +443,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun recordDispatchBlocked(tool: String, args: JSONObject, category: String) {
         runCatching { OrionEvidenceLedger.recordBlocked(svc, evidenceTaskId(), tool, category) }
     }
-    private fun executeWithRecoveryGuard(tool: String, args: JSONObject, specialDispatch: ((String, JSONObject) -> String?)? = null): String {
+    private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
         ToolRegistry.find(tool)?.let { definition ->
             OrionToolContractCodec.validateArguments(definition, args)?.let { reason ->
                 val blocked = "error: invalid arguments for '$tool': $reason. No action was dispatched."
@@ -702,7 +702,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     val validationArgs = JSONObject(args.toString()).put("tool", tool)
                     val validation = validateAction(validationArgs)
                     if (validation.startsWith("INVALID:")) "error: preflight blocked action. $validation"
-                    else specialDispatch?.invoke(tool, executionArgs) ?: exec(tool, executionArgs)
+                    else exec(tool, executionArgs)
                 } else {
                     specialDispatch?.invoke(tool, executionArgs) ?: exec(tool, executionArgs)
                 }
@@ -1202,18 +1202,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         var handledDiscoveryVersion = 0
         var callbackDiscoveryRounds = 0
         val callbackToolReceipts = JSONArray()
-        fun dispatchNativeTool(name: String, args: JSONObject): String {
-            return executeWithRecoveryGuard(name, args) { dispatchedName, dispatchedArgs ->
-                if (dispatchedName != "capability_load") return@executeWithRecoveryGuard null
-                val result = ToolRegistry.loadCapability(nativeTools, dispatchedArgs.optString("tool_name"))
-                val loaded = runCatching { JSONObject(result).optBoolean("loaded") }.getOrDefault(false)
-                if (loaded) {
-                    discoveredToolVersion++
-                    ui.note("[CAPABILITIES] Loaded the selected registered capability; preparing a provider turn with its exact callable schema.")
-                }
-                result
-            }
-        }
+        fun dispatchNativeTool(name: String, args: JSONObject): String = executeWithRecoveryGuard(name, args)
 
         fun chatTurnWithNativeTools(): OrionModelTurn {
             // The current request receives the complete latest callable set. Only discovery
@@ -2254,7 +2243,15 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                     researchCancelled,
                     { question, options, access -> ui.askUser(question, options, access) },
                     pythonExecutor = pythonExecutor,
-                    routineReplay = { action, name -> runSavedRoutineTool(action, name) }
+                    routineReplay = { action, name -> runSavedRoutineTool(action, name) },
+                    capabilityLoad = { requestedName ->
+                        val result = ToolRegistry.loadCapability(nativeTools, requestedName)
+                        if (runCatching { JSONObject(result).optBoolean("loaded") }.getOrDefault(false)) {
+                            discoveredToolVersion++
+                            ui.note("[CAPABILITIES] Loaded the selected registered capability; preparing a provider turn with its exact callable schema.")
+                        }
+                        result
+                    }
                 ) ?: "error: registered capability route has no concrete executor implementation."
             }.getOrElse { "error: backend execution threw ${it.javaClass.simpleName}; outcome requires inspection." }
             val shouldRecord = !isNonLoggedAction(route.tool, args)
