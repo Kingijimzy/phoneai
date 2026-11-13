@@ -444,6 +444,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         runCatching { OrionEvidenceLedger.recordBlocked(svc, evidenceTaskId(), tool, category) }
     }
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
+        ToolRegistry.find(tool)?.let { definition ->
+            OrionToolContractCodec.validateArguments(definition, args)?.let { reason ->
+                val blocked = "error: invalid arguments for '$tool': $reason. No action was dispatched."
+                taskProofs.record(tool, blocked)
+                recordDispatchBlocked(tool, args, "tool_argument_contract_invalid")
+                return blocked
+            }
+        }
         if (OrionCommandIntentPolicy.browserToolBlockedBeforePython(activeRequestScope, tool)) {
             val blocked = "error: this request explicitly asks to build and test a Python scraper. Use the registered python_exec tool first with Python source in the 'code' argument and phone.http_get(url); do not substitute browser navigation or web search."
             taskProofs.record(tool, blocked)
