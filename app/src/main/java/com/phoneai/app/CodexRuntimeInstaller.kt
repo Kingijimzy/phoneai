@@ -38,7 +38,23 @@ internal class CodexRuntimeInstaller(context: Context) {
             # Install the three required helpers explicitly instead of assuming every
             # executable carries the target-triple suffix.
             for binary in codex-app-server codex-code-mode-host codex-exec-server; do
-              candidate=$(find "${'
+              candidate=$(find "${'$'}work" \\( -type f -o -type l \\) \\
+                \\( -name "${'$'}binary" -o -name "${'$'}binary-aarch64-unknown-linux-musl" \\) -print -quit)
+              if [ -z "${'$'}candidate" ]; then
+                echo "Codex archive missing required executable: ${'$'}binary"
+                cat "${'$'}work/archive-files.txt" | head -100
+                find "${'$'}work" -maxdepth 5 -print
+                case "${'$'}binary" in
+                  codex-app-server) exit 31 ;;
+                  codex-code-mode-host) exit 32 ;;
+                  codex-exec-server) exit 33 ;;
+                esac
+              fi
+              install -m 755 "${'$'}candidate" "/usr/local/bin/${'$'}binary"
+            done
+            test -x '$GUEST_BINARY'
+            test -x '$GUEST_CODE_MODE_HOST'
+            test -x '$GUEST_EXEC_SERVER'
             '$GUEST_BINARY' --help >/dev/null
             rm -rf "${'$'}work"
         """.trimIndent()
