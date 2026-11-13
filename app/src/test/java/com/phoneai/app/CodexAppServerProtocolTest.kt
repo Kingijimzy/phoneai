@@ -7,7 +7,7 @@ import org.junit.Test
 class CodexAppServerProtocolTest {
     @Test fun deviceLoginUsesOfficialChatGptDeviceFlow() {
         val request = CodexAppServerProtocol.startChatGptDeviceLogin(7).toJson()
-        assertEquals("2.0", request.getString("jsonrpc"))
+        assertFalse(request.has("jsonrpc"))
         assertEquals("account/login/start", request.getString("method"))
         assertEquals("chatgptDeviceCode", request.getJSONObject("params").getString("type"))
     }
@@ -65,6 +65,19 @@ class CodexAppServerProtocolTest {
         assertEquals("string", dynamic.getJSONObject(1).getJSONObject("inputSchema").getJSONObject("properties").getJSONObject("name").getString("type"))
         assertTrue(dynamic.getJSONObject(1).getJSONObject("inputSchema").getJSONArray("required").toString().contains("name"))
         assertEquals("gpt-5-codex", params.getString("model"))
+    }
+
+    @Test fun initializeAcknowledgementMatchesPinnedCodexResponseContract() {
+        assertTrue(CodexAppServerProtocol.isInitializeResponse(
+            JSONObject().put("userAgent", "codex-app-server/0.167.1")
+                .put("codexHome", "/root/.codex")
+                .put("platformFamily", "unix")
+                .put("platformOs", "linux")
+        ))
+        assertFalse(CodexAppServerProtocol.isInitializeResponse(
+            JSONObject().put("serverInfo", JSONObject().put("name", "codex"))
+                .put("capabilities", JSONObject())
+        ))
     }
 
     @Test fun initializeOptsIntoExperimentalDynamicToolApi() {
