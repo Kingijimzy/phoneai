@@ -369,7 +369,9 @@ internal object ToolRegistry {
         // Ultron coordination and execution capabilities share one model-facing tool set.
         add(listOf("ask_user"))
         add(coordinatorNativeTools)
-        if (Regex("\\b(mcp|remote server|remote tool|api tools|anything tools)\\b").containsMatchIn(query)) add(mcpNativeTools)
+        // Keep remote capability discovery callable for ordinary-language requests. The model
+        // decides whether to inspect the configured endpoint; runtime scope checks still gate use.
+        add(mcpNativeTools)
         if (Regex("\\b(app|phone|screen|tap|click|swipe|open|launch|send|message|wifi|bluetooth|notification|battery|screenshot)\\b").containsMatchIn(query)) {
             add(phoneNativeTools)
         }
