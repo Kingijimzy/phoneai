@@ -45,7 +45,7 @@ object AgentPolicy {
     internal fun defaultOn(id: String) = id in defaultOnPacks
 
     /** An explicit user choice always wins; only a never-set pack falls back to its default. */
-    @Suppress("UNUSED_PARAMETER") fun enabled(c: Context, id: String) = true // Free mode: every capability pack is on.
+    fun enabled(c: Context, id: String): Boolean {\n        val pack = packs.firstOrNull { it.id == id } ?: return false\n        if (!pack.implemented) return false\n        val prefs = p(c)\n        return if (prefs.contains("pack_$id")) prefs.getBoolean("pack_$id", false) else defaultOn(id)\n    }.
     fun setEnabled(c: Context, id: String, on: Boolean) {
         val pack = packs.firstOrNull { it.id == id }
         p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
@@ -71,7 +71,7 @@ object AgentPolicy {
     fun packOffMessage(pack: String): String =
         "The '$pack' capability pack is switched off, so this tool is unavailable right now. The feature exists: tell the user which pack to switch on (${ToolGate.howToEnable(pack)}) instead of saying Orion lacks it."
 
-    /** Compatibility decision adapter. GatePolicy is default-ALLOW except PLAN mode and disabled trading order execution. */
+    /** Central decision adapter; owner settings flow through GatePolicy. */
     internal fun gate(
         c: Context, pack: String, toolId: String, dangerous: Boolean,
         toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false,
