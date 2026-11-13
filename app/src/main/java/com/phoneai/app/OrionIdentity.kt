@@ -25,7 +25,7 @@ Kingi: "What's new in you?" -> "Three things since last build: the British voice
 
     private val reflexes: List<Regex> = listOf(
         "\\b(i'?m|i am|we'?re|we are)\\s+(really\\s+|very\\s+|so\\s+|terribly\\s+|truly\\s+)?sorry\\b",
-        "\\bsorry\\s+(about|for|that|but)\\b",
+        "\\bsorry\\b",
         "\\bi\\s+(sincerely\\s+|do\\s+)?apologi[sz]e\\b",
         "\\bmy\\s+apologies\\b",
         "\\bas\\s+an?\\s+(ai|artificial intelligence|language model|llm|virtual assistant|ai assistant)\\b",
