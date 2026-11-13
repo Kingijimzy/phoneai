@@ -3,6 +3,7 @@ package com.phoneai.app
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.security.MessageDigest
 import kotlin.math.min
 
 /**
@@ -27,15 +28,23 @@ internal object OrionExperience {
 
     /** Stable signature of "this tool with these kinds of arguments". Pure. */
     fun signature(tool: String, args: JSONObject?): String {
-        val parts = identityKeys.mapNotNull { k -> args?.optString(k, "")?.trim()?.takeIf { it.isNotEmpty() }?.let { "$k=${it.lowercase().take(40)}" } }
-        return tool + "|" + parts.joinToString("&")
+        val canonical = buildString {
+            append(tool.trim().lowercase())
+            identityKeys.forEach { key ->
+                val value = args?.optString(key, "")?.trim()?.lowercase().orEmpty()
+                if (value.isNotEmpty()) append('|').append(key).append('=').append(value)
+            }
+        }
+        // Never persist raw paths, URLs, contact names, commands or message text in the experience key.
+        val digest = MessageDigest.getInstance("SHA-256").digest(canonical.toByteArray(Charsets.UTF_8))
+        return tool.trim().lowercase() + "|" + digest.joinToString("") { "%02x".format(it) }
     }
 
     private fun tokens(s: String): Set<String> = Regex("[a-z0-9]{4,}").findAll(s.lowercase()).map { it.value }.toSet()
 
     /** Failures that have not since been followed by a success of the same signature. Pure. */
     fun unresolvedFailures(records: List<Record>, now: Long): List<Record> =
-        records.filter { !it.ok && now - it.at <= WINDOW_MS }
+        records.filter { !it.ok && it.at <= now && now - it.at <= WINDOW_MS }
             .filter { f -> records.none { it.ok && it.key == f.key && it.at > f.at } }
             .sortedByDescending { it.at }
 
@@ -58,16 +67,16 @@ internal object OrionExperience {
 
     fun all(c: Context): List<Record> = synchronized(lock) { load(c) }
 
-    fun record(c: Context, tool: String, args: JSONObject?, ok: Boolean, reason: String, now: Long = System.currentTimeMillis()) {
-        if (tool.isBlank()) return
-        runCatching {
+    fun record(c: Context, tool: String, args: JSONObject?, ok: Boolean, reason: String, now: Long = System.currentTimeMillis()): Boolean {
+        if (tool.isBlank() || now <= 0L) return false
+        return runCatching {
             synchronized(lock) {
                 val list = (load(c) + Record(tool, signature(tool, args), ok, reason.lineSequence().firstOrNull().orEmpty().take(140), now)).takeLast(MAX)
                 val arr = JSONArray()
                 list.forEach { arr.put(JSONObject().put("t", it.tool).put("k", it.key).put("ok", it.ok).put("r", it.reason).put("at", it.at)) }
-                c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, arr.toString()).apply()
+                c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, arr.toString()).commit()
             }
-        }
+        }.getOrDefault(false)
     }
 
     fun priorNote(c: Context, tool: String, args: JSONObject?, now: Long = System.currentTimeMillis()): String =
@@ -89,11 +98,10 @@ internal object OrionExperience {
 internal object OrionExecutive {
     /** Every tool result passes through here. A failure comes back with the executive order attached. */
     fun afterTool(c: Context, tool: String, args: JSONObject?, result: String, failed: Boolean, priorNote: String): String {
-        runCatching {
-            OrionExperience.record(c, tool, args, !failed, if (failed) result else "")
-            OrionDrives.onToolOutcome(c, failed)
-        }
-        return directive(result, failed, priorNote)
+        val experienceSaved = OrionExperience.record(c, tool, args, !failed, if (failed) result else "")
+        runCatching { OrionDrives.onToolOutcome(c, failed) }
+        val output = directive(result, failed, priorNote)
+        return if (experienceSaved) output else output + "\n[LEARNING STORAGE WARNING] The action result is unchanged, but Orion could not durably save this experience. Do not claim the lesson was recorded."
     }
 
     /** Pure. */
