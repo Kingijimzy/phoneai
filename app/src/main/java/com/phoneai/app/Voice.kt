@@ -26,20 +26,23 @@ import java.util.concurrent.Executors
 /** Android speech recognition with optional sentence-streamed on-device neural TTS and Android TTS fallback. */
 class Voice(private val ctx: Context) {
     companion object {
-        @Volatile private var lastPiperPerformance = "Piper synthesis: not measured in this app session (select the installed English Piper voice and speak a response)."
-        @Volatile private var lastPiperPerformanceAtMs: Long? = null
+        @Volatile private var lastKokoroPerformance = "Kokoro synthesis: not measured in this app session (select the installed English Kokoro voice and speak a response)."
+        @Volatile private var lastKokoroPerformanceAtMs: Long? = null
 
-        /** Latest real generation result; remains explicitly unmeasured until Piper has actually synthesized audio. */
-        fun piperPerformanceSummary(): String {
-            val value = lastPiperPerformance
-            val at = lastPiperPerformanceAtMs ?: return value
+        /** Latest real generation result; remains explicitly unmeasured until Kokoro has actually synthesized audio. */
+        fun kokoroPerformanceSummary(): String {
+            val value = lastKokoroPerformance
+            val at = lastKokoroPerformanceAtMs ?: return value
             val ageSeconds = ((SystemClock.elapsedRealtime() - at).coerceAtLeast(0L)) / 1000L
             return "$value Last sample: $ageSeconds second(s) ago."
         }
 
-        private fun setPiperPerformance(value: String) {
-            lastPiperPerformance = value
-            lastPiperPerformanceAtMs = SystemClock.elapsedRealtime()
+        /** Backward-compatible name retained for existing diagnostics integrations. */
+        fun piperPerformanceSummary(): String = kokoroPerformanceSummary()
+
+        private fun setKokoroPerformance(value: String) {
+            lastKokoroPerformance = value
+            lastKokoroPerformanceAtMs = SystemClock.elapsedRealtime()
         }
     }
 
@@ -79,7 +82,7 @@ class Voice(private val ctx: Context) {
     /** Fires for every spoken word (used to move the avatar's mouth). Runs on the main thread. */
     @Volatile
     var onWord: (() -> Unit)? = null
-    /** Real RMS amplitude from each generated Piper PCM block; zero is not synthesized into fallback audio. */
+    /** Real RMS amplitude from each generated Kokoro PCM block; zero is not synthesized into fallback audio. */
     @Volatile var onAudioAmplitude: ((Float) -> Unit)? = null
 
     /** Reports real playback/engine failures instead of silently dropping speech. */
@@ -172,8 +175,7 @@ class Voice(private val ctx: Context) {
         callback?.let { cb -> main.post { cb() } }
     }
 
-    private fun clean(s: String): String =
-        s.replace(Regex("[*_`#>]+"), "").replace(Regex("https?://\\S+"), "link").trim()
+    private fun clean(s: String): String = OrionSpeechTextPolicy.prepare(s)
 
     /** Split long replies on sentence boundaries, preserving conversational flow. */
     /** Keep split logic isolated so queue boundaries can be tested without a TTS engine. */
@@ -194,7 +196,7 @@ class Voice(private val ctx: Context) {
             return
         }
 
-        // The installed Piper voice is English-only for now. Other phone languages
+        // The installed Kokoro voice is British English. Other phone languages
         // retain Android TTS rather than being read with an inappropriate English model.
         if (Prefs.neuralVoice(ctx) &&
             Locale.getDefault().language == "en" &&
@@ -217,24 +219,9 @@ class Voice(private val ctx: Context) {
         speakWithAndroidTts(chunks, onDone)
     }
 
-    /**
-     * Speaks a composed line with per-sentence pace and breathing room. Engines without per-sentence control
-     * (Android TTS) speak the same words at the owner's chosen rate.
-     */
-    fun speakLine(line: OrionSpokenLine.Line, onDone: (() -> Unit)? = null) {
-        val chunks = OrionSpokenLine.plan(line, Prefs.rate(ctx).coerceIn(0.75f, 1.25f))
-            .map { it.copy(text = clean(it.text)) }.filter { it.text.isNotEmpty() }
-        if (chunks.isEmpty()) { onDone?.invoke(); return }
-        if (Prefs.neuralVoice(ctx) && Locale.getDefault().language == "en" && NeuralVoiceInstaller.isInstalled(ctx)) {
-            speakNeural(chunks.map { it.text }, onDone, chunks.map { it.speed }, chunks.map { it.pauseAfterMs })
-            return
-        }
-        speak(chunks.joinToString(" ") { it.text }, onDone)
-    }
-
-    /** Compatibility path if Piper is not installed or native initialization fails. */
+    /** Compatibility path if Kokoro is not installed or native initialization fails. */
     private fun speakWithAndroidTts(chunks: List<String>, onDone: (() -> Unit)?) {
-        // Neural-engine failure must not bypass the explicit no-network-TTS preference.
+        // Kokoro-engine failure must not bypass the explicit no-network-TTS preference.
         // Report the missing local voice instead of silently dropping the assistant reply.
         if (Prefs.offlineVoiceOnly(ctx) && voiceList().none { !it.features.contains("networkTts") }) {
             main.post { onProblem?.invoke("Orion cannot speak offline because no installed local voice is available. Install voice data in Android Text-to-speech settings, or turn off Offline-only voice.") }
@@ -285,7 +272,7 @@ class Voice(private val ctx: Context) {
      * PCM blocks directly into AudioTrack. Blocking writes add back-pressure; synthesis
      * of the next sentence overlaps playback of the current sentence.
      */
-    private fun speakNeural(chunks: List<String>, onDone: (() -> Unit)?, speeds: List<Float>? = null, pausesMs: List<Int>? = null) {
+    private fun speakNeural(chunks: List<String>, onDone: (() -> Unit)?) {
         val token = playbackGeneration.get()
         val ids = chunks.mapIndexed { index, _ -> "n" + System.nanoTime() + "_" + index }
         ids.forEach { pendingIds.add(it) }
@@ -298,7 +285,7 @@ class Voice(private val ctx: Context) {
             var track: AudioTrack? = null
             var fallbackStart = 0
             var completedBeforeFallback = 0
-            var piperMetricsRecorded = false
+            var kokoroMetricsRecorded = false
             try {
                 if (token != playbackGeneration.get()) return@execute
                 val model = NeuralVoiceInstaller.modelFile(ctx)
@@ -313,7 +300,8 @@ class Voice(private val ctx: Context) {
                     if (token != playbackGeneration.get()) return@execute
                     fallbackStart = index
                     val generation = GenerationConfig(
-                        speed = speeds?.getOrNull(index) ?: Prefs.rate(ctx).coerceIn(0.75f, 1.25f)
+                        sid = Prefs.kokoroSpeakerId(ctx),
+                        speed = Prefs.rate(ctx).coerceIn(0.85f, 1.15f)
                     )
                     engine.generateWithConfigAndCallback(
                         text = chunks[index],
@@ -344,13 +332,6 @@ class Voice(private val ctx: Context) {
                     if (token != playbackGeneration.get()) return@execute
                     fallbackStart = index + 1
                     if (index < chunks.lastIndex) {
-                        val gapMs = pausesMs?.getOrNull(index) ?: 0
-                        val gapTrack = track
-                        if (gapMs > 0 && gapTrack != null) {
-                            // A breath between sentences: silence the orb can relax into.
-                            writeNeuralSamples(gapTrack, FloatArray(engine.sampleRate() * gapMs / 1000), token)
-                            main.post { if (token == playbackGeneration.get()) onAudioAmplitude?.invoke(0f) }
-                        }
                         finished(ids[index])
                         completedBeforeFallback++
                     }
@@ -361,19 +342,19 @@ class Voice(private val ctx: Context) {
                 val generatedAudioSeconds = generatedFrames.toDouble() / engine.sampleRate().coerceAtLeast(1)
                 if (generatedFrames > 0L) {
                     val realTimeFactor = generatedAudioSeconds / (generationElapsedMs / 1000.0)
-                    setPiperPerformance(String.format(
+                    setKokoroPerformance(String.format(
                         Locale.US,
-                        "Piper synthesis: %.2f seconds of audio in %d ms; real-time factor %.2fx; %d characters across %d chunk(s).",
+                        "Kokoro synthesis: %.2f seconds of audio in %d ms; real-time factor %.2fx; %d characters across %d chunk(s).",
                         generatedAudioSeconds,
                         generationElapsedMs,
                         realTimeFactor,
                         chunks.sumOf { it.length },
                         chunks.size
                     ))
-                    piperMetricsRecorded = true
+                    kokoroMetricsRecorded = true
                 } else {
-                    setPiperPerformance("Piper synthesis: no audio frames were produced; this run is not a valid speed measurement.")
-                    piperMetricsRecorded = true
+                    setKokoroPerformance("Kokoro synthesis: no audio frames were produced; this run is not a valid speed measurement.")
+                    kokoroMetricsRecorded = true
                 }
                 val activeTrack = track
                 if (activeTrack != null) awaitNeuralPlayback(activeTrack, neuralFramesWritten, token)
@@ -382,8 +363,8 @@ class Voice(private val ctx: Context) {
             } catch (error: Throwable) {
                 // Never fail silently: say why the neural voice did not speak.
                 main.post { onProblem?.invoke("Neural voice failed (" + error.javaClass.simpleName + (error.message?.let { ": " + it.take(120) } ?: "") + "). Try Reinstall / repair neural voice in Settings.") }
-                if (!piperMetricsRecorded) {
-                    setPiperPerformance("Piper synthesis: failed (${error.javaClass.simpleName}); Android TTS fallback may be used. No successful Piper speed measurement was recorded.")
+                if (!kokoroMetricsRecorded) {
+                    setKokoroPerformance("Kokoro synthesis: failed (${error.javaClass.simpleName}); Android TTS fallback may be used. No successful Kokoro speed measurement was recorded.")
                 }
                 // Drain any already-written sentence before switching engines so the
                 // fallback doesn't overlap neural playback. A stopped turn never falls back.
@@ -413,18 +394,21 @@ class Voice(private val ctx: Context) {
         try { current?.release() } catch (_: Exception) {}
         val config = getOfflineTtsConfig(
             modelDir = model.parentFile?.absolutePath
-                ?: throw IllegalStateException("Neural model folder is missing."),
+                ?: throw IllegalStateException("Kokoro model folder is missing."),
             modelName = model.name,
             acousticModelName = "",
             vocoder = "",
-            voices = "",
+            voices = "voices.bin",
             lexicon = "",
             dataDir = NeuralVoiceInstaller.espeakDataDirectory(ctx).absolutePath,
             dictDir = "",
             ruleFsts = "",
             ruleFars = "",
-            numThreads = 2
+            numThreads = 3
         )
+        // British phonemization and speaker embeddings are explicit, not inferred
+        // from the phone locale or the Android system TTS voice.
+        config.model.kokoro.lang = "en-gb"
         return OfflineTts(assetManager = null, config = config).also {
             neuralEngine = it
             neuralEnginePath = model.absolutePath

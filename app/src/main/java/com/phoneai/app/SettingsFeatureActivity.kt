@@ -136,6 +136,9 @@ class SettingsFeatureActivity : Activity() {
                 card("Capabilities and integrations", "Review connected services, tool permissions, credentials and connection status.", "Open capability board") {
                     startActivity(Intent(this, CapabilityBoardActivity::class.java))
                 }
+                card("Telegram bot", "Connect your private Telegram bot, verify the owner chat, send a test reply and control the background listener.", "Configure Telegram") {
+                    startActivity(Intent(this, TelegramSettingsActivity::class.java))
+                }
                 card("Remote MCP", "Configure trusted MCP endpoints, local pairing, least-privilege scopes and remote tool discovery.", "Open MCP settings") {
                     startActivity(Intent(this, McpSettingsActivity::class.java))
                 }

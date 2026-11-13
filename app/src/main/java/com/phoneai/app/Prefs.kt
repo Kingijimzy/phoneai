@@ -456,7 +456,7 @@ object Prefs {
     fun offlineVoiceOnly(c: Context): Boolean = sp(c).getBoolean("offline_voice_only", true)
     fun setOfflineVoiceOnly(c: Context, v: Boolean) = sp(c).edit().putBoolean("offline_voice_only", v).apply()
 
-    /** Use the installed English Piper neural voice instead of Android TTS. */
+    /** Enable model-aware routing for assistant requests. */
     fun modelRouting(c: Context): Boolean = sp(c).getBoolean("model_routing", true)
     fun setModelRouting(c: Context, v: Boolean) = sp(c).edit().putBoolean("model_routing", v).apply()
     /** The shared living orb is the default identity; other companion skins remain selectable. */
@@ -466,8 +466,24 @@ object Prefs {
     fun setLastChatSeen(c: Context, v: Long) = sp(c).edit().putLong("chat_last_seen", v).apply()
     fun companionVoice(c: Context): Boolean = sp(c).getBoolean("companion_voice", false)
     fun setCompanionVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("companion_voice", v).apply()
-    fun neuralVoice(c: Context): Boolean = sp(c).getBoolean("neural_voice", false)
+    /** Kokoro is the canonical spoken identity; Android TTS remains the compatibility fallback. */
+    fun neuralVoice(c: Context): Boolean = sp(c).getBoolean("neural_voice", true)
     fun setNeuralVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("neural_voice", v).apply()
+
+    val KOKORO_BRITISH_VOICES = listOf("bf_emma", "bf_isabella")
+    fun kokoroVoice(c: Context): String {
+        val saved = sp(c).getString("kokoro_voice", "bf_emma") ?: "bf_emma"
+        return saved.takeIf { it in KOKORO_BRITISH_VOICES } ?: "bf_emma"
+    }
+    fun setKokoroVoice(c: Context, value: String) {
+        val safe = value.takeIf { it in KOKORO_BRITISH_VOICES } ?: "bf_emma"
+        sp(c).edit().putString("kokoro_voice", safe).apply()
+    }
+    /** Speaker IDs from the official sherpa-onnx Kokoro English v0.19 model. */
+    fun kokoroSpeakerId(c: Context): Int = when (kokoroVoice(c)) {
+        "bf_isabella" -> 8
+        else -> 7 // bf_emma
+    }
 
     fun deepVoice(c: Context): Boolean = sp(c).getBoolean("deep", false)
     fun setDeepVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("deep", v).apply()

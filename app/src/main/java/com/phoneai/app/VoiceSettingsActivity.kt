@@ -34,6 +34,7 @@ class VoiceSettingsActivity : Activity() {
     private var neuralSwitch: Switch? = null
     private var bindingControls = false
     private var neuralInstallButton: Button? = null
+    private var kokoroVoiceButton: Button? = null
     private var wakeInstallButton: Button? = null
     private var geminiVoiceButton: Button? = null
     private var geminiSensitivityButton: Button? = null
@@ -143,7 +144,7 @@ class VoiceSettingsActivity : Activity() {
             addSwitch(this, "Speak Orion's answers", Prefs.voice(this@VoiceSettingsActivity)) {
                 Prefs.setVoice(this@VoiceSettingsActivity, it)
             }
-            addSwitch(this, "Deeper voice", Prefs.deepVoice(this@VoiceSettingsActivity)) {
+            addSwitch(this, "Lower pitch on Android fallback only", Prefs.deepVoice(this@VoiceSettingsActivity)) {
                 Prefs.setDeepVoice(this@VoiceSettingsActivity, it)
             }
             addSwitch(this, "Offline-only voice output", Prefs.offlineVoiceOnly(this@VoiceSettingsActivity)) {
@@ -155,28 +156,32 @@ class VoiceSettingsActivity : Activity() {
                     Toast.LENGTH_LONG
                 ).show()
             }
-            neuralSwitch = addSwitch(this, "Use installed English neural voice (Piper)", Prefs.neuralVoice(this@VoiceSettingsActivity)) {
+            neuralSwitch = addSwitch(this, "Use Orion's British neural voice (Kokoro)", Prefs.neuralVoice(this@VoiceSettingsActivity)) {
+                Prefs.setNeuralVoice(this@VoiceSettingsActivity, it)
                 if (it && !NeuralVoiceInstaller.isInstalled(this@VoiceSettingsActivity)) {
-                    Prefs.setNeuralVoice(this@VoiceSettingsActivity, false)
-                    Toast.makeText(this@VoiceSettingsActivity, "Install the neural voice first.", Toast.LENGTH_LONG).show()
-                    refresh()
+                    Toast.makeText(this@VoiceSettingsActivity, "Kokoro is not installed yet. Download it below to activate Orion's British voice.", Toast.LENGTH_LONG).show()
                 } else {
-                    Prefs.setNeuralVoice(this@VoiceSettingsActivity, it)
                     Toast.makeText(
                         this@VoiceSettingsActivity,
-                        if (it) "English neural voice enabled; synthesis runs on-device."
-                        else "Android TextToSpeech selected.",
+                        if (it) "Kokoro British neural speech enabled on-device."
+                        else "Android TextToSpeech selected as the speech engine.",
                         Toast.LENGTH_SHORT
                     ).show()
                 }
+                refresh()
             }
-            addNote(this, "Piper currently provides one English voice. Other languages continue using Android TextToSpeech.")
+            addNote(this, "Kokoro-82M runs locally through Sherpa-ONNX. Emma is the default British female voice; Isabella is also available. The quantized model is downloaded only when you choose to install it.")
+            kokoroVoiceButton = button("British voice · " + kokoroVoiceLabel()) { chooseKokoroVoice() }
+            addView(kokoroVoiceButton, LinearLayout.LayoutParams(-1, -2))
             neuralInstallButton = button(
-                if (NeuralVoiceInstaller.isInstalled(this@VoiceSettingsActivity)) "Repair / reinstall English neural voice"
-                else "Install English neural voice · about 21 MB"
-            ) { installNeuralVoice() }
-            addView(neuralInstallButton, LinearLayout.LayoutParams(-1, -2))
-            addView(button("Choose Android speech voice") { chooseAndroidVoice() },
+                when {
+                    NeuralVoiceInstaller.isInstalling() -> "Kokoro installation running in background · reopen later"
+                    NeuralVoiceInstaller.isInstalled(this@VoiceSettingsActivity) -> "Repair / reinstall Kokoro British voice"
+                    else -> "Install Kokoro British neural voice · about 104 MB"
+                }
+            ) { installNeuralVoice() }.apply { isEnabled = !NeuralVoiceInstaller.isInstalling() }
+            addView(neuralInstallButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            addView(button("Choose Android fallback voice") { chooseAndroidVoice() },
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
             addView(button("Test spoken voice") { testVoice() },
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
@@ -263,17 +268,8 @@ class VoiceSettingsActivity : Activity() {
                     Toast.LENGTH_LONG
                 ).show()
             }
-            geminiVoiceButton = button("Gemini Live voice · " + Prefs.geminiVoice(this@VoiceSettingsActivity)) {
-                val voices = Prefs.GEMINI_VOICES.toTypedArray()
-                AlertDialog.Builder(this@VoiceSettingsActivity)
-                    .setTitle("Gemini Live voice")
-                    .setSingleChoiceItems(voices, voices.indexOf(Prefs.geminiVoice(this@VoiceSettingsActivity)).coerceAtLeast(0)) { dialog, which ->
-                        Prefs.setGeminiVoice(this@VoiceSettingsActivity, voices[which])
-                        dialog.dismiss()
-                        refresh()
-                    }
-                    .setNegativeButton("Cancel", null)
-                    .show()
+            geminiVoiceButton = button("Gemini Live spoken voice · " + kokoroVoiceLabel()) {
+                chooseKokoroVoice()
             }
             addView(geminiVoiceButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
             geminiSensitivityButton = button("Gemini Live mic sensitivity · " + Prefs.geminiMicSensitivity(this@VoiceSettingsActivity)) {
@@ -348,9 +344,16 @@ class VoiceSettingsActivity : Activity() {
         neuralSwitch?.isChecked = Prefs.neuralVoice(this)
         bindingControls = false
         wakeStatus.text = wakeStatusText()
-        neuralInstallButton?.text = if (NeuralVoiceInstaller.isInstalled(this)) "Repair / reinstall English neural voice" else "Install English neural voice · about 21 MB"
+        val kokoroInstalling = NeuralVoiceInstaller.isInstalling()
+        neuralInstallButton?.text = when {
+            kokoroInstalling -> "Kokoro installation running in background · reopen later"
+            NeuralVoiceInstaller.isInstalled(this) -> "Repair / reinstall Kokoro British voice"
+            else -> "Install Kokoro British neural voice · about 104 MB"
+        }
+        neuralInstallButton?.isEnabled = !kokoroInstalling
+        kokoroVoiceButton?.text = "British voice · " + kokoroVoiceLabel()
         wakeInstallButton?.text = if (WakeWordModelInstaller.isInstalled(this)) "Offline wake-word model · installed" else "Install dedicated offline wake-word model · about 16 MB"
-        geminiVoiceButton?.text = "Gemini Live voice · " + Prefs.geminiVoice(this)
+        geminiVoiceButton?.text = "Gemini Live spoken voice · " + kokoroVoiceLabel()
         geminiSensitivityButton?.text = "Gemini Live mic sensitivity · " + Prefs.geminiMicSensitivity(this)
         liveStyleButton?.text = "Live-call visual · " + liveStyleLabel()
     }
@@ -366,6 +369,27 @@ class VoiceSettingsActivity : Activity() {
         "dot_matrix" -> "Dot matrix"
         "eyes" -> "Eyes"
         else -> "Glass orb"
+    }
+
+    private fun kokoroVoiceLabel(): String = when (Prefs.kokoroVoice(this)) {
+        "bf_isabella" -> "Isabella · British English"
+        else -> "Emma · British English"
+    }
+
+    private fun chooseKokoroVoice() {
+        val ids = Prefs.KOKORO_BRITISH_VOICES
+        val labels = arrayOf("Emma · British English · default", "Isabella · British English")
+        val selected = ids.indexOf(Prefs.kokoroVoice(this)).coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle("Orion's British neural voice")
+            .setSingleChoiceItems(labels, selected) { dialog, which ->
+                Prefs.setKokoroVoice(this, ids[which])
+                dialog.dismiss()
+                refresh()
+                if (NeuralVoiceInstaller.isInstalled(this)) testVoice()
+            }
+            .setNegativeButton("CLOSE", null)
+            .show()
     }
 
     private fun chooseAndroidVoice() {
@@ -408,6 +432,10 @@ class VoiceSettingsActivity : Activity() {
     }
 
     private fun installNeuralVoice() {
+        if (NeuralVoiceInstaller.isInstalling()) {
+            Toast.makeText(this, "Kokoro installation is already running in the background.", Toast.LENGTH_SHORT).show()
+            return
+        }
         if (installCancellation != null) {
             Toast.makeText(this, "Another voice download is still finishing.", Toast.LENGTH_SHORT).show()
             return
@@ -415,7 +443,7 @@ class VoiceSettingsActivity : Activity() {
         val cancelled = AtomicBoolean(false)
         installCancellation = cancelled
         val progress = ProgressDialog(this).apply {
-            setTitle("Install English neural voice")
+            setTitle("Install Kokoro British neural voice")
             setProgressStyle(ProgressDialog.STYLE_HORIZONTAL)
             max = 100
             setCancelable(true)
@@ -435,14 +463,14 @@ class VoiceSettingsActivity : Activity() {
                 }
             },
             { failure ->
+                if (failure == null) Prefs.setNeuralVoice(applicationContext, true)
                 runOnUiThread {
                     if (progress.isShowing) progress.dismiss()
                     if (activeProgress === progress) activeProgress = null
                     if (installCancellation === cancelled) installCancellation = null
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     if (failure == null) {
-                        Prefs.setNeuralVoice(this, true)
-                        Toast.makeText(this, "English neural voice installed and enabled.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, "Kokoro British neural voice installed and enabled.", Toast.LENGTH_LONG).show()
                     } else {
                         Toast.makeText(this, "Neural voice install failed: " + (failure.message ?: "unknown error"), Toast.LENGTH_LONG).show()
                     }
@@ -503,7 +531,8 @@ class VoiceSettingsActivity : Activity() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
-        installCancellation?.set(true)
+        // A settings-screen recreation must not cancel a user-requested model installation.
+        // Explicit cancellation remains available from the progress dialog itself.
         activeProgress?.let { if (it.isShowing) it.dismiss() }
         activeProgress = null
         previewVoice?.shutdown()

@@ -53,8 +53,10 @@ class OrionToolContractCodecTest {
         val extension = ToolRegistry.find("extension_create") ?: error("extension_create must be registered")
         val schema = OrionToolContractCodec.parameters(extension)
         assertFalse(schema.getJSONArray("required").toString().contains("runtime"))
-        assertEquals("python", schema.getJSONObject("properties")
-            .getJSONObject("runtime").getJSONArray("enum").getString(0))
+        val runtimeOptions = schema.getJSONObject("properties")
+            .getJSONObject("runtime").getJSONArray("enum")
+        assertEquals("python_full", runtimeOptions.getString(0))
+        assertEquals("python", runtimeOptions.getString(1))
     }
 
     @Test fun derivesNestedArrayAndObjectArgumentSchemas() {

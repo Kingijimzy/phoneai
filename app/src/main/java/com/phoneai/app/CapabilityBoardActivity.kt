@@ -93,6 +93,35 @@ class CapabilityBoardActivity : Activity() {
             c.addView(row); page.addView(c)
         }
 
+        val telegramCard = card()
+        telegramCard.addView(text("Telegram Bot", 16f, Theme.TEXT, true))
+        val telegramConfigured = TelegramBridge.isConfigured(this)
+        val telegramListening = TelegramListenerService.isEnabled(this)
+        telegramCard.addView(text(
+            when {
+                telegramListening -> "Background listener active · saved bot credentials"
+                telegramConfigured -> "Bot credentials saved · connection check available"
+                else -> "Not configured"
+            },
+            12f, if (telegramListening) Theme.OK else Theme.MUTED
+        ))
+        val telegramActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        telegramActions.addView(chip("Configure / verify") {
+            startActivity(android.content.Intent(this, TelegramSettingsActivity::class.java))
+        })
+        telegramActions.addView(chip(if (telegramListening) "Stop listener" else "Start listener") {
+            if (telegramListening) {
+                TelegramListenerService.stop(this)
+                Toast.makeText(this, "Telegram listener stopped.", Toast.LENGTH_SHORT).show()
+            } else {
+                val started = telegramConfigured && TelegramListenerService.start(this)
+                Toast.makeText(this, if (started) "Telegram listener started." else "Configure and verify Telegram first.", Toast.LENGTH_LONG).show()
+            }
+            render()
+        }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) })
+        telegramCard.addView(telegramActions)
+        page.addView(telegramCard)
+
         page.addView(text("OTHER APPS AND SITES", 10f, Theme.MUTED, true).apply { setPadding(0, dp(16), 0, 0) })
         val vc = card()
         val entries = AppVault.list(this)
