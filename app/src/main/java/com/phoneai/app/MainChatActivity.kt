@@ -81,6 +81,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private val composeOrbSpeechAmplitude = mutableStateOf(0f)
     private val composeOrbWordPulse = mutableStateOf(0f)
     private val composeActivityEvents = mutableStateOf<List<OrionActivityEvent>>(emptyList())
+    private val composeAttachments = mutableStateOf<List<OrionChatAttachmentStore.Attachment>>(emptyList())
     private val composeSelectedImages get() = chatUiState.selectedImages
     private var composeChatActive = false
     private var streamingMessageId: Long? = null
@@ -786,6 +787,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     date = date,
                     messages = messages,
                     activityEvents = persistedEvents,
+                    attachments = OrionChatAttachmentStore.forSession(this@MainChatActivity, sessionId),
+                    onOpenAttachment = { openChatAttachment(it) },
                     onBack = {
                         dialog.dismiss()
                         showChatHistory()
@@ -1425,6 +1428,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 OrionComposeChatScreen(
                     lines = composeLines,
                     activityEvents = composeActivityEvents.value,
+                    attachments = composeAttachments.value,
+                    onOpenAttachment = { openChatAttachment(it) },
                     status = composeStatus.value,
                     orbMode = composeOrbMode.value,
                     orbMicLevel = composeOrbMicLevel.value,
@@ -1663,6 +1668,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         super.onResume()
         runCatching {
             onChatEvents(OrionConversationRepository.get(this).eventsForActive(this))
+            refreshChatAttachments()
         }
         refreshProviderModelChip()
         if (livePulse?.isStarted != true) livePulse?.start()
@@ -1890,6 +1896,35 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
     }
 
+
+    private fun currentChatSessionId(): String {
+        ChatHistoryStore.activeSessionId(this)?.let { return it }
+        ChatHistoryStore.save(this, composeLines.map { it.kind to it.text })
+        return ChatHistoryStore.activeSessionId(this)
+            ?: throw IllegalStateException("Could not create a conversation session for this attachment.")
+    }
+
+    private fun refreshChatAttachments() {
+        val sessionId = ChatHistoryStore.activeSessionId(this)
+        composeAttachments.value = if (sessionId.isNullOrBlank()) emptyList()
+            else runCatching { OrionChatAttachmentStore.forSession(this, sessionId) }.getOrDefault(emptyList())
+    }
+
+    private fun openChatAttachment(attachment: OrionChatAttachmentStore.Attachment) {
+        try {
+            val file = OrionChatAttachmentStore.file(this, attachment)
+            if (!file.isFile) throw IllegalStateException("This attachment is no longer available.")
+            val uri = androidx.core.content.FileProvider.getUriForFile(this, "${packageName}.files", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, attachment.mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(intent, "Open ${attachment.name}"))
+        } catch (error: Exception) {
+            Toast.makeText(this, error.message ?: "No compatible app could open this attachment.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun sendMessage() {
         val value = input.text.toString().trim()
         val imageUris = selectedImageUris.toList()
@@ -2085,6 +2120,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 OrionConversationRepository.get(this@MainChatActivity).eventsForActive(this@MainChatActivity)
             }.getOrDefault(emptyList())
             onChatEvents(activeEvents)
+            refreshChatAttachments()
         }
     }
 
