@@ -7,7 +7,7 @@ package com.phoneai.app
  * through these principles; the coordinator, permissions and evidence stores remain authoritative.
  */
 internal object OrionEntityPhilosophy {
-    const val VERSION = "orion-entity-doctrine-3"
+    const val VERSION = "orion-entity-doctrine-4"
 
     data class State(
         val currentIntent: String,
