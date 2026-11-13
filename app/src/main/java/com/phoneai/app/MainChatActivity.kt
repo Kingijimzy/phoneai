@@ -482,6 +482,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 PhoneAiService.instance?.startNewChat() ?: run {
                     ChatHistoryStore.archiveAndClear(this, composeLines.map { it.kind to it.text })
                     composeLines.clear()
+                    composeAttachments.value = emptyList()
+            composeAttachments.value = emptyList()
                 }
                 composeChatTitle.value = "Orion"
                 getSharedPreferences("orion_chat_history", MODE_PRIVATE).edit().remove("active_title").apply()
@@ -496,6 +498,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     PhoneAiService.instance?.startNewChat() ?: run {
                         ChatHistoryStore.archiveAndClear(this, composeLines.map { it.kind to it.text })
                         composeLines.clear()
+                    composeAttachments.value = emptyList()
+            composeAttachments.value = emptyList()
                     }
                     composeChatTitle.value = "Orion"
                     getSharedPreferences("orion_chat_history", MODE_PRIVATE).edit().remove("active_title").apply()
@@ -681,6 +685,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                                     service.deleteAllChatHistory { deleted, message ->
                                         if (deleted) {
                                             composeLines.clear()
+                                            composeAttachments.value = emptyList()
+                    composeAttachments.value = emptyList()
+            composeAttachments.value = emptyList()
                                             dialog.dismiss()
                                             Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_SHORT).show()
                                         } else {
@@ -691,6 +698,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                                     val deleted = ChatHistoryStore.clearAll(this@MainChatActivity)
                                     if (deleted) {
                                         composeLines.clear()
+                    composeAttachments.value = emptyList()
+            composeAttachments.value = emptyList()
                                         dialog.dismiss()
                                     }
                                     Toast.makeText(this@MainChatActivity,
@@ -1463,6 +1472,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                         else {
                             ChatHistoryStore.archiveAndClear(this@MainChatActivity, composeLines.map { it.kind to it.text })
                             composeLines.clear()
+                    composeAttachments.value = emptyList()
+            composeAttachments.value = emptyList()
                             Toast.makeText(this@MainChatActivity, "New chat ready", Toast.LENGTH_SHORT).show()
                         }
                     },
@@ -2137,6 +2148,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             // Rebuild the entire visible timeline on session switches: never leave activity
             // cards from the previous session attached to the newly restored transcript.
             composeLines.clear()
+            composeAttachments.value = emptyList()
             messages.forEachIndexed { index, pair ->
                 val (kind, text) = pair
                 composeLines.add(OrionChatLine(System.nanoTime() + index, kind, text))
