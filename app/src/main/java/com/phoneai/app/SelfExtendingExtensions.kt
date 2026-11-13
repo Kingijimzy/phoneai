@@ -10,10 +10,9 @@ import java.security.MessageDigest
 /**
  * Lifecycle contract for self-extending tools.
  *
- * Generated source is never executed by this class. A platform sandbox must implement
- * ExtensionSandbox and enforce process isolation, no network by default, bounded CPU/time,
- * bounded memory/output, and an explicit capability bridge. A syntax check or denylist is
- * not a security boundary.
+ * Generated source is executed by the selected ExtensionSandbox runtime adapter:
+ * "python" uses the restricted data-transform interpreter; "python_full" uses full CPython.
+ * The full CPython PRoot guest shares the Android app UID and is not an OS security boundary.
  */
 internal object SelfExtendingExtensionPolicy {
     const val MAX_SOURCE_BYTES = 8_000
