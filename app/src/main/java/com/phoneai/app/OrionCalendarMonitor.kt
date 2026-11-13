@@ -2,6 +2,7 @@ package com.phoneai.app
 
 import android.content.ContentResolver
 import android.content.Context
+import android.content.pm.PackageManager
 import android.database.Cursor
 import android.provider.CalendarContract
 import java.util.Locale
@@ -37,6 +38,9 @@ internal object OrionCalendarMonitor {
         now: Long = System.currentTimeMillis()
     ): List<UpcomingEvent> {
         if (!isEnabled(context, now)) return emptyList()
+        if (context.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) {
+            return emptyList()
+        }
         val resolver: ContentResolver = context.applicationContext.contentResolver
         val start = now
         val end = now + lookaheadHours.coerceAtLeast(1).coerceAtMost(168).toLong() * 60 * 60 * 1000
