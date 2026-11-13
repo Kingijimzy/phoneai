@@ -6,10 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -372,12 +369,10 @@ internal fun OrionComposeActivityCard(event: OrionActivityEvent) {
     val safeEvidence = OrionActivityPresentation.evidence(event.evidence)
     val terminalOutput = safeEvidence.lastOrNull { it.contains("Python terminal", true) || it.contains("TASK:OUTPUT", true) }
         ?: displaySummary
-    val pulse = rememberInfiniteTransition(label = "task-stream-pulse")
-    val alpha by pulse.animateFloat(
-        initialValue = if (active) 0.35f else 1f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(850), repeatMode = RepeatMode.Reverse),
-        label = "task-stream-alpha"
+    val alpha by animateFloatAsState(
+        targetValue = if (active) 0.65f else 1f,
+        animationSpec = tween(180),
+        label = "task-status-alpha"
     )
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp))

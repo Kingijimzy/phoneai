@@ -169,20 +169,31 @@ class OrionActivityTimelineTest {
                 correlationId = "tool-call-a"
             ),
             OrionConversationRepository.ChatEvent(
+                id = "interaction-done", sessionId = "session-a", messageId = "turn-a",
+                type = "interaction", status = "completed", summary = "interaction processing finished", createdAt = 25
+            ),
+            OrionConversationRepository.ChatEvent(
                 id = "other-turn", sessionId = "session-a", messageId = "turn-b",
                 type = "tool", status = "failed", summary = "Workspace read failed", createdAt = 30
+            ),
+            OrionConversationRepository.ChatEvent(
+                id = "objective-verified", sessionId = "session-a", messageId = "objective-1",
+                type = "objective_verified", status = "verified", summary = "Objective verified with trusted evidence", createdAt = 40
             )
         )
         val timeline = OrionActivityTimeline()
         timeline.replay(OrionActivityTimeline.fromPersisted(persisted))
         val cards = timeline.compactForChat()
-        assertEquals(2, cards.size)
+        assertEquals(3, cards.size)
         val first = cards.single { it.taskId == "message-turn-a" }
-        assertEquals(OrionActivityStatus.SUCCEEDED, first.status)
-        assertTrue(first.evidence.any { it.startsWith("DONE · Browser search returned results") })
+        assertEquals(OrionActivityStatus.WAITING, first.status)
+        assertTrue(first.evidence.any { it.startsWith("WAITING · Objective completion has not been verified.") })
         val second = cards.single { it.taskId == "message-turn-b" }
         assertEquals(OrionActivityStatus.FAILED, second.status)
         assertEquals(OrionActivityKind.ERROR, second.kind)
+        val verified = cards.single { it.taskId == "message-objective-1" }
+        assertEquals(OrionActivityStatus.SUCCEEDED, verified.status)
+        assertEquals(OrionActivityKind.COMPLETION, verified.kind)
     }
 
     @Test fun progressStepsKeepDetailsForSingleStepTask() {

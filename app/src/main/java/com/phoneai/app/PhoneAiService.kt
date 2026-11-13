@@ -410,7 +410,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     if (brainTracked) recordChatEvent(
                         "runtime", "started",
                         "work=" + item.type.name.lowercase() + "; key=" + item.key.take(80) +
-                            "; checkpoint=" + item.checkpoint.take(100) + "; attempt=" + item.attempts
+                            "; checkpoint=" + item.checkpoint.take(100) + "; attempt=" + item.attempts,
+                        messageId = item.key
                     )
                     try {
                         when (item.type) {
@@ -467,7 +468,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                         if (completed && brainTracked) recordChatEvent(
                             "runtime", "completed",
                             "work=" + item.type.name.lowercase() + "; key=" + item.key.take(80) +
-                                "; checkpoint=" + item.checkpoint.take(100)
+                                "; checkpoint=" + item.checkpoint.take(100),
+                            messageId = item.key
                         )
                         if (completed && item.type == OrionRuntime.WorkType.SOUL_WATCH) {
                             OrionRuntimeNotifier.postResult(this, item, success = true)
@@ -478,7 +480,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                             "runtime", if (retryQueued) "retry_scheduled" else "failed",
                             "work=" + item.type.name.lowercase() + "; key=" + item.key.take(80) +
                                 "; attempt=" + (item.attempts + 1) + "; retry=" + retryQueued +
-                                "; error=" + error.javaClass.simpleName
+                                "; error=" + error.javaClass.simpleName,
+                            messageId = item.key
                         )
                         if (!retryQueued && item.type == OrionRuntime.WorkType.SOUL_WATCH) {
                             OrionRuntimeNotifier.postResult(this, item, success = false)
@@ -932,6 +935,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         } catch (_: Exception) {
             /* Conversation storage must never crash phone control. */
         }
+    }
+
+    /** Persist a completion receipt only after the objective graph verifies its latest trusted evidence. */
+    fun recordVerifiedObjectiveEvent(objectiveId: String, evidenceId: String): Boolean {
+        return try {
+            val safeObjective = objectiveId.trim().take(80)
+            val safeEvidence = evidenceId.trim().take(80)
+            if (safeObjective.isBlank() || safeEvidence.isBlank()) return false
+            val repository = OrionConversationRepository.get(this)
+            val event = repository.recordEvent(
+                this, safeObjective, "objective_verified", "verified",
+                "Objective '$safeObjective' completed after trusted evidence receipt '$safeEvidence' and dependency state were verified."
+            ) ?: return false
+            val events = repository.eventsForActive(this)
+            main.post { mainChatListener?.onChatEvents(events) }
+            true
+        } catch (_: Exception) { false }
     }
 
     fun activeChatEvents(): List<OrionConversationRepository.ChatEvent> =

@@ -235,8 +235,14 @@ internal object OrionTasksCapabilityExecutor {
                 stopped() -> "error: objective completion was stopped."
                 objectiveId.isBlank() || evidenceId.isBlank() ->
                     "error: complete_objective requires the exact objective_id and evidence_id from a trusted executor receipt."
-                OrionObjectiveGraph.completeFromEvidence(service, objectiveId, evidenceId) ->
-                    "PASS: objective node '$objectiveId' is complete; its latest trusted successful executor receipt and dependency state were verified."
+                OrionObjectiveGraph.completeFromEvidence(service, objectiveId, evidenceId) -> {
+                    val receiptSaved = service.recordVerifiedObjectiveEvent(objectiveId, evidenceId)
+                    if (receiptSaved) {
+                        "PASS: objective node '$objectiveId' is complete; its latest trusted successful executor receipt and dependency state were verified and recorded in chat history."
+                    } else {
+                        "PASS: objective node '$objectiveId' is complete in the durable objective graph, but its chat receipt could not be saved. The trusted evidence ID remains '$evidenceId'."
+                    }
+                }
                 else ->
                     "error: objective '$objectiveId' was not completed. The evidence ID may be stale, untrusted, from another session, or a dependency may still be incomplete."
             }

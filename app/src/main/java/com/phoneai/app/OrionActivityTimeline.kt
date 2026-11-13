@@ -145,6 +145,7 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
                 val status = event.status.lowercase()
                 val kind = when {
                     type.contains("approval") -> OrionActivityKind.APPROVAL
+                    type.contains("objective") && status == "verified" -> OrionActivityKind.COMPLETION
                     type.contains("cancel") || status in setOf("cancelled", "canceled") -> OrionActivityKind.CANCELLED
                     type.contains("interrupt") || status == "interrupted" -> OrionActivityKind.INTERRUPTED
                     type.contains("error") || status in setOf("failed", "error", "denied", "rejected") -> OrionActivityKind.ERROR
@@ -155,7 +156,9 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
                     else -> OrionActivityKind.THINKING
                 }
                 val eventStatus = when {
-                    status in setOf("pending", "waiting", "needs_approval", "approval_required", "needs_review") -> OrionActivityStatus.WAITING
+                    type.contains("objective") && status == "verified" -> OrionActivityStatus.SUCCEEDED
+                    type in setOf("interaction", "runtime") && status in setOf("completed", "success", "succeeded", "result") -> OrionActivityStatus.WAITING
+                    status in setOf("pending", "waiting", "needs_approval", "approval_required", "needs_review", "returned") -> OrionActivityStatus.WAITING
                     status in setOf("failed", "error", "denied", "rejected") -> OrionActivityStatus.FAILED
                     status in setOf("cancelled", "canceled") -> OrionActivityStatus.CANCELLED
                     status == "interrupted" -> OrionActivityStatus.INTERRUPTED
@@ -168,7 +171,7 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
                     kind = kind,
                     status = eventStatus,
                     title = event.summary.lineSequence().firstOrNull()?.take(120)?.ifBlank { event.type } ?: event.type,
-                    summary = event.summary.take(500),
+                    summary = if (type in setOf("interaction", "runtime") && status in setOf("completed", "success", "succeeded", "result")) "Execution processing finished; objective completion has not been verified." else event.summary.take(500),
                     timestampMs = event.createdAt.coerceAtLeast(0L),
                     evidence = listOf(
                         (when (eventStatus) {
@@ -178,7 +181,7 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
                             OrionActivityStatus.FAILED -> "FAILED"
                             OrionActivityStatus.CANCELLED -> "CANCELLED"
                             OrionActivityStatus.INTERRUPTED -> "INTERRUPTED"
-                        }) + " · " + event.summary.take(500)
+                        }) + " · " + (if (type in setOf("interaction", "runtime") && status in setOf("completed", "success", "succeeded", "result")) "Objective completion has not been verified." else event.summary.take(500))
                     ),
                     typedEvidence = listOfNotNull(OrionActivityEvidence.fromJson(event.evidenceJson)),
                     correlationId = event.correlationId
