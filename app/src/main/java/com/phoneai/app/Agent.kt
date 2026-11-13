@@ -214,7 +214,7 @@ internal object IrreversibleActionConfirmationPolicy {
             "project_verify" -> if (payload.optBoolean("run_tests", false))
                 "Orion is about to execute the project's test command using $tool$detail. Allow this execution?" else null
             "extension_enable" -> "Orion is requesting approval to activate the exact-source-tested generated extension '${payload.optString("id").take(80)}'. This makes the tool available for later calls. Allow activation?"
-            "python_exec", "dev_python", "extension_run", "extension_test" -> {
+            "python_exec", "dev_python", "extension_run" -> {
                 val code = payload.optString("code").ifBlank { payload.optString("script") }.take(700)
                 "Orion is about to execute code using $tool. Code preview: ${code.ifBlank { "(source is held by the tool runtime)" }}. Allow execution?"
             }
