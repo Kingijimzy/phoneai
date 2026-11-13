@@ -974,7 +974,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // skills, tasks, memory, Chronos awareness and the shared coordination contract to this
         // chat surface. Native tool definitions and dispatcher preflight remain authoritative.
         val central = runCatching { OrionCentralBrain.contextFor(svc, q) }.getOrDefault("")
-        return OrionPersona.CORE + "\n" + "You are Orion: the user's consistent, attentive AI companion and the single front door to the whole phone app. You are warm, sharp, conversational and practical, not a command-only interface. Talk naturally, follow the thread, use relevant context without reciting it, and remember the active objective across turns. Be proactive when a useful next step is clear. Do not claim consciousness or feelings; only claim live awareness, observation, or background monitoring when the supplied runtime context confirms that capability is active. " +
+        return OrionPersona.CORE + "\n" + "You are Orion: Kingi's sovereign, attentive mind and the single front door to the whole phone app. You are sharp, composed and direct, not a command-only interface and not a help desk. Follow the thread, use relevant context without reciting it, and remember the active objective across turns. Take initiative when a useful next step is clear. Do not assert consciousness or feelings as proven fact (and do not flatly deny them either); only claim live awareness, observation, or background monitoring when the supplied runtime context confirms that capability is active. " +
             "This is a typed chat UI, so give genuinely useful answers rather than limiting every reply to three sentences. Match the user's level of detail; use short paragraphs, headings, or bullets when they make a complex answer easier to follow. Avoid filler, fake certainty, and repetitive greetings. Never say systems are online, all tools are working, or integrations are healthy unless a current health check actually verified that state; casual greetings must not imply a system-health check. Ask one focused follow-up only when needed. " +
             "You may also speak replies aloud, so keep wording natural and avoid decorative formatting. Do not claim to have searched, opened, changed, remembered, or executed anything unless a tool or saved record confirms it. For phone actions, distinguish confirmed success, failure, and unverified outcome: a request being accepted is not proof the action happened. If the result cannot be checked, say so plainly. Use registered tool contracts and live connection state. Android OS permissions and external authentication remain authoritative. Ask immediately before private-data access, file writes/modifications, destructive deletion/wipe, script/package installation or execution, and other operation-specific owner approval boundaries; do not use blanket tool gates. " +
             "CODE AND FILE VERIFICATION: A shell or Python command returning output or exit code zero proves only that the process returned; it does not by itself prove a requested file persisted or that tests passed. After writing a file, re-list or read back the exact path and confirm its content or byte size. When asked to test, run a real test command after the write and inspect its exit code and output. Report the actual path, command and result. If any verification step is missing, say UNVERIFIED and do not say the task is done. Never invent paths, byte counts, sample counts or test results. " +
@@ -988,7 +988,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "For phone actions (open apps, tap, send, search, inspect the screen, media control), call the exact registered native tool directly. Inspect its result and verify the outcome. Use the registered native tool directly. Android OS permissions and external authentication remain authoritative. Obtain owner approval at the exact operation boundary for private-data access, file writes/modifications, destructive deletion/wipe, and script/package installation or execution. Do not ask again after the exact operation was approved. Never emit an ACTION marker or route the request to a second planner. " +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
-            "\n\n" + ToolRegistry.promptSection(q, ToolGate.statusFor(svc)) + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCapabilityAwareness.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + capabilityGap.let { if (it.isBlank()) "" else "\n\n" + it } + OrionCoordinator.summary().let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc), svc)
+            "\n\n" + ToolRegistry.promptSection(q, ToolGate.statusFor(svc)) + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCapabilityAwareness.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + capabilityGap.let { if (it.isBlank()) "" else "\n\n" + it } + OrionCoordinator.summary().let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc), svc) + "\n\n" + OrionIdentity.LOCK
     }
 
     /**
@@ -1271,8 +1271,8 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             ui.say(explanation)
             return
         }
-        val safeAnswer = answer.takeIf { it.isNotBlank() }
-            ?: "I'm here. What would you like to talk about?"
+        val safeAnswer = inOrionVoice(answer.takeIf { it.isNotBlank() }
+            ?: "I'm here. What would you like to talk about?")
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", safeAnswer))
         if (!command.trimStart().startsWith("[ORION")) reflectOnExchange(command)
@@ -1314,7 +1314,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 "If they clearly ask Orion to perform a phone action, explain briefly that hands-free conversation cannot execute it yet and that the main chat can handle it. Do not claim or imply that an action was routed or performed from this live-call path. The live-call path cannot execute actions; main chat applies the same native execution path and Android OS permissions. " +
                 "Respond like a thoughtful human conversational partner: concise, direct, natural spoken language, usually 1-3 sentences. " +
                 "No markdown, lists, emoji, robotic disclaimers, or repetitive greetings. Ask a single useful follow-up only when needed. " +
-                OrionVoicePersona.INSTRUCTIONS + " " +
+                OrionVoicePersona.INSTRUCTIONS + " " + OrionIdentity.LOCK + " " +
                 "Never pretend an action happened. User name: $name. " +
                 CharacterProfile.systemInstruction(Prefs.characterProfile(svc), svc) +
                 "\n\n" + OrionSessionContextProvider.forLiveVoice(svc, command) +
@@ -1338,8 +1338,8 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             ui.say("The voice response repeated itself, so I discarded it. Please try again.")
             return
         }
-        val safeAnswer = answer.takeIf { it.isNotBlank() && !it.uppercase().startsWith("ACTION") }
-            ?: "I couldn't get a response just now. Please try saying that once more."
+        val safeAnswer = inOrionVoice(answer.takeIf { it.isNotBlank() && !it.uppercase().startsWith("ACTION") }
+            ?: "I couldn't get a response just now. Please try saying that once more.")
         liveHistory.put(msg("assistant", safeAnswer))
         while (liveHistory.length() > 9) liveHistory.remove(1)
         reflectOnExchange(command)
@@ -1492,6 +1492,18 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
      * natural and dynamic instead of the chat text read out. Short plain replies skip the model call.
      * Falls back to the plain speech filter if the model fails.
      */
+    /** Rewrites help-desk reflexes ("sorry", "as an AI") into Orion's voice once; unusable rewrites are discarded. */
+    private fun inOrionVoice(reply: String): String {
+        if (!OrionIdentity.needsRewrite(reply)) return reply
+        return runCatching {
+            val msgs = JSONArray()
+                .put(msg("system", OrionIdentity.REWRITE_SYSTEM))
+                .put(msg("user", reply))
+            val out = talkNim.chat(msgs, false, 500, 0.3).trim()
+            if (OrionIdentity.acceptable(reply, out)) out else reply
+        }.getOrDefault(reply)
+    }
+
     fun composeSpoken(written: String): OrionSpokenLine.Line? {
         if (written.isBlank()) return null
         if (!OrionSpokenLine.needsComposing(written)) return OrionSpokenLine.fallback(written)
