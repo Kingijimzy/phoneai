@@ -49,16 +49,15 @@ internal object CodexAppServerProtocol {
             result.optString("platformFamily").isNotBlank() &&
             result.optString("platformOs").isNotBlank()
 
-    /** Codex DynamicToolCallRequest carries turnId but deliberately has no threadId. */
+    /** App-server item/tool/call params must match both the active thread and turn. */
     fun toolCallBelongsToActiveTurn(
         params: JSONObject,
         activeThreadId: String?,
         activeTurnId: String?
     ): Boolean {
         if (activeThreadId.isNullOrBlank() || activeTurnId.isNullOrBlank()) return false
-        val suppliedThreadId = params.optString("threadId")
-        if (suppliedThreadId.isNotBlank() && suppliedThreadId != activeThreadId) return false
-        return params.optString("turnId") == activeTurnId
+        return params.optString("threadId") == activeThreadId &&
+            params.optString("turnId") == activeTurnId
     }
 
     fun startChatGptDeviceLogin(id: Int): Request = Request(
