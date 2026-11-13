@@ -107,4 +107,11 @@ class OrionToolContractCodecTest {
         }
         assertEquals(ToolRegistry.names(), names.toSet())
     }
+    @Test fun exposesMcpDiscoveryForOrdinaryLanguageRequests() {
+        val selected = ToolRegistry.nativeToolsFor("Find the latest information about my business records")
+        assertTrue(selected.any { it.name == "mcp_status" })
+        assertTrue(selected.any { it.name == "mcp_list_tools" })
+        assertTrue(selected.any { it.name == "mcp_call" })
+    }
+
 }
