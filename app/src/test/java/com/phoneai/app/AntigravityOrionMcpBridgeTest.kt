@@ -24,7 +24,7 @@ class AntigravityOrionMcpBridgeTest {
 
     @Test fun exposesOnlyCurrentToolsAndRoutesCallsToTheSuppliedExecutor() {
         val calls = AtomicInteger()
-        val tool = ToolDefinition("battery", "battery {}: report battery status", "report battery status", ToolAccess.READ)
+        val tool = ToolDefinition("battery", "battery {detail:string}: report battery status", "report battery status", ToolAccess.READ)
         AntigravityOrionMcpBridge(listOf(tool)) { name, args ->
             assertEquals("battery", name)
             assertEquals("full", args.getString("detail"))
