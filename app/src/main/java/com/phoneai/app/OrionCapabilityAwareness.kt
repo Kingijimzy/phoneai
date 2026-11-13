@@ -1,7 +1,11 @@
 package com.phoneai.app
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
 import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Evidence-bounded self inventory: registered tools, informational pack catalog, enabled skills/extensions and configured
@@ -9,10 +13,11 @@ import org.json.JSONArray
  * is healthy until a real request succeeds.
  */
 internal object OrionCapabilityAwareness {
-    data class State(val added: List<String>, val removed: List<String>, val untested: List<String>, val failing: List<String>)
+    data class State(val added: List<String>, val removed: List<String>, val untested: List<String>, val failing: List<String>, val environmentChanges: List<String> = emptyList())
 
     private const val PREFS = "orion_capability_awareness"
     private const val KEY = "known"
+    private const val ENV_KEY = "environment"
 
     fun diff(known: Set<String>?, now: Set<String>): Pair<List<String>, List<String>> =
         if (known == null) emptyList<String>() to emptyList()
@@ -36,6 +41,67 @@ internal object OrionCapabilityAwareness {
             runCatching { JSONArray(s).let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } }.getOrNull()
         }
 
+    /** Small, evidence-based readiness snapshot. It never performs remote provider requests. */
+    private fun environmentSnapshot(c: Context): Map<String, String> = buildMap {
+        put("android_api", Build.VERSION.SDK_INT.toString())
+        put("app_version", runCatching {
+            @Suppress("DEPRECATION")
+            c.packageManager.getPackageInfo(c.packageName, 0).versionName ?: "unknown"
+        }.getOrDefault("unknown"))
+        OrionPlatformInventory.permissionStates(c).forEach { (key, value) -> put("permission:$key", value.name) }
+        put("accessibility_service", if (PhoneAiService.instance != null) "CONNECTED" else "DISCONNECTED")
+        put("shizuku", runCatching {
+            val s = OrionShizukuBridge.state()
+            when {
+                s.canExecute -> "READY"
+                !s.installedAndRunning -> "NOT_RUNNING"
+                !s.permissionGranted -> "NOT_AUTHORIZED"
+                !s.supportedIdentity -> "UNSUPPORTED_IDENTITY"
+                else -> "USER_SERVICE_DISCONNECTED"
+            }
+        }.getOrDefault("UNKNOWN"))
+        put("termux", runCatching {
+            if (TermuxBridgeRunner.readiness(c) == null) "PREFLIGHT_READY" else "NOT_READY"
+        }.getOrDefault("UNKNOWN"))
+        put("linux", runCatching {
+            if (LinuxRuntimeInstaller(c).isReady(LinuxRuntimePolicy.productionManifest)) "READY" else "NOT_READY"
+        }.getOrDefault("UNKNOWN"))
+        put("network", runCatching {
+            val manager = c.getSystemService(ConnectivityManager::class.java)
+            val network = manager?.activeNetwork
+            val caps = network?.let { manager.getNetworkCapabilities(it) }
+            when {
+                caps == null -> "DISCONNECTED"
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) -> "VALIDATED"
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) -> "UNVALIDATED"
+                else -> "LOCAL_ONLY"
+            }
+        }.getOrDefault("UNKNOWN"))
+    }
+
+    private fun environmentDiff(c: Context, current: Map<String, String>): List<String> {
+        val prefs = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val previous = prefs.getString(ENV_KEY, null)?.let { raw ->
+            runCatching {
+                val json = JSONObject(raw)
+                buildMap { json.keys().forEach { key -> put(key, json.optString(key, "UNKNOWN")) } }
+            }.getOrNull()
+        }
+        val changes = if (previous == null) emptyList() else current.keys.union(previous.keys).sorted()
+            .mapNotNull { key ->
+                val before = previous[key] ?: "NOT_OBSERVED"
+                val after = current[key] ?: "NOT_PRESENT"
+                if (before == after) null else "$key: $before -> $after"
+            }
+        val json = JSONObject()
+        current.toSortedMap().forEach { (key, value) -> json.put(key, value) }
+        if (!prefs.edit().putString(ENV_KEY, json.toString()).commit()) {
+            return changes + "environment_snapshot_persistence=FAILED"
+        }
+        return changes
+    }
+
     /** Read-only view (used by the gate and the prompt). */
     fun state(c: Context): State {
         val now = registered(c)
@@ -54,6 +120,8 @@ internal object OrionCapabilityAwareness {
     fun scan(c: Context): State {
         val current = registered(c)
         val s = state(c)
+        val environmentChanges = runCatching { environmentDiff(c, environmentSnapshot(c)) }
+            .getOrElse { listOf("environment_snapshot=UNKNOWN (${it.javaClass.simpleName})") }
         if (s.added.isNotEmpty()) {
             OrionLessons.learn(c, "New Orion capabilities are available: ${s.added.take(8).joinToString()}. Re-check readiness before using them.")
             OrionFollowUpStore.add(c, "New Orion capabilities appeared (${s.added.take(5).joinToString()}): verify one on a real task and record its actual readiness.")
@@ -64,7 +132,7 @@ internal object OrionCapabilityAwareness {
         }
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY, JSONArray(current.toList().sorted()).toString()).apply()
-        return s
+        return s.copy(environmentChanges = environmentChanges)
     }
 
     fun promptBlock(c: Context): String {
