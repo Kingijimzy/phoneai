@@ -23,7 +23,7 @@ internal class CodexAppServerClient(
 
     fun initialize(): Boolean {
         val response = request(CodexAppServerProtocol.initialize(ids.getAndIncrement()))
-        session.writeLine(JSONObject().put("method", "initialized").put("params", JSONObject()).toString())
+        session.writeLine(JSONObject().put("jsonrpc", "2.0").put("method", "initialized").put("params", JSONObject()).toString())
         initialized = response.optJSONObject("serverInfo") != null || response.has("capabilities")
         return initialized
     }
@@ -217,9 +217,9 @@ internal class CodexAppServerClient(
             else -> null
         }
         val envelope = if (response != null) {
-            JSONObject().put("id", id).put("result", response)
+            JSONObject().put("jsonrpc", "2.0").put("id", id).put("result", response)
         } else {
-            JSONObject().put("id", id).put(
+            JSONObject().put("jsonrpc", "2.0").put("id", id).put(
                 "error",
                 JSONObject().put("code", -32601).put("message", "Unsupported Codex app-server request: $method")
             )
