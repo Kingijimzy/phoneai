@@ -5,18 +5,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OrionNativeToolDispatcherTest {
-    private fun call(id: String, name: String, available: Boolean = true, validationError: String? = null) =
-        OrionModelToolCall(id, name, JSONObject().put("value", id), available, validationError)
+    private fun call(id: String, name: String, args: JSONObject = JSONObject(), available: Boolean = true, validationError: String? = null) =
+        OrionModelToolCall(id, name, args, available, validationError)
 
     @Test fun dispatchesMultipleRegisteredCallsInOrder() {
         val executed = mutableListOf<String>()
         val outcomes = OrionNativeToolDispatcher.dispatch(
-            listOf(call("1", "read_one"), call("2", "read_two")),
+            listOf(call("1", "media_status"), call("2", "read_battery")),
             cancelled = { false }, isRegistered = { true },
             execute = { name, _ -> executed += name; "result:$name" }
         )
-        assertEquals(listOf("read_one", "read_two"), executed)
-        assertEquals(listOf("result:read_one", "result:read_two"), outcomes.map { it.content })
+        assertEquals(listOf("media_status", "read_battery"), executed)
+        assertEquals(listOf("result:media_status", "result:read_battery"), outcomes.map { it.content })
         assertTrue(outcomes.all { it.dispatched })
     }
 
@@ -37,7 +37,7 @@ class OrionNativeToolDispatcherTest {
 
     @Test fun deniedPermissionResultIsReturnedWithoutBypassingGuard() {
         val outcomes = OrionNativeToolDispatcher.dispatch(
-            listOf(call("1", "open_app")),
+            listOf(call("1", "media_status")),
             cancelled = { false }, isRegistered = { true },
             execute = { _, _ -> "error: Android permission is denied; owner approval is required." }
         )
@@ -49,7 +49,7 @@ class OrionNativeToolDispatcherTest {
         var cancelled = false
         var executions = 0
         val outcomes = OrionNativeToolDispatcher.dispatch(
-            listOf(call("1", "first"), call("2", "second")),
+            listOf(call("1", "media_status"), call("2", "read_battery")),
             cancelled = { cancelled }, isRegistered = { true },
             execute = { _, _ -> executions++; cancelled = true; "first result" }
         )
@@ -61,7 +61,7 @@ class OrionNativeToolDispatcherTest {
 
     @Test fun executionFailureIsPreservedAsFeedbackForTheNextModelTurn() {
         val outcomes = OrionNativeToolDispatcher.dispatch(
-            listOf(call("1", "read_data")),
+            listOf(call("1", "media_status")),
             cancelled = { false }, isRegistered = { true },
             execute = { _, _ -> "error: temporary service failure" }
         )
