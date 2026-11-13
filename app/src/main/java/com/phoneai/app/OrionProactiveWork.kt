@@ -22,8 +22,8 @@ internal class OrionProactiveWorker(
 ) : Worker(appContext, params) {
     override fun doWork(): Result {
         if (!OrionMasterControl.isEnabled(applicationContext)) return Result.success()
-        val coreEnabled = runCatching { AgentPolicy.enabled(applicationContext, "orion_core") }.getOrDefault(false)
-        val proactiveEnabled = runCatching { AgentPolicy.enabled(applicationContext, "proactive") }.getOrDefault(false)
+        val coreEnabled = runCatching { AgentPolicy.backgroundEnabled(applicationContext, "orion_core") }.getOrDefault(false)
+        val proactiveEnabled = runCatching { AgentPolicy.backgroundEnabled(applicationContext, "proactive") }.getOrDefault(false)
         if (!OrionProactivePolicy.shouldRun(coreEnabled, proactiveEnabled)) return Result.success()
 
         // Local health sensing still runs every heartbeat; unsolicited initiatives must pass the Proactive Gate.
@@ -81,7 +81,7 @@ internal object OrionProactiveWork {
                 WorkManager.getInstance(app).cancelUniqueWork(UNIQUE_NAME)
                 return@runCatching
             }
-            if (!AgentPolicy.enabled(app, "orion_core") || !AgentPolicy.enabled(app, "proactive")) {
+            if (!AgentPolicy.backgroundEnabled(app, "orion_core") || !AgentPolicy.backgroundEnabled(app, "proactive")) {
                 WorkManager.getInstance(app).cancelUniqueWork(UNIQUE_NAME)
                 return@runCatching
             }
