@@ -21,6 +21,17 @@ object NeuralVoiceInstaller {
     private const val MAX_ARCHIVE_BYTES = 150L * 1024L * 1024L
     private const val MAX_EXTRACTED_FILE_BYTES = 180L * 1024L * 1024L
     private const val MAX_ESPEAK_BYTES = 60L * 1024L * 1024L
+    private val installActive = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** True while a model install is running, even if its settings screen is recreated. */
+    fun isInstalling(): Boolean = installActive.get()
+
+    /** Map compressed archive consumption to the extraction phase (80–98%). */
+    internal fun extractionProgressPercent(bytesRead: Long, archiveBytes: Long): Int {
+        if (archiveBytes <= 0L) return 80
+        val consumed = bytesRead.coerceIn(0L, archiveBytes)
+        return (80L + consumed * 18L / archiveBytes).toInt().coerceIn(80, 98)
+    }
 
     internal fun espeakRelativePath(entryName: String): String? {
         val parts = entryName.replace('\\', '/').split('/').filter { it.isNotEmpty() && it != "." }
@@ -70,6 +81,10 @@ object NeuralVoiceInstaller {
         completion: (Throwable?) -> Unit
     ) {
         val app = context.applicationContext
+        if (!installActive.compareAndSet(false, true)) {
+            completion(IllegalStateException("A Kokoro voice installation is already running."))
+            return
+        }
         Thread({
             val archive = File(app.cacheDir, "orion-kokoro-int8-en.tar.bz2")
             val stage = File(app.filesDir, "orion-neural-voice-stage")
@@ -86,7 +101,10 @@ object NeuralVoiceInstaller {
                 }
                 checkCancelled(isCancelled)
                 progress("Extracting voice model and pronunciation data…", 80)
-                extractModel(archive, stage, isCancelled)
+                extractModel(archive, stage, isCancelled) { percent ->
+                    progress("Extracting Kokoro model and pronunciation data…", percent)
+                }
+                progress("Verifying extracted Kokoro model files…", 98)
                 archive.delete()
                 checkCancelled(isCancelled)
 
@@ -132,6 +150,7 @@ object NeuralVoiceInstaller {
             } finally {
                 archive.delete()
                 if (failure != null) stage.deleteRecursively()
+                installActive.set(false)
                 completion(failure)
             }
         }, "Orion-Kokoro-Voice-Install").apply { isDaemon = true }.start()
@@ -206,18 +225,28 @@ object NeuralVoiceInstaller {
         }
     }
 
-    private fun extractModel(archive: File, destination: File, isCancelled: () -> Boolean) {
+    private fun extractModel(
+        archive: File,
+        destination: File,
+        isCancelled: () -> Boolean,
+        progress: (Int) -> Unit
+    ) {
         var modelExtracted = false
         var voicesExtracted = false
         var tokensExtracted = false
         var licenseExtracted = false
         var espeakBytes = 0L
-        TarArchiveInputStream(
-            BZip2CompressorInputStream(BufferedInputStream(FileInputStream(archive)))
-        ).use { tar ->
+        val compressed = BZip2CompressorInputStream(BufferedInputStream(FileInputStream(archive)))
+        TarArchiveInputStream(compressed).use { tar ->
+            var lastProgress = 80
             while (true) {
                 checkCancelled(isCancelled)
                 val entry = tar.nextTarEntry ?: break
+                val currentProgress = extractionProgressPercent(compressed.bytesRead, archive.length())
+                if (currentProgress > lastProgress) {
+                    lastProgress = currentProgress
+                    progress(currentProgress)
+                }
                 if (!entry.isFile || entry.size <= 0L || entry.size > MAX_EXTRACTED_FILE_BYTES) continue
                 val base = File(entry.name).name
                 val espeakRelative = espeakRelativePath(entry.name)
@@ -255,6 +284,11 @@ object NeuralVoiceInstaller {
                         if (count < 0) break
                         output.write(buffer, 0, count)
                         remaining -= count
+                        val currentProgress = extractionProgressPercent(compressed.bytesRead, archive.length())
+                        if (currentProgress > lastProgress) {
+                            lastProgress = currentProgress
+                            progress(currentProgress)
+                        }
                     }
                 }
                 if (remaining != 0L) throw IOException("The Kokoro archive contains a truncated file.")
@@ -266,6 +300,7 @@ object NeuralVoiceInstaller {
                 }
             }
         }
+        progress(98)
         if (!modelExtracted || !voicesExtracted || !tokensExtracted || !licenseExtracted || espeakBytes <= 0L) {
             throw IOException("The official Kokoro archive did not contain the expected model, voices, tokens, license and pronunciation data.")
         }
