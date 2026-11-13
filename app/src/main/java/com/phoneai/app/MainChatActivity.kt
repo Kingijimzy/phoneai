@@ -1754,9 +1754,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                         try {
                             val savedAttachment = OrionChatAttachmentStore.import(this, sessionId, uri)
                             val name = savedAttachment.name
-                            val unusedNameQuery = (contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
-                                ?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: "upload_${System.currentTimeMillis()}")
-                                .replace(Regex("[^A-Za-z0-9._-]"), "_").take(100)
                             val dir = java.io.File(filesDir, "orion-python/workspace/uploads").apply { mkdirs() }
                             val dest = java.io.File(dir, name)
                             contentResolver.openInputStream(uri)?.use { input -> dest.outputStream().use { out -> input.copyTo(out, 8192) } }
