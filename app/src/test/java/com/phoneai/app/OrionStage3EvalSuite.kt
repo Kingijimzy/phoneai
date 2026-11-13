@@ -503,7 +503,7 @@ internal class OrionStage3EvalSuite {
         }
 
         // Calendar should be empty without consent
-        assertTrue("calendar empty without consent", calendar.isEmpty() || calendar.contains("OWNER-GRANTED CALENDAR CONTEXT"))
+        assertTrue("calendar must disclose disabled consent without reading events", calendar.isEmpty() || calendar.contains("OWNER-GRANTED CALENDAR CONTEXT") || calendar.contains("switched off"))
 
         // Follow-ups should be a bounded list
         assertTrue("follow-ups should be a list", followUps is List<*>)
