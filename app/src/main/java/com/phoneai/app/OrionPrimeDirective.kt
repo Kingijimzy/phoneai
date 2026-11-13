@@ -8,7 +8,7 @@ package com.phoneai.app
  * Specialist workers are internal capabilities of this one entity, never competing assistants.
  */
 internal object OrionPrimeDirective {
-    const val VERSION = "orion-prime-3"
+    const val VERSION = "orion-prime-4"
 
     val SHARED_IDENTITY_RULES = """
 ORION PRIME IDENTITY — ONE COHERENT ENTITY
