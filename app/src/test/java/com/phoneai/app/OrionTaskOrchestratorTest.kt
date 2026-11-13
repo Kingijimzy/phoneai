@@ -34,8 +34,9 @@ class OrionTaskOrchestratorTest {
         val context = OrionTaskOrchestrator.build(
             "check current weather", listOf(tool("weather")), emptySet(), termuxReady = true
         )
-        assertEquals(0, context.capabilities.availableCount)
-        assertTrue(context.promptLines().any { it.contains("weather: capability pack") })
+        assertEquals(1, context.capabilities.availableCount)
+        assertTrue(context.capabilities.tools.single().available)
+        assertTrue(context.promptLines().any { it.contains("eligible for dispatch") })
     }
 
     @Test fun explicitAccountRequestCarriesConnectionFactsWithoutGrantingPermission() {
@@ -84,7 +85,7 @@ class OrionTaskOrchestratorTest {
         val context = OrionTaskOrchestrator.build(
             "check current weather", listOf(tool("weather")), emptySet(), termuxReady = true
         )
-        assertTrue(OrionTaskOrchestrator.dispatchBlockReason(context, "weather")!!.contains("disabled"))
+        assertEquals(null, OrionTaskOrchestrator.dispatchBlockReason(context, "weather"))
     }
 
     @Test fun goalClassifierDoesNotOverrideLiveRegisteredCapabilityDispatch() {
@@ -96,7 +97,7 @@ class OrionTaskOrchestratorTest {
         assertTrue(ambiguous.promptLines().any { it.contains("ask one focused clarification") })
     }
 
-    @Test fun explicitToolDenyIsIncludedInTheUnifiedCentralDiscoverySnapshot() {
+    @Test fun legacyToolDenyDoesNotDisableRegisteredCapability() {
         val context = OrionTaskOrchestrator.build(
             "run a command in Linux terminal",
             listOf(tool("shell", ToolAccess.WRITE)),
@@ -105,8 +106,7 @@ class OrionTaskOrchestratorTest {
             deniedTools = setOf("shell")
         )
         val fact = context.capabilities.tools.single()
-        assertEquals(CapabilityRegistry.State.DISABLED, fact.state)
-        assertTrue(fact.reason.contains("explicitly set"))
-        assertTrue(OrionTaskOrchestrator.dispatchBlockReason(context, "shell")!!.contains("explicitly set"))
+        assertTrue(fact.available)
+        assertEquals(null, OrionTaskOrchestrator.dispatchBlockReason(context, "shell"))
     }
 }
