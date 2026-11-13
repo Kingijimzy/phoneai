@@ -9,6 +9,7 @@ internal object OrionSpeechTextPolicy {
     private val fencedCode = Regex("(?s)\\x60\\x60\\x60.*?\\x60\\x60\\x60|~~~.*?~~~")
     private val inlineCode = Regex("\\x60[^\\x60]*\\x60")
     private val url = Regex("(?i)\\b(?:https?://|www\\.)\\S+")
+    private val markdownLink = Regex("\\[([^\\]]+)]\\([^)]*\\)")
     private val htmlTag = Regex("<[^>]{1,300}>")
     private val internalLine = Regex(
         "(?i)^\\s*(?:assistant\\s+to=|tool\\s+(?:call|result)\\s*:|analysis\\s*:|commentary\\s*:|" +
@@ -22,6 +23,7 @@ internal object OrionSpeechTextPolicy {
 
         text = fencedCode.replace(text, " ")
         text = inlineCode.replace(text, " ")
+        text = markdownLink.replace(text, "$1")
         text = url.replace(text, "the link")
         text = htmlTag.replace(text, " ")
 
