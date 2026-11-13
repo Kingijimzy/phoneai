@@ -34,9 +34,13 @@ internal object OrionCoordinator {
     /** Pure: how many requests each surface made lately, for the self-diagnosis view. */
     fun surfaceCounts(entries: List<Entry>): Map<Surface, Int> = entries.groupingBy { it.surface }.eachCount()
 
+    /** Unknown master-control state is not permission to execute. */
+    internal fun shouldAdmit(masterEnabled: Boolean?): Boolean = masterEnabled == true
+
     /** Admission: the master switch is the only gate here; everything else is decided inside the agent. */
     fun admit(c: Context, surface: Surface, text: String): Boolean {
-        val ok = runCatching { OrionMasterControl.isEnabled(c) }.getOrDefault(true)
+        val masterEnabled = runCatching { OrionMasterControl.isEnabled(c) }.getOrNull()
+        val ok = shouldAdmit(masterEnabled)
         record(surface, text, ok)
         if (ok && surface.ownerInitiated) {
             runCatching {
