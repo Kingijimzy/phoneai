@@ -116,11 +116,8 @@ internal object OrionCapabilityDiscovery {
             val permissionReason = when (permissionState) {
                 PermissionState.GRANTED -> null
                 PermissionState.MISSING -> "required Android permission '$permissionKey' is missing"
-                PermissionState.UNKNOWN -> "required Android permission '$permissionKey' is unverified"
+                PermissionState.UNKNOWN -> null
                 null -> null
-            }
-            val disabledReason = when {
-                else -> null
             }
             val entry = CapabilityRegistry.evaluate(
                 CapabilityRegistry.Facts(
@@ -140,7 +137,6 @@ internal object OrionCapabilityDiscovery {
         val blockers = mutableListOf<String>()
         if (unique.isEmpty()) blockers += "tool registry is empty"
         if (duplicateNames.isNotEmpty()) blockers += "duplicate tool registrations: ${duplicateNames.sorted().joinToString(", ")}"
-        if (unique.any { it.name == "termux_command" } && !termuxReady) blockers += "optional Termux-only command tool unavailable; Orion built-in shell does not depend on Termux"
         return Snapshot(
             registeredCount = unique.size,
             availableCount = facts.count { it.available },
