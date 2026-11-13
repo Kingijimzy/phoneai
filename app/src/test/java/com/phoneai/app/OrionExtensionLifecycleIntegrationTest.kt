@@ -230,14 +230,14 @@ class OrionExtensionLifecycleIntegrationTest {
     fun restrictedPythonSelfCreationAndTestsDoNotRequireRepeatedOwnerPrompts() {
         ExtensionAutonomySettings.setAutoActivationEnabled(context, true)
         val id = "safe_format_tool"
-        val source = "RESULT = INPUT.get(\"value\", \"\").strip().lower()"
+        val source = extensionSource("echo_greeting")
         val created = runTool("extension_create", JSONObject()
             .put("id", id).put("name", "Safe format tool").put("source", source)
             .put("description", "Normalizes a short text value"))
         assertTrue(created.contains("Saved disabled extension draft"))
         val prompts = mutableListOf<String>()
         val tested = executor.execute("extension_test", JSONObject().put("id", id).put("tests", JSONArray().put(
-            JSONObject().put("input", JSONObject().put("value", " HELLO ")).put("expect", "hello")
+            JSONObject().put("input", JSONObject().put("greeting", "HELLO")).put("expect", "echo:HELLO")
         )), { question -> prompts += question; false }, stopped)
         assertTrue(tested.orEmpty().contains("SANDBOX TEST PASSED"))
         assertTrue(tested.orEmpty().contains("AUTO-ACTIVATED"))
