@@ -258,7 +258,15 @@ private fun OrionStructuredBlockCard(block: OrionMessageBlock, onOpenBrowser: (S
                 Text("Risk: " + block.risk, color = accent, fontSize = 10.sp)
             }
         }
-        is OrionMessageBlock.TaskReceipt -> Column(
+        is OrionMessageBlock.TaskReceipt -> {
+            val receiptAccent = when (block.status.lowercase()) {
+                "failed", "error" -> OrionUiPalette.danger
+                "cancelled", "canceled", "interrupted" -> OrionUiPalette.warning
+                "waiting", "pending", "approval_required" -> OrionUiPalette.warning
+                "completed", "success", "succeeded", "verified" -> OrionUiPalette.success
+                else -> OrionUiPalette.secondaryText
+            }
+            Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(OrionUiPalette.panel)
                 .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp)).padding(11.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp)
@@ -266,13 +274,14 @@ private fun OrionStructuredBlockCard(block: OrionMessageBlock, onOpenBrowser: (S
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("TASK RECEIPT", color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
-                Text(block.status.uppercase(), color = OrionUiPalette.success, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                Text(block.status.uppercase(), color = receiptAccent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
             Text(block.objective, color = ChatCopy, fontSize = 12.sp, fontWeight = FontWeight.Medium)
             block.steps.forEachIndexed { index, step ->
                 Text((index + 1).toString() + ". " + step, color = ChatMuted, fontSize = 10.sp)
             }
             if (block.evidence.isNotBlank()) Text(block.evidence.take(1600), color = ChatMuted, fontSize = 9.sp, lineHeight = 13.sp)
+            }
         }
         is OrionMessageBlock.Thinking -> Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(OrionUiPalette.panel).padding(10.dp),

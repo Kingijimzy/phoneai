@@ -138,6 +138,12 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
         }.sortedBy { it.timestampMs }
 
     companion object {
+        /** Keep objective identity distinct from per-tool correlation IDs and conversation IDs. */
+        fun taskKey(traceId: String?, messageId: String?, sessionId: String): String =
+            traceId?.takeIf { it.isNotBlank() }?.let { "trace-$it" }
+                ?: messageId?.takeIf { it.isNotBlank() }?.let { "message-$it" }
+                ?: "session-$sessionId"
+
         data class ProgressStep(val state: String, val title: String, val detail: String = "")
 
         /** Keep useful action details visible and distinguish a raw result from verified completion. */

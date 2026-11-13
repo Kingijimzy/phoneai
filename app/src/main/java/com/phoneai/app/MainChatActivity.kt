@@ -2197,7 +2197,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 val evidence = OrionActivityEvidence.fromJson(event.evidenceJson)
                 OrionActivityEvent(
                     eventId = event.id,
-                    taskId = event.traceId ?: "session-" + event.sessionId,
+                    taskId = OrionActivityTimeline.taskKey(event.traceId, event.messageId, event.sessionId),
                     kind = kind,
                     status = eventStatus,
                     title = event.summary.lineSequence().firstOrNull()?.take(120)?.ifBlank { event.type } ?: event.type,

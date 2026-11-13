@@ -146,6 +146,16 @@ class OrionActivityTimelineTest {
         assertEquals(OrionActivityStatus.INTERRUPTED, interrupted.status)
     }
 
+    @Test fun taskIdentityPrefersTraceThenTurnAndNeverUsesToolCorrelationAsObjectiveIdentity() {
+        assertEquals("trace-trace-1", OrionActivityTimeline.taskKey("trace-1", "turn-1", "session-1"))
+        assertEquals("message-turn-1", OrionActivityTimeline.taskKey(null, "turn-1", "session-1"))
+        assertEquals("session-session-1", OrionActivityTimeline.taskKey(null, null, "session-1"))
+        assertNotEquals(
+            OrionActivityTimeline.taskKey(null, "turn-1", "session-1"),
+            OrionActivityTimeline.taskKey(null, "turn-2", "session-1")
+        )
+    }
+
     @Test fun progressStepsKeepDetailsForSingleStepTask() {
         val steps = OrionActivityTimeline.progressSteps(listOf(
             "WAITING · Save file: scraper.py was written to Downloads/Orion; 1,248 bytes"
