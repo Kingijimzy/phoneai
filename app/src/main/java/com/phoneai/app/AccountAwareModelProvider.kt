@@ -56,10 +56,25 @@ internal class AccountAwareModelProvider(
             return fallback.chatTurn(messages, vision, maxTokens, temperature, fastResponse, tools, onDelta)
         }
         check(!cancelled) { "Account model request was cancelled." }
-        val prompt = transcript(messages)
-        require(prompt.isNotBlank()) { "No text content was supplied to the account model." }
         val model = (if (commandMode && !vision) Prefs.commandModelId(app) else null)
             ?: Prefs.model(app, provider, false).takeIf { it.isNotBlank() }
+        // Account CLIs have their own hard payload limits. Apply the same provider-aware
+        // context governance used by API providers before serialising the transcript.
+        // Antigravity's CLI rejects prompts above 100k characters; unknown account models
+        // deliberately receive the conservative 16k-token policy rather than an assumed
+        // large context window. This keeps the newest user turn and complete tool exchanges.
+        val contextCapabilities = OrionProviderContextPolicy.capabilities(
+            provider.id, model.orEmpty(), transport = "chat"
+        )
+        val budgetedMessages = OrionProviderContextPolicy.fitMessages(
+            messages, contextCapabilities, maxTokens
+        )
+        val prompt = transcript(budgetedMessages)
+        require(prompt.isNotBlank()) { "No text content was supplied to the account model." }
+        require(prompt.length <= 100_000) {
+            "The conversation is still too large after context compaction (" + prompt.length + " characters). " +
+                "Start a new chat or reduce attached content; Orion preserved the latest user request."
+        }
         val answer = synchronized(lock) {
             check(!cancelled) { "Account model request was cancelled." }
             when (provider.id) {

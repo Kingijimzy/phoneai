@@ -18,10 +18,11 @@ class AgentHooksTest {
   assertNull(AgentHooks.scopeBlockReason("What's the weather in Lagos, Nigeria today?", "weather", JSONObject().put("location", "Lagos, Nigeria")))
  }
  @Test fun allowsExplicitSend(){assertNull(AgentHooks.scopeBlockReason("Send this message to Alex","click_text",JSONObject().put("text","Send")))}
- @Test fun unrequestedConsequentialActionWarnsInsteadOfBlocking(){
+ @Test fun consequentialUiActionRequiresApprovalButIsNotMisclassifiedAsUnavailable(){
   val args=JSONObject().put("text","Transfer funds")
   assertNotNull(AgentHooks.scopeWarning("Open the banking app and inspect it","click_text",args))
   assertNull(AgentHooks.scopeBlockReason("Open the banking app and inspect it","click_text",args))
+  assertTrue(AgentHooks.requiresConfirmation("click_text",args))
  }
  @Test fun negatedAndDraftOnlyRequestsNeverAuthorizeConsequentialActions(){
   listOf("Do not send this message to Alex","Don't send this message to Alex","Never send this message","Draft a message to Amma without sending","Prepare a reply but do not send it").forEach { request ->
@@ -33,16 +34,16 @@ class AgentHooksTest {
   assertNull(AgentHooks.scopeBlockReason("Write and send this message to Amma","click_text",JSONObject().put("text","Send")))
   assertNull(AgentHooks.scopeBlockReason("Prepare and send the reply to Amma","click_text",JSONObject().put("text","Send")))
  }
- @Test fun onlyDestructiveDataOperationsRequireConfirmation(){
-  assertFalse(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","restart")))
-  assertFalse(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","shutdown")))
-  assertFalse(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","wifi_toggle")))
+ @Test fun criticalDeviceSettingsAndDestructiveDataOperationsRequireConfirmation(){
+  assertTrue(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","restart")))
+  assertTrue(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","shutdown")))
+  assertTrue(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","wifi_toggle")))
   assertTrue(AgentHooks.requiresConfirmation("task_delete",JSONObject().put("id","task-1")))
   assertTrue(AgentHooks.requiresConfirmation("workspace_delete",JSONObject().put("path","Downloads/report.txt")))
   assertTrue(AgentHooks.requiresConfirmation("shell",JSONObject().put("command","rm -rf /sdcard/old")))
-  assertFalse(AgentHooks.requiresConfirmation("notification_action",JSONObject().put("action","reply")))
-  assertFalse(AgentHooks.requiresConfirmation("type",JSONObject().put("text","Hello"),"WhatsApp message"))
-  assertFalse(AgentHooks.requiresConfirmation("telegram_send",JSONObject().put("message","Hello")))
+  assertTrue(AgentHooks.requiresConfirmation("notification_action",JSONObject().put("action","reply")))
+  assertTrue(AgentHooks.requiresConfirmation("type",JSONObject().put("text","Hello"),"WhatsApp message"))
+  assertTrue(AgentHooks.requiresConfirmation("telegram_send",JSONObject().put("message","Hello")))
  }
  @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.recordVerified("open_app","WhatsApp opened\\nLOCAL VERIFY PASS: target app is visible");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
  @Test fun proofRecorderRecognizesExplicitPostActionUiVerification() {

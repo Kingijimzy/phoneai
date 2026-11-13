@@ -185,12 +185,12 @@ internal object OrionObjectiveGraph {
         val resolved = resolveDispatchId(graph, id) ?: return false
         if (canExecute(graph, resolved) != null) return false
         val node = graph.nodes.firstOrNull { it.id == resolved } ?: return false
-        if (node.evidence != evidenceId) return false
+        if (node.status != Status.RUNNING || node.evidence != evidenceId) return false
         val receipt = ChatHistoryStore.objectiveEvidence(context, resolved).firstOrNull {
             it.id == evidenceId && it.outcome == "success"
         } ?: return false
-        val active = ChatHistoryStore.activeSessionId(context)
-        if (active != null && receipt.sessionId != active) return false
+        val active = ChatHistoryStore.activeSessionId(context) ?: return false
+        if (receipt.sessionId != active) return false
         return save(context, updateStatusSoft(graph, resolved, Status.COMPLETE, receipt.id))
     }
 
@@ -238,6 +238,7 @@ internal object OrionObjectiveGraph {
             appendLine()
         }
         appendLine("Only work on objectives whose dependencies are COMPLETE. Never invent objective ids that are not listed. If an id is unknown, use the single RUNNING or READY node. Unknown ids must not stop the task.")
+        appendLine("A tool result is not objective completion. Only a trusted successful executor result creates an OBJECTIVE EVIDENCE RECEIPT containing the exact objective_id and evidence_id. Once the whole node objective is satisfied, call complete_objective with those exact values; the executor checks that the receipt is latest, successful, belongs to this session, and that dependencies are complete. Never invent or reuse an old evidence_id.")
     }
 
     fun resolveSessionId(context: Context): String {

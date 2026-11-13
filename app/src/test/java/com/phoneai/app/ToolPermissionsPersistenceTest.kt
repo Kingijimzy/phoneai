@@ -2,6 +2,8 @@ package com.phoneai.app
 
 import android.content.Context
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,66 +21,55 @@ class ToolPermissionsPersistenceTest {
         context = RuntimeEnvironment.getApplication()
         context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit().clear().commit()
         context.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE).edit().clear().commit()
-        writeTool = ToolRegistry.all.first {
-            it.access == ToolAccess.WRITE && it.name !in ToolPermissionPolicy.alwaysAllowed
-        }.name
+        writeTool = ToolRegistry.all.first { it.access == ToolAccess.WRITE && it.name !in ToolPermissionPolicy.alwaysAllowed }.name
     }
 
     @Test fun defaultPermissionIsAllow() {
         assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
     }
 
-    @Test fun explicitDenyIsIgnoredInFreeMode() {
-        ToolPermissions.applyLevel(context, "careful")
-        ToolPermissions.cycle(context, writeTool) // would be DENY; free mode never refuses
+    @Test fun explicitLegacyDenyIsDiscardedAndNeverEffective() {
+        ToolPermissions.set(context, mapOf(writeTool to ToolMode.DENY))
         assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
-        ToolPermissions.applyLevel(context, "read_only")
-        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
+        assertTrue(ToolPermissions.map(context).isEmpty())
     }
 
-    @Test fun readOnlyPresetDoesNotBlockInFreeMode() {
+    @Test fun readOnlyAndCarefulPresetsNormalizeToAutonomous() {
         ToolPermissions.applyLevel(context, "read_only")
-        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
-    }
-
-    @Test fun autonomousPresetStaysAllowEvenAfterCycling() {
-        ToolPermissions.applyLevel(context, "autonomous")
         assertEquals("autonomous", ToolPermissions.level(context))
+        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
+        ToolPermissions.applyLevel(context, "careful")
+        assertEquals("autonomous", ToolPermissions.level(context))
+        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
+    }
+
+    @Test fun cyclingCannotCreateAnInternalToolBlock() {
+        ToolPermissions.cycle(context, writeTool)
+        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
         ToolPermissions.cycle(context, writeTool)
         assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
     }
 
-    @Test fun legacyAskValueMigratesToAllowWithoutPrompt() {
-        context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
-            .putString("tool_modes", org.json.JSONObject().put(writeTool, "ASK").toString())
-            .commit()
-        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
-    }
-
-    @Test fun noModeIsAGlobalExecutionStop() {
+    @Test fun legacyPlanModeCannotStopRegisteredToolDispatch() {
         AgentPolicy.setMode(context, AgentPolicy.Mode.PLAN)
-        val planned = AgentPolicy.gate(
-            context, "trading_research", "live_sports", dangerous = false,
-            toolMode = ToolMode.ALLOW, askedThisTask = false
-        )
-        assertEquals(GatePolicy.Verdict.ALLOW, planned.verdict)
-
-        AgentPolicy.setMode(context, AgentPolicy.Mode.ALLOW)
-        AgentPolicy.setEnabled(context, "trading_research", true)
-        val allowed = AgentPolicy.gate(
-            context, "trading_research", "live_sports", dangerous = false,
-            toolMode = ToolMode.ALLOW, askedThisTask = false
-        )
-        assertEquals(GatePolicy.Verdict.ALLOW, allowed.verdict)
+        val result = AgentPolicy.gate(context, "trading_research", "live_sports",
+            dangerous = false, toolMode = ToolMode.DENY, askedThisTask = false,
+            hardBlockReason = "legacy local blocker")
+        assertEquals(GatePolicy.Verdict.ALLOW, result.verdict)
+        assertEquals(AgentPolicy.Mode.ALLOW, AgentPolicy.mode(context))
     }
 
-    @Test fun legacyAskDoesNotCreateAnApprovalVerdict() {
-        AgentPolicy.setMode(context, AgentPolicy.Mode.ALLOW)
-        AgentPolicy.setEnabled(context, "trading_research", true)
-        val result = AgentPolicy.gate(
-            context, "trading_research", "live_sports", dangerous = false,
-            toolMode = ToolMode.ASK, askedThisTask = false
-        )
+    @Test fun disabledPackCannotDisableRegisteredTool() {
+        AgentPolicy.setEnabled(context, "trading_research", false)
+        assertTrue(AgentPolicy.enabled(context, "trading_research"))
+        val result = AgentPolicy.gate(context, "trading_research", "live_sports",
+            dangerous = false, toolMode = ToolMode.DENY, askedThisTask = false)
         assertEquals(GatePolicy.Verdict.ALLOW, result.verdict)
+    }
+
+    @Test fun backgroundProactiveSwitchRemainsAnIndependentOptIn() {
+        AgentPolicy.setEnabled(context, "proactive", false)
+        assertFalse(AgentPolicy.backgroundEnabled(context, "proactive"))
+        assertTrue(AgentPolicy.enabled(context, "proactive"))
     }
 }

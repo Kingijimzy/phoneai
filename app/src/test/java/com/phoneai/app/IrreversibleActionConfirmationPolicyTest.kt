@@ -25,6 +25,37 @@ class IrreversibleActionConfirmationPolicyTest {
         assertFalse(IrreversibleActionConfirmationPolicy.requiresConfirmation("Restart computer or change Wi-Fi"))
     }
 
+    @Test fun privateReadsWritesAndScriptExecutionRequireOwnerApproval() {
+        listOf("workspace_read", "workspace_list", "find_files", "dev_read", "project_inspect",
+            "github_account_read", "gmail_list_messages", "telegram_inbox", "read_notifications",
+            "clipboard_read", "resolve_contact", "device_location")
+            .forEach { tool ->
+                assertNotNull("$tool must require owner approval",
+                    IrreversibleActionConfirmationPolicy.ownerApprovalDescription(tool, JSONObject().put("path", "private/item.txt")))
+            }
+        listOf("workspace_write", "dev_write", "save_file", "project_create", "project_plan",
+            "python_exec", "extension_run")
+            .forEach { tool ->
+                assertNotNull("$tool must require owner approval",
+                    IrreversibleActionConfirmationPolicy.ownerApprovalDescription(tool, JSONObject().put("code", "print('test')")))
+            }
+        assertNotNull(IrreversibleActionConfirmationPolicy.ownerApprovalDescription(
+            "shell", JSONObject().put("command", "printf hello > /workspace/note.txt")
+        ))
+        assertNotNull(IrreversibleActionConfirmationPolicy.ownerApprovalDescription(
+            "shell", JSONObject().put("command", "python3 /workspace/task.py")
+        ))
+        assertNull(IrreversibleActionConfirmationPolicy.ownerApprovalDescription(
+            "shell", JSONObject().put("command", "ls -la /workspace")
+        ))
+    }
+
+    @Test fun connectedMcpReadRequiresOwnerApproval() {
+        assertNotNull(IrreversibleActionConfirmationPolicy.ownerApprovalDescription(
+            "mcp_read_resource", JSONObject().put("uri", "private://record")
+        ))
+    }
+
     @Test fun explicitDeleteAndWipeRequestsAreClassifiedButNegationsAreNot() {
         assertNotNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Delete the old report file"))
         assertNotNull(IrreversibleActionConfirmationPolicy.destructiveRequestDescription("Clear app data for this app"))

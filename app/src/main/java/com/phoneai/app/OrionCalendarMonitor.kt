@@ -2,6 +2,7 @@ package com.phoneai.app
 
 import android.content.ContentResolver
 import android.content.Context
+import android.content.pm.PackageManager
 import android.database.Cursor
 import android.provider.CalendarContract
 import java.util.Locale
@@ -37,6 +38,9 @@ internal object OrionCalendarMonitor {
         now: Long = System.currentTimeMillis()
     ): List<UpcomingEvent> {
         if (!isEnabled(context, now)) return emptyList()
+        if (context.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) {
+            return emptyList()
+        }
         val resolver: ContentResolver = context.applicationContext.contentResolver
         val start = now
         val end = now + lookaheadHours.coerceAtLeast(1).coerceAtMost(168).toLong() * 60 * 60 * 1000
@@ -87,6 +91,14 @@ internal object OrionCalendarMonitor {
         lookaheadHours: Int,
         now: Long = System.currentTimeMillis()
     ): String {
+        // Do not disclose or prompt for Android-level access while the owner has disabled
+        // Orion's calendar scope. The app-level consent switch is the first privacy boundary.
+        if (!isEnabled(context, now)) {
+            return "Calendar access is switched off in Orion's owner consent settings."
+        }
+        if (context.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) {
+            return "Android Calendar permission is not granted. Enable Calendar read access for Orion in Android app settings, then retry."
+        }
         val events = upcoming(context, lookaheadHours, now)
             .filter { it.minutesFromNow <= 120 } // within 2 hours
             .take(5)

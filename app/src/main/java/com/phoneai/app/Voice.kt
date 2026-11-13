@@ -300,6 +300,7 @@ class Voice(private val ctx: Context) {
             var track: AudioTrack? = null
             var fallbackStart = 0
             var completedBeforeFallback = 0
+            var peakSampleAmplitude = 0f
             var kokoroMetricsRecorded = false
             try {
                 if (token != playbackGeneration.get()) return@execute
@@ -329,6 +330,7 @@ class Voice(private val ctx: Context) {
                                 if (activeTrack == null || !writeNeuralSamples(activeTrack, samples, token)) 0
                                 else {
                                     if (samples.isNotEmpty()) {
+                                        for (sample in samples) peakSampleAmplitude = maxOf(peakSampleAmplitude, kotlin.math.abs(sample))
                                         var sumSquares = 0.0
                                         for (sample in samples) sumSquares += sample.toDouble() * sample.toDouble()
                                         val rms = kotlin.math.sqrt(sumSquares / samples.size).toFloat().coerceIn(0f, 1f)
@@ -375,8 +377,16 @@ class Voice(private val ctx: Context) {
                     ))
                     kokoroMetricsRecorded = true
                 } else {
-                    setKokoroPerformance("Kokoro synthesis: no audio frames were produced; this run is not a valid speed measurement.")
+                    setKokoroPerformance("Kokoro synthesis: no audio frames were produced; Android TTS fallback will be used.")
                     kokoroMetricsRecorded = true
+                    fallbackStart = 0
+                    throw IllegalStateException("Kokoro generated no PCM audio frames.")
+                }
+                if (peakSampleAmplitude < 0.0001f) {
+                    setKokoroPerformance("Kokoro synthesis: PCM output was silent; Android TTS fallback will be used.")
+                    kokoroMetricsRecorded = true
+                    fallbackStart = 0
+                    throw IllegalStateException("Kokoro generated silent PCM audio.")
                 }
                 val activeTrack = track
                 if (activeTrack != null) awaitNeuralPlayback(activeTrack, neuralFramesWritten, token)
@@ -546,6 +556,11 @@ class Voice(private val ctx: Context) {
         // cannot be attached here; stopping playback is the reliable platform-safe guard.
         stopSpeaking()
         stopListening()
+        if (ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            onProblem?.invoke("Android has not granted microphone permission. Open Orion's app settings, allow Microphone, then try listening again.")
+            onText(null)
+            return
+        }
         if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
             onProblem?.invoke("No speech recognition on this phone. Install or enable Google voice typing.")
             onText(null)

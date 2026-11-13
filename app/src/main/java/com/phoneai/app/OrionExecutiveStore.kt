@@ -343,7 +343,14 @@ internal object OrionExecutiveStore {
         startedAt: Long
     ): DispatchHandle? {
         val cleanIntent = intent.trim().take(2_000).ifBlank { "Capability dispatch" }
-        val objectiveId = "exec-" + digest(sessionId + "|" + cleanIntent).take(40)
+        // Each dispatch gets its own lifecycle record. A single user objective may invoke
+        // several tools, including parallel calls; sharing one phase row would let one
+        // completed tool incorrectly mark another in-flight tool as complete.
+        val dispatchIdentity = listOf(
+            sessionId, cleanIntent, capability, digest(arguments.toString()),
+            startedAt.toString(), java.util.UUID.randomUUID().toString()
+        ).joinToString("|")
+        val objectiveId = "exec-" + digest(dispatchIdentity).take(40)
         val attempt = beginDispatchAttempt(context, objectiveId, cleanIntent, graphStepId,
             capability, digest(arguments.toString()), startedAt) ?: return null
         return DispatchHandle(objectiveId, attempt)
@@ -377,6 +384,18 @@ internal object OrionExecutiveStore {
                     WHERE outcome=? AND process_epoch<>?""",
                     arrayOf(DispatchOutcome.RECONCILIATION_REQUIRED.name, System.currentTimeMillis(),
                         "RUNNING", processEpoch))
+                // A process-death window is an unknown side-effect outcome. Surface it as
+                // BLOCKED in the executive ledger so the planner must reconcile before retry.
+                db.execSQL("""UPDATE objectives SET phase=?,revision=revision+1,
+                    recovery_cursor=?,blocker=?,updated_at=?
+                    WHERE id IN (
+                        SELECT objective_id FROM dispatch_attempts
+                        WHERE outcome=? AND process_epoch<>?
+                    ) AND phase NOT IN (?,?,?)""",
+                    arrayOf(Phase.BLOCKED.name, "reconcile_dispatch",
+                        "Previous process ended during a tool action; inspect the real outcome before retrying.",
+                        System.currentTimeMillis(), DispatchOutcome.RECONCILIATION_REQUIRED.name,
+                        processEpoch, Phase.COMPLETED.name, Phase.FAILED.name, Phase.BLOCKED.name))
                 db.execSQL("INSERT OR IGNORE INTO objectives(id,intent,phase,revision,plan_revision,recovery_cursor,blocker,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
                     arrayOf(cleanObjective, cleanIntent, Phase.GROUND.name, 0, 0, "", "", startedAt, startedAt))
                 val existing = get(db, cleanObjective)
@@ -387,13 +406,16 @@ internal object OrionExecutiveStore {
                     VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                     arrayOf(attemptId, cleanObjective, graphStepId.take(120), cleanCapability,
                         argumentsDigest.lowercase(), processEpoch, "RUNNING", "", "", startedAt, 0))
+                // The tool dispatcher has already completed live retrieval, policy assessment
+                // and capability selection before it opens this execution boundary.
+                if (!transitionPath(db, cleanObjective, dispatchStartPath())) return null
                 db.setTransactionSuccessful()
                 attemptId
             } finally { db.endTransaction() }
         }.getOrNull()
     }
 
-    /** Resolve a dispatch attempt only after its evidence event has been durably written. */
+    /** Resolve a dispatch attempt and its executive phase atomically after evidence is durable. */
     fun finishDispatchAttempt(
         context: Context,
         attemptId: String,
@@ -405,11 +427,28 @@ internal object OrionExecutiveStore {
             (outcome == DispatchOutcome.VERIFIED && evidenceRef.isBlank())) return false
         return runCatching {
             val db = Db(context.applicationContext).writableDatabase
-            db.execSQL("""UPDATE dispatch_attempts SET outcome=?,evidence_ref=?,summary=?,finished_at=?
-                WHERE attempt_id=? AND outcome=? AND process_epoch=?""",
-                arrayOf(outcome.name, evidenceRef.take(160), summary.take(320),
-                    System.currentTimeMillis(), attemptId, "RUNNING", processEpoch))
-            db.rawQuery("SELECT changes()", null).use { it.moveToFirst() && it.getInt(0) == 1 }
+            db.beginTransaction()
+            try {
+                val objectiveId = db.rawQuery(
+                    "SELECT objective_id FROM dispatch_attempts WHERE attempt_id=? AND outcome=? AND process_epoch=?",
+                    arrayOf(attemptId, "RUNNING", processEpoch)
+                ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null } ?: return false
+                db.execSQL("""UPDATE dispatch_attempts SET outcome=?,evidence_ref=?,summary=?,finished_at=?
+                    WHERE attempt_id=? AND outcome=? AND process_epoch=?""",
+                    arrayOf(outcome.name, evidenceRef.take(160), summary.take(320),
+                        System.currentTimeMillis(), attemptId, "RUNNING", processEpoch))
+                val changed = db.rawQuery("SELECT changes()", null).use { it.moveToFirst() && it.getInt(0) == 1 }
+                if (!changed) return false
+                val blocker = when (outcome) {
+                    DispatchOutcome.VERIFIED -> ""
+                    DispatchOutcome.EXECUTED_UNVERIFIED -> "Action returned, but trusted verification evidence is missing."
+                    DispatchOutcome.FAILED -> "The capability execution failed; diagnose and select a different route before retrying."
+                    DispatchOutcome.RECONCILIATION_REQUIRED -> "The previous process ended during execution; reconcile the action outcome before retrying."
+                }
+                if (!transitionPath(db, objectiveId, dispatchFinishPath(outcome), blocker = blocker)) return false
+                db.setTransactionSuccessful()
+                true
+            } finally { db.endTransaction() }
         }.getOrDefault(false)
     }
 
@@ -437,21 +476,69 @@ internal object OrionExecutiveStore {
         else -> DispatchOutcome.EXECUTED_UNVERIFIED
     }
 
+    /** Phases completed before the backend is entered. */
+    internal fun dispatchStartPath(): List<Phase> =
+        listOf(Phase.RETRIEVE, Phase.ASSESS, Phase.SELECT, Phase.PERFORM)
+
+    /** A successful call is not complete until verification and learning have been recorded. */
+    internal fun dispatchFinishPath(outcome: DispatchOutcome): List<Phase> = when (outcome) {
+        DispatchOutcome.VERIFIED -> listOf(Phase.VERIFY, Phase.LEARN, Phase.COMPLETED)
+        DispatchOutcome.EXECUTED_UNVERIFIED -> listOf(Phase.VERIFY, Phase.BLOCKED)
+        DispatchOutcome.FAILED -> listOf(Phase.BLOCKED)
+        DispatchOutcome.RECONCILIATION_REQUIRED -> listOf(Phase.BLOCKED)
+    }
+
+    private fun transitionPath(
+        db: SQLiteDatabase,
+        objectiveId: String,
+        path: List<Phase>,
+        blocker: String = ""
+    ): Boolean {
+        for (phase in path) {
+            val current = get(db, objectiveId) ?: return false
+            if (current.phase == phase) continue
+            if (!canTransition(current.phase, phase)) return false
+            val changed = db.compileStatement(
+                "UPDATE objectives SET phase=?,revision=revision+1,recovery_cursor=?,blocker=?,updated_at=? WHERE id=? AND revision=?"
+            ).run {
+                bindString(1, phase.name)
+                bindString(2, if (phase == Phase.BLOCKED) "dispatch_recovery" else phase.name.lowercase())
+                bindString(3, blocker.take(500))
+                bindLong(4, System.currentTimeMillis())
+                bindString(5, objectiveId)
+                bindLong(6, current.revision)
+                executeUpdateDelete()
+            }
+            if (changed != 1) return false
+        }
+        return true
+    }
+
     fun contextBlock(context: Context): String = runCatching {
-        val db = Db(context.applicationContext).readableDatabase
-        val objective = db.rawQuery("""SELECT id,intent,phase,revision,plan_revision,recovery_cursor,blocker
-            FROM objectives WHERE phase NOT IN (?,?) ORDER BY updated_at DESC LIMIT 1""",
-            arrayOf(Phase.COMPLETED.name, Phase.FAILED.name)).use {
-            if (!it.moveToFirst()) null else Objective(it.getString(0),it.getString(1),Phase.valueOf(it.getString(2)),
-                it.getLong(3),it.getLong(4),it.getString(5),it.getString(6),0L)
-        } ?: return ""
-        val steps = steps(context, objective.id)
-        buildString {
-            appendLine("SQLITE EXECUTIVE LEDGER — authoritative persisted state")
-            appendLine("objective_id=${objective.id}; phase=${objective.phase}; revision=${objective.revision}; plan_revision=${objective.planRevision}")
-            appendLine("intent=${objective.intent.take(500)}; recovery_cursor=${objective.recoveryCursor}; blocker=${objective.blocker}")
-            steps.forEach { appendLine("step[${it.ordinal}]=${it.id}; ${it.status}; ${it.title}; capability=${it.capability}; attempts=${it.attempts}; evidence=${it.evidenceRef}; result=${it.resultSummary.take(180)}") }
-            appendLine("Only VERIFIED steps with evidence references are complete. Reconcile RUNNING steps before retrying; do not infer completion from a model response.")
+        Db(context.applicationContext).readableDatabase.use { db ->
+            val recentObjectives = db.rawQuery("""SELECT id,intent,phase,revision,plan_revision,recovery_cursor,blocker
+                FROM objectives ORDER BY updated_at DESC LIMIT 8""", null).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(
+                        Objective(cursor.getString(0), cursor.getString(1), Phase.valueOf(cursor.getString(2)),
+                            cursor.getLong(3), cursor.getLong(4), cursor.getString(5), cursor.getString(6), 0L)
+                    )
+                }
+            }
+            if (recentObjectives.isEmpty()) "" else buildString {
+                appendLine("SQLITE EXECUTIVE LEDGER — latest 8 durable dispatch/objective records, including terminal outcomes")
+                recentObjectives.forEach { objective ->
+                    appendLine("objective_id=${objective.id}; phase=${objective.phase}; revision=${objective.revision}; plan_revision=${objective.planRevision}")
+                    appendLine("intent=${objective.intent.take(500)}; recovery_cursor=${objective.recoveryCursor}; blocker=${objective.blocker}")
+                    steps(context, objective.id).forEach { step ->
+                        appendLine("step[${step.ordinal}]=${step.id}; ${step.status}; ${step.title}; capability=${step.capability}; attempts=${step.attempts}; evidence=${step.evidenceRef}; result=${step.resultSummary.take(180)}")
+                    }
+                    dispatchAttempts(context, objective.id).forEach { attempt ->
+                        appendLine("dispatch_attempt=${attempt.id}; capability=${attempt.capability}; outcome=${attempt.outcome}; evidence_ref=${attempt.evidenceRef}; summary=${attempt.summary.take(180)}")
+                    }
+                }
+                appendLine("Only VERIFIED steps and dispatch attempts with durable evidence references are complete. BLOCKED or RECONCILIATION_REQUIRED attempts must be reconciled against current state before retrying. Terminal records remain available as history; never infer completion from a model response.")
+            }
         }
     }.getOrDefault("")
 }

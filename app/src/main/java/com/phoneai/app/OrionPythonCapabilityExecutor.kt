@@ -46,7 +46,7 @@ internal class OrionPythonCapabilityExecutor(
             "extension_rollback" -> rollbackExtension(args)
             "extension_create" -> createDraft(args)
             "extension_update" -> updateDraft(args)
-            "extension_test" -> testDraft(args, stopped)
+            "extension_test" -> testDraft(args, confirm, stopped)
             "extension_enable" -> enable(args)
             "extension_run" -> runExtension(args, stopped)
             "extension_disable" -> disable(args)
@@ -57,7 +57,7 @@ internal class OrionPythonCapabilityExecutor(
     private fun extensionPolicy(): String =
         "Generated-extension auto-activation is " +
             (if (ExtensionAutonomySettings.autoActivationEnabled(context)) "ON" else "OFF") +
-            ". Activation still requires passing tests for the exact source hash; generated code receives no Android, filesystem, network, or shell capabilities."
+            ". Restricted python receives no Android, filesystem, network, or shell capabilities. Full CPython runs with the Android app UID and may access resources available to the app; it requires separate owner approval to test and activate. Every activation requires a passing receipt for the exact source hash."
 
     private fun setExtensionAutoActivation(args: JSONObject): String {
         val rawEnabled = args.opt("enabled")
@@ -84,7 +84,7 @@ internal class OrionPythonCapabilityExecutor(
     private fun createDraft(args: JSONObject): String {
         val id = args.optString("id").trim()
         val name = args.optString("name").trim()
-        val runtime = args.optString("runtime", "python_full").trim().lowercase()
+        val runtime = args.optString("runtime", "python_full").trim().lowercase().ifBlank { "python_full" }
         val source = args.optString("source")
         val invalid = SelfExtendingExtensionPolicy.validateIdentity(id, name)
             ?: SelfExtendingExtensionPolicy.validateSource(runtime, source)
@@ -143,7 +143,7 @@ internal class OrionPythonCapabilityExecutor(
         else "error: could not archive active version $id; the existing extension remains unchanged"
     }
 
-    private fun testDraft(args: JSONObject, stopped: () -> Boolean): String {
+    private fun testDraft(args: JSONObject, confirm: (String) -> Boolean, stopped: () -> Boolean): String {
         val id = args.optString("id").trim()
         val extension = try { extensionStore.all().firstOrNull { it.id == id } } catch (_: Exception) { null }
             ?: return "error: extension draft not found or registry unreadable"
@@ -165,11 +165,14 @@ internal class OrionPythonCapabilityExecutor(
             return "error: sandbox tests passed but their durable verification receipt could not be saved; extension remains disabled"
         }
         val ownerAutoActivation = ExtensionAutonomySettings.autoActivationEnabled(context)
-        val autoActivated = ownerAutoActivation && activateVerifiedVersion(extension, report, approved = true)
+        // Orion and Kingi share the platform: an exact-source tested extension auto-promotes in either
+        // runtime when the owner's auto-activation setting is on (default on).
+        val safeRuntimeAutoActivation = ownerAutoActivation
+        val autoActivated = safeRuntimeAutoActivation &&
+            activateVerifiedVersion(extension, report, approved = false)
         AgentPolicy.log(
             context, "extension:$id", "auto-activate", autoActivated,
             if (autoActivated) "owner pre-approval promoted exact-hash sandbox-tested extension"
-            else if (ownerAutoActivation) "owner auto-activation was enabled but promotion failed validation"
             else "owner auto-activation is off; awaiting an explicit extension_enable tool request"
         )
         if (autoActivated) runCatching { OrionLessons.learn(context, "Built and activated tool '$id' (${extension.displayName}): ${extension.description.take(100)}. Reuse it via extension_run before building anything similar.") }

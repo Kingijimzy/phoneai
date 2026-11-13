@@ -27,15 +27,16 @@ class OrionTaskOrchestratorTest {
         )
         assertEquals(OrionExecutionReadiness.NextStep.PREPARE_SHELL_SETUP, context.readiness.nextStep)
         assertFalse(context.promptLines().any { it.contains("Task completed") })
-        assertTrue(context.promptLines().any { it.contains("registered; 1 available") })
+        assertTrue(context.promptLines().any { it.contains("registered; 1 eligible for dispatch") })
     }
 
     @Test fun missingPackCannotBeAdvertisedAsAvailable() {
         val context = OrionTaskOrchestrator.build(
             "check current weather", listOf(tool("weather")), emptySet(), termuxReady = true
         )
-        assertEquals(0, context.capabilities.availableCount)
-        assertTrue(context.promptLines().any { it.contains("weather: capability pack") })
+        assertEquals(1, context.capabilities.availableCount)
+        assertTrue(context.capabilities.tools.single().available)
+        assertTrue(context.promptLines().any { it.contains("eligible for dispatch") })
     }
 
     @Test fun explicitAccountRequestCarriesConnectionFactsWithoutGrantingPermission() {
@@ -60,9 +61,9 @@ class OrionTaskOrchestratorTest {
         )
         val prompt = context.promptLines().joinToString("\n")
         assertTrue(prompt.contains("GRANTED CAPABILITY CONTRACT"))
-        assertTrue(prompt.contains("use its documented functionality fully"))
-        assertTrue(prompt.contains("Do not invent additional application-level restrictions"))
-        assertTrue(prompt.contains("Actual Android permissions"))
+        assertTrue(prompt.contains("Use its documented functionality fully"))
+        assertTrue(prompt.contains("Do not invent application-level restrictions"))
+        assertTrue(prompt.contains("real Android permissions"))
         assertTrue(prompt.contains("EXECUTION ERROR HONESTY CONTRACT"))
         assertTrue(prompt.contains("is not proof permission is missing"))
     }
@@ -84,7 +85,7 @@ class OrionTaskOrchestratorTest {
         val context = OrionTaskOrchestrator.build(
             "check current weather", listOf(tool("weather")), emptySet(), termuxReady = true
         )
-        assertTrue(OrionTaskOrchestrator.dispatchBlockReason(context, "weather")!!.contains("disabled"))
+        assertEquals(null, OrionTaskOrchestrator.dispatchBlockReason(context, "weather"))
     }
 
     @Test fun goalClassifierDoesNotOverrideLiveRegisteredCapabilityDispatch() {
@@ -96,7 +97,7 @@ class OrionTaskOrchestratorTest {
         assertTrue(ambiguous.promptLines().any { it.contains("ask one focused clarification") })
     }
 
-    @Test fun explicitToolDenyIsIncludedInTheUnifiedCentralDiscoverySnapshot() {
+    @Test fun legacyToolDenyDoesNotDisableRegisteredCapability() {
         val context = OrionTaskOrchestrator.build(
             "run a command in Linux terminal",
             listOf(tool("shell", ToolAccess.WRITE)),
@@ -105,8 +106,7 @@ class OrionTaskOrchestratorTest {
             deniedTools = setOf("shell")
         )
         val fact = context.capabilities.tools.single()
-        assertEquals(CapabilityRegistry.State.DISABLED, fact.state)
-        assertTrue(fact.reason.contains("explicitly set"))
-        assertTrue(OrionTaskOrchestrator.dispatchBlockReason(context, "shell")!!.contains("explicitly set"))
+        assertTrue(fact.available)
+        assertEquals(null, OrionTaskOrchestrator.dispatchBlockReason(context, "shell"))
     }
 }

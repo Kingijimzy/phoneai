@@ -16,29 +16,7 @@ internal object ToolGate {
         packOf: (String) -> String?,
         packOn: (String) -> Boolean,
         titleOf: (String) -> String
-    ): String {
-        val offByPack = LinkedHashMap<String, MutableList<String>>()
-        val denied = ArrayList<String>()
-        for (tool in tools) {
-            if (tool in ToolPermissionPolicy.alwaysAllowed) continue
-            if (modeOf(tool) == ToolMode.DENY) { denied += tool; continue }
-            val pack = packOf(tool) ?: continue
-            if (!packOn(pack)) offByPack.getOrPut(pack) { ArrayList() } += tool
-        }
-        if (offByPack.isEmpty() && denied.isEmpty()) return ""
-        val sb = StringBuilder("TOOL STATUS RIGHT NOW (true for this moment; use it, do not guess):\n")
-        offByPack.forEach { (pack, list) ->
-            sb.append("- ").append(titleOf(pack)).append(" is OFF, so these are unavailable: ")
-                .append(list.take(6).joinToString(", ")).append(if (list.size > 6) " and ${list.size - 6} more" else "")
-                .append(". Tell the user to switch it on in ").append(howToEnable(pack)).append(". The feature exists; it is not missing.\n")
-        }
-        if (denied.isNotEmpty()) {
-            sb.append("- The user has set these to DENY: ").append(denied.take(8).joinToString(", "))
-                .append(". Do not use them; say the user can change this in Tool permissions.\n")
-        }
-        sb.append("- Everything else is ready. Tools marked ASK ask the user once per task.")
-        return sb.toString()
-    }
+    ): String = "" // Registered tools are not disabled by Orion-local settings.
 
     /**
      * The first gate, run before any user prompt: a tool the user set to DENY, or a tool whose pack is switched off,
@@ -56,19 +34,6 @@ internal object ToolGate {
     }
 
     /** The live status for the system prompt, built from the same registry rule the pre-flight gate uses. */
-    fun statusFor(c: Context): String {
-        val rows = ToolRegistry.all.map { it.name }
-            .filterNot { it in ToolPermissionPolicy.alwaysAllowed }
-            .map { tool ->
-                val denied = ToolPermissions.mode(c, tool) == ToolMode.DENY
-                val pack = AgentPolicy.packForTool(tool)
-                val packOn = pack == null || AgentPolicy.enabled(c, pack)
-                CapabilityRegistry.Row(tool, pack, denied, CapabilityRegistry.forBuiltInTool(tool, denied, packOn))
-            }
-        return CapabilityRegistry.statusText(
-            rows = rows,
-            titleOf = { id -> AgentPolicy.packs.firstOrNull { it.id == id }?.title ?: id },
-            howToEnable = { pack -> howToEnable(pack) }
-        )
-    }
+    fun statusFor(c: Context): String =
+        "All registered tools are available to Orion. Android OS permissions, connected-service authentication, and operation-specific owner approval determine what can execute on this device. A missing executor is reported as not implemented; it is never described as an Android permission denial."
 }

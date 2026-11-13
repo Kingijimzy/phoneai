@@ -15,19 +15,20 @@ class OrionCapabilityDiscoveryTest {
         assertEquals(ToolRegistry.all.size, ToolRegistry.all.map { it.name }.distinct().size)
     }
 
-    @Test fun disabledPackBlocksRegisteredTool() {
+    @Test fun disabledPackDoesNotBlockRegisteredTool() {
         val snapshot = OrionCapabilityDiscovery.discover(listOf(tool("weather")), emptySet(), termuxReady = true)
-        assertEquals(0, snapshot.availableCount)
-        assertTrue(snapshot.tools.single().reason.contains("disabled"))
+        assertEquals(1, snapshot.availableCount)
+        assertTrue(snapshot.tools.single().available)
     }
 
-    @Test fun enabledPackDoesNotMakeTermuxReadyByItself() {
+    @Test fun unreadyTermuxBridgeDoesNotDisableRegisteredTool() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("termux_command", ToolAccess.WRITE)),
             setOf("termux_bridge"),
             termuxReady = false
         )
-        assertFalse(snapshot.tools.single().available)
+        assertTrue(snapshot.tools.single().available)
+        assertEquals(CapabilityRegistry.State.SETUP_REQUIRED, snapshot.tools.single().state)
         assertTrue(snapshot.tools.single().reason.contains("not ready"))
     }
 
@@ -41,10 +42,9 @@ class OrionCapabilityDiscoveryTest {
         assertEquals(1, snapshot.availableCount)
     }
 
-    @Test fun unmappedToolFailsClosed() {
+    @Test fun unmappedRegisteredToolRemainsDispatchEligible() {
         val snapshot = OrionCapabilityDiscovery.discover(listOf(tool("invented_tool")), setOf("orion_core"), true)
-        assertFalse(snapshot.tools.single().available)
-        assertTrue(snapshot.tools.single().reason.contains("fail closed"))
+        assertTrue(snapshot.tools.single().available)
     }
 
     @Test fun missingAndroidPermissionBlocksSensitiveCapability() {
@@ -54,14 +54,15 @@ class OrionCapabilityDiscoveryTest {
             termuxReady = true,
             permissionStates = mapOf("contacts" to OrionCapabilityDiscovery.PermissionState.MISSING)
         )
-        assertFalse(snapshot.tools.single().available)
+        assertTrue(snapshot.tools.single().available)
+        assertEquals(CapabilityRegistry.State.PERMISSION_REQUIRED, snapshot.tools.single().state)
         assertTrue(snapshot.tools.single().reason.contains("permission"))
     }
 
     @Test fun unknownPermissionIsNotReportedAsGranted() {
         val snapshot = OrionCapabilityDiscovery.discover(listOf(tool("read_notifications")), setOf("phone_control"), true)
-        assertFalse(snapshot.tools.single().available)
-        assertTrue(snapshot.tools.single().reason.contains("unverified"))
+        assertTrue(snapshot.tools.single().available)
+        assertEquals(CapabilityRegistry.State.AVAILABLE_LIMITED, snapshot.tools.single().state)
     }
 
     @Test fun grantedAndroidPermissionsMakeMatchingCapabilitiesAvailable() {
@@ -92,8 +93,7 @@ class OrionCapabilityDiscoveryTest {
             setOf(pack),
             termuxReady = true
         )
-        assertFalse(unknown.tools.single().available)
-        assertTrue(unknown.tools.single().reason.contains("accessibility"))
+        assertTrue(unknown.tools.single().available)
 
         val granted = OrionCapabilityDiscovery.discover(
             listOf(tool("tap", ToolAccess.WRITE)),
@@ -111,21 +111,22 @@ class OrionCapabilityDiscoveryTest {
             termuxReady = true,
             permissionStates = mapOf("location" to OrionCapabilityDiscovery.PermissionState.MISSING)
         )
-        assertFalse(snapshot.tools.single().available)
+        assertTrue(snapshot.tools.single().available)
+        assertEquals(CapabilityRegistry.State.PERMISSION_REQUIRED, snapshot.tools.single().state)
         assertTrue(snapshot.tools.single().reason.contains("location"))
     }
 
-    @Test fun availableToolRequiresRegistryAndEnabledPack() {
+    @Test fun registeredToolIsDispatchEligibleRegardlessOfPack() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("weather")),
             setOf("trading_research"),
             termuxReady = true
         )
         assertEquals(1, snapshot.availableCount)
-        assertTrue(snapshot.promptLines().any { it.contains("weather(read,available_limited,not-live-tested)") })
+        assertTrue(snapshot.promptLines().any { it.contains("weather(read,dispatch-eligible,not-live-tested)") })
     }
 
-    @Test fun mcpCallIsBlockedUntilEndpointIsConfiguredAndPaired() {
+    @Test fun mcpToolRemainsDispatchEligibleUntilEndpointIsConfiguredAndPaired() {
         val pack = AgentPolicy.packForTool("mcp_call") ?: "connectors"
         val unconfigured = OrionCapabilityDiscovery.discover(
             listOf(tool("mcp_call", ToolAccess.WRITE)),
@@ -133,7 +134,8 @@ class OrionCapabilityDiscoveryTest {
             termuxReady = true,
             integrationStates = mapOf("mcp_endpoint" to "not-configured", "mcp_pairing" to "not-paired")
         )
-        assertFalse(unconfigured.tools.single().available)
+        assertTrue(unconfigured.tools.single().available)
+        assertEquals(CapabilityRegistry.State.SETUP_REQUIRED, unconfigured.tools.single().state)
         assertTrue(unconfigured.tools.single().reason.contains("endpoint"))
         val configuredButUnpaired = OrionCapabilityDiscovery.discover(
             listOf(tool("mcp_call", ToolAccess.WRITE)),
@@ -141,7 +143,8 @@ class OrionCapabilityDiscoveryTest {
             termuxReady = true,
             integrationStates = mapOf("mcp_endpoint" to "configured", "mcp_pairing" to "not-paired")
         )
-        assertFalse(configuredButUnpaired.tools.single().available)
+        assertTrue(configuredButUnpaired.tools.single().available)
+        assertEquals(CapabilityRegistry.State.SETUP_REQUIRED, configuredButUnpaired.tools.single().state)
         assertTrue(configuredButUnpaired.tools.single().reason.contains("paired"))
     }
 
@@ -165,10 +168,10 @@ class OrionCapabilityDiscoveryTest {
         val prompt = snapshot.promptLines().joinToString("\n")
         assertTrue(snapshot.tools.single().available)
         assertTrue(prompt.contains("GRANTED CAPABILITY RULE"))
-        assertTrue(prompt.contains("use it fully"))
+        assertTrue(prompt.contains("use its documented functions"))
         assertTrue(prompt.contains("Do not invent extra application-level restrictions"))
         assertTrue(prompt.contains("actual Android OS/runtime permissions"))
-        assertTrue(prompt.contains("explicit confirmations required for consequential actions"))
+        assertTrue(prompt.contains("operation-specific owner confirmations"))
     }
 
     @Test fun promptNeverConfusesEligibilityWithLiveExecutionVerification() {
@@ -178,7 +181,7 @@ class OrionCapabilityDiscoveryTest {
             termuxReady = true
         )
         val prompt = snapshot.promptLines().joinToString("\n")
-        assertTrue(prompt.contains("eligible under current settings"))
+        assertTrue(prompt.contains("Registered tools eligible for dispatch"))
         assertTrue(prompt.contains("runtime health verified=0"))
         assertTrue(prompt.contains("not proof of live execution"))
         assertTrue(prompt.contains("Never describe an eligible tool as tested"))
@@ -206,17 +209,14 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(fact.reason.contains("not tested yet"))
     }
 
-    @Test fun explicitToolDenyIsReflectedInTheLiveCapabilitySnapshot() {
+    @Test fun explicitToolDenyDoesNotRemoveRegisteredToolFromDispatch() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("shell", ToolAccess.WRITE)),
             setOf("workspace_shell"),
             termuxReady = false,
             deniedTools = setOf("shell")
         )
-        val fact = snapshot.tools.single()
-        assertFalse(fact.available)
-        assertEquals(CapabilityRegistry.State.DISABLED, fact.state)
-        assertTrue(fact.reason.contains("explicitly set"))
+        assertTrue(snapshot.tools.single().available)
     }
 
     @Test fun duplicateToolDefinitionsAreReportedInsteadOfSilentlyHidden() {
@@ -236,8 +236,8 @@ class OrionCapabilityDiscoveryTest {
             termuxReady = true,
             permissionStates = mapOf("contacts" to OrionCapabilityDiscovery.PermissionState.MISSING)
         )
-        assertEquals(CapabilityRegistry.State.DISABLED, snapshot.tools.single().state)
-        assertTrue(snapshot.tools.single().reason.contains("disabled"))
+        assertEquals(CapabilityRegistry.State.PERMISSION_REQUIRED, snapshot.tools.single().state)
+        assertTrue(snapshot.tools.single().reason.contains("permission"))
     }
 
 
@@ -248,7 +248,8 @@ class OrionCapabilityDiscoveryTest {
             termuxReady = true,
             permissionStates = mapOf("notification_access" to OrionCapabilityDiscovery.PermissionState.MISSING)
         )
-        assertFalse(snapshot.tools.single().available)
+        assertTrue(snapshot.tools.single().available)
+        assertEquals(CapabilityRegistry.State.PERMISSION_REQUIRED, snapshot.tools.single().state)
         assertTrue(snapshot.tools.single().reason.contains("notification_access"))
     }
 

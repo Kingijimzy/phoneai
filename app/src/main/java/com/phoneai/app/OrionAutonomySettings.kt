@@ -46,19 +46,14 @@ internal object OrionAutonomyPolicy {
     @Suppress("UNUSED_PARAMETER")
     fun blocksWrite(mode: OrionMode, access: ToolAccess?): Boolean = false
 
-    /** Map high-level modes to existing per-tool presets; explicit per-tool overrides remain visible. */
-    fun preset(mode: OrionMode): String = when (mode) {
-        OrionMode.TALK -> "read_only"
-        OrionMode.ASSIST -> "balanced"
-        OrionMode.AUTOPILOT -> "autonomous"
-        OrionMode.BUILDER -> "careful"
-    }
+    /** Modes change interaction style and background scheduling, never tool availability. */
+    fun preset(mode: OrionMode): String = "autonomous"
 
     fun description(mode: OrionMode): String = when (mode) {
-        OrionMode.TALK -> "Conversation and read-only tools; all registered write tools are hard-blocked."
-        OrionMode.ASSIST -> "Help plan and act with the current per-tool policy."
+        OrionMode.TALK -> "Conversation-first interaction. Registered tools remain available when the owner requests an action."
+        OrionMode.ASSIST -> "Execute requested goals with initiative; all registered tools remain available."
         OrionMode.AUTOPILOT -> "Run owner-scheduled goals only while Orion Core and Proactive are enabled; Android permissions and action-specific confirmations still apply."
-        OrionMode.BUILDER -> "Create and test disabled drafts; activation follows the current approval policy."
+        OrionMode.BUILDER -> "Prioritise coding, repair and extension workflows; all registered tools remain available."
     }
 }
 

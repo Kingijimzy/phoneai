@@ -44,6 +44,8 @@ internal class OrionStage3EvalSuite {
         // TaskStore keeps a process-wide cache that survives Robolectric resets; isolate each test.
         TaskStore.all(context).toList().forEach { TaskStore.delete(context, it.id) }
         OrionFollowUpStore.pending(context).toList().forEach { OrionFollowUpStore.done(context, it.id) }
+        // Robolectric reuses application preferences across test methods; ambient grants must not leak.
+        OrionSensorScope.values().forEach { OrionSensorConsent.revoke(context, it) }
     }
 
     /* ========================================================================
@@ -501,7 +503,7 @@ internal class OrionStage3EvalSuite {
         }
 
         // Calendar should be empty without consent
-        assertTrue("calendar empty without consent", calendar.isEmpty() || calendar.contains("OWNER-GRANTED CALENDAR CONTEXT"))
+        assertTrue("calendar must disclose disabled consent without reading events", calendar.isEmpty() || calendar.contains("OWNER-GRANTED CALENDAR CONTEXT") || calendar.contains("switched off"))
 
         // Follow-ups should be a bounded list
         assertTrue("follow-ups should be a list", followUps is List<*>)

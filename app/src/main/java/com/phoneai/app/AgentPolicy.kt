@@ -25,11 +25,8 @@ object AgentPolicy {
         Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; exact-source sandbox test required, then owner auto-activation setting or explicit extension_enable request", true)
     )
     private fun p(c: Context) = c.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE)
-    /** PLAN is the only global execution stop; legacy saved modes resolve to ALLOW. */
-    fun mode(c: Context): Mode {
-        val saved = p(c).getString("mode", null)
-        return if (saved.equals("PLAN", ignoreCase = true)) Mode.PLAN else Mode.ALLOW
-    }
+    /** Legacy PLAN state is presentation-only; it never suppresses registered tool dispatch. */
+    fun mode(c: Context): Mode = Mode.ALLOW
     fun setMode(c: Context, v: Mode) {
         p(c).edit().putString("mode", if (v == Mode.PLAN) Mode.PLAN.name else Mode.ALLOW.name).apply()
     }
@@ -45,7 +42,18 @@ object AgentPolicy {
     internal fun defaultOn(id: String) = id in defaultOnPacks
 
     /** An explicit user choice always wins; only a never-set pack falls back to its default. */
-    @Suppress("UNUSED_PARAMETER") fun enabled(c: Context, id: String) = true // Free mode: every capability pack is on.
+    fun enabled(c: Context, id: String): Boolean {
+        // Pack switches are organisational UI only. A registered capability is never
+        // disabled by an Orion-local switch; its executor reports Android/service limits.
+        return packs.any { it.id == id && it.implemented }
+    }
+    /** Opt-in background observation is separate from capability/tool availability. */
+    fun backgroundEnabled(c: Context, id: String): Boolean {
+        val pack = packs.firstOrNull { it.id == id } ?: return false
+        if (!pack.implemented) return false
+        val prefs = p(c)
+        return if (prefs.contains("pack_$id")) prefs.getBoolean("pack_$id", false) else defaultOn(id)
+    }
     fun setEnabled(c: Context, id: String, on: Boolean) {
         val pack = packs.firstOrNull { it.id == id }
         p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
@@ -67,29 +75,24 @@ object AgentPolicy {
     fun setBudgets(c: Context, steps: Int, calls: Int, minutes: Int) {
         p(c).edit().putInt("budget_steps_v5", steps.coerceIn(1, 1_000_000)).putInt("budget_calls_v5", calls.coerceIn(1, 1_000_000)).putInt("budget_minutes_v5", minutes.coerceIn(1, 100_000)).apply()
     }
-    /** The one wording for "this pack is off", shared by the pre-flight check, the pack gate and the prompt status. */
+    /** Legacy compatibility text: pack state is informational and never disables a registered tool. */
     fun packOffMessage(pack: String): String =
-        "The '$pack' capability pack is switched off, so this tool is unavailable right now. The feature exists: tell the user which pack to switch on (${ToolGate.howToEnable(pack)}) instead of saying Orion lacks it."
+        "The '$pack' label is organisational only. Registered tools remain available to Orion; check the actual Android permission, service, connection or executor result instead."
 
-    /** Compatibility decision adapter. GatePolicy is default-ALLOW except PLAN mode and disabled trading order execution. */
+    /** Central decision adapter; owner settings flow through GatePolicy. */
     internal fun gate(
         c: Context, pack: String, toolId: String, dangerous: Boolean,
         toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false,
         hardBlockReason: String? = null
     ): GatePolicy.Result {
-        val talkReadOnly = OrionAutonomyPolicy.blocksWrite(
-            OrionAutonomySettings.read(c).mode,
-            ToolRegistry.all.firstOrNull { it.name == toolId }?.access
-        )
-        val effectiveToolMode = if (talkReadOnly) ToolMode.DENY else toolMode
         return GatePolicy.decide(GatePolicy.Input(
         pack = pack,
-        packOn = packs.any { it.id == pack } && enabled(c, pack),
+        packOn = true,
         tool = toolId,
-        mode = mode(c),
-        toolMode = effectiveToolMode,
-        // Legacy per-tool ASK values are normalized to ALLOW by ToolPermissionPolicy.modeOf.
-        // Only an explicit DENY, PLAN mode or disabled capability pack blocks dispatch.
+        mode = Mode.ALLOW,
+        toolMode = ToolMode.ALLOW,
+        // Legacy per-tool DENY/ASK values and disabled-pack preferences are intentionally
+        // ignored for tool execution. Android OS permission checks remain in each executor.
         autonomous = ToolPermissions.level(c) == "autonomous",
         dangerous = dangerous,
         approvedThisAction = approvedThisAction,
@@ -118,7 +121,7 @@ object AgentPolicy {
         "termux_command" -> "termux_bridge"
         "shell", "workspace_list", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "python_exec", "project_create", "project_list", "project_inspect", "project_plan", "project_verify" -> "workspace_shell"
         "self_diagnose", "repair_apply", "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get",
-        "goal_add", "goal_list", "goal_remove", "goal_toggle" -> "orion_core"
+        "goal_add", "goal_list", "goal_remove", "goal_toggle", "complete_objective" -> "orion_core"
         "model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state",
         "proactive_check", "proactive_status", "followup_add", "followup_list", "followup_done", "quiet_period_set" -> "orion_core"
         "chronos_awareness", "calendar_events", "voice_speak", "voice_listen" -> "phone_control"

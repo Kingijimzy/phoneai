@@ -1,40 +1,54 @@
 package com.phoneai.app
 
 import android.content.Context
+import org.json.JSONObject
 
-/** Compatibility value used by GatePolicy; Orion does not keep per-tool permission scopes. */
 internal enum class ToolMode { ALLOW, ASK, DENY }
 
-/** Legacy adapter kept for source compatibility. Every registered tool resolves to ALLOW. */
+/** Per-tool controls are persisted locally; Android OS permissions remain mandatory. */
 internal object ToolPermissionPolicy {
     val alwaysAllowed = setOf("ask_user", "wait", "time")
     val levels = listOf("autonomous")
-
-    fun levelLabel(level: String) = "Direct execution: registered tools run without Orion per-tool permission scopes."
+    fun levelLabel(level: String) =
+        "Autonomous: every registered tool is available. Android OS permissions and operation-specific owner confirmations still apply."
     fun preset(level: String, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> = emptyMap()
     fun modeOf(map: Map<String, ToolMode>, tool: String): ToolMode = ToolMode.ALLOW
     fun applyPreset(level: String, overrides: Map<String, ToolMode>, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> = emptyMap()
-    fun serializeOverrides(map: Map<String, ToolMode>): String = "{}"
-    fun next(mode: ToolMode): ToolMode = ToolMode.ALLOW
-    fun serialize(map: Map<String, ToolMode>): String = "{}"
-    fun parse(json: String?): Map<String, ToolMode> = emptyMap()
+    fun serializeOverrides(map: Map<String, ToolMode>): String = JSONObject().apply { map.forEach { (k, v) -> put(k, v.name) } }.toString()
+    fun serialize(map: Map<String, ToolMode>) = serializeOverrides(map)
+    fun next(mode: ToolMode) = ToolMode.ALLOW
+    fun parse(json: String?): Map<String, ToolMode> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return runCatching {
+            val obj = JSONObject(json)
+            buildMap {
+                val keys = obj.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val mode = runCatching { ToolMode.valueOf(obj.optString(key).uppercase()) }.getOrNull()
+                    if (!key.isBlank() && mode != null) put(key, mode)
+                }
+            }
+        }.getOrDefault(emptyMap())
+    }
     fun denyMessage(tool: String) = "Tool '$tool' is not registered in Orion's tool registry."
 }
 
 object ToolPermissions {
-    /** Old saved settings are ignored; Orion has no per-tool permission matrix. */
-    internal fun map(c: Context): Map<String, ToolMode> = emptyMap()
-    @Suppress("UNUSED_PARAMETER")
-    internal fun mode(c: Context, tool: String): ToolMode = ToolMode.ALLOW
-    @Suppress("UNUSED_PARAMETER")
-    internal fun hasOverride(c: Context, tool: String): Boolean = false
-    @Suppress("UNUSED_PARAMETER")
-    internal fun set(c: Context, modes: Map<String, ToolMode>) = Unit
-    /** Compatibility value: GatePolicy treats requested actions as autonomous by default. */
-    @Suppress("UNUSED_PARAMETER")
+    private const val PREFS = "phoneai"
+    private const val MODES = "tool_modes"
+    private const val LEVEL = "tool_level"
+    internal fun map(c: Context) = emptyMap<String, ToolMode>()
+    internal fun mode(c: Context, tool: String) = ToolMode.ALLOW
+    internal fun hasOverride(c: Context, tool: String) = false
+    internal fun set(c: Context, modes: Map<String, ToolMode>) {
+        // Remove legacy per-tool DENY/ASK state; registered tools are never disabled locally.
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(MODES).apply()
+    }
     fun level(c: Context): String = "autonomous"
-    @Suppress("UNUSED_PARAMETER")
-    internal fun applyLevel(c: Context, level: String) = Unit
-    @Suppress("UNUSED_PARAMETER")
-    internal fun cycle(c: Context, tool: String) = Unit
+    internal fun applyLevel(c: Context, level: String) {
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(LEVEL, "autonomous").remove(MODES).apply()
+    }
+    internal fun cycle(c: Context, tool: String) { /* legacy UI callback; no local DENY/ASK cycle */ }
 }

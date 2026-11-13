@@ -158,6 +158,7 @@ class VoiceSettingsActivity : Activity() {
             }
             neuralSwitch = addSwitch(this, "Use Orion's British neural voice (Kokoro)", Prefs.neuralVoice(this@VoiceSettingsActivity)) {
                 Prefs.setNeuralVoice(this@VoiceSettingsActivity, it)
+                if (it) Prefs.setVoice(this@VoiceSettingsActivity, true)
                 if (it && !NeuralVoiceInstaller.isInstalled(this@VoiceSettingsActivity)) {
                     Toast.makeText(this@VoiceSettingsActivity, "Kokoro is not installed yet. Download it below to activate Orion's British voice.", Toast.LENGTH_LONG).show()
                 } else {
@@ -426,6 +427,13 @@ class VoiceSettingsActivity : Activity() {
     private fun testVoice() {
         val voice = Voice(this)
         previewVoice = voice
+        voice.onProblem = { message ->
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    Toast.makeText(this, "Voice test failed: $message", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
         voice.speak("Hello. This is Orion. This is a test of the current spoken voice.") {
             runOnUiThread { voice.shutdown(); if (previewVoice === voice) previewVoice = null }
         }
@@ -463,18 +471,23 @@ class VoiceSettingsActivity : Activity() {
                 }
             },
             { failure ->
-                if (failure == null) Prefs.setNeuralVoice(applicationContext, true)
+                if (failure == null) {
+                    Prefs.setNeuralVoice(applicationContext, true)
+                    Prefs.setVoice(applicationContext, true)
+                }
                 runOnUiThread {
                     if (progress.isShowing) progress.dismiss()
                     if (activeProgress === progress) activeProgress = null
                     if (installCancellation === cancelled) installCancellation = null
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     if (failure == null) {
-                        Toast.makeText(this, "Kokoro British neural voice installed and enabled.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, "Kokoro British neural voice installed. Testing spoken output now…", Toast.LENGTH_LONG).show()
+                        refresh()
+                        testVoice()
                     } else {
                         Toast.makeText(this, "Neural voice install failed: " + (failure.message ?: "unknown error"), Toast.LENGTH_LONG).show()
+                        refresh()
                     }
-                    refresh()
                 }
             }
         )

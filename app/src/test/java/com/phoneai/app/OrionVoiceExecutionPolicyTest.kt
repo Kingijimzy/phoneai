@@ -25,15 +25,14 @@ class OrionVoiceExecutionPolicyTest {
     }
 
     @Test fun voiceRoutingDoesNotGrantPermissionOrBypassTheDispatchPolicy() {
-        // Voice routes through the same dispatcher. Ordinary operations execute directly;
-        // only delete/wipe data operations use the shared destructive confirmation.
+        // Voice routes through the same dispatcher and inherits exact-operation owner approval.
         assertTrue(OrionVoiceExecutionPolicy.shouldRouteToCommand("Send this message to Amma", emptyList(), ""))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("telegram_send"))
         assertEquals("messaging", AgentPolicy.packForTool("telegram_send"))
-        assertFalse(AgentHooks.requiresConfirmation("telegram_send", org.json.JSONObject().put("message", "Hello")))
-        assertFalse(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "restart")))
-        assertFalse(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "shutdown")))
-        assertFalse(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "wifi_toggle")))
+        assertTrue(AgentHooks.requiresConfirmation("telegram_send", org.json.JSONObject().put("message", "Hello")))
+        assertTrue(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "restart")))
+        assertTrue(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "shutdown")))
+        assertTrue(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "wifi_toggle")))
         assertTrue(AgentHooks.requiresConfirmation("task_delete", org.json.JSONObject().put("id", "task-1")))
     }
     @Test fun progressCueOnlyTriggersForPotentiallySlowRegisteredToolNames() {

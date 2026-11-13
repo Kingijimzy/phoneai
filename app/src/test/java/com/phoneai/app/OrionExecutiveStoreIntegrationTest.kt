@@ -64,6 +64,77 @@ class OrionExecutiveStoreIntegrationTest {
             JSONObject().put("command", "whoami"), 101L
         )!!
         assertNotEquals(first.attemptId, second.attemptId)
-        assertEquals(2, OrionExecutiveStore.dispatchAttempts(context, first.objectiveId).size)
+        // Each tool invocation owns an independent executive objective; never merge receipts.
+        assertNotEquals(first.objectiveId, second.objectiveId)
+        assertEquals(1, OrionExecutiveStore.dispatchAttempts(context, first.objectiveId).size)
+        assertEquals(1, OrionExecutiveStore.dispatchAttempts(context, second.objectiveId).size)
     }
+
+    @Test fun verifiedTerminalDispatchReceiptRemainsVisibleToCentralBrain() {
+        val handle = OrionExecutiveStore.beginToolDispatch(
+            context, "session-context", "Verify terminal receipt visibility", "voice-test",
+            "voice_test", JSONObject().put("mode", "smoke"), System.currentTimeMillis()
+        )!!
+        assertTrue(OrionExecutiveStore.finishDispatchAttempt(
+            context, handle.attemptId, OrionExecutiveStore.DispatchOutcome.VERIFIED,
+            "evidence-voice-smoke-001", "Voice smoke test passed and output was observed"
+        ))
+
+        val brainContext = OrionExecutiveStore.contextBlock(context)
+        assertTrue(brainContext.contains("phase=COMPLETED"))
+        assertTrue(brainContext.contains("outcome=VERIFIED"))
+        assertTrue(brainContext.contains("evidence-voice-smoke-001"))
+        assertTrue(brainContext.contains("Voice smoke test passed"))
+    }
+
+
+    @Test fun objectiveGraphCompletionRequiresLatestTrustedReceiptAndCompletedDependencies() {
+        ChatHistoryStore.clearAll(context)
+        ChatHistoryStore.save(context, listOf("user" to "Verify objective evidence integration"))
+        assertNotNull(ChatHistoryStore.activeSessionId(context))
+
+        val graph = OrionObjectiveGraph.Graph(
+            objective = "Research then summarize",
+            nodes = listOf(
+                OrionObjectiveGraph.Objective("research", "Research", status = OrionObjectiveGraph.Status.RUNNING),
+                OrionObjectiveGraph.Objective("summarize", "Summarize", dependsOn = listOf("research"))
+            )
+        )
+        assertTrue(OrionObjectiveGraph.save(context, graph))
+
+        val firstReceipt = OrionObjectiveGraph.recordExecution(
+            context, "research", "web_search", "error-free but superseded result"
+        )
+        assertNotNull(firstReceipt)
+        val latestReceipt = OrionObjectiveGraph.recordExecution(
+            context, "research", "web_search", "latest trusted research result"
+        )
+        assertNotNull(latestReceipt)
+        assertTrue(firstReceipt != latestReceipt)
+
+        assertFalse(OrionObjectiveGraph.completeFromEvidence(context, "research", requireNotNull(firstReceipt)))
+        assertTrue(OrionObjectiveGraph.completeFromEvidence(context, "research", requireNotNull(latestReceipt)))
+        val updated = requireNotNull(OrionObjectiveGraph.load(context))
+        assertEquals(OrionObjectiveGraph.Status.COMPLETE, updated.nodes.first { it.id == "research" }.status)
+        assertNull(OrionObjectiveGraph.canExecute(updated, "summarize"))
+        assertFalse(OrionObjectiveGraph.completeFromEvidence(context, "summarize", "model-invented-evidence"))
+    }
+
+
+    @Test fun objectiveCompletionRejectsEvidenceAfterItsOwnerSessionIsArchived() {
+        ChatHistoryStore.clearAll(context)
+        ChatHistoryStore.save(context, listOf("me" to "Start objective session"))
+        val graph = OrionObjectiveGraph.Graph(
+            objective = "Session-bound objective",
+            nodes = listOf(OrionObjectiveGraph.Objective("main", "Complete session-bound work", status = OrionObjectiveGraph.Status.RUNNING))
+        )
+        assertTrue(OrionObjectiveGraph.save(context, graph))
+        val receipt = OrionObjectiveGraph.recordExecution(context, "main", "verify_action", "PASS: observed state matches goal")
+        assertNotNull(receipt)
+
+        ChatHistoryStore.archiveAndClear(context, listOf("me" to "Archive the objective session"))
+        assertNull(ChatHistoryStore.activeSessionId(context))
+        assertFalse(OrionObjectiveGraph.completeFromEvidence(context, "main", requireNotNull(receipt)))
+    }
+
 }

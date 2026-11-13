@@ -130,6 +130,9 @@ internal object DeviceOperationRouter {
         return buildString {
             appendLine("ORION DEVICE CAPABILITY INVENTORY")
             appendLine("Clock: alarm/timer intents and alarm listing")
+            appendLine("Camera: external camera-app handoff; flashlight requires Orion's Android CAMERA permission")
+            appendLine("Calendar: read upcoming events only with owner consent and Android READ_CALENDAR; write access is not currently exposed as an Orion tool")
+            appendLine("Media library: Android scoped media permissions and system Photo Picker; no unrestricted storage access")
             appendLine("Audio: media stream read/set/up/down/mute/unmute")
             appendLine("Connectivity: Wi-Fi/Bluetooth settings panels; airplane-mode state read-only")
             appendLine("Notification reading/replies: " + if (notificationAccess) "NotificationListener granted" else "NotificationListener access not granted")

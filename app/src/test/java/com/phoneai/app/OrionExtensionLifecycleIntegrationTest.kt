@@ -37,6 +37,7 @@ class OrionExtensionLifecycleIntegrationTest {
 
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
+        ExtensionAutonomySettings.setAutoActivationEnabled(context, false)
         listOf(
             "orion_generated_extensions.json",
             "orion_extension_versions.json",
@@ -195,6 +196,50 @@ class OrionExtensionLifecycleIntegrationTest {
         val historyResult = runTool("extension_history", JSONObject().put("id", id))
         assertTrue("extension_history should list both versions: $historyResult",
             historyResult.contains("v1") && historyResult.contains("v2"))
+    }
+
+    @Test
+    fun fullCpythonAutoActivatesWithoutPromptsWhenAutonomyIsEnabled() {
+        ExtensionAutonomySettings.setAutoActivationEnabled(context, true)
+        val fullRuntimeSandbox = object : ExtensionSandbox {
+            override fun test(extension: GeneratedExtension, testCases: List<JSONObject>) =
+                ExtensionTestReport(true, extension.sourceSha256, "full runtime tests passed")
+            override fun execute(extension: GeneratedExtension, input: JSONObject, grantedCapabilities: Set<String>) =
+                JSONObject().put("ok", true).put("result", "executed")
+        }
+        val guarded = OrionPythonCapabilityExecutor(context, null, extensionSandbox = fullRuntimeSandbox)
+        val id = "full_python_tool"
+        val source = "import math\nRESULT = math.sqrt(16)"
+        val created = guarded.execute("extension_create", JSONObject()
+            .put("id", id).put("name", "Full Python tool").put("runtime", "python_full")
+            .put("source", source).put("description", "Requires full CPython"), confirm, stopped)
+        assertTrue(created.orEmpty().contains("Saved disabled extension draft"))
+        val approvalRequests = mutableListOf<String>()
+        val tested = guarded.execute("extension_test", JSONObject().put("id", id).put("tests", JSONArray().put(
+            JSONObject().put("input", JSONObject()).put("expect", 4)
+        )), { question -> approvalRequests += question; true }, stopped)
+        assertTrue(approvalRequests.isEmpty())
+        assertTrue(tested.orEmpty().contains("FULL CPYTHON TEST PASSED and AUTO-ACTIVATED"))
+        assertNotNull(SelfExtendingExtensionStore(context).enabled(id))
+    }
+
+    @Test
+    fun restrictedPythonSelfCreationAndTestsDoNotRequireRepeatedOwnerPrompts() {
+        ExtensionAutonomySettings.setAutoActivationEnabled(context, true)
+        val id = "safe_format_tool"
+        val source = extensionSource("echo_greeting")
+        val created = runTool("extension_create", JSONObject()
+            .put("id", id).put("name", "Safe format tool").put("runtime", "python").put("source", source)
+            .put("description", "Normalizes a short text value"))
+        assertTrue(created.contains("Saved disabled extension draft"))
+        val prompts = mutableListOf<String>()
+        val tested = executor.execute("extension_test", JSONObject().put("id", id).put("tests", JSONArray().put(
+            JSONObject().put("input", JSONObject().put("greeting", "HELLO")).put("expect", "echo:HELLO")
+        )), { question -> prompts += question; false }, stopped)
+        assertTrue(tested.orEmpty().contains("SANDBOX TEST PASSED"))
+        assertTrue(tested.orEmpty().contains("AUTO-ACTIVATED"))
+        assertTrue(prompts.isEmpty())
+        assertNotNull(SelfExtendingExtensionStore(context).enabled(id))
     }
 
     @Test

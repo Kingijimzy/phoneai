@@ -28,7 +28,7 @@ internal fun Activity.showAutonomyControlCenter() {
             OrionAutonomySettings.write(this, latest)
             // Keep the existing execution governor in sync with the selected control-center limits.
             AgentPolicy.setBudgets(this, latest.maxToolSteps, latest.maxAiRequests, AgentPolicy.maxMinutes(this))
-            showControlCenterMenu("Mode saved: ${mode.name}. Potentially consequential actions show warnings and continue without Orion confirmation.")
+            showControlCenterMenu("Mode saved: ${mode.name}. Modes change interaction and background scheduling, not registered-tool availability. Orion asks at the exact boundary for private-data access, file writes, destructive changes and script installation or execution.")
         }
         .setNeutralButton("More controls") { _, _ -> showControlCenterMenu(null) }
         .setNegativeButton("Close", null)
@@ -113,16 +113,30 @@ private fun Activity.showAndroidPermissionStatus() {
         checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
     val rows = mutableListOf<String>()
     rows += "Microphone: " + if (granted(Manifest.permission.RECORD_AUDIO)) "GRANTED" else "not granted"
+    rows += "Camera / flashlight: " + if (granted(Manifest.permission.CAMERA)) "GRANTED" else "not granted"
     rows += "Contacts: " + if (granted(Manifest.permission.READ_CONTACTS)) "GRANTED" else "not granted"
     val location = granted(Manifest.permission.ACCESS_COARSE_LOCATION) || granted(Manifest.permission.ACCESS_FINE_LOCATION)
     rows += "Location: " + if (location) "GRANTED" else "not granted"
-    if (Build.VERSION.SDK_INT >= 33) rows += "Notifications: " + if (granted(Manifest.permission.POST_NOTIFICATIONS)) "GRANTED" else "not granted / not requested"
+    rows += "Calendar read: " + if (granted(Manifest.permission.READ_CALENDAR)) "GRANTED" else "not granted"
+    rows += "Calendar write: " + if (granted(Manifest.permission.WRITE_CALENDAR)) "GRANTED" else "not granted"
+    rows += "Phone state: " + if (granted(Manifest.permission.READ_PHONE_STATE)) "GRANTED" else "not granted"
+    rows += "Place calls: " + if (granted(Manifest.permission.CALL_PHONE)) "GRANTED" else "not granted"
+    if (Build.VERSION.SDK_INT >= 26) rows += "Answer calls: " + if (granted(Manifest.permission.ANSWER_PHONE_CALLS)) "GRANTED" else "not granted"
+    rows += "Modify system settings: " + if (Settings.System.canWrite(this)) "GRANTED" else "not granted (special app access)"
+    if (Build.VERSION.SDK_INT >= 31) rows += "Exact alarms: " + if (getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms()) "GRANTED" else "not granted (inexact fallback)"
+    if (Build.VERSION.SDK_INT >= 33) {
+        rows += "Photos: " + if (granted(Manifest.permission.READ_MEDIA_IMAGES)) "GRANTED" else "not granted / use Android Photo Picker"
+        rows += "Videos: " + if (granted(Manifest.permission.READ_MEDIA_VIDEO)) "GRANTED" else "not granted / use Android Photo Picker"
+        rows += "Audio files: " + if (granted(Manifest.permission.READ_MEDIA_AUDIO)) "GRANTED" else "not granted"
+        if (Build.VERSION.SDK_INT >= 34) rows += "Selected photos: " + if (granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)) "GRANTED" else "not granted"
+        rows += "Notifications: " + if (granted(Manifest.permission.POST_NOTIFICATIONS)) "GRANTED" else "not granted / not requested"
+    }
     val notificationAccess = runCatching {
         Settings.Secure.getString(contentResolver, "enabled_notification_listeners").orEmpty()
             .split(':').any { it.equals("${packageName}/${OrionNotificationListener::class.java.name}", true) }
     }.getOrDefault(false)
     rows += "Notification listener access: " + if (notificationAccess) "GRANTED" else "not granted"
     AlertDialog.Builder(this).setTitle("Android permission status")
-        .setMessage(rows.joinToString("\n") + "\n\nOrion reads current grant state. It should request only missing runtime permissions when a feature is enabled.")
+        .setMessage(rows.joinToString("\n") + "\n\nOrion reads current Android grant state. A denied or revoked permission blocks the corresponding feature; Orion must not bypass it. Permissions are requested only when a feature is invoked.")
         .setPositiveButton("OK", null).show()
 }

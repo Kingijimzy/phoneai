@@ -4,11 +4,8 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OrionAutonomyPolicyTest {
-    @Test fun modesMapToExpectedExistingToolPolicies() {
-        assertEquals("read_only", OrionAutonomyPolicy.preset(OrionMode.TALK))
-        assertEquals("balanced", OrionAutonomyPolicy.preset(OrionMode.ASSIST))
-        assertEquals("autonomous", OrionAutonomyPolicy.preset(OrionMode.AUTOPILOT))
-        assertEquals("careful", OrionAutonomyPolicy.preset(OrionMode.BUILDER))
+    @Test fun modesNeverMapToToolBlockingPresets() {
+        OrionMode.values().forEach { assertEquals("autonomous", OrionAutonomyPolicy.preset(it)) }
     }
 
     @Test fun noModeBlocksWriteTools() {
