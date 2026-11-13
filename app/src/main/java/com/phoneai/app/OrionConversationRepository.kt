@@ -369,6 +369,25 @@ class OrionConversationRepository private constructor(context: Context) :
         return result
     }
 
+    /** Restore durable activity receipts for an active or archived conversation by stable ID. */
+    @Synchronized
+    fun eventsForSession(context: Context, sessionId: String): List<ChatEvent> {
+        val id = sessionId.trim().take(128)
+        if (id.isBlank()) return emptyList()
+        migrateLegacy(context)
+        val result = ArrayList<ChatEvent>()
+        readableDatabase.rawQuery(
+            "SELECT id,session_id,message_id,event_type,status,summary,created_at,trace_id,correlation_id,evidence_json FROM chat_events WHERE session_id=? ORDER BY created_at ASC",
+            arrayOf(id)
+        ).use { c ->
+            while (c.moveToNext()) result.add(
+                ChatEvent(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
+                    c.getString(4), c.getString(5), c.getLong(6), c.getString(7), c.getString(8), c.getString(9))
+            )
+        }
+        return result
+    }
+
     private fun clean(turns: List<Pair<String, String>>) =
         turns.filter { (kind, text) -> (kind == "me" || kind == "ai") && text.isNotBlank() }
             .takeLast(MAX_TURNS).map { it.first to it.second.take(6000) }
