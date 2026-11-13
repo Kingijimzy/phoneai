@@ -260,6 +260,17 @@ class ToolRegistryPromptAvailabilityTest {
         assertTrue("Core image generation contract is always available", launch.contains("image_generate"))
     }
 
+
+    @Test fun extensionLifecycleContractsAreAlwaysDetailedForModelLedForgingAndReuse() {
+        val detailed = ToolRegistry.detailedToolNames("an unrelated conversation")
+        assertTrue(detailed.containsAll(setOf(
+            "extension_list", "extension_create", "extension_update", "extension_test",
+            "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback"
+        )))
+        assertTrue("The developer route must remain available beside extension forging",
+            ToolRegistry.nativeToolsFor("an unrelated conversation").any { it.name == "dev_shell" })
+    }
+
     @Test fun exactRegisteredToolNameCanRequestItsFullContract() {
         val selected = ToolRegistry.detailedToolNames("Please call open_app now")
         assertTrue(selected.contains("open_app"))
