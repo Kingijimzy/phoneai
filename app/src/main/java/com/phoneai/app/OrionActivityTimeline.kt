@@ -115,7 +115,7 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
             val ordered = taskEvents.sortedWith(compareBy<OrionActivityEvent> { it.timestampMs }.thenBy { it.eventId })
             val first = ordered.firstOrNull() ?: return@mapNotNull null
             val latest = ordered.last()
-            val history = ordered.map { event ->
+            val history = ordered.flatMap { event ->
                 val state = when (event.status) {
                     OrionActivityStatus.ACTIVE -> "RUNNING"
                     OrionActivityStatus.WAITING -> "WAITING"
@@ -124,7 +124,8 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
                     OrionActivityStatus.CANCELLED -> "CANCELLED"
                     OrionActivityStatus.INTERRUPTED -> "INTERRUPTED"
                 }
-                "$state · ${event.title}: ${event.summary}".take(360)
+                listOf("$state · ${event.title}: ${event.summary}".take(360)) +
+                    event.evidence.map { it.take(360) }
             }.distinct().takeLast(40)
             latest.copy(
                 eventId = "task-stream-${latest.taskId}",
