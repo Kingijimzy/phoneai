@@ -6,6 +6,7 @@ import org.json.JSONObject
 internal object AntigravityCliProtocol {
     const val EXECUTABLE = "agy"
     const val OFFICIAL_INSTALLER = "https://antigravity.google/cli/install.sh"
+    const val MAX_PROMPT_CHARS = 32_000
 
     data class Invocation(val argv: List<String>, val requiresExistingLogin: Boolean)
 
@@ -16,7 +17,7 @@ internal object AntigravityCliProtocol {
 
     fun headlessPrompt(prompt: String, model: String? = null): Invocation {
         require(prompt.isNotBlank()) { "Antigravity prompt is required" }
-        require(prompt.length <= 100_000) { "Antigravity prompt exceeds the supported input size" }
+        require(prompt.length <= MAX_PROMPT_CHARS) { "Antigravity prompt exceeds the safe context budget" }
         return Invocation(
             buildList {
                 add(EXECUTABLE)
@@ -31,6 +32,26 @@ internal object AntigravityCliProtocol {
             },
             requiresExistingLogin = true
         )
+    }
+
+
+    /** Keep the newest complete prompt tail within a conservative CLI context budget. */
+    fun compactPrompt(prompt: String, maxChars: Int = MAX_PROMPT_CHARS): String {
+        require(maxChars >= 512) { "Antigravity prompt budget is too small" }
+        val clean = prompt.trim()
+        if (clean.length <= maxChars) return clean
+        val marker = "[Earlier conversation context omitted to recover Antigravity context budget.]\\n\\n"
+        val available = (maxChars - marker.length).coerceAtLeast(1)
+        return marker + clean.takeLast(available)
+    }
+
+    fun isContextOverflow(message: String): Boolean {
+        val value = message.lowercase()
+        return listOf(
+            "context window", "context length", "context overflow", "too many tokens",
+            "conversation is still too large", "prompt is too large",
+            "maximum context", "after context compaction"
+        ).any(value::contains)
     }
 
     fun listModelsInvocation(): Invocation =
