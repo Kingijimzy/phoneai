@@ -94,6 +94,15 @@ class SelfExtendingExtensionsTest {
         assertNull(SelfExtendingExtensionPolicy.validateSource("python", "def run(value):\n    return str(value).strip()"))
     }
 
+    @Test fun embeddedCredentialsAreRejectedForEveryExtensionRuntime() {
+        val token = "sk-" + "A".repeat(24)
+        val fullSource = "RESULT = \"$token\""
+        val restrictedSource = "RESULT = \"$token\""
+        assertNotNull(SelfExtendingExtensionPolicy.validateSource("python_full", fullSource))
+        assertNotNull(SelfExtendingExtensionPolicy.validateSource("python", restrictedSource))
+        assertFalse(store.saveDraft(draft(source = fullSource).copy(runtime = "python_full")))
+    }
+
     @Test fun duplicateIdsAndUnsupportedRuntimeAreRejected() {
         assertTrue(store.saveDraft(draft()))
         assertFalse(store.saveDraft(draft()))
