@@ -180,7 +180,11 @@ class OrionPythonCapabilityExecutorTest {
                 org.json.JSONArray().put(JSONObject().put("input", JSONObject()).put("expect", source))),
             { true }, { false }
         ).orEmpty()
-        assertTrue(tested, tested.contains("FULL CPYTHON TEST PASSED and AUTO-ACTIVATED"))
+        assertTrue(tested, tested.contains("FULL CPYTHON TEST PASSED"))
+        assertFalse("Full CPython must not auto-activate", tested.contains("AUTO-ACTIVATED"))
+        assertTrue(executor.execute("extension_run", JSONObject().put("id", "full_helper"), { true }, { false }).orEmpty().startsWith("error:"))
+        val enabled = executor.execute("extension_enable", JSONObject().put("id", "full_helper"), { true }, { false }).orEmpty()
+        assertTrue(enabled, enabled.contains("enabled"))
     }
 }
 
