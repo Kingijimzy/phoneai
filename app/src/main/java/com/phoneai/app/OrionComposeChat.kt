@@ -1086,6 +1086,7 @@ internal fun OrionArchivedConversationScreen(
     title: String,
     date: String,
     messages: List<Pair<String, String>>,
+    activityEvents: List<OrionConversationRepository.ChatEvent> = emptyList(),
     onBack: () -> Unit,
     onCopy: () -> Unit,
     onContinue: () -> Unit,
@@ -1114,21 +1115,35 @@ internal fun OrionArchivedConversationScreen(
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(OrionUiPalette.border))
-        if (messages.isEmpty()) {
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text("This conversation has no saved messages.", color = OrionUiPalette.muted, fontSize = 13.sp)
+        LazyColumn(
+            Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 22.dp, bottom = 22.dp)
+        ) {
+            if (messages.isEmpty() && activityEvents.isEmpty()) {
+                item(key = "archive-empty") {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 28.dp), contentAlignment = Alignment.Center) {
+                        Text("This conversation has no saved messages or activity.", color = OrionUiPalette.muted, fontSize = 13.sp)
+                    }
+                }
             }
-        } else {
-            LazyColumn(
-                Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 22.dp, bottom = 22.dp)
-            ) {
-                itemsIndexed(messages, key = { index, item -> "archive-$index-${item.first}" }) { index, item ->
-                    ChatBubble(
-                        item = OrionChatLine(index.toLong(), item.first, item.second),
-                        onOpenBrowser = onOpenBrowser
-                    )
+            itemsIndexed(messages, key = { index, item -> "archive-$index-${item.first}" }) { index, item ->
+                ChatBubble(
+                    item = OrionChatLine(index.toLong(), item.first, item.second),
+                    onOpenBrowser = onOpenBrowser
+                )
+            }
+            if (activityEvents.isNotEmpty()) {
+                item(key = "archive-activity-heading") {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("ACTIVITY HISTORY", color = OrionUiPalette.secondaryText,
+                            fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
+                        Text("Persisted execution receipts for this conversation",
+                            color = OrionUiPalette.muted, fontSize = 11.sp)
+                    }
+                }
+                itemsIndexed(activityEvents, key = { _, event -> "archive-event-${event.id}" }) { _, event ->
+                    OrionPersistedActivityCard(event)
                 }
             }
         }
