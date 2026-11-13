@@ -1213,24 +1213,30 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             }
             return result
         }
-        fun chatTurnWithNativeTools(): OrionModelTurn = activeModel.chatTurn(
-            messages, false, 32768, 0.7, tools = nativeTools,
-            onToolCall = { name, args ->
-                val result = OrionNativeToolDispatcher.dispatchCallback(
-                    name = name,
-                    args = args,
-                    cancelled = { stopped },
-                    isRegistered = { candidate -> nativeTools.any { it.name == candidate } && ToolRegistry.find(candidate) != null },
-                    execute = ::dispatchNativeTool
-                )
-                callbackToolReceipts.put(JSONObject()
-                    .put("name", name)
-                    .put("arguments", args.toString().take(2000))
-                    .put("result", result.take(5000)))
-                ui.note(activityNote(name, args, result))
-                result
-            }
-        )
+        fun chatTurnWithNativeTools(): OrionModelTurn {
+            // The current request receives the complete latest callable set. Only discovery
+            // that happens during this provider call requires another provider turn.
+            handledDiscoveryVersion = discoveredToolVersion
+            return activeModel.chatTurn(
+                messages, false, 32768, 0.7, tools = nativeTools,
+                onToolCall = { name, args ->
+                    val result = OrionNativeToolDispatcher.dispatchCallback(
+                        name = name,
+                        args = args,
+                        cancelled = { stopped },
+                        isRegistered = { candidate -> nativeTools.any { it.name == candidate } && ToolRegistry.find(candidate) != null },
+                        execute = ::dispatchNativeTool
+                    )
+                    if (callbackToolReceipts.length() >= 12) callbackToolReceipts.remove(0)
+                    callbackToolReceipts.put(JSONObject()
+                        .put("name", name)
+                        .put("arguments", args.toString().take(2000))
+                        .put("result", result.take(5000)))
+                    ui.note(activityNote(name, args, result))
+                    result
+                }
+            )
+        }
         fun continueAfterCallbackDiscovery(initial: OrionModelTurn): OrionModelTurn {
             var current = initial
             // Codex/Antigravity account adapters may execute callbacks internally and return
