@@ -36,7 +36,7 @@ internal object ToolInputSchema {
             val name = rawName.removeSuffix("?").trim()
             if (!name.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) return@forEach
             val rawType = field.substring(colon + 1).trim()
-            val optional = rawName.endsWith("?") || rawType.contains(" = ")
+            val optional = rawName.endsWith("?") || rawType.contains("=")
             val type = rawType.substringBefore(" = ").trim()
             properties.put(name, propertySchema(type))
             if (!optional) required.put(name)
