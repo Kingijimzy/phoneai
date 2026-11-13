@@ -438,7 +438,10 @@ class ToolRegistryNativeSelectionTest {
         assertEquals("orion_core", AgentPolicy.packForTool("capability_search"))
         assertEquals(OrionCapabilityAdapters.Backend.RUNTIME_STATE, OrionCapabilityAdapters.route("capability_search")?.backend)
         assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.RUNTIME_STATE, "capability_search"))
-        assertTrue(ToolRegistry.nativeToolsFor("hello").any { it.name == "capability_search" })
+        val foundation = ToolRegistry.nativeToolsFor("hello")
+        assertTrue(foundation.any { it.name == "capability_search" })
+        assertTrue(foundation.any { it.name == "capability_load" })
+        assertEquals(ToolAccess.READ, ToolRegistry.find("capability_load")?.access)
     }
 
     @Test fun capabilitySearchReturnsExactSchemasOnlyForImplementedTools() {
