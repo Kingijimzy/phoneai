@@ -632,10 +632,11 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             .takeIf { it.isNotBlank() }
         val dispatchGraphStep = runCatching {
             val graph = activeDispatchGraph ?: return@runCatching "unbound"
-            if (tool == "complete_objective") {
-                requestedGraphStep?.takeIf { id -> graph.nodes.any { it.id == id } } ?: "unresolved"
-            } else {
-                OrionObjectiveGraph.resolveDispatchId(graph, requestedGraphStep, tool) ?: "unresolved"
+            when {
+                tool == "complete_objective" ->
+                    requestedGraphStep?.takeIf { id -> graph.nodes.any { it.id == id } } ?: "unresolved"
+                !OrionObjectiveGraph.requiresObjectiveDispatch(tool) -> "unbound"
+                else -> OrionObjectiveGraph.resolveDispatchId(graph, requestedGraphStep, tool) ?: "unresolved"
             }
         }.getOrDefault("unbound")
         // The graph is an objective/dependency controller, not a capability deny-list.
