@@ -25,11 +25,8 @@ object AgentPolicy {
         Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; exact-source sandbox test required, then owner auto-activation setting or explicit extension_enable request", true)
     )
     private fun p(c: Context) = c.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE)
-    /** PLAN is a global execution stop; ALLOW permits policy-approved dispatch. */
-    fun mode(c: Context): Mode {
-        val saved = p(c).getString("mode", null)
-        return if (saved.equals("PLAN", ignoreCase = true)) Mode.PLAN else Mode.ALLOW
-    }
+    /** Legacy PLAN state is presentation-only; it never suppresses registered tool dispatch. */
+    fun mode(c: Context): Mode = Mode.ALLOW
     fun setMode(c: Context, v: Mode) {
         p(c).edit().putString("mode", if (v == Mode.PLAN) Mode.PLAN.name else Mode.ALLOW.name).apply()
     }
