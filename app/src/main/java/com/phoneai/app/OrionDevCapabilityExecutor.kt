@@ -6,9 +6,9 @@ import org.json.JSONObject
 
 /**
  * Owns Dev Agent and Macro Protocol tool execution.
- * All calls route through OrionDevAgent and OrionMacroExecutor, which enforce
- * ShellPolicy hard blocks, read-only-by-default workspace access, and honest
- * reporting (code written ≠ compiled ≠ tested ≠ installed).
+ * All calls route through OrionDevAgent and OrionMacroExecutor, which use
+ * operation-specific execution approval, the shared Linux development workspace,
+ * read-only-by-default project inspection, and honest build/test/install reporting.
  */
 internal class OrionDevCapabilityExecutor(
     private val context: Context,
