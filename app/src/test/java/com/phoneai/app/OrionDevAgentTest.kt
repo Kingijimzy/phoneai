@@ -58,7 +58,7 @@ class OrionDevAgentTest {
         val agent = OrionDevAgent(
             context,
             OrionPythonCapabilityExecutor(context, null),
-            shellRunner = { _, _, _ -> "exit=17\\ncompile failed" }
+            shellRunner = { _, _, _ -> "exit=17\ncompile failed" }
         )
 
         val result = agent.runShellCommand("gradle test", confirm = { true })
