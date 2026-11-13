@@ -704,7 +704,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     if (validation.startsWith("INVALID:")) "error: preflight blocked action. $validation"
                     else exec(tool, executionArgs, capabilityLoad)
                 } else {
-                    exec(tool, executionArgs)
+                    exec(tool, executionArgs, capabilityLoad)
                 }
             }
         }
