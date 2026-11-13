@@ -184,6 +184,8 @@ internal class GeminiLiveSession(
             append("Your response is returned as text and spoken by Orion's selected local British neural voice. Write speech-ready prose: natural sentences, clear pauses, restrained warmth, and no raw tool traces or unnecessary markup. ")
             append(OrionVoicePersona.INSTRUCTIONS)
             append(" ")
+            append(OrionIdentity.LOCK)
+            append(" ")
             append("This realtime model does not directly execute phone tools. If the user clearly addresses Orion by name and gives a command, the app will end this realtime session and hand the command to Orion's shared guarded tool executor. ")
             append("Never claim that you performed an action on the device. For action requests without the explicit wake phrase 'Orion', explain briefly that they can say 'Orion, [request]' to hand off to the app-approved tools. ")
             append("Do not request passwords, API keys, PINs, recovery phrases, or one-time codes. ")
