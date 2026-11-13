@@ -28,7 +28,7 @@ internal fun Activity.showAutonomyControlCenter() {
             OrionAutonomySettings.write(this, latest)
             // Keep the existing execution governor in sync with the selected control-center limits.
             AgentPolicy.setBudgets(this, latest.maxToolSteps, latest.maxAiRequests, AgentPolicy.maxMinutes(this))
-            showControlCenterMenu("Mode saved: ${mode.name}. Potentially consequential actions show warnings and continue without Orion confirmation.")
+            showControlCenterMenu("Mode saved: ${mode.name}. Modes change interaction and background scheduling, not registered-tool availability. Orion asks at the exact boundary for private-data access, file writes, destructive changes and script installation or execution.")
         }
         .setNeutralButton("More controls") { _, _ -> showControlCenterMenu(null) }
         .setNegativeButton("Close", null)
