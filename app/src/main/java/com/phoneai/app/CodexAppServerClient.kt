@@ -64,18 +64,6 @@ internal class CodexAppServerClient(
         request(CodexAppServerProtocol.compactThread(ids.getAndIncrement(), threadId))
     }
 
-    fun resumeThread(threadId: String): String {
-        check(initialized) { "Codex app-server has not been initialized" }
-        val result = request(CodexAppServerProtocol.resumeThread(ids.getAndIncrement(), threadId))
-        return result.optJSONObject("thread")?.optString("id")?.takeIf { it.isNotBlank() }
-            ?: error("Codex app-server did not resume thread '$threadId'")
-    }
-
-    fun compactThread(threadId: String) {
-        check(initialized) { "Codex app-server has not been initialized" }
-        request(CodexAppServerProtocol.compactThread(ids.getAndIncrement(), threadId))
-    }
-
     fun startTurn(threadId: String, text: String, model: String? = null): JSONObject =
         request(CodexAppServerProtocol.startTurn(ids.getAndIncrement(), threadId, text, model))
 
