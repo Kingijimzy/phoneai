@@ -27,7 +27,7 @@ class OrionTaskOrchestratorTest {
         )
         assertEquals(OrionExecutionReadiness.NextStep.PREPARE_SHELL_SETUP, context.readiness.nextStep)
         assertFalse(context.promptLines().any { it.contains("Task completed") })
-        assertTrue(context.promptLines().any { it.contains("registered; 1 available") })
+        assertTrue(context.promptLines().any { it.contains("registered; 1 eligible for dispatch") })
     }
 
     @Test fun missingPackCannotBeAdvertisedAsAvailable() {
