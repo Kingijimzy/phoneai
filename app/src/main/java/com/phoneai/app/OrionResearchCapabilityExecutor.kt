@@ -24,10 +24,10 @@ internal object OrionResearchCapabilityExecutor {
     ): String = when (tool) {
         "web_search" -> tools.webSearch(args.optString("query"))
         "live_news" -> LiveNews.search(args.optString("query"))
-        "live_web_search" -> LiveWebSearch.search(args.optString("query"))
+        "live_web_search" -> LiveWebSearch.research(args.optString("query"), cancelled)
         "fetch_url", "research_web" -> if (args.optString("url").isBlank() && args.optString("query").isNotBlank()) {
             // Models often send a question to research_web. Search for it instead of failing.
-            LiveWebSearch.search(args.optString("query"))
+            LiveWebSearch.research(args.optString("query"), cancelled)
         } else {
             val result = BrowserResearch.fetch(args.optString("url"), cancelled)
             val page = result.page
