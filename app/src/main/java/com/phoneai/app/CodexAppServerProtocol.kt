@@ -79,6 +79,7 @@ internal object CodexAppServerProtocol {
             tools.take(128).forEach { tool ->
                 dynamicTools.put(
                     JSONObject()
+                        .put("type", "function")
                         .put("name", tool.name)
                         .put("description", tool.promptLine.take(4_000))
                         .put("inputSchema", JSONObject(tool.inputSchema.toString()))
