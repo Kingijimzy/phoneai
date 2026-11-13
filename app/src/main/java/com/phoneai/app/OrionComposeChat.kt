@@ -780,7 +780,7 @@ internal fun OrionComposeChatScreen(
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(ChatHairline.copy(alpha = .55f)))
 
-        if (lines.isEmpty()) {
+        if (lines.isEmpty() && attachments.isEmpty() && activityEvents.isEmpty()) {
             OrionHome(
                 commandMode = commandMode,
                 onSend = onSend,
