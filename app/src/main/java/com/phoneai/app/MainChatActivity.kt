@@ -1726,7 +1726,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             Thread {
                 try {
                     val sessionId = currentChatSessionId()
-                    val attachment = OrionChatAttachmentStore.import(this, sessionId, uri)
+                    val attachment = OrionChatAttachmentStore.saveFromUri(this, sessionId, uri)
                     val extracted = if (attachment.name.substringAfterLast('.', "").equals("pdf", true)) {
                         SafeDocumentExtractor.Extracted(
                             attachment.name, attachment.mimeType,
@@ -1764,7 +1764,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     val sessionId = currentChatSessionId()
                     files.take(4).forEach { uri ->
                         try {
-                            val savedAttachment = OrionChatAttachmentStore.import(this, sessionId, uri)
+                            val savedAttachment = OrionChatAttachmentStore.saveFromUri(this, sessionId, uri)
                             val name = savedAttachment.name
                             val dir = java.io.File(filesDir, "orion-python/workspace/uploads").apply { mkdirs() }
                             val dest = java.io.File(dir, name)
@@ -1802,7 +1802,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 val sessionId = runCatching { currentChatSessionId() }.getOrNull()
                 if (sessionId != null) Thread {
                     chosen.distinct().take(4).forEach { uri ->
-                        runCatching { OrionChatAttachmentStore.import(this, sessionId, uri) }
+                        runCatching { OrionChatAttachmentStore.saveFromUri(this, sessionId, uri) }
                     }
                     runOnUiThread {
                         composeAttachments.value = OrionChatAttachmentStore.forSession(this, sessionId)
