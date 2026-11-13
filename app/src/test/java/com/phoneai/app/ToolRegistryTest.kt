@@ -418,4 +418,41 @@ class ToolRegistryNativeSelectionTest {
         assertTrue(!required.contains("count"))
         assertEquals(false, schema.getBoolean("additionalProperties"))
     }
+    @Test fun capabilitySearchIsAlwaysCallableAndReadOnly() {
+        val definition = ToolRegistry.find("capability_search") ?: error("capability_search must be registered")
+        assertEquals(ToolAccess.READ, definition.access)
+        assertEquals("orion_core", AgentPolicy.packForTool("capability_search"))
+        assertEquals(OrionCapabilityAdapters.Backend.RUNTIME_STATE, OrionCapabilityAdapters.route("capability_search")?.backend)
+        assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.RUNTIME_STATE, "capability_search"))
+        assertTrue(ToolRegistry.nativeToolsFor("hello").any { it.name == "capability_search" })
+    }
+
+    @Test fun capabilitySearchReturnsExactSchemasOnlyForImplementedTools() {
+        val result = JSONObject(ToolRegistry.searchCapabilities("inspect MCP resources", 8))
+        val rows = result.getJSONArray("results")
+        assertTrue(rows.length() > 0)
+        val names = (0 until rows.length()).map { rows.getJSONObject(it).getString("name") }
+        assertTrue(names.contains("mcp_list_resources"))
+        for (index in 0 until rows.length()) {
+            val row = rows.getJSONObject(index)
+            val name = row.getString("name")
+            val definition = ToolRegistry.find(name) ?: error("discovery returned unregistered tool $name")
+            assertEquals(definition.access.name.lowercase(), row.getString("access"))
+            assertEquals("object", row.getJSONObject("schema").getString("type"))
+            val route = OrionCapabilityAdapters.route(name) ?: error("discovery returned unrouted tool $name")
+            assertTrue(OrionRuntimeCapabilityExecutor.supports(route.backend, name))
+        }
+    }
+
+    @Test fun discoveredToolsAreAddedToTheNextTurnOnlyByExactRegistryName() {
+        val exposed = ToolRegistry.nativeToolsFor("hello").toMutableList()
+        val result = JSONObject(ToolRegistry.searchCapabilities("inspect MCP resources", 8)).toString()
+        val added = ToolRegistry.addDiscoveredTools(exposed, result)
+        assertTrue(added > 0)
+        assertTrue(exposed.any { it.name == "mcp_list_resources" })
+        val before = exposed.size
+        assertEquals(0, ToolRegistry.addDiscoveredTools(exposed, """{"results":[{"name":"invented_tool"}]}"""))
+        assertEquals(before, exposed.size)
+    }
+
 }
