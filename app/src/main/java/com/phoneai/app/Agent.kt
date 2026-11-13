@@ -217,8 +217,13 @@ internal object IrreversibleActionConfirmationPolicy {
                     .ifBlank { payload.optString("script") }
                 val scriptInstall = Regex("(?i)\\b(pip|pip3|npm|pnpm|yarn|gem|cargo|go)\\s+install\\b|\\b(apk|apt|apt-get)\\s+add\\b|\\b(curl|wget)\\b.{0,240}\\|\\s*(sh|bash)|\\b(sh|bash|python3?|node|ruby|perl)\\s+[^;&|]+\\.(sh|bash|py|js|rb|pl)\\b|(?:^|\\s)\\./[^;&|]+\\.(sh|py|js|rb|pl)\\b")
                     .containsMatchIn(command)
-                if (scriptInstall) "Orion is about to download, install, or execute a script or package through $tool: ${command.take(220)}. Allow this operation?"
-                else null
+                val fileWrite = Regex("(?i)(?:^|[;&|]\\s*)(?:touch|mkdir|cp|mv|tee|install)\\b|(?:>|>>)[^;&|]+|\\bsed\\s+-i\\b")
+                    .containsMatchIn(command)
+                when {
+                    scriptInstall -> "Orion is about to download, install, or execute a script or package through $tool: ${command.take(220)}. Allow this operation?"
+                    fileWrite -> "Orion is about to create or modify files through $tool: ${command.take(220)}. Allow this write?"
+                    else -> null
+                }
             }
             else -> null
         }
