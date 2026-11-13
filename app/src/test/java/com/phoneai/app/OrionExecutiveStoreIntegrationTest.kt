@@ -117,4 +117,21 @@ class OrionExecutiveStoreIntegrationTest {
         assertFalse(OrionObjectiveGraph.completeFromEvidence(context, "summarize", "model-invented-evidence"))
     }
 
+
+    @Test fun objectiveCompletionRejectsEvidenceAfterItsOwnerSessionIsArchived() {
+        ChatHistoryStore.clearAll(context)
+        ChatHistoryStore.save(context, listOf("me" to "Start objective session"))
+        val graph = OrionObjectiveGraph.Graph(
+            objective = "Session-bound objective",
+            nodes = listOf(OrionObjectiveGraph.Objective("main", "Complete session-bound work", status = OrionObjectiveGraph.Status.RUNNING))
+        )
+        assertTrue(OrionObjectiveGraph.save(context, graph))
+        val receipt = OrionObjectiveGraph.recordExecution(context, "main", "verify_action", "PASS: observed state matches goal")
+        assertNotNull(receipt)
+
+        ChatHistoryStore.archiveAndClear(context, listOf("me" to "Archive the objective session"))
+        assertNull(ChatHistoryStore.activeSessionId(context))
+        assertFalse(OrionObjectiveGraph.completeFromEvidence(context, "main", requireNotNull(receipt)))
+    }
+
 }
