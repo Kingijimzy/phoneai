@@ -1198,13 +1198,58 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             .distinctBy { it.name }
             .take(128)
             .toMutableList()
+        var discoveredToolVersion = 0
+        var handledDiscoveryVersion = 0
+        var callbackDiscoveryRounds = 0
+        val callbackToolReceipts = JSONArray()
         fun dispatchNativeTool(name: String, args: JSONObject): String {
             val result = executeWithRecoveryGuard(name, args)
             if (name == "capability_search") {
                 val added = ToolRegistry.addDiscoveredTools(nativeTools, result)
-                if (added > 0) ui.note("[CAPABILITIES] Discovered $added additional callable tool(s) for the next model turn.")
+                if (added > 0) {
+                    discoveredToolVersion++
+                    ui.note("[CAPABILITIES] Discovered $added additional callable tool(s); preparing a provider turn with those exact registered functions.")
+                }
             }
             return result
+        }
+        fun chatTurnWithNativeTools(): OrionModelTurn = activeModel.chatTurn(
+            messages, false, 32768, 0.7, tools = nativeTools,
+            onToolCall = { name, args ->
+                val result = OrionNativeToolDispatcher.dispatchCallback(
+                    name = name,
+                    args = args,
+                    cancelled = { stopped },
+                    isRegistered = { candidate -> nativeTools.any { it.name == candidate } && ToolRegistry.find(candidate) != null },
+                    execute = ::dispatchNativeTool
+                )
+                callbackToolReceipts.put(JSONObject()
+                    .put("name", name)
+                    .put("arguments", args.toString().take(2000))
+                    .put("result", result.take(5000)))
+                ui.note(activityNote(name, args, result))
+                result
+            }
+        )
+        fun continueAfterCallbackDiscovery(initial: OrionModelTurn): OrionModelTurn {
+            var current = initial
+            // Codex/Antigravity account adapters may execute callbacks internally and return
+            // only final text. Their current provider turn cannot see newly appended function
+            // declarations. Start a fresh provider turn with the expanded exact tool set and
+            // bounded execution receipts so the model can select and call the discovered tool.
+            while (discoveredToolVersion > handledDiscoveryVersion &&
+                current.toolCalls.isEmpty() && !stopped && callbackDiscoveryRounds < 3) {
+                handledDiscoveryVersion = discoveredToolVersion
+                callbackDiscoveryRounds++
+                messages.put(msg(
+                    "user",
+                    "CONTINUE THE SAME OBJECTIVE using the newly exposed registered tool functions. " +
+                        "The following tool calls have ALREADY executed; do not repeat them. Inspect their results and continue from the confirmed state:\\n" +
+                        callbackToolReceipts.toString().take(12000)
+                ))
+                current = chatTurnWithNativeTools()
+            }
+            return current
         }
         val toolTranscriptStart = messages.length()
         var toolRounds = 0
@@ -1217,26 +1262,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             chatHist.put(msg("assistant", note))
         }
         val answer = try {
-            var turn = activeModel.chatTurn(
-                messages, false, 32768, 0.7, tools = nativeTools,
-                onToolCall = { name, args ->
-                    val result = OrionNativeToolDispatcher.dispatchCallback(
-
-                        name = name,
-
-                        args = args,
-
-                        cancelled = { stopped },
-
-                        isRegistered = { candidate -> nativeTools.any { it.name == candidate } && ToolRegistry.find(candidate) != null },
-
-                        execute = ::dispatchNativeTool
-
-                    )
-                    ui.note(activityNote(name, args, result))
-                    result
-                }
-            )
+            var turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
             if (directActionRoute && !turn.toolCallingAvailable) {
                 ui.say("This selected model can chat, but its current connection does not expose Orion's native tools. No action was dispatched. Switch to a native-tool-capable provider or connect the account tool bridge.")
                 return
@@ -1277,26 +1303,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                         .put("content", outcome.content))
                 }
                 if (!stopped) {
-                    turn = activeModel.chatTurn(
-                        messages, false, 32768, 0.7, tools = nativeTools,
-                        onToolCall = { name, args ->
-                            val result = OrionNativeToolDispatcher.dispatchCallback(
-
-                                name = name,
-
-                                args = args,
-
-                                cancelled = { stopped },
-
-                                isRegistered = { candidate -> nativeTools.any { it.name == candidate } && ToolRegistry.find(candidate) != null },
-
-                                execute = ::dispatchNativeTool
-
-                            )
-                            ui.note(activityNote(name, args, result))
-                            result
-                        }
-                    )
+                    turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
                     if (!turn.toolCallingAvailable) {
                         preserveToolTranscript("The provider lost native tool capability after partial execution. Inspect completed tool results before continuing; do not repeat side effects.")
                         ui.say("The selected model stopped supporting Orion tool calls after partial execution. I preserved the completed results; no further actions were dispatched.")
