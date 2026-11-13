@@ -320,9 +320,11 @@ internal object ToolRegistry {
         "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt"
     )
     private val phoneNativeTools = listOf(
-        "device_operation", "lookup_app", "open_app", "whatsapp_compose", "read_screen", "point_at", "sketch_screen", "validate_action", "verify_action",
-        "verify_send", "click", "click_text", "tap", "type", "wait_for", "routine_run", "routine_resume",
-        "open_deep_link", "system_intent", "device_info", "look"
+        "device_operation", "lookup_app", "open_app", "whatsapp_compose", "read_screen",
+        "point_at", "sketch_screen", "validate_action", "verify_action", "verify_send",
+        "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll",
+        "type", "key", "wait_for", "look", "play", "routine_run", "routine_resume",
+        "open_deep_link", "system_intent", "device_info"
     )
     private val developerNativeTools = listOf(
         "python_exec", "shell", "workspace_read", "workspace_write", "workspace_list", "save_file",
@@ -341,7 +343,7 @@ internal object ToolRegistry {
     fun nativeToolsFor(
         request: String?,
         priorToolNames: Set<String> = emptySet(),
-        maxTools: Int = 64
+        maxTools: Int = 96
     ): List<ToolDefinition> {
         val limit = maxTools.coerceIn(1, 128)
         val query = request.orEmpty().lowercase()
