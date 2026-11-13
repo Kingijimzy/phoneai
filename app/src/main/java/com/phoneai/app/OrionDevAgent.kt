@@ -18,7 +18,8 @@ import org.json.JSONObject
  */
 internal class OrionDevAgent(
     private val context: Context,
-    private val pythonExecutor: OrionPythonCapabilityExecutor
+    private val pythonExecutor: OrionPythonCapabilityExecutor,
+    private val shellRunner: (Context, String, String) -> String = ShellRunner::run
 ) {
     private val workspace = OrionPythonWorkspace(context)
 
@@ -146,23 +147,39 @@ internal class OrionDevAgent(
      * Output is captured honestly; exit status is part of the evidence.
      * Uses the existing ShellRunner; shell risk classifications are warnings only.
      */
-    fun runShellCommand(command: String, stopped: () -> Boolean = { false }): DevResult {
+    fun runShellCommand(
+        command: String,
+        confirm: (String) -> Boolean = { false },
+        stopped: () -> Boolean = { false }
+    ): DevResult {
+        if (stopped()) {
+            return DevResult(action = "run_shell_command", blocker = "shell command cancelled before launch.", summary = "No shell command was executed.")
+        }
+        if (command.isBlank()) {
+            return DevResult(action = "run_shell_command", blocker = "shell command is required.", summary = "No shell command was executed.")
+        }
+        val approval = "Orion is about to execute this command in the Alpine/PRoot development workspace under the Android app UID. The guest is not an OS security boundary. Command: ${command.take(700)}. Allow this execution?"
+        if (!confirm(approval)) {
+            return DevResult(action = "run_shell_command", blocker = "owner approval was not granted; the Linux command was not executed.", summary = "No shell command was executed.")
+        }
         if (stopped()) {
             return DevResult(action = "run_shell_command", blocker = "shell command cancelled before launch.", summary = "No shell command was executed.")
         }
         val warning = ShellPolicy.warning(command)
-        val result = ShellRunner.runBuiltin(context, command)
-        if (result.startsWith("error:")) {
+        // Dev builds and tests belong in the same Alpine workspace used by CPython,
+        // not Android's minimal /system/bin/sh environment.
+        val result = shellRunner(context.applicationContext, "cd /workspace && $command", "linux")
+        if (result.startsWith("error:", ignoreCase = true)) {
             return DevResult(
                 action = "run_shell_command",
                 blocker = result,
-                summary = "Shell command was not executed: $result"
+                summary = "Linux development command was not executed successfully: $result"
             )
         }
         return DevResult(
             action = "run_shell_command",
             evidence = (warning ?: "") + result.take(8_000),
-            summary = "Shell command executed. Exit status and output are evidence; command acceptance is not task completion."
+            summary = "Linux development command executed. Exit status and output are evidence; command acceptance is not task completion."
         )
     }
 
