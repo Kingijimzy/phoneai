@@ -1720,18 +1720,21 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             Thread {
                 try {
                     val extracted = SafeDocumentExtractor.extract(contentResolver, uri)
+                    val sessionId = currentChatSessionId()
+                    val attachment = OrionChatAttachmentStore.import(this, sessionId, uri)
                     runOnUiThread {
                         selectedDocumentName = extracted.name
                         selectedDocumentText = extracted.text
+                        composeAttachments.value = OrionChatAttachmentStore.forSession(this, sessionId)
                         selectedImageUris.clear()
                         composeSelectedImages.value = emptyList()
                         refreshImagePreview(null)
                         refreshDocumentPreview(extracted.name)
-                        Toast.makeText(this, "Attached ${extracted.name} · ${extracted.text.length} characters", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Saved ${extracted.name} · ${extracted.text.length} characters", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     runOnUiThread {
-                        Toast.makeText(this, e.message ?: "Could not read this document.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, e.message ?: "Could not read or save this document.", Toast.LENGTH_LONG).show()
                     }
                 }
             }.start()
