@@ -330,7 +330,7 @@ internal object ToolRegistry {
     private val coordinatorNativeTools = listOf(
         "chronos_awareness", "soul_state", "recall", "remember", "update_memory",
         "ask_agent", "queue_agent", "agent_jobs", "agent_cancel", "agent_reassign",
-        "create_agent", "task_list", "task_add", "task_update", "capability_note"
+        "create_agent", "task_list", "task_add", "task_update", "complete_objective", "capability_note"
     )
 
     fun nativeToolsFor(
