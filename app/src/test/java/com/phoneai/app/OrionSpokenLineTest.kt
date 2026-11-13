@@ -66,7 +66,7 @@ class OrionSpokenLineTest {
     }
 
     @Test fun spokenComposerReceivesRecentConversationWithoutDumpingItAll() {
-        val context = "Kingi: I normally wake up early.\\nOrion: That is part of your routine.\\nKingi: Help me plan today."
+        val context = "Kingi: I normally wake up early.\nOrion: That is part of your routine.\nKingi: Help me plan today."
         val prompt = OrionSpokenLine.userMessage("Let's start with the first task.", "Help me plan today.", context)
         assertTrue(prompt.contains("I normally wake up early"))
         assertTrue(prompt.contains("That is part of your routine"))
