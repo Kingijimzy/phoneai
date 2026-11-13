@@ -91,11 +91,13 @@ internal object OrionCalendarMonitor {
         lookaheadHours: Int,
         now: Long = System.currentTimeMillis()
     ): String {
-        if (context.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) {
-            return "Android Calendar permission is not granted. Enable Calendar read access for Orion in Android app settings, then retry."
-        }
+        // Do not disclose or prompt for Android-level access while the owner has disabled
+        // Orion's calendar scope. The app-level consent switch is the first privacy boundary.
         if (!isEnabled(context, now)) {
             return "Calendar access is switched off in Orion's owner consent settings."
+        }
+        if (context.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) {
+            return "Android Calendar permission is not granted. Enable Calendar read access for Orion in Android app settings, then retry."
         }
         val events = upcoming(context, lookaheadHours, now)
             .filter { it.minutesFromNow <= 120 } // within 2 hours
