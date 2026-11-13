@@ -84,7 +84,13 @@ internal object OrionChatAttachmentStore {
             .replace(Regex("[^A-Za-z0-9._ -]"), "_").trim().take(100).ifBlank { "attachment" }
         val extension = safeName.substringAfterLast('.', "").lowercase().takeIf { it.isNotBlank() }
         val inferredMime = extension?.let { android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(it) }
-        val mime = (resolver.getType(uri) ?: inferredMime ?: "application/octet-stream").substringBefore(';').take(120)
+        val resolverMime = resolver.getType(uri)?.substringBefore(';')
+        val mime = when {
+            uri.scheme == "file" -> inferredMime ?: resolverMime ?: "application/octet-stream"
+            resolverMime.isNullOrBlank() || resolverMime == "application/octet-stream" ->
+                inferredMime ?: resolverMime ?: "application/octet-stream"
+            else -> resolverMime
+        }.take(120)
         val directory = root(context, sessionId).apply { mkdirs() }
         val destination = File(directory, id + "_" + safeName)
         val digest = MessageDigest.getInstance("SHA-256")
