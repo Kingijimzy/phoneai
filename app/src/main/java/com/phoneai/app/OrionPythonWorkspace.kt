@@ -103,6 +103,23 @@ internal class OrionPythonWorkspace(context: Context) {
             .take(500).map { root.toPath().relativize(it.toPath()).toString() }
             .sorted().joinToString("\n").ifBlank { "(workspace empty)" }.take(12_000)
     }
+
+    /** List one selected project directory without allowing paths or symlinks outside the workspace. */
+    @Synchronized fun list(path: String): String {
+        val directory = if (path.isBlank() || path == ".") {
+            ensureRoot()
+            root
+        } else {
+            val selected = resolve(path, true) ?: return "error: invalid or missing workspace directory"
+            if (!selected.isDirectory) return "error: selected workspace path is not a directory"
+            selected
+        }
+        return directory.walkTopDown()
+            .onEnter { it == directory || it.name !in IGNORED_LIST_DIRECTORIES }
+            .filter { it != directory && it.isFile && (!it.isHidden || it.name == ".gitignore") }
+            .take(500).map { directory.toPath().relativize(it.toPath()).toString() }
+            .sorted().joinToString("\n").ifBlank { "(workspace directory empty)" }.take(12_000)
+    }
     @Synchronized fun read(path: String): String {
         val file = resolve(path, true) ?: return "error: invalid or missing workspace file"
         if (!file.isFile || file.length() > MAX_FILE_BYTES) return "error: file is not regular or exceeds 32 MiB"
