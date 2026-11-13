@@ -52,10 +52,11 @@ class OrionCalendarMonitorTest {
     private lateinit var context: Context
 
     @Before fun setUp() {
-        context = RuntimeEnvironment.getApplication()
+        val application = RuntimeEnvironment.getApplication()
+        context = application
         // Robolectric does not grant dangerous permissions automatically. Mirror the
         // installed-app state used by these calendar-provider integration tests.
-        org.robolectric.Shadows.shadowOf(context).grantPermissions(android.Manifest.permission.READ_CALENDAR)
+        org.robolectric.Shadows.shadowOf(application).grantPermissions(android.Manifest.permission.READ_CALENDAR)
         FakeCalendarProvider.rows.clear()
         Robolectric.setupContentProvider(FakeCalendarProvider::class.java, CalendarContract.AUTHORITY)
         OrionSensorScope.values().forEach { OrionSensorConsent.revoke(context, it) }
