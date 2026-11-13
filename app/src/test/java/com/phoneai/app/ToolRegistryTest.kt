@@ -382,7 +382,7 @@ class ToolRegistryNativeSelectionTest {
     }
 
     @Test fun untypedJsonArgumentsRemainCompatibleWithExistingToolContracts() {
-        val tool = ToolDefinition("mcp_call", "mcp_call {name, arguments}: call a paired MCP tool", "call", ToolAccess.WRITE)
+        val tool = ToolDefinition("mcp_call", "mcp_call {name, arguments: json object}: call a paired MCP tool", "call", ToolAccess.WRITE)
         assertNull(OrionToolContractCodec.validateArguments(tool, org.json.JSONObject().put("name", "read_status").put("arguments", org.json.JSONObject().put("detail", "full"))))
     }
 
