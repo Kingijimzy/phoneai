@@ -69,14 +69,35 @@ internal object OrionCapabilityAwareness {
 
     fun promptBlock(c: Context): String {
         val s = state(c)
+        val tools = runCatching { ToolRegistry.all.map { it.name }.distinct() }.getOrDefault(emptyList())
+        val skills = runCatching { SkillRegistry.list(c).filter { it.enabled } }.getOrDefault(emptyList())
+        val extensions = runCatching {
+            SelfExtendingExtensionStore(c).all().filter {
+                it.enabled && it.verified && it.sourceSha256 == SelfExtendingExtensionPolicy.sha256(it.source)
+            }
+        }.getOrDefault(emptyList())
+        val providers = runCatching {
+            Providers.all.filter { it.noKey || Prefs.hasKey(c, it.id) }.map { it.id }
+        }.getOrDefault(emptyList())
+        val phoneConnected = PhoneAiService.instance != null
+        val screenRegistered = "read_screen" in tools
         val parts = buildList {
-            if (s.added.isNotEmpty()) add("new since I last checked: ${s.added.take(8).joinToString()}")
-            if (s.removed.isNotEmpty()) add("removed from installed registry: ${s.removed.take(8).joinToString()}")
-            if (s.failing.isNotEmpty()) add("degraded tools: ${s.failing.take(5).joinToString()}")
-            if (s.untested.size >= 3) add("registered tools with no recorded use yet: ${s.untested.size} (e.g. ${s.untested.take(4).joinToString()})")
+            add("registered_tools=${tools.size}")
+            add("enabled_skills=${skills.size}")
+            add("verified_enabled_extensions=${extensions.size}")
+            add("configured_providers=${providers.size} (${providers.take(8).joinToString().ifBlank { "none" }})")
+            add("phone_accessibility_service=${if (phoneConnected) "connected" else "not connected"}")
+            add("screen_capture_tool=${if (screenRegistered) "registered; live capture must still be checked at execution" else "not registered"}")
+            add("untested_registered_tools=${s.untested.size}")
+            if (s.added.isNotEmpty()) add("new_since_last_scan=${s.added.take(8).joinToString()}")
+            if (s.removed.isNotEmpty()) add("removed_since_last_scan=${s.removed.take(8).joinToString()}")
+            if (s.failing.isNotEmpty()) add("degraded_tools=${s.failing.take(8).joinToString()}")
         }
-        return if (parts.isEmpty()) "" else "SELF-DIAGNOSIS (local capability inventory): " + parts.joinToString("; ") +
-            ". Configured providers are not necessarily live or healthy; verify them with an actual provider result. Missing a capability the task needs? Reuse a current tool or build/test a bounded extension rather than inventing availability."
+        return "ORION LIVE SELF-INVENTORY (local evidence, refreshed for this turn): " +
+            parts.joinToString("; ") +
+            ". Treat registration, configuration, connection, permission and successful execution as separate states. " +
+            "Never claim a tool works solely because it is registered. If a needed capability is absent or fails, inspect the real tool contract and runtime result; reuse or repair existing code before proposing a new extension. " +
+            "For a genuine gap, create a bounded disabled draft, test the exact source, repair failures, and activate only under the owner's configured autonomy policy and operation-specific safety boundary."
     }
 
     /** What can actually be done right now: configured providers, phone control, failing tools. Facts, not claims. */
