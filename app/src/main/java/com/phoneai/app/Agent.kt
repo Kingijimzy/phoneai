@@ -626,13 +626,39 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val dispatchIntent = activeRequestScope.ifBlank { "Execute registered capability: $tool" }
         // Bind the low-level receipt to the actual ready/running node in the durable task graph.
         // This is traceability only: an unresolved graph node does not silently disable a registered tool.
+        val activeDispatchGraph = runCatching { OrionObjectiveGraph.load(svc) }.getOrNull()
+        val requestedGraphStep = args.optString("objective_id")
+            .ifBlank { args.optString("objectiveId") }
+            .takeIf { it.isNotBlank() }
         val dispatchGraphStep = runCatching {
-            val graph = OrionObjectiveGraph.load(svc) ?: return@runCatching "unbound"
-            val requestedStep = args.optString("objective_id")
-                .ifBlank { args.optString("objectiveId") }
-                .takeIf { it.isNotBlank() }
-            OrionObjectiveGraph.resolveDispatchId(graph, requestedStep, tool) ?: "unresolved"
+            val graph = activeDispatchGraph ?: return@runCatching "unbound"
+            if (tool == "complete_objective") {
+                requestedGraphStep?.takeIf { id -> graph.nodes.any { it.id == id } } ?: "unresolved"
+            } else {
+                OrionObjectiveGraph.resolveDispatchId(graph, requestedGraphStep, tool) ?: "unresolved"
+            }
         }.getOrDefault("unbound")
+        // The graph is an objective/dependency controller, not a capability deny-list.
+        // When a real node is resolved, enforce its prerequisites and single-owner claim.
+        // An absent or ambiguous graph binding remains an ordinary registered-tool dispatch.
+        if (tool != "complete_objective" && activeDispatchGraph != null &&
+            dispatchGraphStep !in setOf("unbound", "unresolved")) {
+            val graphBlock = OrionObjectiveGraph.canExecute(activeDispatchGraph, dispatchGraphStep)
+            if (graphBlock != null) {
+                val blocked = "error: objective graph blocked this step: $graphBlock No capability was dispatched."
+                recordDispatchBlocked(tool, args, "objective_graph_dependency_gate")
+                taskProofs.record(tool, blocked)
+                return blocked
+            }
+            val graphNode = activeDispatchGraph.nodes.firstOrNull { it.id == dispatchGraphStep }
+            if (graphNode != null && graphNode.status != OrionObjectiveGraph.Status.RUNNING &&
+                !OrionObjectiveGraph.startExecution(svc, dispatchGraphStep)) {
+                val blocked = "error: objective '$dispatchGraphStep' is owned by another active execution or could not be claimed. No capability was dispatched."
+                recordDispatchBlocked(tool, args, "objective_graph_execution_claim")
+                taskProofs.record(tool, blocked)
+                return blocked
+            }
+        }
         val executiveHandle = OrionExecutiveStore.beginToolDispatch(
             svc,
             OrionObjectiveGraph.resolveSessionId(svc),
@@ -728,11 +754,23 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             (shouldVerifyAction && verifiedResult.contains("LOCAL VERIFY PASS:", ignoreCase = true)) ||
                 (tool == "verify_send" && result.trimStart().startsWith("PASS:", ignoreCase = true)) ||
                 (tool == "verify_action" && result.trimStart().startsWith("PASS:", ignoreCase = true)) ||
+                (tool == "complete_objective" && result.trimStart().startsWith("PASS: objective node", ignoreCase = true)) ||
                 (tool == "shell" && (
                     result.startsWith("EXIT 0 · SUCCESS\nLOCAL VERIFY PASS: shell process exited with code 0.") ||
                         result.startsWith("exit=0\nLOCAL VERIFY PASS: shell process exited with code 0.")
                     ))
             )
+        // Objective progress accepts only trusted success receipts or explicit failures.
+        // A merely returned/unverified backend result must never become completion evidence.
+        if (tool != "complete_objective" && dispatchGraphStep !in setOf("unbound", "unresolved") &&
+            (trustedVerification || verifiedResult.trimStart().startsWith("error", ignoreCase = true))) {
+            val objectiveReceipt = runCatching {
+                OrionObjectiveGraph.recordExecution(svc, dispatchGraphStep, tool, verifiedResult)
+            }.getOrNull()
+            if (trustedVerification && objectiveReceipt.isNullOrBlank()) {
+                verifiedResult += "\\nOBJECTIVE GRAPH WARNING: the action was verified, but its objective evidence receipt could not be persisted. The objective remains incomplete."
+            }
+        }
         if (trustedVerification) taskProofs.recordVerified(tool, verifiedResult)
         else taskProofs.record(tool, verifiedResult)
         var dispatchEvidenceSaved = false
