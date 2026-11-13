@@ -59,6 +59,7 @@ class CodexAppServerProtocolTest {
         assertEquals("auto_review", params.getString("approvalsReviewer"))
         val dynamic = params.getJSONArray("dynamicTools")
         assertEquals(2, dynamic.length())
+        assertEquals("function", dynamic.getJSONObject(0).getString("type"))
         assertEquals("battery", dynamic.getJSONObject(0).getString("name"))
         assertTrue(dynamic.getJSONObject(0).getString("description").contains("report battery status"))
         assertEquals("object", dynamic.getJSONObject(0).getJSONObject("inputSchema").getString("type"))
