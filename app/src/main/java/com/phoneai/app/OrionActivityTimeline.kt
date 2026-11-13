@@ -138,6 +138,53 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
         }.sortedBy { it.timestampMs }
 
     companion object {
+        /** Convert persisted lifecycle records into the exact event model used by live chat. */
+        fun fromPersisted(events: List<OrionConversationRepository.ChatEvent>): List<OrionActivityEvent> =
+            events.map { event ->
+                val type = event.type.lowercase()
+                val status = event.status.lowercase()
+                val kind = when {
+                    type.contains("approval") -> OrionActivityKind.APPROVAL
+                    type.contains("tool") || type.contains("terminal") || type.contains("python") || type.contains("file") -> OrionActivityKind.TOOL
+                    type.contains("browser") || type.contains("research") -> OrionActivityKind.RESEARCH
+                    type.contains("agent") || type.contains("specialist") || type.contains("delegate") -> OrionActivityKind.DELEGATION
+                    type.contains("error") || status in setOf("failed", "error", "denied") -> OrionActivityKind.ERROR
+                    type.contains("cancel") -> OrionActivityKind.CANCELLED
+                    type.contains("interrupt") -> OrionActivityKind.INTERRUPTED
+                    type.contains("complete") || status in setOf("completed", "success", "succeeded", "result") -> OrionActivityKind.COMPLETION
+                    else -> OrionActivityKind.THINKING
+                }
+                val eventStatus = when {
+                    status in setOf("pending", "waiting", "needs_approval", "approval_required") -> OrionActivityStatus.WAITING
+                    status in setOf("failed", "error", "denied") -> OrionActivityStatus.FAILED
+                    status in setOf("cancelled", "canceled") -> OrionActivityStatus.CANCELLED
+                    status == "interrupted" -> OrionActivityStatus.INTERRUPTED
+                    status in setOf("completed", "success", "succeeded", "result") -> OrionActivityStatus.SUCCEEDED
+                    else -> OrionActivityStatus.ACTIVE
+                }
+                OrionActivityEvent(
+                    eventId = event.id,
+                    taskId = taskKey(event.traceId, event.messageId, event.sessionId),
+                    kind = kind,
+                    status = eventStatus,
+                    title = event.summary.lineSequence().firstOrNull()?.take(120)?.ifBlank { event.type } ?: event.type,
+                    summary = event.summary.take(500),
+                    timestampMs = event.createdAt.coerceAtLeast(0L),
+                    evidence = listOf(
+                        (when (eventStatus) {
+                            OrionActivityStatus.ACTIVE -> "RUNNING"
+                            OrionActivityStatus.WAITING -> "WAITING"
+                            OrionActivityStatus.SUCCEEDED -> "DONE"
+                            OrionActivityStatus.FAILED -> "FAILED"
+                            OrionActivityStatus.CANCELLED -> "CANCELLED"
+                            OrionActivityStatus.INTERRUPTED -> "INTERRUPTED"
+                        }) + " · " + event.summary.take(500)
+                    ),
+                    typedEvidence = listOfNotNull(OrionActivityEvidence.fromJson(event.evidenceJson)),
+                    correlationId = event.correlationId
+                )
+            }.sortedWith(compareBy<OrionActivityEvent> { it.timestampMs }.thenBy { it.eventId })
+
         /** Keep objective identity distinct from per-tool correlation IDs and conversation IDs. */
         fun taskKey(traceId: String?, messageId: String?, sessionId: String): String =
             traceId?.takeIf { it.isNotBlank() }?.let { "trace-$it" }

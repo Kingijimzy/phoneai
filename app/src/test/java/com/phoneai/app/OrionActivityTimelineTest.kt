@@ -156,6 +156,35 @@ class OrionActivityTimelineTest {
         )
     }
 
+    @Test fun persistedEventsUseTheSameTaskProjectionAndKeepDistinctTurns() {
+        val persisted = listOf(
+            OrionConversationRepository.ChatEvent(
+                id = "tool-start", sessionId = "session-a", messageId = "turn-a",
+                type = "tool", status = "started", summary = "Started browser search", createdAt = 10,
+                correlationId = "tool-call-a"
+            ),
+            OrionConversationRepository.ChatEvent(
+                id = "tool-done", sessionId = "session-a", messageId = "turn-a",
+                type = "tool_result", status = "completed", summary = "Browser search returned results", createdAt = 20,
+                correlationId = "tool-call-a"
+            ),
+            OrionConversationRepository.ChatEvent(
+                id = "other-turn", sessionId = "session-a", messageId = "turn-b",
+                type = "tool", status = "failed", summary = "Workspace read failed", createdAt = 30
+            )
+        )
+        val timeline = OrionActivityTimeline()
+        timeline.replay(OrionActivityTimeline.fromPersisted(persisted))
+        val cards = timeline.compactForChat()
+        assertEquals(2, cards.size)
+        val first = cards.single { it.taskId == "message-turn-a" }
+        assertEquals(OrionActivityStatus.SUCCEEDED, first.status)
+        assertTrue(first.evidence.any { it.startsWith("DONE · Browser search returned results") })
+        val second = cards.single { it.taskId == "message-turn-b" }
+        assertEquals(OrionActivityStatus.FAILED, second.status)
+        assertEquals(OrionActivityKind.ERROR, second.kind)
+    }
+
     @Test fun progressStepsKeepDetailsForSingleStepTask() {
         val steps = OrionActivityTimeline.progressSteps(listOf(
             "WAITING · Save file: scraper.py was written to Downloads/Orion; 1,248 bytes"

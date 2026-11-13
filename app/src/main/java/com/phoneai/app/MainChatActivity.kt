@@ -2191,41 +2191,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     override fun onChatEvents(events: List<OrionConversationRepository.ChatEvent>) {
         runOnUiThread {
             val projection = OrionActivityTimeline(maxEvents = 300)
-            projection.replay(events.mapNotNull { event ->
-                val type = event.type.lowercase()
-                val status = event.status.lowercase()
-                val kind = when {
-                    type.contains("approval") -> OrionActivityKind.APPROVAL
-                    type.contains("tool") || type.contains("terminal") || type.contains("python") -> OrionActivityKind.TOOL
-                    type.contains("browser") || type.contains("research") -> OrionActivityKind.RESEARCH
-                    type.contains("agent") || type.contains("specialist") || type.contains("delegate") -> OrionActivityKind.DELEGATION
-                    type.contains("error") || status in setOf("failed", "error") -> OrionActivityKind.ERROR
-                    type.contains("cancel") -> OrionActivityKind.CANCELLED
-                    type.contains("interrupt") -> OrionActivityKind.INTERRUPTED
-                    type.contains("complete") || status in setOf("completed", "success", "succeeded", "result") -> OrionActivityKind.COMPLETION
-                    else -> OrionActivityKind.THINKING
-                }
-                val eventStatus = when {
-                    status in setOf("pending", "waiting", "needs_approval", "approval_required") -> OrionActivityStatus.WAITING
-                    status in setOf("failed", "error") -> OrionActivityStatus.FAILED
-                    status in setOf("cancelled", "canceled") -> OrionActivityStatus.CANCELLED
-                    status in setOf("interrupted") -> OrionActivityStatus.INTERRUPTED
-                    status in setOf("completed", "success", "succeeded", "result") -> OrionActivityStatus.SUCCEEDED
-                    else -> OrionActivityStatus.ACTIVE
-                }
-                val evidence = OrionActivityEvidence.fromJson(event.evidenceJson)
-                OrionActivityEvent(
-                    eventId = event.id,
-                    taskId = OrionActivityTimeline.taskKey(event.traceId, event.messageId, event.sessionId),
-                    kind = kind,
-                    status = eventStatus,
-                    title = event.summary.lineSequence().firstOrNull()?.take(120)?.ifBlank { event.type } ?: event.type,
-                    summary = event.summary.take(500),
-                    timestampMs = event.createdAt.coerceAtLeast(0L),
-                    typedEvidence = listOfNotNull(evidence),
-                    correlationId = event.correlationId
-                )
-            })
+            projection.replay(OrionActivityTimeline.fromPersisted(events))
             composeActivityEvents.value = projection.compactForChat()
             refreshChatAttachments()
             // Activity events have their own compact timeline cards. Do not mirror them

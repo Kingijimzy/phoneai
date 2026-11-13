@@ -357,7 +357,7 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
 }
 
 @Composable
-private fun OrionComposeActivityCard(event: OrionActivityEvent) {
+internal fun OrionComposeActivityCard(event: OrionActivityEvent) {
     var expanded by rememberSaveable(event.eventId) { mutableStateOf(false) }
     val active = event.status == OrionActivityStatus.ACTIVE
     val accent = when (event.status) {
@@ -415,20 +415,12 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
             Text(if (expanded) "LESS" else "DETAILS", color = OrionUiPalette.muted, fontSize = 8.sp,
                 fontWeight = FontWeight.SemiBold)
         }
-        // Progress bar: sweeps while the task runs, fills when it finishes.
-        val sweep by pulse.animateFloat(
-            initialValue = 0f, targetValue = 0.7f,
-            animationSpec = infiniteRepeatable(tween(1100), repeatMode = RepeatMode.Reverse), label = "task-progress-sweep"
+        // Status accent only. This is deliberately not a percentage-complete bar.
+        Box(
+            Modifier.fillMaxWidth().padding(top = 6.dp, start = 13.dp)
+                .height(2.dp).clip(RoundedCornerShape(2.dp))
+                .background(accent.copy(alpha = if (active) 0.55f else 1f))
         )
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp, start = 13.dp).height(3.dp).clip(RoundedCornerShape(2.dp)).background(OrionUiPalette.raised)) {
-            if (active || event.status == OrionActivityStatus.WAITING) {
-                Spacer(Modifier.weight(sweep.coerceAtLeast(0.001f)))
-                Box(Modifier.weight(0.3f).fillMaxHeight().background(accent))
-                Spacer(Modifier.weight((0.7f - sweep).coerceAtLeast(0.001f)))
-            } else {
-                Box(Modifier.weight(1f).fillMaxHeight().background(accent))
-            }
-        }
         val steps = OrionActivityTimeline.progressSteps(safeEvidence)
         if (steps.isNotEmpty()) {
             val shown = if (expanded) steps.takeLast(14) else steps.takeLast(4)
@@ -1116,6 +1108,11 @@ internal fun OrionArchivedConversationScreen(
 ) {
     val renderedMessages = if (structuredMessages.isNotEmpty()) structuredMessages else
         messages.mapIndexed { index, pair -> OrionChatLine(index.toLong(), pair.first, pair.second) }
+    val activityCards = remember(activityEvents) {
+        val projection = OrionActivityTimeline(maxEvents = 300)
+        projection.replay(OrionActivityTimeline.fromPersisted(activityEvents))
+        projection.compactForChat()
+    }
     Column(Modifier.fillMaxSize().background(OrionUiPalette.background)) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
@@ -1172,8 +1169,8 @@ internal fun OrionArchivedConversationScreen(
                             color = OrionUiPalette.muted, fontSize = 11.sp)
                     }
                 }
-                itemsIndexed(activityEvents, key = { _, event -> "archive-event-${event.id}" }) { _, event ->
-                    OrionPersistedActivityCard(event)
+                itemsIndexed(activityCards, key = { _, event -> "archive-task-${event.eventId}" }) { _, event ->
+                    OrionComposeActivityCard(event)
                 }
             }
         }
