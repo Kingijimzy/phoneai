@@ -660,143 +660,73 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private fun showChatHistory() {
         val chats = ChatHistoryStore.archived(this)
         val dialog = android.app.Dialog(this)
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(18), dp(18), dp(12))
-            setBackgroundColor(0xFF090909.toInt())
-        }
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val heading = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
-        heading.addView(label("CHAT ARCHIVE", 11f, 0xFF999999.toInt(), true))
-        heading.addView(label("Your conversations", 25f, 0xFFF4F4F4.toInt(), true).apply { setPadding(0, dp(4), 0, dp(3)) })
-        heading.addView(label("${chats.size} saved chats · stored on this device", 12f, 0xFF8B8B8B.toInt()))
-        header.addView(heading)
-        val clearAll = historyActionButton("Clear all") {
-            AlertDialog.Builder(this@MainChatActivity)
-                .setTitle("Delete all chat history?")
-                .setMessage("This permanently deletes the active transcript and every archived conversation on this device. Saved Orion memory notes are not affected.")
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Delete all") { _, _ ->
-                    val service = PhoneAiService.instance
-                    if (service != null) {
-                        service.deleteAllChatHistory { deleted, message ->
-                            if (deleted) {
-                                composeLines.clear()
-                                dialog.dismiss()
-                                Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    } else {
-                        val deleted = ChatHistoryStore.clearAll(this@MainChatActivity)
-                        if (deleted) {
-                            composeLines.clear()
-                            dialog.dismiss()
-                        }
-                        Toast.makeText(this@MainChatActivity, if (deleted) "Chat history deleted" else "Could not delete chat history", Toast.LENGTH_SHORT).show()
+        val content = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+            setContent {
+                OrionChatHistoryScreen(
+                    chats = chats,
+                    onClose = { dialog.dismiss() },
+                    onClearAll = {
+                        AlertDialog.Builder(this@MainChatActivity)
+                            .setTitle("Delete all chat history?")
+                            .setMessage("This permanently deletes the active transcript and every archived conversation on this device. Saved Orion memory notes are not affected.")
+                            .setNegativeButton("Cancel", null)
+                            .setPositiveButton("Delete all") { _, _ ->
+                                val service = PhoneAiService.instance
+                                if (service != null) {
+                                    service.deleteAllChatHistory { deleted, message ->
+                                        if (deleted) {
+                                            composeLines.clear()
+                                            dialog.dismiss()
+                                            Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                } else {
+                                    val deleted = ChatHistoryStore.clearAll(this@MainChatActivity)
+                                    if (deleted) {
+                                        composeLines.clear()
+                                        dialog.dismiss()
+                                    }
+                                    Toast.makeText(this@MainChatActivity,
+                                        if (deleted) "Chat history deleted" else "Could not delete chat history",
+                                        Toast.LENGTH_SHORT).show()
+                                }
+                            }.show()
+                    },
+                    onOpen = { chat ->
+                        val date = java.text.SimpleDateFormat("d MMM yyyy · h:mm a", java.util.Locale.getDefault())
+                            .format(java.util.Date(chat.timestamp))
+                        showArchivedConversation(chat.sessionId, chat.title, chat.messages, date)
+                    },
+                    onRename = { chat ->
+                        showRenameArchivedChatDialog(chat.sessionId, chat.title, dialog)
+                    },
+                    onDelete = { chat ->
+                        AlertDialog.Builder(this@MainChatActivity)
+                            .setTitle("Delete this conversation?")
+                            .setMessage("This permanently removes this archived transcript and its associated activity history from this device.")
+                            .setNegativeButton("Cancel", null)
+                            .setPositiveButton("Delete") { _, _ ->
+                                val deleted = ChatHistoryStore.deleteArchivedById(this@MainChatActivity, chat.sessionId)
+                                Toast.makeText(this@MainChatActivity,
+                                    if (deleted) "Conversation deleted" else "Could not delete conversation",
+                                    Toast.LENGTH_SHORT).show()
+                                if (deleted) {
+                                    dialog.dismiss()
+                                    showChatHistory()
+                                }
+                            }.show()
                     }
-                }.show()
-        }
-        header.addView(clearAll)
-        val close = historyActionButton("Close") { dialog.dismiss() }
-        header.addView(close)
-        root.addView(header)
-        val divider = View(this).apply { setBackgroundColor(0xFF292929.toInt()) }
-        root.addView(divider, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(16); bottomMargin = dp(12) })
-        val search = EditText(this@MainChatActivity).apply {
-            hint = "Search conversations"
-            setSingleLine(true)
-            textSize = 14f
-            setTextColor(0xFFF1F1F1.toInt())
-            setHintTextColor(0xFF858585.toInt())
-            setPadding(dp(14), dp(10), dp(14), dp(10))
-            background = rounded(0xFF151515.toInt(), 13, 0xFF303030.toInt())
-            contentDescription = "Search saved conversations"
-        }
-        root.addView(search, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
-        val list = ScrollView(this).apply { isFillViewport = true; clipToPadding = false }
-        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        if (chats.isEmpty()) {
-            val empty = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dp(22), dp(36), dp(22), dp(36))
-                background = rounded(0xFF151515.toInt(), 20, 0xFF303030.toInt())
-            }
-            empty.tag = "no saved conversations yet"
-            empty.addView(OrionIconView(this@MainChatActivity).apply {
-                icon = "history"
-                tint = Theme.SILVER
-                contentDescription = "Chat history"
-            }, LinearLayout.LayoutParams(dp(36), dp(36)).apply { gravity = Gravity.CENTER })
-            empty.addView(label("No saved conversations yet", 18f, 0xFFF1F1F1.toInt(), true).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(7)) })
-            empty.addView(label("When you start a new chat, Orion keeps the previous conversation here.", 13f, 0xFF9B9B9B.toInt()).apply { gravity = Gravity.CENTER; textAlignment = View.TEXT_ALIGNMENT_CENTER })
-            rows.addView(empty, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
-        } else {
-            val dates = java.text.SimpleDateFormat("d MMM yyyy · h:mm a", java.util.Locale.getDefault())
-            chats.forEachIndexed { index, chat ->
-                val preview = chat.messages.lastOrNull()?.second.orEmpty().replace("\\n", " ").trim()
-                val card = LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(dp(16), dp(14), dp(16), dp(14))
-                    background = rounded(0xFF171717.toInt(), 18, 0xFF303030.toInt())
-                    isClickable = true
-                    isFocusable = true
-                }
-                val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-                top.addView(label(chat.title.ifBlank { "Untitled conversation" }, 16f, 0xFFF0F0F0.toInt(), true), LinearLayout.LayoutParams(0, -2, 1f))
-                top.addView(historyActionButton("Rename") {
-                    showRenameArchivedChatDialog(chat.sessionId, chat.title, dialog)
-                }, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(5) })
-                top.addView(historyActionButton("Delete") {
-                    AlertDialog.Builder(this@MainChatActivity)
-                        .setTitle("Delete this conversation?")
-                        .setMessage("This permanently removes this archived transcript from this device.")
-                        .setNegativeButton("Cancel", null)
-                        .setPositiveButton("Delete") { _, _ ->
-                            val deleted = ChatHistoryStore.deleteArchivedById(this@MainChatActivity, chat.sessionId)
-                            Toast.makeText(this@MainChatActivity, if (deleted) "Conversation deleted" else "Could not delete conversation", Toast.LENGTH_SHORT).show()
-                            if (deleted) {
-                                dialog.dismiss()
-                                showChatHistory()
-                            }
-                        }.show()
-                })
-                top.addView(label("›", 25f, 0xFFBDBDBD.toInt(), true))
-                card.tag = (chat.title + " " + preview + " " + chat.messages.joinToString(" ") { it.second }).lowercase(java.util.Locale.ROOT)
-                card.addView(top)
-                card.addView(label(dates.format(java.util.Date(chat.timestamp)) + "  ·  " + chat.messages.size + " messages", 11f, 0xFF8E8E8E.toInt()).apply { setPadding(0, dp(7), 0, dp(8)) })
-                card.addView(label(preview.ifBlank { "Open conversation to view messages" }, 13f, 0xFFB6B6B6.toInt()).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END })
-                card.setOnClickListener { showArchivedConversation(chat.sessionId, chat.title, chat.messages, dates.format(java.util.Date(chat.timestamp))) }
-                rows.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
-                animateIn(card, (index.coerceAtMost(6) * 35L))
+                )
             }
         }
-        search.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                val query = s?.toString()?.trim()?.lowercase(java.util.Locale.ROOT).orEmpty()
-                for (index in 0 until rows.childCount) {
-                    val child = rows.getChildAt(index)
-                    val searchable = child.tag as? String
-                    child.visibility = if (query.isEmpty() || searchable?.contains(query) == true) View.VISIBLE else View.GONE
-                }
-            }
-            override fun afterTextChanged(s: android.text.Editable?) = Unit
-        })
-        list.addView(rows)
-        root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
-        dialog.setContentView(root)
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.window?.setLayout(-1, -1)
+        dialog.setContentView(content)
         dialog.show()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setBackgroundDrawable(rounded(0xFF090909.toInt(), 0))
         dialog.window?.setLayout(-1, -1)
-        animateIn(root)
     }
 
     private fun showRenameArchivedChatDialog(sessionId: String, currentTitle: String, historyDialog: android.app.Dialog) {
