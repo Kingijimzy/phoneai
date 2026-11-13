@@ -18,6 +18,7 @@ internal object CodexAppServerProtocol {
 
     data class Request(val id: Int, val method: String, val params: JSONObject) {
         fun toJson(): JSONObject = JSONObject()
+            .put("jsonrpc", "2.0")
             .put("id", id)
             .put("method", method)
             .put("params", params)
@@ -61,9 +62,7 @@ internal object CodexAppServerProtocol {
                     JSONObject()
                         .put("name", tool.name)
                         .put("description", tool.promptLine.take(4_000))
-                        .put("inputSchema", JSONObject()
-                            .put("type", "object")
-                            .put("additionalProperties", true))
+                        .put("inputSchema", JSONObject(tool.inputSchema.toString()))
                 )
             }
             params.put("dynamicTools", dynamicTools)
