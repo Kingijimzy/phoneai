@@ -78,12 +78,11 @@ internal class AccountAwareModelProvider(
                     val budgetedMessages = OrionProviderContextPolicy.fitMessages(
                         messages, contextCapabilities, maxTokens
                     )
-                    val prompt = transcript(budgetedMessages)
-                    require(prompt.isNotBlank()) { "No text content was supplied to the account model." }
-                    require(prompt.length <= 100_000) {
-                        "The conversation is too large for Antigravity's CLI payload (" + prompt.length + " characters). " +
-                            "Orion kept the latest user request; reduce attached content or start a fresh chat."
-                    }
+                    // The CLI has no durable native thread API. Keep the latest complete
+                    // messages and discard older history deterministically instead of failing
+                    // the entire request after the provider-specific budgeter has run.
+                    val prompt = boundedRecentTranscript(budgetedMessages, 60_000)
+                    require(prompt.isNotBlank()) { "No text content was supplied to Antigravity." }
                     runAntigravity(prompt, model, tools, onDelta, onToolCall)
                 }
                 else -> error("Unsupported account provider: " + provider.id)
