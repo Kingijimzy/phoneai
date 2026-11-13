@@ -2042,30 +2042,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             RoutineReplayPolicy.exactName(MacroStore.names(this), request.name) != null ||
                 RoutineReplayPolicy.isExplicitRoutineCommand(t)
         } == true
-        // Talk and Command are one mind: every message goes through the agent, whose first step lets the model
-        // answer directly or take the job to tools. No mode switch and no phrase list decides that.
-        val routeToAgent = true
-        if (!savedRoutineCommand && ((conversationOnly && !routeToAgent) || (isConversationStarter(t) && !LiveWebSearch.isSearchRequest(t) && !LiveNews.isNewsRequest(t) && !routeToAgent))) {
-            wakeGen++
-            appendTranscript("me", t)
-            mainChatListener?.onMessage("me", t)
-            voice.stopSpeaking()
-            voice.stopListening()
-            listening = false
-            hideBubble()
-            running = true
-            phase = "thinking"
-            refreshMode()
-            worker.execute {
-                try {
-                    OrionCoordinator.run(this, OrionCoordinator.Surface.CHAT, t) { agent.runConversation(t) }
-                } catch (e: Exception) {
-                    say("I couldn't reach the AI just now. " + (e.message ?: "Please try again."))
-                }
-                main.post { finishRun() }
-            }
-            return
-        }
+        // Talk and Command share one Agent/model/tool loop. Preserve the real entry surface
+        // in the coordinator ledger; a constant routeToAgent previously made the CHAT branch
+        // unreachable and mislabeled every typed conversation as COMMAND.
+        val requestSurface = if (conversationOnly) OrionCoordinator.Surface.CHAT else OrionCoordinator.Surface.COMMAND
 
         wakeGen++
         appendTranscript("me", t)
@@ -2098,7 +2078,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (panel != null) showThinkingIndicator()
         worker.execute {
             try {
-                OrionCoordinator.run(this, OrionCoordinator.Surface.COMMAND, t) { agent.run(t) }
+                OrionCoordinator.run(this, requestSurface, t) { agent.run(t) }
             } catch (e: Exception) {
                 say("Error: ${e.message}")
             } finally {
