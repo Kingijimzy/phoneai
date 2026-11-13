@@ -384,6 +384,18 @@ internal object OrionExecutiveStore {
                     WHERE outcome=? AND process_epoch<>?""",
                     arrayOf(DispatchOutcome.RECONCILIATION_REQUIRED.name, System.currentTimeMillis(),
                         "RUNNING", processEpoch))
+                // A process-death window is an unknown side-effect outcome. Surface it as
+                // BLOCKED in the executive ledger so the planner must reconcile before retry.
+                db.execSQL("""UPDATE objectives SET phase=?,revision=revision+1,
+                    recovery_cursor=?,blocker=?,updated_at=?
+                    WHERE id IN (
+                        SELECT objective_id FROM dispatch_attempts
+                        WHERE outcome=? AND process_epoch<>?
+                    ) AND phase NOT IN (?,?,?)""",
+                    arrayOf(Phase.BLOCKED.name, "reconcile_dispatch",
+                        "Previous process ended during a tool action; inspect the real outcome before retrying.",
+                        System.currentTimeMillis(), DispatchOutcome.RECONCILIATION_REQUIRED.name,
+                        processEpoch, Phase.COMPLETED.name, Phase.FAILED.name, Phase.BLOCKED.name))
                 db.execSQL("INSERT OR IGNORE INTO objectives(id,intent,phase,revision,plan_revision,recovery_cursor,blocker,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
                     arrayOf(cleanObjective, cleanIntent, Phase.GROUND.name, 0, 0, "", "", startedAt, startedAt))
                 val existing = get(db, cleanObjective)
