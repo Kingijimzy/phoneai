@@ -221,6 +221,11 @@ internal object IrreversibleActionConfirmationPolicy {
                 val value = payload.optString("text").take(300)
                 "Orion is about to enter text into the active app field${if (targetLabel.isBlank()) "" else " in $targetLabel"}: ${value.ifBlank { "(text unavailable)" }}. Allow this write?"
             }
+            "computer_settings" -> when (payload.optString("action").lowercase()) {
+                "restart", "shutdown", "wifi_toggle" ->
+                    "Orion is about to change a critical device setting (${payload.optString("action")}). Allow this operation?"
+                else -> null
+            }
             "telegram_send", "sms", "notification_action" ->
                 "Orion is about to send or reply through $tool. Target/action: ${payload.optString("contact").ifBlank { payload.optString("action") }.take(120)}. Allow this external action?"
             "web_api" -> if (!payload.optString("method", "GET").equals("GET", true))
