@@ -958,6 +958,17 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun chatSystem(query: String? = null): String {
         val n = Prefs.userName(svc)
         val q = query.orEmpty()
+        // Refresh the local self-inventory before every model turn so new/removed tools and
+        // extensions are reflected immediately rather than only after a background scan.
+        runCatching { OrionCapabilityAwareness.scan(svc) }
+        val capabilityGap = if (q.isBlank()) "" else runCatching {
+            CapabilityGapPlanner.assess(
+                request = q,
+                registeredTools = ToolRegistry.all,
+                enabledSkills = SkillRegistry.list(svc).filter { it.enabled },
+                extensions = SelfExtendingExtensionStore(svc).all()
+            ).promptBlock()
+        }.getOrDefault("")
         // One executive context from OrionCentralBrain supplies identity, live registry,
         // skills, tasks, memory, Chronos awareness and the shared coordination contract to this
         // chat surface. Native tool definitions and dispatcher preflight remain authoritative.
@@ -976,7 +987,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "For phone actions (open apps, tap, send, search, inspect the screen, media control), call the exact registered native tool directly. Inspect its result and verify the outcome. Use the registered native tool directly. Android OS permissions and external authentication remain authoritative. Obtain owner approval at the exact operation boundary for private-data access, file writes/modifications, destructive deletion/wipe, and script/package installation or execution. Do not ask again after the exact operation was approved. Never emit an ACTION marker or route the request to a second planner. " +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
-            "\n\n" + ToolRegistry.promptSection(q, ToolGate.statusFor(svc)) + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCapabilityAwareness.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCoordinator.summary().let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc), svc)
+            "\n\n" + ToolRegistry.promptSection(q, ToolGate.statusFor(svc)) + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCapabilityAwareness.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + capabilityGap.let { if (it.isBlank()) "" else "\n\n" + it } + OrionCoordinator.summary().let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc), svc)
     }
 
     /**
