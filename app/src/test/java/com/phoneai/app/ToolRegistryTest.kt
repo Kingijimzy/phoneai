@@ -373,6 +373,19 @@ class ToolRegistryNativeSelectionTest {
     }
 
 
+    @Test fun validatesRequiredTypesAndUnknownArgumentsAtRuntime() {
+        val tool = ToolDefinition("demo", "demo {name:string, enabled:boolean, count?:integer}: test", "test", ToolAccess.WRITE)
+        assertNull(OrionToolContractCodec.validateArguments(tool, org.json.JSONObject().put("name", "ok").put("enabled", true)))
+        assertTrue(OrionToolContractCodec.validateArguments(tool, org.json.JSONObject().put("enabled", true))!!.contains("missing required"))
+        assertTrue(OrionToolContractCodec.validateArguments(tool, org.json.JSONObject().put("name", "ok").put("enabled", "true"))!!.contains("must be boolean"))
+        assertTrue(OrionToolContractCodec.validateArguments(tool, org.json.JSONObject().put("name", "ok").put("enabled", true).put("unexpected", "x"))!!.contains("unknown argument"))
+    }
+
+    @Test fun untypedJsonArgumentsRemainCompatibleWithExistingToolContracts() {
+        val tool = ToolDefinition("mcp_call", "mcp_call {name, arguments}: call a paired MCP tool", "call", ToolAccess.WRITE)
+        assertNull(OrionToolContractCodec.validateArguments(tool, org.json.JSONObject().put("name", "read_status").put("arguments", org.json.JSONObject().put("detail", "full"))))
+    }
+
     @Test fun derivesTypedSchemasFromToolSignatures() {
         val tool = ToolDefinition(
             "demo",
