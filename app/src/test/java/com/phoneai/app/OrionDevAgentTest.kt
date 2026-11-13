@@ -107,4 +107,48 @@ class OrionDevAgentTest {
 
         assertTrue(result.blocker.orEmpty().contains("invalid or missing workspace directory"))
     }
+
+    @Test fun devShellReportsBuildAndTestAsSeparateVerifiedOutcomes() {
+        val context = RuntimeEnvironment.getApplication()
+        val agent = OrionDevAgent(
+            context,
+            OrionPythonCapabilityExecutor(context, null),
+            shellRunner = { _, command, _ ->
+                if (command.contains("assembleDebug")) "exit=0\\nBUILD SUCCESSFUL"
+                else "exit=0\\nTests run: 24, failures: 0"
+            }
+        )
+
+        val build = agent.runShellCommand("./gradlew :app:assembleDebug", verification = "build", confirm = { true })
+        assertTrue(build.compilationAttempted)
+        assertTrue(build.compilationPassed)
+        assertFalse(build.testsAttempted)
+        assertTrue(build.statusLine().contains("compiled OK"))
+        assertTrue(build.summary.contains("Build command exited with status 0"))
+
+        val tests = agent.runShellCommand("./gradlew testDebugUnitTest", verification = "test", confirm = { true })
+        assertTrue(tests.testsAttempted)
+        assertTrue(tests.testsPassed)
+        assertFalse(tests.compilationAttempted)
+        assertTrue(tests.statusLine().contains("tests passed"))
+    }
+
+    @Test fun devShellRejectsFalseBuildClassificationAndReportsFailedBuild() {
+        val context = RuntimeEnvironment.getApplication()
+        var executed = false
+        val agent = OrionDevAgent(
+            context,
+            OrionPythonCapabilityExecutor(context, null),
+            shellRunner = { _, _, _ -> executed = true; "exit=1\\ncompile failed" }
+        )
+
+        val mismatch = agent.runShellCommand("python3 --version", verification = "build", confirm = { true })
+        assertFalse(executed)
+        assertTrue(mismatch.blocker.orEmpty().contains("does not match"))
+
+        val failed = agent.runShellCommand("./gradlew :app:assembleDebug", verification = "build", confirm = { true })
+        assertTrue(failed.compilationAttempted)
+        assertFalse(failed.compilationPassed)
+        assertTrue(failed.statusLine().contains("compilation failed"))
+    }
 }
