@@ -67,11 +67,11 @@ class SelfExtendingExtensionsTest {
         assertFalse(store.saveDraft(draft()))
         assertNotNull(SelfExtendingExtensionPolicy.validateSource("ruby", "puts 'hi'"))
         assertNotNull(SelfExtendingExtensionPolicy.validateSource("javascript", "function run(x) { return x; }"))
-        assertNull(SelfExtendingExtensionPolicy.validateSource("python_full", "import os\\nRESULT = os.listdir('/')"))
+        assertNull(SelfExtendingExtensionPolicy.validateSource("python_full", "import os\nRESULT = os.listdir('/')"))
     }
 
     @Test fun fullPythonExtensionCanBePersistedAsAGeneratedDraft() {
-        val source = "import os\\nRESULT = os.getcwd()"
+        val source = "import os\nRESULT = os.getcwd()"
         val extension = GeneratedExtension(
             id = "full_python_tool",
             displayName = "Full Python tool",
@@ -107,7 +107,7 @@ class SelfExtendingExtensionsTest {
         // verbatim in the serialized file.
         val registry = JSONObject(file.readText())
         val entries = registry.getJSONArray("extensions")
-        entries.getJSONObject(0).put("source", "def run(value):\\n    return 'tampered'")
+        entries.getJSONObject(0).put("source", "def run(value):\n    return 'tampered'")
         file.writeText(registry.toString())
 
         assertNull(store.enabled(extension.id))
