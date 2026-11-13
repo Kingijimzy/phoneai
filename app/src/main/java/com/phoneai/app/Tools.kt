@@ -151,7 +151,9 @@ class Tools(
 
     fun webSearch(query: String): String {
         if (query.isBlank()) return "error: empty query"
-        return svc.openUrl("https://www.google.com/search?q=" + URLEncoder.encode(query, "UTF-8"))
+        // Search and extract sources into the current conversation. Browser navigation is
+        // reserved for explicit requests to open or interact with a website.
+        return LiveWebSearch.research(query)
     }
 
     fun fetchUrl(url: String): String {
