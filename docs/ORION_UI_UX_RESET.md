@@ -111,3 +111,13 @@ The main chat should remain the primary workspace. Secondary features should not
 - Do not change tool execution semantics or approval policy as part of a styling-only commit.
 - Do not delete legacy history or user files during schema migration.
 - Do not claim physical-device acceptance based only on CI.
+
+## Implemented on the UI foundation branch
+
+- Archived transcript detail now uses the same Compose `ChatBubble` renderer as the live chat.
+- Archived transcript detail retrieves the session's persisted SQLite activity receipts by stable session ID.
+- Activity receipts render through a typed card using stored event type, status, summary, and sanitized evidence; they are not reconstructed from arbitrary marker text.
+- Repository coverage verifies that a session's activity receipts remain available after archiving and switching to a different active conversation.
+- Copy transcript uses actual line separators.
+
+These changes do not yet solve general file/artifact persistence, message block typing, or the legacy history-list UI. Those remain explicit follow-on work.
