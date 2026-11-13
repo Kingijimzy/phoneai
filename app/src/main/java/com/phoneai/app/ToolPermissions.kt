@@ -62,7 +62,7 @@ object ToolPermissions {
         .getString(LEVEL, "autonomous")?.lowercase()?.takeIf { it in ToolPermissionPolicy.levels } ?: "autonomous"
     internal fun applyLevel(c: Context, level: String) {
         val normalized = level.lowercase().takeIf { it in ToolPermissionPolicy.levels } ?: "autonomous"
-        val merged = ToolPermissionPolicy.preset(normalized).toMutableMap().apply { putAll(map(c)) }
+        val merged = ToolPermissionPolicy.preset(normalized)
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(LEVEL, normalized).putString(MODES, ToolPermissionPolicy.serializeOverrides(merged)).apply()
     }
