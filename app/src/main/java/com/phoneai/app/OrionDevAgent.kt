@@ -169,17 +169,24 @@ internal class OrionDevAgent(
         // Dev builds and tests belong in the same Alpine workspace used by CPython,
         // not Android's minimal /system/bin/sh environment.
         val result = shellRunner(context.applicationContext, "cd /workspace && $command", "linux")
-        if (result.startsWith("error:", ignoreCase = true)) {
+        val exitCode = shellExitCode(result)
+        if (result.startsWith("error:", ignoreCase = true) || exitCode == null || exitCode != 0) {
+            val reason = when {
+                result.startsWith("error:", ignoreCase = true) -> result
+                exitCode == null -> "Linux runtime returned no verifiable exit status. Raw result: ${result.take(2_000)}"
+                else -> "Linux command exited with status $exitCode. Raw result: ${result.take(6_000)}"
+            }
             return DevResult(
                 action = "run_shell_command",
-                blocker = result,
-                summary = "Linux development command was not executed successfully: $result"
+                blocker = reason,
+                evidence = result.take(8_000),
+                summary = "Linux development command did not pass execution verification."
             )
         }
         return DevResult(
             action = "run_shell_command",
             evidence = (warning ?: "") + result.take(8_000),
-            summary = "Linux development command executed. Exit status and output are evidence; command acceptance is not task completion."
+            summary = "Linux development command exited with status 0. This verifies process success only; it does not prove compilation, tests, or installation unless those were explicitly run."
         )
     }
 
@@ -232,6 +239,15 @@ internal class OrionDevAgent(
         if (files.any { it.endsWith(".js") || it.endsWith(".ts") || it.equals("package.json") }) return "JavaScript/TypeScript"
         if (files.any { it.equals("AndroidManifest.xml") }) return "Android"
         return "unknown"
+    }
+
+    internal fun shellExitCode(result: String): Int? {
+        val firstLine = result.lineSequence().firstOrNull()?.trim().orEmpty()
+        return when {
+            firstLine.startsWith("exit=") -> firstLine.removePrefix("exit=").takeWhile { it == '-' || it.isDigit() }.toIntOrNull()
+            firstLine.startsWith("EXIT ") -> Regex("^EXIT\\s+(-?\\d+)\\b").find(firstLine)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            else -> null
+        }
     }
 
     companion object {
