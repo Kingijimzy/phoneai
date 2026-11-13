@@ -950,7 +950,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val rewound = TranscriptEditPolicy.rewind(transcript.toList(), prompt) ?: return false
         transcript.clear()
         transcript.addAll(rewound)
-        ChatHistoryStore.save(this, transcript.toList())
+        ChatHistoryStore.saveStructured(this, asStructuredLines(transcript))
         agent.reset()
         agent.restoreConversationContext(transcript.toList())
         mainChatListener?.onTranscriptRestored(transcript.toList())
@@ -1195,7 +1195,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             }
             transcript.clear()
             transcript.addAll(messages.filter { it.first == "me" || it.first == "ai" }.takeLast(80))
-            ChatHistoryStore.restoreActive(this, transcript)
+            ChatHistoryStore.saveStructured(this, asStructuredLines(transcript))
             agent.reset()
             agent.restoreConversationContext(transcript.toList())
             mainChatListener?.onTranscriptRestored(transcript.toList())
@@ -1229,7 +1229,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 mainChatListener?.onMessage("ai", "Stop or finish the current task before starting a new chat.")
                 return@post
             }
-            ChatHistoryStore.archiveAndClear(this, transcript.toList())
+            ChatHistoryStore.archiveAndClearStructured(this, asStructuredLines(transcript))
             transcript.clear()
             agent.reset()
             mainChatListener?.onTranscriptRestored(emptyList())
@@ -1266,7 +1266,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         main.post {
             if (!running) {
                 agent.reset()
-                ChatHistoryStore.archiveAndClear(this, transcript)
+                ChatHistoryStore.archiveAndClearStructured(this, asStructuredLines(transcript))
                 transcript.clear()
                 mainChatListener?.onMessage("ai", "New conversation. What are we working on?")
             }
@@ -1340,9 +1340,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         scheduleRuntimeDrain()
     }
 
+    private fun asStructuredLines(lines: List<Pair<String, String>>): List<OrionChatLine> =
+        lines.mapIndexed { index, pair -> OrionChatLine(index.toLong(), pair.first, pair.second) }
+
     private fun appendTranscript(kind: String, text: String) {
         transcript.add(Pair(kind, text))
-        if (kind == "me" || kind == "ai") ChatHistoryStore.save(this, transcript)
+        if (kind == "me" || kind == "ai") ChatHistoryStore.saveStructured(this, asStructuredLines(transcript))
     }
 
     private fun addLine(kind: String, text: String) {
@@ -1761,7 +1764,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun newChat() {
         agent.reset()
-        ChatHistoryStore.archiveAndClear(this, transcript)
+        ChatHistoryStore.archiveAndClearStructured(this, asStructuredLines(transcript))
         transcript.clear()
         hideThinkingIndicator()
         logBox?.removeAllViews()

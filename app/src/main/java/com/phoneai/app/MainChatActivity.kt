@@ -1469,7 +1469,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                         val service = PhoneAiService.instance
                         if (service != null) service.startNewChat()
                         else {
-                            ChatHistoryStore.archiveAndClear(this@MainChatActivity, composeLines.map { it.kind to it.text })
+                            ChatHistoryStore.archiveAndClearStructured(this@MainChatActivity, composeLines.toList())
                             composeLines.clear()
                             composeAttachments.value = emptyList()
                             Toast.makeText(this@MainChatActivity, "New chat ready", Toast.LENGTH_SHORT).show()
