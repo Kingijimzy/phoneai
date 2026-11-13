@@ -83,7 +83,19 @@ internal object OrionChatAttachmentStore {
         val safeName = displayName.substringAfterLast('/').substringAfterLast('\\')
             .replace(Regex("[^A-Za-z0-9._ -]"), "_").trim().take(100).ifBlank { "attachment" }
         val extension = safeName.substringAfterLast('.', "").lowercase().takeIf { it.isNotBlank() }
-        val inferredMime = extension?.let { android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(it) }
+        val knownMime = mapOf(
+            "txt" to "text/plain", "md" to "text/markdown", "csv" to "text/csv",
+            "json" to "application/json", "xml" to "application/xml",
+            "pdf" to "application/pdf", "png" to "image/png", "jpg" to "image/jpeg",
+            "jpeg" to "image/jpeg", "webp" to "image/webp", "gif" to "image/gif",
+            "mp3" to "audio/mpeg", "wav" to "audio/wav", "mp4" to "video/mp4",
+            "zip" to "application/zip", "docx" to "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "xlsx" to "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "pptx" to "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        )
+        val inferredMime = extension?.let {
+            knownMime[it] ?: android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(it)
+        }
         val resolverMime = resolver.getType(uri)?.substringBefore(';')
         val mime = when {
             uri.scheme == "file" -> inferredMime ?: resolverMime ?: "application/octet-stream"
