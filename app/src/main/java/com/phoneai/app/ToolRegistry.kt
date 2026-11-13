@@ -367,6 +367,8 @@ internal object ToolRegistry {
         fun add(names: Iterable<String>) {
             names.forEach { if (selected.size < limit && it in byName) selected += it }
         }
+        // Universal discovery remains callable even when a specific tool is outside the bounded window.
+        add(listOf("capability_search"))
         // Ultron coordination and execution capabilities share one model-facing tool set.
         add(listOf("ask_user"))
         add(coordinatorNativeTools)
