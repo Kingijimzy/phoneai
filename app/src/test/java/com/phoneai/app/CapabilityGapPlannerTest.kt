@@ -25,6 +25,7 @@ class CapabilityGapPlannerTest {
         assertEquals(CapabilityGapRoute.MODEL_DECIDES, unrelated.route)
         assertTrue(news.reason.contains("No lexical similarity score"))
         assertTrue(news.nextActions.any { it.contains("semantic fit") || it.contains("objective-level") })
+        assertTrue(news.nextActions.any { it.contains("capability_search") && it.contains("capability_load") })
     }
 
     @Test fun capabilityGapContextRequiresReuseAndVerifiedExtensionLifecycle() {
