@@ -189,8 +189,8 @@ internal object OrionObjectiveGraph {
         val receipt = ChatHistoryStore.objectiveEvidence(context, resolved).firstOrNull {
             it.id == evidenceId && it.outcome == "success"
         } ?: return false
-        val active = ChatHistoryStore.activeSessionId(context)
-        if (active != null && receipt.sessionId != active) return false
+        val active = ChatHistoryStore.activeSessionId(context) ?: return false
+        if (receipt.sessionId != active) return false
         return save(context, updateStatusSoft(graph, resolved, Status.COMPLETE, receipt.id))
     }
 
