@@ -768,7 +768,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 OrionObjectiveGraph.recordExecution(svc, dispatchGraphStep, tool, verifiedResult)
             }.getOrNull()
             if (trustedVerification && objectiveReceipt.isNullOrBlank()) {
-                verifiedResult += "\\nOBJECTIVE GRAPH WARNING: the action was verified, but its objective evidence receipt could not be persisted. The objective remains incomplete."
+                verifiedResult += "\nOBJECTIVE GRAPH WARNING: the action was verified, but its objective evidence receipt could not be persisted. The objective remains incomplete."
             }
         }
         if (trustedVerification) taskProofs.recordVerified(tool, verifiedResult)
