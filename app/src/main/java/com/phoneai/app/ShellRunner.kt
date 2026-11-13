@@ -234,18 +234,19 @@ object ShellRunner {
         val reportedResult = if (warning == null) verifiedResult else warning + verifiedResult
         AgentPolicy.log(c.applicationContext, "shell:$where", command, null, reportedResult)
         // Dedicated shell command record with secret redaction for independent audit.
-        val exitCode = when {
-            verifiedResult.startsWith("EXIT 0 · SUCCESS\n") -> 0
-            verifiedResult.startsWith("exit=") -> verifiedResult.lineSequence().first()
-                .removePrefix("exit=").takeWhile { it == '-' || it.isDigit() }.toIntOrNull()
-            verifiedResult.startsWith("error: EXIT ") -> {
-                val tail = verifiedResult.substringAfter("error: EXIT ").takeWhile { it == '-' || it.isDigit() }
-                tail.toIntOrNull()
-            }
-            else -> null
-        }
+        val exitCode = exitCodeFromResult(verifiedResult)
         ShellCommandStore.record(c.applicationContext, ShellExecutionRouting.backend(where).name.lowercase(), command, exitCode, reportedResult, exitCode == 0)
         return reportedResult
+    }
+
+    /** Parse only backend-owned exit receipts, never arbitrary command output. */
+    internal fun exitCodeFromResult(result: String): Int? = when {
+        result.startsWith("EXIT 0 · SUCCESS\\n") -> 0
+        result.startsWith("exit=") -> result.lineSequence().first()
+            .removePrefix("exit=").takeWhile { it == '-' || it.isDigit() }.toIntOrNull()
+        result.startsWith("error: EXIT ") -> result.substringAfter("error: EXIT ")
+            .takeWhile { it == '-' || it.isDigit() }.toIntOrNull()
+        else -> null
     }
 
     fun writeFile(c: Context, rel: String, content: String): String {
