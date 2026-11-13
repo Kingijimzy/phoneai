@@ -114,8 +114,8 @@ class OrionDevAgentTest {
             context,
             OrionPythonCapabilityExecutor(context, null),
             shellRunner = { _, command, _ ->
-                if (command.contains("assembleDebug")) "exit=0\\nBUILD SUCCESSFUL"
-                else "exit=0\\nTests run: 24, failures: 0"
+                if (command.contains("assembleDebug")) "exit=0\nBUILD SUCCESSFUL"
+                else "exit=0\nTests run: 24, failures: 0"
             }
         )
 
@@ -139,7 +139,7 @@ class OrionDevAgentTest {
         val agent = OrionDevAgent(
             context,
             OrionPythonCapabilityExecutor(context, null),
-            shellRunner = { _, _, _ -> executed = true; "exit=1\\ncompile failed" }
+            shellRunner = { _, _, _ -> executed = true; "exit=1\ncompile failed" }
         )
 
         val mismatch = agent.runShellCommand("python3 --version", verification = "build", confirm = { true })
