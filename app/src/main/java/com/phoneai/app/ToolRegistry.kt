@@ -372,12 +372,11 @@ internal object ToolRegistry {
         // Keep remote capability discovery callable for ordinary-language requests. The model
         // decides whether to inspect the configured endpoint; runtime scope checks still gate use.
         add(mcpNativeTools)
-        if (Regex("\\b(app|phone|screen|tap|click|swipe|open|launch|send|message|wifi|bluetooth|notification|battery|screenshot)\\b").containsMatchIn(query)) {
-            add(phoneNativeTools)
-        }
-        if (Regex("\\b(code|python|project|repo|build|test|shell|script|file|program|developer|kotlin|javascript|android)\\b").containsMatchIn(query)) {
-            add(developerNativeTools)
-        }
+        // Expose the complete core phone and developer capability families on every turn.
+        // The model chooses the operation; runtime permissions, access classes and executor
+        // preflight remain authoritative. Never hide a callable tool based on user keywords.
+        add(phoneNativeTools)
+        add(developerNativeTools)
         if (Regex("\\b(?:routine|teach\\s+mode|recorded\\s+gesture)\\b").containsMatchIn(query)) {
             add(phoneNativeTools.filter { it == "routine_run" || it == "routine_resume" })
         }
