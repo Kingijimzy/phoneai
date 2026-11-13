@@ -15,7 +15,9 @@ Orion bundles CPython 3.11 through Chaquopy. Direct `python_exec` scripts run in
 - `asyncio`: bounded `run` / `sleep`; no subprocess, event-loop policy, task spawning, or arbitrary await syntax.
 - `urllib.parse`: URL parsing and encoding only. `urllib.request`, raw sockets and arbitrary imports remain unavailable.
 
-The interpreter bounds source size, AST nodes, loops, range length, output, sequence growth, integer size and exponentiation. Generated extensions continue to run without the `phone` facade.
+The restricted `python` generated-extension runtime uses the same bounded interpreter and does not expose the `phone` facade.
+
+Generated extensions may also select `runtime=python_full`. Those extensions run through the full CPython workspace runtime (Alpine/PRoot, with the bundled Chaquopy CPython fallback), receive the `INPUT` JSON object and return their result through `RESULT`. They can use normal Python imports, standard-library facilities, filesystem and network APIs available to that CPython process. This is full interpreter execution, not an OS-isolated container: PRoot runs as the Android app UID, and Android's app sandbox and granted platform permissions remain authoritative.
 
 ### Scoped files
 
