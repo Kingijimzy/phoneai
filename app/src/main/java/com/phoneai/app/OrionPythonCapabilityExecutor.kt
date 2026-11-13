@@ -84,7 +84,7 @@ internal class OrionPythonCapabilityExecutor(
     private fun createDraft(args: JSONObject): String {
         val id = args.optString("id").trim()
         val name = args.optString("name").trim()
-        val runtime = args.optString("runtime", "python_full").trim().lowercase()
+        val runtime = args.optString("runtime", "python").trim().lowercase()
         val source = args.optString("source")
         val invalid = SelfExtendingExtensionPolicy.validateIdentity(id, name)
             ?: SelfExtendingExtensionPolicy.validateSource(runtime, source)
@@ -165,7 +165,11 @@ internal class OrionPythonCapabilityExecutor(
             return "error: sandbox tests passed but their durable verification receipt could not be saved; extension remains disabled"
         }
         val ownerAutoActivation = ExtensionAutonomySettings.autoActivationEnabled(context)
-        val autoActivated = ownerAutoActivation && activateVerifiedVersion(extension, report, approved = true)
+        // Only the capability-free restricted interpreter may auto-promote. Full CPython runs
+        // with the Android app UID, so it always needs a separate owner-confirmed activation.
+        val safeRuntimeAutoActivation = ownerAutoActivation && extension.runtime == "python"
+        val autoActivated = safeRuntimeAutoActivation &&
+            activateVerifiedVersion(extension, report, approved = false)
         AgentPolicy.log(
             context, "extension:$id", "auto-activate", autoActivated,
             if (autoActivated) "owner pre-approval promoted exact-hash sandbox-tested extension"
@@ -177,7 +181,8 @@ internal class OrionPythonCapabilityExecutor(
             "$testLabel PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
         } else {
             "$testLabel PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} " +
-                if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use explicit extension_enable approval."
+                if (extension.runtime == "python_full") "Full CPython extensions never auto-activate: request explicit owner approval with extension_enable."
+                else if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use explicit extension_enable approval."
                 else "Next: extension_enable (requires an explicit extension_enable tool request)."
         }
     }
