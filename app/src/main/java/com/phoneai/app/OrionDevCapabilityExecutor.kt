@@ -66,7 +66,7 @@ internal class OrionDevCapabilityExecutor(
             "dev_shell" -> {
                 val command = args.optString("command")
                 if (command.isBlank()) "error: command is required"
-                else devAgent.runShellCommand(command, stopped).let { r ->
+                else devAgent.runShellCommand(command, confirm, stopped).let { r ->
                     if (!r.blocker.isNullOrBlank()) "error: ${r.blocker}" else r.evidence
                 }
             }
