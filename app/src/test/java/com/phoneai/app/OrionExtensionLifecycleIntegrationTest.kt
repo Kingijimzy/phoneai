@@ -213,14 +213,35 @@ class OrionExtensionLifecycleIntegrationTest {
             .put("id", id).put("name", "Full Python tool").put("runtime", "python_full")
             .put("source", source).put("description", "Requires full CPython"), confirm, stopped)
         assertTrue(created.orEmpty().contains("Saved disabled extension draft"))
+        val approvalRequests = mutableListOf<String>()
         val tested = guarded.execute("extension_test", JSONObject().put("id", id).put("tests", JSONArray().put(
             JSONObject().put("input", JSONObject()).put("expect", 4)
-        )), confirm, stopped)
+        )), { question -> approvalRequests += question; true }, stopped)
+        assertTrue(approvalRequests.single().contains("Android app UID"))
         assertTrue(tested.orEmpty().contains("FULL CPYTHON TEST PASSED"))
         assertTrue(tested.orEmpty().contains("never auto-activate") || tested.orEmpty().contains("explicit owner approval"))
         assertNull(SelfExtendingExtensionStore(context).enabled(id))
         val enabled = guarded.execute("extension_enable", JSONObject().put("id", id), confirm, stopped)
         assertTrue(enabled.orEmpty().contains("is enabled"))
+        assertNotNull(SelfExtendingExtensionStore(context).enabled(id))
+    }
+
+    @Test
+    fun restrictedPythonSelfCreationAndTestsDoNotRequireRepeatedOwnerPrompts() {
+        ExtensionAutonomySettings.setAutoActivationEnabled(context, true)
+        val id = "safe_format_tool"
+        val source = "RESULT = INPUT.get(\"value\", \"\").strip().lower()"
+        val created = runTool("extension_create", JSONObject()
+            .put("id", id).put("name", "Safe format tool").put("source", source)
+            .put("description", "Normalizes a short text value"))
+        assertTrue(created.contains("Saved disabled extension draft"))
+        val prompts = mutableListOf<String>()
+        val tested = executor.execute("extension_test", JSONObject().put("id", id).put("tests", JSONArray().put(
+            JSONObject().put("input", JSONObject().put("value", " HELLO ")).put("expect", "hello")
+        )), { question -> prompts += question; false }, stopped)
+        assertTrue(tested.orEmpty().contains("SANDBOX TEST PASSED"))
+        assertTrue(tested.orEmpty().contains("AUTO-ACTIVATED"))
+        assertTrue(prompts.isEmpty())
         assertNotNull(SelfExtendingExtensionStore(context).enabled(id))
     }
 
