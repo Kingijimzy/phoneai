@@ -26,8 +26,12 @@ internal object OrionMasterControl {
             .putLong(KEY_CHANGED_AT, System.currentTimeMillis())
             .commit()
         if (!saved) return false
-        OrionRuntime(app).start()
+        val runtime = OrionRuntime(app)
+        runtime.start()
+        runCatching { OrionUnifiedExecutionCoordinator.reconcileAndSchedule(app) }
         OrionProactiveWork.refresh(app)
+        OrionDeviceHealthWork.ensureScheduled(app)
+        if (runtime.pendingItems().isNotEmpty()) OrionRecoveryWork.schedule(app)
         runCatching { PhoneAiService.instance?.startOrionAfterMasterStart() }
         return true
     }
@@ -43,12 +47,14 @@ internal object OrionMasterControl {
         if (!saved) return false
 
         // Stop the central brain and every independently running Orion automation.
+        runCatching { OrionUnifiedExecutionCoordinator.cancelAll(app, "orion_master_shutdown") }
         OrionRuntime(app).stop()
         runCatching {
             val work = WorkManager.getInstance(app)
             work.cancelUniqueWork("orion_stage6_proactive_heartbeat")
             work.cancelUniqueWork("orion_durable_runtime_recovery")
         }
+        runCatching { OrionDeviceHealthWork.ensureScheduled(app) }
         runCatching { PhoneAiService.instance?.stopOrionForMasterShutdown() }
         runCatching { TelegramListenerService.stop(app) }
         runCatching { WatchService.stop(app) }

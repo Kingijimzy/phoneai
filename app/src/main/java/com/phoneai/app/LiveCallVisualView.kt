@@ -138,7 +138,8 @@ class LiveCallVisualView(context: Context) : View(context) {
         val h = height.toFloat()
         if (w <= 0f || h <= 0f) return
         val now = System.currentTimeMillis()
-        val t = if (reducedMotion) 0f else now / 1000f
+        // Use a monotonic, session-relative clock; epoch seconds lose sub-minute Float precision.
+        val t = if (reducedMotion) 0f else SystemClock.elapsedRealtime() / 1000f
         updatePowerPolicy()
         paint.color = android.graphics.Color.BLACK
         canvas.drawColor(android.graphics.Color.BLACK)
@@ -146,8 +147,14 @@ class LiveCallVisualView(context: Context) : View(context) {
             Style.DOT_MATRIX -> drawDots(canvas, w, h, t, now)
             Style.EYES -> drawEyes(canvas, w, h, t, now)
             Style.ORB -> {
-                val lvl = if (mode == OrbView.Mode.SPEAKING) maxOf(speechAmplitude, wordPulse * .5f) else micLevel
-                orb.draw(canvas, w / 2f, h / 2f, minOf(w, h) * .34f, t, lvl, mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING)
+                orb.draw(
+                    canvas, w / 2f, h / 2f, minOf(w, h) * .34f, t,
+                    level = micLevel,
+                    busy = mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING,
+                    mode = mode,
+                    speechAmplitude = speechAmplitude,
+                    wordPulse = wordPulse
+                )
                 if (!reducedMotion) postInvalidateOnAnimation()
             }
         }

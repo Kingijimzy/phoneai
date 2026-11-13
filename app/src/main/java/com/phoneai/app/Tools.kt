@@ -68,9 +68,8 @@ class Tools(
         }
         roots.forEach { walk(it, 0) }
         val found = roots.flatMap { it.findAccessibilityNodeInfosByText(text) } + matches
-        val n = found.firstOrNull { it.isVisibleToUser && (it.text?.toString()?.trim()?.lowercase() == query) }
-            ?: found.firstOrNull { it.isVisibleToUser }
-            ?: found.firstOrNull()
+        val n = found.firstOrNull { it.isVisibleToUser && !it.isPassword && (it.text?.toString()?.trim()?.lowercase() == query) }
+            ?: found.firstOrNull { it.isVisibleToUser && !it.isPassword }
             ?: run {
                 val seen = ArrayList<String>()
                 fun labels(node: AccessibilityNodeInfo?, depth: Int) {
@@ -523,8 +522,13 @@ class Tools(
                 if (hour !in 0..23 || minute !in 0..59) return "error: alarm time is outside 24-hour range"
                 val alarm = Intent(AlarmClock.ACTION_SET_ALARM).putExtra(AlarmClock.EXTRA_HOUR, hour)
                     .putExtra(AlarmClock.EXTRA_MINUTES, minute).putExtra(AlarmClock.EXTRA_MESSAGE, uriText)
-                return try { alarm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); svc.startActivity(alarm); "alarm request handed to the clock app; verify it was saved" }
-                    catch (e: Exception) { "error: clock app could not set alarm (" + e.javaClass.simpleName + ")" }
+                    // Ask compatible clock apps to create the alarm without presenting their setup UI.
+                    .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+                return try {
+                    alarm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    svc.startActivity(alarm)
+                    "alarm request sent to the clock app with skip-UI enabled; Android/OEM clock support varies, so do not claim it was saved until verified"
+                } catch (e: Exception) { "error: clock app could not accept the alarm request (" + e.javaClass.simpleName + ")" }
             }
             "timer" -> {
                 val seconds = query.toIntOrNull() ?: return "error: timer route needs duration in seconds"
@@ -588,6 +592,28 @@ class Tools(
         } catch (e: Exception) {
             "error: could not launch deep link (" + (e.message ?: e.javaClass.simpleName) + ")"
         }
+    }
+
+    /** Opens a WhatsApp chat with a prefilled message. Sending remains an explicit in-app action. */
+    fun whatsappCompose(phoneRaw: String, message: String): String {
+        val digits = WhatsAppComposePolicy.normalizePhone(phoneRaw)
+            ?: return "error: phone must be an international number in E.164 format, for example +2348012345678"
+        val text = WhatsAppComposePolicy.validateMessage(message)
+            ?: return "error: WhatsApp prefilled message must contain 1..1000 characters"
+        val uri = Uri.parse("https://wa.me/" + digits + "?text=" + Uri.encode(text))
+        val candidates = listOf("com.whatsapp", "com.whatsapp.w4b")
+        for (packageName in candidates) {
+            try {
+                svc.startActivity(Intent(Intent.ACTION_VIEW, uri).setPackage(packageName)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return "WhatsApp chat opened for +$digits with the message prefilled. It has NOT been sent; review and tap Send in WhatsApp."
+            } catch (_: android.content.ActivityNotFoundException) {
+                // Try the next official WhatsApp package.
+            } catch (e: Exception) {
+                return "error: WhatsApp handoff failed (" + e.javaClass.simpleName + ")"
+            }
+        }
+        return "error: WhatsApp or WhatsApp Business is not installed or cannot handle the chat link"
     }
 
     fun resolveContact(name: String): String {

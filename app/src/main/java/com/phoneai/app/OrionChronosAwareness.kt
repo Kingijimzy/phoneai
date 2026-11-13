@@ -28,6 +28,7 @@ internal object OrionChronosAwareness {
         val chronos = OrionSensorConsent.read(app, OrionSensorScope.CHRONOS_AWARENESS, now)
         if (!appUsage.active() || !chronos.active() || chronos.foregroundOnly) {
             clear(app)
+            HabitRoutineEngine.clear(app)
             return false
         }
 
@@ -48,11 +49,13 @@ internal object OrionChronosAwareness {
             previousStarted
         } else now
 
-        return prefs.edit()
+        val saved = prefs.edit()
             .putString(KEY_CATEGORY, category)
             .putLong(KEY_FOCUS_STARTED, startedAt)
             .putLong(KEY_LAST_EVENT, now)
             .commit()
+        if (saved) HabitRoutineEngine.record(app, category, now)
+        return saved
     }
 
     @Synchronized fun summary(context: Context, now: Long = System.currentTimeMillis()): String {
@@ -61,6 +64,7 @@ internal object OrionChronosAwareness {
         val chronos = OrionSensorConsent.read(app, OrionSensorScope.CHRONOS_AWARENESS, now)
         if (!appUsage.active() || !chronos.active() || chronos.foregroundOnly) {
             clear(app)
+            HabitRoutineEngine.clear(app)
             return ""
         }
         val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -85,7 +89,7 @@ internal object OrionChronosAwareness {
         val app = context.applicationContext
         if (!AgentPolicy.enabled(app, "orion_core") || !AgentPolicy.enabled(app, "proactive")) return null
         val summary = summary(app, now)
-        if (summary.isBlank()) return null
+        if (summary.isBlank()) return HabitRoutineEngine.suggestion(app, now)
         val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val last = prefs.getLong(KEY_LAST_SUGGESTION, 0L)
         if (last > now || (last > 0L && now - last < SUGGESTION_COOLDOWN_MS)) return null
@@ -98,10 +102,12 @@ internal object OrionChronosAwareness {
             "productivity" -> 90L
             "communication" -> 75L
             "shopping" -> 40L
-            else -> return null
+            else -> 0L
         }
-        if (minutes < threshold) return null
-        return "Chronos observed about $minutes minutes in the broad $category app category. Would a short break or a switch to your current priority be useful? This is only a suggestion; no app, setting, or task was changed."
+        if (threshold > 0L && minutes >= threshold) {
+            return "Chronos observed about $minutes minutes in the broad $category app category. Would a short break or a switch to your current priority be useful? This is only a suggestion; no app, setting, or task was changed."
+        }
+        return HabitRoutineEngine.suggestion(app, now)
     }
 
     @Synchronized fun markSuggestionShown(context: Context, now: Long = System.currentTimeMillis()): Boolean =

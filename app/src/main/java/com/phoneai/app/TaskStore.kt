@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.content.Context
+import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -22,14 +23,17 @@ object TaskStore {
     private val lock = Any()
     private var cache: MutableList<OrionTask>? = null
     private fun file(c: Context) = File(c.filesDir, "orion_tasks.json")
+    private fun atomic(c: Context) = AtomicFile(file(c))
 
     private fun load(c: Context): MutableList<OrionTask> {
         cache?.let { return it }
         val tasks = mutableListOf<OrionTask>()
         try {
-            val f = file(c)
-            if (f.exists()) {
-                val arr = JSONArray(f.readText())
+            // AtomicFile.openRead() also restores a backup after an interrupted write.
+            val arr = runCatching {
+                JSONArray(atomic(c).openRead().bufferedReader().use { it.readText() })
+            }.getOrNull()
+            if (arr != null) {
                 for (i in 0 until arr.length()) {
                     val o = arr.getJSONObject(i)
                     tasks.add(
@@ -85,19 +89,15 @@ object TaskStore {
                     .put("resultSummary", t.resultSummary.take(1200))
             )
         }
-        val target = file(c)
-        val temp = File(c.filesDir, "orion_tasks.json.tmp")
+        val target = atomic(c)
+        var stream: java.io.FileOutputStream? = null
         return try {
-            temp.writeText(arr.toString())
-            if (temp.renameTo(target)) {
-                true
-            } else {
-                target.writeText(arr.toString())
-                temp.delete()
-                true
-            }
+            stream = target.startWrite()
+            stream.write(arr.toString().toByteArray(Charsets.UTF_8))
+            target.finishWrite(stream)
+            true
         } catch (_: Exception) {
-            temp.delete()
+            stream?.let { runCatching { target.failWrite(it) } }
             false
         }
     }

@@ -1,8 +1,8 @@
 package com.phoneai.app
 
 /**
- * Local capability/perception audit. This reports what is actually available; it never
- * grants permissions, enables packs, or treats a model's request as user consent.
+ * Local capability/perception audit. Reports live availability; it never grants permissions,
+ * enables packs, or treats a model request as owner consent.
  */
 internal object OrionCapabilityAudit {
     enum class Status { READY, LIMITED, BLOCKED }
@@ -14,6 +14,7 @@ internal object OrionCapabilityAudit {
         val enabledPacks: Int,
         val accessibilityReady: Boolean,
         val screenPerceptionReady: Boolean,
+        val shizukuReady: Boolean,
         val limitations: List<String>
     )
 
@@ -22,7 +23,8 @@ internal object OrionCapabilityAudit {
         implementedPacks: Int,
         enabledPacks: Int,
         accessibilityReady: Boolean,
-        screenPerceptionReady: Boolean
+        screenPerceptionReady: Boolean,
+        shizukuReady: Boolean = false
     ): Report {
         val limitations = mutableListOf<String>()
         if (registeredTools <= 0) limitations += "no_registered_tools"
@@ -43,6 +45,7 @@ internal object OrionCapabilityAudit {
             enabledPacks = enabledPacks.coerceIn(0, implementedPacks.coerceAtLeast(0)),
             accessibilityReady = accessibilityReady,
             screenPerceptionReady = screenPerceptionReady,
+            shizukuReady = shizukuReady,
             limitations = limitations.distinct()
         )
     }

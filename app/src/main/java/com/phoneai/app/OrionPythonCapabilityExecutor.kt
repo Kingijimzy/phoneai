@@ -39,6 +39,8 @@ internal class OrionPythonCapabilityExecutor(
             }
             "workspace_list" -> OrionPythonWorkspace(context).list()
             "extension_list" -> listExtensions()
+            "extension_policy" -> extensionPolicy()
+            "extension_auto_activation" -> setExtensionAutoActivation(args)
             "extension_history" -> extensionHistory(args)
             "extension_rollback" -> rollbackExtension(args)
             "extension_create" -> createDraft(args)
@@ -49,6 +51,22 @@ internal class OrionPythonCapabilityExecutor(
             "extension_disable" -> disable(args)
             else -> null
         }
+    }
+
+    private fun extensionPolicy(): String =
+        "Generated-extension auto-activation is " +
+            (if (ExtensionAutonomySettings.autoActivationEnabled(context)) "ON" else "OFF") +
+            ". Activation still requires passing tests for the exact source hash; generated code receives no Android, filesystem, network, or shell capabilities."
+
+    private fun setExtensionAutoActivation(args: JSONObject): String {
+        val rawEnabled = args.opt("enabled")
+        if (rawEnabled !is Boolean) {
+            return "error: enabled must be a JSON boolean (true or false)"
+        }
+        val enabled = rawEnabled
+        ExtensionAutonomySettings.setAutoActivationEnabled(context, enabled)
+        AgentPolicy.log(context, "extension-policy", "auto-activation", true, if (enabled) "enabled by owner" else "disabled by owner")
+        return extensionPolicy()
     }
 
     private fun listExtensions(): String = try {
@@ -126,7 +144,7 @@ internal class OrionPythonCapabilityExecutor(
         if (!testReceipts.record(id, report)) {
             return "error: sandbox tests passed but their durable verification receipt could not be saved; extension remains disabled"
         }
-        val ownerAutoActivation = true
+        val ownerAutoActivation = ExtensionAutonomySettings.autoActivationEnabled(context)
         val autoActivated = ownerAutoActivation && activateVerifiedVersion(extension, report, approved = true)
         AgentPolicy.log(
             context, "extension:$id", "auto-activate", autoActivated,
@@ -219,7 +237,7 @@ internal class OrionPythonCapabilityExecutor(
         fun requiresExplicitApproval(tool: String): Boolean = false
 
         private val supportedTools = setOf(
-            "python_exec", "workspace_list", "extension_list", "extension_create", "extension_update", "extension_test",
+            "python_exec", "workspace_list", "extension_list", "extension_policy", "extension_auto_activation", "extension_create", "extension_update", "extension_test",
             "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback"
         )
         fun supports(tool: String): Boolean = tool in supportedTools

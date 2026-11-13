@@ -11,13 +11,13 @@ import org.json.JSONObject
  */
 internal object OrionDeviceCapabilityExecutor {
     private val supportedTools = setOf(
-        "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications",
+        "lookup_app", "open_app", "system_intent", "open_deep_link", "whatsapp_compose", "read_notifications",
         "media_status", "media_control", "play_media", "chrome_search", "resolve_contact", "list_apps",
         "list_app_deeplinks", "read_screen", "validate_action", "verify_action", "verify_send",
         "click", "click_text", "point_at", "sketch_screen", "wait_for", "tap", "long_press", "swipe", "swipe_path",
         "scroll", "type", "key", "look", "play", "record_screen",
         "chronos_awareness", "calendar_events", "voice_speak", "voice_listen",
-        "routine_run", "routine_resume"
+        "routine_run", "routine_resume", "device_operation"
     )
 
     fun supports(tool: String): Boolean = tool in supportedTools
@@ -40,7 +40,9 @@ internal object OrionDeviceCapabilityExecutor {
         "lookup_app" -> tools.lookupApp(args.optString("name"))
         "open_app" -> service.openApp(args.optString("name"))
         "system_intent" -> tools.systemIntent(args.optString("action"), args.optString("query"), args.optString("url"))
+        "device_operation" -> DeviceOperationRouter.execute(service, args.optString("operation"), args.optString("value"))
         "open_deep_link" -> tools.openDeepLink(args.optString("uri"))
+        "whatsapp_compose" -> tools.whatsappCompose(args.optString("phone"), args.optString("message"))
         "read_notifications" -> OrionNotificationListener.readSafeNotifications()
         "media_status" -> OrionNotificationListener.mediaStatus()
         "media_control" -> OrionNotificationListener.controlMedia(args.optString("action"))
@@ -55,39 +57,50 @@ internal object OrionDeviceCapabilityExecutor {
         "verify_action" -> verifyAction(args)
         "verify_send" -> verifySend(args)
         "click" -> {
+            val mismatch = expectedPackageError(args, service)
             val id = args.optInt("id", -1)
-            if (id < 0 || service.nodeInfo(id) == null) "error: target ID is stale or missing. Run read_screen and choose a current ID."
+            if (mismatch != null) mismatch
+            else if (id < 0 || service.nodeInfo(id) == null) "error: target ID is stale or missing. Run read_screen and choose a current ID."
             else service.clickId(id)
         }
-        "click_text" -> tools.clickText(args.optString("text"))
-        "point_at" -> service.pointAt(args.optInt("id", -1), args.optLong("duration_ms", 2400L))
-        "sketch_screen" -> service.sketchScreen(
-            id = args.optInt("id", -1),
-            shape = args.optString("shape", "circle"),
-            labelText = args.optString("label"),
-            durationMs = args.optLong("duration_ms", 4200L),
-            x = args.optInt("x", -1),
-            y = args.optInt("y", -1),
-            radius = args.optInt("radius", 48)
-        )
+        "click_text" -> expectedPackageError(args, service) ?: tools.clickText(args.optString("text"))
+        "point_at" -> expectedPackageError(args, service) ?: service.pointAt(args.optInt("id", -1), args.optLong("duration_ms", 2400L))
+        "sketch_screen" -> {
+            val mismatch = expectedPackageError(args, service)
+            if (mismatch != null) mismatch else service.sketchScreen(
+                id = args.optInt("id", -1),
+                shape = args.optString("shape", "circle"),
+                labelText = args.optString("label"),
+                durationMs = args.optLong("duration_ms", 4200L),
+                x = args.optInt("x", -1),
+                y = args.optInt("y", -1),
+                radius = args.optInt("radius", 48)
+            )
+        }
         "wait_for" -> tools.waitFor(args.optString("text"), args.optDouble("seconds", 8.0))
-        "tap" -> withCoordinates(args, "x", "y") { x, y -> service.tap(x, y) }
-        "long_press" -> withCoordinates(args, "x", "y") { x, y -> service.longPress(x, y) }
+        "tap" -> expectedPackageError(args, service) ?: withCoordinates(args, "x", "y") { x, y -> service.tap(x, y) }
+        "long_press" -> expectedPackageError(args, service) ?: withCoordinates(args, "x", "y") { x, y -> service.longPress(x, y) }
         "swipe" -> {
-            val x1 = number(args, "x1")
-            val y1 = number(args, "y1")
-            val x2 = number(args, "x2")
-            val y2 = number(args, "y2")
-            if (x1 == null || y1 == null || x2 == null || y2 == null) "error: swipe needs x1,y1,x2,y2"
-            else service.swipe(x1, y1, x2, y2, args.optLong("ms", 300L))
+            val mismatch = expectedPackageError(args, service)
+            if (mismatch != null) mismatch else {
+                val x1 = number(args, "x1")
+                val y1 = number(args, "y1")
+                val x2 = number(args, "x2")
+                val y2 = number(args, "y2")
+                if (x1 == null || y1 == null || x2 == null || y2 == null) "error: swipe needs x1,y1,x2,y2"
+                else service.swipe(x1, y1, x2, y2, args.optLong("ms", 300L))
+            }
         }
         "swipe_path" -> {
-            val points = args.optJSONArray("points")
-            if (points == null || points.length() < 2) "error: recorded swipe needs at least two points"
-            else service.performRecordedPath(points, args.optLong("ms", 300L))
+            val mismatch = expectedPackageError(args, service)
+            if (mismatch != null) mismatch else {
+                val points = args.optJSONArray("points")
+                if (points == null || points.length() < 2) "error: recorded swipe needs at least two points"
+                else service.performRecordedPath(points, args.optLong("ms", 300L))
+            }
         }
-        "scroll" -> service.scroll(args.optString("direction", "down"))
-        "type" -> service.typeText(args.optString("text"))
+        "scroll" -> expectedPackageError(args, service) ?: service.scroll(args.optString("direction", "down"))
+        "type" -> expectedPackageError(args, service) ?: service.typeText(args.optString("text"))
         "key" -> service.key(args.optString("name"))
         "look" -> look(args.optString("question", "Describe what is on the screen."))
         "play" -> play(args.optString("goal"), args.optInt("steps", 20))
@@ -112,6 +125,16 @@ internal object OrionDeviceCapabilityExecutor {
             "voice_listen is handled through the live Voice activity; use the microphone UI to speak and read the transcript"
         }
         else -> "error: device executor does not implement '$tool'."
+    }
+
+    /** Optional foreground-app guard for actions planned from a prior screen observation. */
+    private fun expectedPackageError(args: JSONObject, service: PhoneAiService): String? {
+        if (service.isDeviceLocked()) return "error: device is locked; unlock it before UI automation"
+        val expected = args.optString("expected_package").trim()
+        if (expected.isBlank()) return null
+        val actual = service.currentPackageName()
+        return if (actual.equals(expected, ignoreCase = true)) null
+        else "error: foreground app changed (expected $expected, found ${actual.ifBlank { "no accessible window" }}); run read_screen again before acting"
     }
 
     private fun number(args: JSONObject, key: String): Float? {

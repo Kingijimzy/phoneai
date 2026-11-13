@@ -248,6 +248,9 @@ internal class OrionExecutionCoordinator(
     private val heartbeatMs: Long = 12_000L
 ) {
     fun dispatch(taskId: String, worker: OrionTaskWorker): OrionCoordinatedResult {
+        if (!OrionMasterControl.isEnabled(context)) {
+            return OrionCoordinatedResult.Deferred(taskId, "orion_master_disabled")
+        }
         val record = tasks.get(taskId) ?: return OrionCoordinatedResult.Failed(taskId, "task_not_found")
         val task = record.envelope
         if (record.status == "needs_review") return OrionCoordinatedResult.NeedsOwner(taskId, "interrupted_task_requires_owner_review")
@@ -260,6 +263,13 @@ internal class OrionExecutionCoordinator(
         if (lease == null) {
             tasks.fail(taskId, retryable = true)
             return OrionCoordinatedResult.Deferred(taskId, "lease_unavailable")
+        }
+
+        if (!OrionMasterControl.isEnabled(context) || tasks.isCancellationRequested(taskId)) {
+            if (!tasks.isCancellationRequested(taskId)) tasks.cancel(taskId, "orion_master_shutdown")
+            leases.release(lease)
+            tasks.markRecovered(taskId)
+            return OrionCoordinatedResult.Deferred(taskId, "cancelled_before_execution")
         }
 
         val taskCheckpoints = OrionTaskCheckpointStore(context)

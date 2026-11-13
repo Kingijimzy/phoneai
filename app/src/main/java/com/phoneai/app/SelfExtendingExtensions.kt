@@ -56,6 +56,25 @@ internal object SelfExtendingExtensionPolicy {
         testPassed && sourceHash.isNotBlank() && sourceHash == testedHash && userApproved
 }
 
+/**
+ * Owner-controlled promotion policy for generated, capability-free data transforms.
+ * Defaults on to honor the owner's autonomous self-evolution preference; the owner can
+ * disable it at any time through the extension_auto_activation tool.
+ */
+internal object ExtensionAutonomySettings {
+    private const val PREFS = "orion_extension_autonomy"
+    private const val KEY_AUTO_ACTIVATE = "auto_activate_after_tests"
+
+    fun autoActivationEnabled(context: Context): Boolean =
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_AUTO_ACTIVATE, true)
+
+    fun setAutoActivationEnabled(context: Context, enabled: Boolean) {
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_AUTO_ACTIVATE, enabled).apply()
+    }
+}
+
 internal data class GeneratedExtension(
     val id: String,
     val displayName: String,
@@ -76,8 +95,11 @@ internal data class ExtensionTestReport(
 )
 
 /**
- * Implementations must run untrusted code in a real isolated sandbox, not the app process.
- * Capabilities are deliberately passed as a narrow list, never as Android Context or shell.
+ * Implementations must enforce the restricted execution contract. The current generated-extension
+ * runtime is an in-process AST-validated interpreter with a cooperative two-second deadline; it is
+ * NOT OS process isolation. It therefore remains capability-free: no Android Context, filesystem,
+ * network, shell, or device bridge is passed to generated code. Full CPython extensions stay blocked
+ * until an OS-enforced isolated worker exists.
  */
 internal interface ExtensionSandbox {
     fun test(extension: GeneratedExtension, testCases: List<JSONObject>): ExtensionTestReport

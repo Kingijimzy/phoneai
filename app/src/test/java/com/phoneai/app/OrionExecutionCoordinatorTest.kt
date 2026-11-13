@@ -14,6 +14,8 @@ class OrionExecutionCoordinatorTest {
     private fun context(): Context = RuntimeEnvironment.getApplication().also { c ->
         c.filesDir.listFiles()?.filter { it.name.startsWith("orion_distributed") || it.name.startsWith("orion_worker_lease") || it.name == "orion_agent_checkpoint.json" || it.name == "orion_agent_checkpoint.json.bak" || it.name == "orion_task_checkpoints" }?.forEach { it.deleteRecursively() }
         AgentCheckpointStore.clear(c)
+        c.getSharedPreferences("orion_master_control", Context.MODE_PRIVATE).edit()
+            .putBoolean("brain_enabled", true).commit()
     }
     private fun worker(result: OrionWorkerResult = OrionWorkerResult.Success("evidence:ok")) =
         object : OrionTaskWorker {
@@ -22,6 +24,30 @@ class OrionExecutionCoordinatorTest {
             override val supportedCapabilities = setOf("research", "coding", "diagnostics", "trading_analysis", "verification")
             override fun execute(task: OrionTaskEnvelope) = result
         }
+
+    @Test fun masterPowerOffPreventsDroneWorkerDispatch() {
+        val c = context()
+        c.getSharedPreferences("orion_master_control", Context.MODE_PRIVATE).edit()
+            .putBoolean("brain_enabled", false).commit()
+        val store = OrionDistributedTaskStore(c)
+        val leases = OrionWorkerLeaseStore(c)
+        val task = OrionTaskEnvelope.create("must not run while Orion is off")
+        assertTrue(store.enqueue(task))
+        var calls = 0
+        val guarded = object : OrionTaskWorker {
+            override val workerId = "guard-test"
+            override val supportedKinds = OrionTaskEnvelope.Kind.values().toSet()
+            override val supportedCapabilities = setOf("research", "coding", "diagnostics", "trading_analysis", "verification")
+            override fun execute(task: OrionTaskEnvelope): OrionWorkerResult {
+                calls++
+                return OrionWorkerResult.Success("evidence:unexpected")
+            }
+        }
+        val result = OrionExecutionCoordinator(store, leases, c).dispatch(task.taskId, guarded)
+        assertTrue(result is OrionCoordinatedResult.Deferred)
+        assertEquals(0, calls)
+        assertEquals("queued", store.get(task.taskId)?.status)
+    }
 
     @Test fun coordinatorClaimsHeartbeatsAndCommitsBothLedgers() {
         val c = context(); val store = OrionDistributedTaskStore(c); val leases = OrionWorkerLeaseStore(c)

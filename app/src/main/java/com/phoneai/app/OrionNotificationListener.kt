@@ -62,8 +62,12 @@ class OrionNotificationListener : NotificationListenerService() {
                     ?: extras.getCharSequence(Notification.EXTRA_TEXT)
                     ?: extras.getCharSequence(Notification.EXTRA_SUB_TEXT)
                 )?.toString().orEmpty().trim()
-            val combined = "$title $text"
             if (title.isBlank() && text.isBlank()) return
+            // Keep ordinary messaging context, but never retain credential, finance or security content.
+            if (!OrionNotificationContentPolicy.isSafe(pkg, app, title, text)) {
+                synchronized(lock) { recent.remove(sbn.key) }
+                return
+            }
             val item = SafeNotification(
                 key = sbn.key,
                 whenMillis = sbn.postTime,
@@ -201,12 +205,11 @@ class OrionNotificationListener : NotificationListenerService() {
             if (replyText.length > 1000) return "error: reply is limited to 1000 characters"
             val actions = sbn.notification.actions ?: emptyArray()
             val candidate = actions.firstOrNull { action ->
-                val inputs = action.remoteInputs
-                !inputs.isNullOrEmpty() && inputs.any { it.allowFreeFormInput || it.choices?.isNotEmpty() == true }
-            } ?: return "error: this notification has no supported direct-reply action; open the app and reply manually"
+                action.remoteInputs?.any { it.allowFreeFormInput } == true
+            } ?: return "error: this notification has no free-form direct-reply action; open the app and reply manually"
             val remoteInputs = candidate.remoteInputs ?: return "error: no reply input is available"
-            val freeForm = remoteInputs.firstOrNull { it.allowFreeFormInput } ?: remoteInputs.firstOrNull()
-                ?: return "error: no reply input is available"
+            val freeForm = remoteInputs.firstOrNull { it.allowFreeFormInput }
+                ?: return "error: this notification does not accept free-form replies; open the app and reply manually"
             return try {
                 val fillIn = android.content.Intent()
                 val results = android.os.Bundle().apply { putCharSequence(freeForm.resultKey, replyText) }

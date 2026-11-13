@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class LiveCallStylePolicyTest {
-    @Test fun dotMatrixIsTheDefaultAndLegacyStylesMigrateToIt() {
+    @Test fun livingOrbIsTheDefaultAndLegacyStylesMigrateToIt() {
         assertEquals("orb", LiveCallStylePolicy.normalize(null))
         assertEquals("orb", LiveCallStylePolicy.normalize("orb"))
         assertEquals("orb", LiveCallStylePolicy.normalize("wave"))

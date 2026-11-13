@@ -155,6 +155,7 @@ android {
 
     buildFeatures {
         compose = true
+        aidl = true
     }
 
     composeOptions {
@@ -165,6 +166,9 @@ android {
 dependencies {
     // Resolve after download task; prefer app/libs pre-placement from CI.
     implementation(files(provider { resolveSherpaAar() }).builtBy(downloadSherpaTtsAar))
+    // Shizuku exposes explicitly granted ADB/shell-identity system APIs; it is optional at runtime.
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
     implementation("com.termux.termux-app:terminal-view:0.118.0")
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

@@ -14,19 +14,40 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 
-/** The animated glass orb for Compose screens. Redraws each frame; cheap because the painter allocates nothing per frame beyond gradients. */
+/** The shared animated silver point-cloud orb for Compose screens. */
 @Composable
-fun OrionOrb(modifier: Modifier, level: Float = 0f, busy: Boolean = false) {
+fun OrionOrb(
+    modifier: Modifier,
+    level: Float = 0f,
+    busy: Boolean = false,
+    mode: OrbView.Mode = if (busy) OrbView.Mode.THINKING else OrbView.Mode.IDLE,
+    speechAmplitude: Float = 0f,
+    wordPulse: Float = 0f
+) {
     val painter = remember { OrionOrbPainter() }
     var t by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
         val start = System.nanoTime()
+        var lastDraw = 0L
         while (true) {
-            androidx.compose.runtime.withFrameNanos { t = (it - start) / 1_000_000_000f }
+            androidx.compose.runtime.withFrameNanos { frame ->
+                // Cap the 3,000-point Canvas at ~30 fps; live-call and compact views use the same budget.
+                if (frame - lastDraw >= 34_000_000L) {
+                    t = (frame - start) / 1_000_000_000f
+                    lastDraw = frame
+                }
+            }
         }
     }
     Canvas(modifier.semantics { contentDescription = "Orion" }) {
         val frame = t
-        drawIntoCanvas { c -> painter.draw(c.nativeCanvas, size.width / 2f, size.height / 2f, minOf(size.width, size.height) * .36f, frame, level, busy) }
+        drawIntoCanvas { c ->
+            painter.draw(
+                c.nativeCanvas, size.width / 2f, size.height / 2f,
+                minOf(size.width, size.height) * .36f, frame,
+                level = level, busy = busy, mode = mode,
+                speechAmplitude = speechAmplitude, wordPulse = wordPulse
+            )
+        }
     }
 }

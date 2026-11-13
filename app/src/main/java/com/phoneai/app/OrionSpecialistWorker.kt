@@ -29,6 +29,16 @@ import java.util.concurrent.atomic.AtomicReference
  */
 internal class OrionSpecialistWorker(appContext: Context, params: WorkerParameters) : Worker(appContext, params) {
     override fun doWork(): Result {
+        // Master power is authoritative even if WorkManager restored a stale request after shutdown.
+        if (!OrionMasterControl.isEnabled(applicationContext)) {
+            inputData.getString(KEY_TASK_ID)?.takeIf { it.isNotBlank() }?.let {
+                runCatching { OrionDistributedTaskStore(applicationContext).cancel(it, "orion_master_shutdown") }
+            }
+            inputData.getString(KEY_JOB_ID)?.takeIf { it.isNotBlank() }?.let {
+                runCatching { OrionWorkerJobStore(applicationContext).cancel(it, "orion_master_shutdown") }
+            }
+            return Result.success()
+        }
         val droneTaskId = inputData.getString(KEY_TASK_ID)?.takeIf { it.isNotBlank() }
         if (droneTaskId != null) return runDroneTask(droneTaskId)
         // Every legacy WorkManager wake also reconciles and reschedules both execution ledgers.
@@ -144,7 +154,8 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
         val answer = AtomicReference<String?>(null)
         val failure = AtomicReference<Exception?>(null)
         val parentCancelled: () -> Boolean = {
-            AgentCheckpointStore.cancellationRequested(applicationContext, claimed.parentTaskId)
+            !OrionMasterControl.isEnabled(applicationContext) ||
+                AgentCheckpointStore.cancellationRequested(applicationContext, claimed.parentTaskId)
         }
         val cancelled: () -> Boolean = { isStopped || parentCancelled() }
         val providerThread = Thread({

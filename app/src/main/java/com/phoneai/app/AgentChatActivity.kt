@@ -50,7 +50,7 @@ class AgentChatActivity : Activity() {
         const val EXTRA_AGENT = "agent_id"
 
         /** The trading workspace: the coach chat is the front door of the desk. */
-        private const val LOOKS = 5 // orb, fox, robot (drawn), dot-matrix orb, hologram head
+        private const val LOOKS = 5 // living orb, fox, robot (drawn), alternate orb skin, hologram head
         fun workspaceIntent(c: Context): Intent = Intent(c, AgentChatActivity::class.java).putExtra(EXTRA_AGENT, "coach")
         private const val REQUEST_IMAGE = 7422
     }
@@ -95,8 +95,14 @@ class AgentChatActivity : Activity() {
     private val tick = object : Runnable { override fun run() { if (resumed) { refreshDesk(); startWake(); ticker.postDelayed(this, 20_000L) } } }
 
     private fun voiceOut(): Voice = voice ?: Voice(applicationContext).also { v ->
-        v.onSpeaking = { on -> speakingNow = on; postUiIfAlive { setLive(if (on) CompanionView.Activity.SPEAKING else CompanionView.Activity.IDLE) } }
+        v.onSpeaking = { on ->
+            speakingNow = on
+            if (!on) postUiIfAlive { orb?.speechAmplitude = 0f }
+            postUiIfAlive { setLive(if (on) CompanionView.Activity.SPEAKING else CompanionView.Activity.IDLE) }
+        }
         v.onLevel = { l -> postUiIfAlive { orb?.level = l; holo?.mic(l) } }
+        v.onAudioAmplitude = { level -> postUiIfAlive { orb?.speechAmplitude = level } }
+        v.onWord = { postUiIfAlive { orb?.pulseMouth() } }
         voice = v
     }
 
@@ -201,7 +207,7 @@ class AgentChatActivity : Activity() {
         if (h.visibility == android.view.View.VISIBLE) h.show(h.stateName(liveState), lastStrip, lastLine)
     }
 
-    /** 0 to 2: drawn characters, 3: dot-matrix orb, 4: human-head hologram banner. Tap the character to cycle. */
+    /** 0 to 2: drawn characters, 3: living point-cloud orb, 4: human-head hologram banner. Tap the character to cycle. */
     private fun applyLook(i: Int) {
         look = i.coerceIn(0, LOOKS - 1)
         Prefs.setCompanionChar(this, look)

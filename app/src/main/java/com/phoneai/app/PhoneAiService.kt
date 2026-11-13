@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.Manifest
+import android.app.KeyguardManager
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
@@ -208,6 +209,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         voice = Voice(this)
         voice.onSpeaking = { s ->
             speaking = s
+            if (!s) for (o in orbs()) o.speechAmplitude = 0f
             refreshMode()
         }
         voice.onWord = {
@@ -219,6 +221,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             mainChatListener?.onAudioLevel(l)
         }
         voice.onAudioAmplitude = { amplitude ->
+            for (o in orbs()) o.speechAmplitude = amplitude
             mainChatListener?.onAudioAmplitude(amplitude)
         }
         voice.onProblem = { message ->
@@ -234,12 +237,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val runtime = OrionRuntime(this)
         orionRuntime = runtime
         if (OrionMasterControl.isEnabled(this)) {
+            // Reconcile both durable specialist ledgers whenever the live brain reconnects.
+            runCatching { OrionUnifiedExecutionCoordinator.reconcileAndSchedule(this) }
             runtime.start()
             val scheduler = OrionDecisionScheduler(runtime)
             decisionScheduler = scheduler
             scheduler.onServiceReady()
             scheduleRuntimeDrain()
             OrionProactiveWork.ensureScheduled(this)
+            OrionDeviceHealthWork.ensureScheduled(this)
             main.removeCallbacks(autonomyTick)
             main.postDelayed(autonomyTick, 5 * 60_000L)
             requestContinuousWatcherObservation("service_connected")
@@ -310,6 +316,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     internal fun startOrionAfterMasterStart() {
         if (!OrionMasterControl.isEnabled(this)) return
         main.post {
+            // A manual Core restart is also a durable worker recovery boundary.
+            runCatching { OrionUnifiedExecutionCoordinator.reconcileAndSchedule(this) }
             val runtime = orionRuntime ?: OrionRuntime(this).also { orionRuntime = it }
             runtime.start()
             val scheduler = OrionDecisionScheduler(runtime)
@@ -421,7 +429,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                     accessibilityReady = serviceInfo != null,
                                     // The local screen reader combines accessibility nodes, OCR and visual regions;
                                     // this is availability, not a claim that every screen is readable.
-                                    screenPerceptionReady = serviceInfo != null && rootInActiveWindow != null
+                                    screenPerceptionReady = serviceInfo != null && rootInActiveWindow != null,
+                                    shizukuReady = OrionShizukuBridge.state().ready
                                 )
                                 lastCapabilityReport = report
                                 if (report.status == OrionCapabilityAudit.Status.BLOCKED) {
@@ -2564,11 +2573,18 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         // Return as soon as the target app is in front instead of always waiting 1.8 s.
         val target = best.activityInfo.packageName
         var waited = 0
+        var foregroundConfirmed = false
         while (waited < 1800) {
-            Thread.sleep(150); waited += 150
-            if (try { currentPackageName() == target } catch (_: Exception) { false }) { Thread.sleep(250); break }
+            Thread.sleep(150)
+            waited += 150
+            if (try { currentPackageName() == target } catch (_: Exception) { false }) {
+                foregroundConfirmed = true
+                Thread.sleep(250)
+                break
+            }
         }
-        return "opened $bestLabel"
+        return if (foregroundConfirmed) "opened $bestLabel; foreground package verified as $target"
+        else "launch request sent to $bestLabel ($target), but Android has not exposed it as the foreground accessibility window yet; verify the screen before interacting"
     }
 
     fun openUrl(url: String): String {
@@ -3034,30 +3050,37 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     fun clickId(id: Int): String {
-        if (id >= nodes.size + ocrElements.size) {
-            val item = visualElements.getOrNull(id - nodes.size - ocrElements.size)
-                ?: return "error: no element $id. Call read_screen first."
-            return tap(item.bounds.centerX().toFloat(), item.bounds.centerY().toFloat())
-        }
-        if (id >= nodes.size) {
-            val item = ocrElements.getOrNull(id - nodes.size)
-                ?: return "error: no element $id. Call read_screen first."
-            return tap(item.bounds.centerX().toFloat(), item.bounds.centerY().toFloat())
-        }
-        val n = nodes.getOrNull(id) ?: return "error: no element $id. Call read_screen first."
-        var cur: AccessibilityNodeInfo? = n
-        var hops = 0
-        while (cur != null && hops < 6) {
-            if (cur.isClickable && cur.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-                Thread.sleep(600)
-                return "clicked $id"
+        interactiveWindowError()?.let { return it }
+        // IDs are valid only for the exact, recent window snapshot that produced them.
+        val resolved = boundsForScreenId(id)
+            ?: return "error: target $id is stale, hidden, protected, or belongs to a different app/window. Run read_screen again."
+        if (id in 0 until nodes.size) {
+            val node = nodes.getOrNull(id)
+                ?: return "error: target $id disappeared. Run read_screen again."
+            if (!node.isVisibleToUser || node.isPassword) {
+                return "error: target is hidden or password-protected; refusing interaction."
             }
-            cur = cur.parent
-            hops++
+            var current: AccessibilityNodeInfo? = node
+            var hops = 0
+            while (current != null && hops < 6) {
+                if (current.isVisibleToUser && current.isClickable &&
+                    current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                    Thread.sleep(350)
+                    val active = rootInActiveWindow
+                    val activePackage = active?.packageName?.toString().orEmpty()
+                    return "click dispatched for target $id in $activePackage; verify the resulting screen before the next action"
+                }
+                current = current.parent
+                hops++
+            }
         }
-        val r = Rect()
-        n.getBoundsInScreen(r)
-        return tap(r.centerX().toFloat(), r.centerY().toFloat())
+        val bounds = resolved.first
+        val size = screenSize()
+        if (bounds.centerX() !in 0..size.first || bounds.centerY() !in 0..size.second) {
+            return "error: target bounds are outside the current display; refusing tap."
+        }
+        val result = tap(bounds.centerX().toFloat(), bounds.centerY().toFloat())
+        return if (result == "ok") "click dispatched for target $id; verify the resulting screen before the next action" else result
     }
 
     private fun findEditable(n: AccessibilityNodeInfo): AccessibilityNodeInfo? {
@@ -3073,6 +3096,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     fun typeText(text: String): String {
+        if (isDeviceLocked()) return "error: device is locked; unlock it before UI automation"
         if (text.isEmpty()) return "error: refusing to type empty text"
         if (text.length > 4000) return "error: text exceeds the 4000 character limit"
         val root = rootInActiveWindow ?: return "error: cannot inspect the current screen"
@@ -3111,40 +3135,64 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     /** Replays a recorded multi-point gesture without an AI call. */
+    /** UI automation is deliberately unavailable while the secure keyguard is showing. */
+    fun isDeviceLocked(): Boolean = try {
+        (getSystemService(android.content.Context.KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
+    } catch (_: Exception) { true }
+
+    private fun interactiveWindowError(): String? = when {
+        isDeviceLocked() -> "error: device is locked; unlock it before UI automation"
+        rootInActiveWindow == null -> "error: no interactive accessibility window is available"
+        else -> null
+    }
+
+    private fun withinDisplay(x: Float, y: Float): Boolean {
+        val size = screenSize()
+        return x.isFinite() && y.isFinite() && x >= 0f && y >= 0f && x < size.first && y < size.second
+    }
+
+    /** Replays a bounded recorded path only on the currently unlocked display. */
     fun performRecordedPath(points: JSONArray, durationMs: Long): String {
-        if (points.length() < 2) return "error: recorded gesture has too few points"
-        val path = Path()
+        interactiveWindowError()?.let { return it }
+        if (points.length() !in 2..128) return "error: recorded gesture must contain 2..128 points"
+        val parsed = mutableListOf<Pair<Float, Float>>()
         for (i in 0 until points.length()) {
-            val p = points.optJSONObject(i) ?: continue
-            val x = p.optDouble("x", Double.NaN).toFloat()
-            val y = p.optDouble("y", Double.NaN).toFloat()
-            if (!x.isFinite() || !y.isFinite()) continue
-            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            val point = points.optJSONObject(i) ?: return "error: recorded gesture contains an invalid point"
+            val x = point.optDouble("x", Double.NaN).toFloat()
+            val y = point.optDouble("y", Double.NaN).toFloat()
+            if (!withinDisplay(x, y)) return "error: recorded gesture contains coordinates outside the current display"
+            parsed += x to y
+        }
+        val path = Path()
+        parsed.forEachIndexed { index, point ->
+            if (index == 0) path.moveTo(point.first, point.second) else path.lineTo(point.first, point.second)
         }
         return gesture(path, durationMs.coerceIn(80L, 8000L))
     }
 
     fun tap(x: Float, y: Float): String {
-        val size = screenSize()
-        if (x < 0 || y < 0 || x > size.first || y > size.second) {
-            return "error: ($x,$y) is outside the screen ${size.first}x${size.second}"
-        }
-        val p = Path()
-        p.moveTo(x, y)
-        return gesture(p, 60L)
+        interactiveWindowError()?.let { return it }
+        if (!withinDisplay(x, y)) return "error: tap coordinates are outside the current display"
+        val path = Path()
+        path.moveTo(x, y)
+        return gesture(path, 60L)
     }
 
     fun longPress(x: Float, y: Float): String {
-        val p = Path()
-        p.moveTo(x, y)
-        return gesture(p, 900L)
+        interactiveWindowError()?.let { return it }
+        if (!withinDisplay(x, y)) return "error: long-press coordinates are outside the current display"
+        val path = Path()
+        path.moveTo(x, y)
+        return gesture(path, 900L)
     }
 
     fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, ms: Long): String {
-        val p = Path()
-        p.moveTo(x1, y1)
-        p.lineTo(x2, y2)
-        return gesture(p, ms)
+        interactiveWindowError()?.let { return it }
+        if (!withinDisplay(x1, y1) || !withinDisplay(x2, y2)) return "error: swipe coordinates are outside the current display"
+        val path = Path()
+        path.moveTo(x1, y1)
+        path.lineTo(x2, y2)
+        return gesture(path, ms)
     }
 
     fun scroll(direction: String): String {

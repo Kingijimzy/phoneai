@@ -57,7 +57,9 @@ internal object OrionUnifiedExecutionCoordinator {
         val app = context.applicationContext
         val record = runCatching { OrionDistributedTaskStore(app).get(taskId) }.getOrNull() ?: return false
         if (record.status !in setOf("queued", "retry_wait")) return record.status == "running" || record.status == "completed"
-        return enqueueWork(app, "orion-task-$taskId", OrionSpecialistWorker.KEY_TASK_ID, taskId)
+        val scheduled = enqueueWork(app, "orion-task-$taskId", OrionSpecialistWorker.KEY_TASK_ID, taskId)
+        if (!scheduled && OrionMasterControl.isEnabled(app)) OrionRecoveryWork.schedule(app)
+        return scheduled
     }
 
     fun dispatchDroneTask(context: Context, taskId: String): OrionCoordinatedResult =
@@ -73,7 +75,9 @@ internal object OrionUnifiedExecutionCoordinator {
             OrionWorkerJobStore.Status.RESULT_PENDING,
             OrionWorkerJobStore.Status.COMPLETED
         )
-        return enqueueWork(app, "orion-specialist-$jobId", OrionSpecialistWorker.KEY_JOB_ID, jobId)
+        val scheduled = enqueueWork(app, "orion-specialist-$jobId", OrionSpecialistWorker.KEY_JOB_ID, jobId)
+        if (!scheduled && OrionMasterControl.isEnabled(app)) OrionRecoveryWork.schedule(app)
+        return scheduled
     }
 
     fun cancelLegacyJob(context: Context, jobId: String, reason: String = "cancelled_by_owner"): Boolean {
@@ -126,6 +130,37 @@ internal object OrionUnifiedExecutionCoordinator {
             runCatching { WorkManager.getInstance(app).cancelUniqueWork("orion-task-${record.envelope.taskId}") }
         }
         return legacyChanged + activeDrone.size
+    }
+
+    /**
+     * Master shutdown fans out to both durable execution ledgers and cancels every associated
+     * WorkManager request. Running jobs remain cancellation-requested until their worker/lease
+     * acknowledges or reconciliation moves an ambiguous result to owner review.
+     */
+    fun cancelAll(context: Context, reason: String = "orion_master_shutdown"): Int {
+        val app = context.applicationContext
+        val work = runCatching { WorkManager.getInstance(app) }.getOrNull()
+        val legacy = OrionWorkerJobStore(app)
+        val legacyActive = legacy.all().filter { it.status in setOf(
+            OrionWorkerJobStore.Status.QUEUED, OrionWorkerJobStore.Status.RUNNING,
+            OrionWorkerJobStore.Status.RESULT_PENDING, OrionWorkerJobStore.Status.PAUSED,
+            OrionWorkerJobStore.Status.CANCEL_REQUESTED
+        ) }
+        var changed = 0
+        legacyActive.forEach { job ->
+            if (legacy.cancel(job.id, reason)) changed++
+            runCatching { work?.cancelUniqueWork("orion-specialist-" + job.id) }
+        }
+
+        val distributed = OrionDistributedTaskStore(app)
+        val droneActive = distributed.all().filter { it.status !in setOf(
+            "completed", "failed", "cancelled", "needs_review"
+        ) }
+        droneActive.forEach { task ->
+            changed += runCatching { distributed.cancel(task.envelope.taskId, reason) }.getOrDefault(0)
+            runCatching { work?.cancelUniqueWork("orion-task-" + task.envelope.taskId) }
+        }
+        return changed
     }
 
     /**

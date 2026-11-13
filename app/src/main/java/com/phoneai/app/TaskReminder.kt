@@ -10,6 +10,10 @@ import android.content.Intent
 import android.os.Build
 import java.util.Date
 
+internal object TaskReminderPolicy {
+    fun isTerminal(status: String): Boolean = status.trim().lowercase() in setOf("done", "completed", "failed", "cancelled", "canceled")
+}
+
 /** Schedules local deadline reminders; no server or paid service is needed. */
 object TaskReminder {
     private const val CHANNEL = "orion_task_reminders"
@@ -29,9 +33,16 @@ object TaskReminder {
     fun schedule(context: Context, task: OrionTask) {
         cancel(context, task.id)
         val due = task.dueAt ?: return
-        if (task.status == "done" || task.status == "cancelled" || due <= System.currentTimeMillis()) return
+        if (TaskReminderPolicy.isTerminal(task.status) || due <= System.currentTimeMillis()) return
         val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, pendingIntent(context, task.id))
+        val operation = pendingIntent(context, task.id)
+        val exactAccessGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarm.canScheduleExactAlarms()
+        if (TaskReminderAlarmPolicy.useExactAlarm(Build.VERSION.SDK_INT, exactAccessGranted)) {
+            alarm.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, operation)
+        } else {
+            // Keep the reminder scheduled when exact-alarm special access is unavailable.
+            alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, operation)
+        }
     }
 
     fun cancel(context: Context, id: Int) {
@@ -45,7 +56,7 @@ object TaskReminder {
 
     internal fun notifyDue(context: Context, id: Int) {
         val task = TaskStore.all(context).firstOrNull { it.id == id } ?: return
-        if (task.status == "done" || task.status == "cancelled") return
+        if (TaskReminderPolicy.isTerminal(task.status)) return
         val due = task.dueAt ?: return
         if (due > System.currentTimeMillis()) {
             schedule(context, task)
@@ -92,11 +103,14 @@ class TaskReminderReceiver : BroadcastReceiver() {
 
 class TaskReminderBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action == Intent.ACTION_BOOT_COMPLETED) {
+        if (intent?.action == Intent.ACTION_BOOT_COMPLETED ||
+            intent?.action == AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED) {
             TaskReminder.restoreAll(context)
             ProactiveBriefing.schedule(context)
             GamingFocus.schedule(context)
             OrionProactiveWork.ensureScheduled(context)
+            OrionDeviceHealthWork.ensureScheduled(context)
+            if (OrionMasterControl.isEnabled(context)) OrionRecoveryWork.schedule(context)
         }
     }
 }

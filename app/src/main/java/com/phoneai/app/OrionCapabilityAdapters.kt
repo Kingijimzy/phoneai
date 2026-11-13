@@ -20,7 +20,7 @@ internal object OrionCapabilityAdapters {
     private val toolsByBackend: Map<Backend, Set<String>> = mapOf(
         Backend.SHELL to setOf("shell", "termux_command"),
         Backend.PYTHON to setOf(
-            "python_exec", "workspace_list", "extension_list", "extension_create", "extension_update", "extension_test",
+            "python_exec", "workspace_list", "extension_list", "extension_policy", "extension_auto_activation", "extension_create", "extension_update", "extension_test",
             "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback"
         ),
         Backend.FILES to setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty", "project_create", "project_list", "project_inspect", "project_plan", "project_verify", "document_extract", "image_read", "image_generate"),
@@ -33,13 +33,13 @@ internal object OrionCapabilityAdapters {
         Backend.DIAGNOSTICS to setOf("self_diagnose", "repair_apply"),
         Backend.MCP to setOf("mcp_status", "mcp_list_tools", "mcp_call", "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt"),
         Backend.DEVICE to setOf(
-            "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications",
+            "lookup_app", "open_app", "system_intent", "open_deep_link", "whatsapp_compose", "read_notifications",
             "media_status", "media_control", "play_media", "chrome_search", "resolve_contact",
             "list_apps", "list_app_deeplinks", "read_screen", "validate_action", "verify_action",
             "verify_send", "click", "click_text", "point_at", "sketch_screen", "wait_for", "tap", "long_press", "swipe",
             "swipe_path", "scroll", "type", "key", "look", "play", "record_screen",
             "chronos_awareness", "calendar_events", "voice_speak", "voice_listen",
-            "routine_run", "routine_resume"
+            "routine_run", "routine_resume", "device_operation"
         ),
         Backend.SKILLS to setOf("skills_list"),
         Backend.INTEGRATIONS to setOf("integration_status", "service_status", "connect_service",

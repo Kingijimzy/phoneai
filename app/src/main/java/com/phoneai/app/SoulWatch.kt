@@ -55,7 +55,8 @@ internal object SoulEngineWatcher {
                 implementedPacks = implemented,
                 enabledPacks = enabled,
                 accessibilityReady = service != null,
-                screenPerceptionReady = service != null && runCatching { service.rootInActiveWindow != null }.getOrDefault(false)
+                screenPerceptionReady = service != null && runCatching { service.rootInActiveWindow != null }.getOrDefault(false),
+                shizukuReady = runCatching { OrionShizukuBridge.state().canExecute }.getOrDefault(false)
             )
         }.getOrElse {
             OrionCapabilityAudit.Report(
@@ -65,6 +66,7 @@ internal object SoulEngineWatcher {
                 enabledPacks = enabled,
                 accessibilityReady = service != null,
                 screenPerceptionReady = false,
+                shizukuReady = runCatching { OrionShizukuBridge.state().canExecute }.getOrDefault(false),
                 limitations = listOf("capability_audit_exception")
             )
         }
