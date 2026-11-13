@@ -418,70 +418,104 @@ private fun DiagramNodeChip(label: String, first: Boolean) {
 
 @Composable
 private fun ShellActivityCard(raw: String) {
-    val failed = raw.startsWith("[SHELL:FAILED]")
-    val body = raw.substringAfter("\n", "")
-    val command = body.substringBefore("\n").removePrefix("$ ")
-    val rest = body.substringAfter("\n", "")
-    val hasMarkers = rest.contains("\u2063OUT\n")
-    val code = if (hasMarkers && rest.startsWith("\u2063CODE\n")) rest.substringAfter("\u2063CODE\n").substringBefore("\u2063OUT\n").trimEnd() else ""
-    val output = (if (hasMarkers) rest.substringAfter("\u2063OUT\n") else rest).trim()
+    val transcript = remember(raw) { OrionShellTranscriptParser.parse(raw) }
+    val failed = transcript.failed
+    val running = transcript.running
+    val command = transcript.command
+    val code = transcript.code
+    val output = transcript.output
     val title = when {
-        command.startsWith("python") -> "ORION PYTHON"
-        command.startsWith("write ") -> "ORION CODE"
-        command.startsWith("cat ") -> "ORION FILE"
+        command.startsWith("python", true) -> "ORION PYTHON"
+        command.startsWith("write ", true) -> "ORION CODE"
+        command.startsWith("cat ", true) -> "ORION FILE"
         else -> "ORION TERMINAL"
+    }
+    val stateColor = when {
+        failed -> OrionUiPalette.danger
+        running -> OrionUiPalette.warning
+        transcript.phase in setOf("COMPLETE", "DONE", "SUCCESS") -> OrionUiPalette.success
+        else -> OrionUiPalette.secondaryText
+    }
+    val stateLabel = when {
+        failed -> "FAILED"
+        running -> "RUNNING"
+        transcript.phase in setOf("COMPLETE", "DONE", "SUCCESS") -> "DONE"
+        else -> transcript.phase
     }
     val clipboard = LocalClipboardManager.current
     var expanded by remember(raw) { mutableStateOf(false) }
-    var open by remember(raw) { mutableStateOf(failed) }
+    var open by remember(raw) { mutableStateOf(failed || running) }
     val mono = androidx.compose.ui.text.font.FontFamily.Monospace
-    val green = OrionUiPalette.success
+    val outputPreview = if (expanded) output.takeLast(8000) else output.takeLast(900)
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).animateContentSize(animationSpec = tween(220))
-            .background(OrionUiPalette.panel).border(1.dp, if (failed) OrionUiPalette.danger else Color(0x40545458), RoundedCornerShape(12.dp))
+            .background(OrionUiPalette.panel)
+            .border(1.dp, if (failed) OrionUiPalette.danger else OrionUiPalette.borderStrong, RoundedCornerShape(12.dp))
             .padding(11.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(Modifier.fillMaxWidth().clickable { open = !open }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(if (failed) OrionUiPalette.danger else green))
+            Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(stateColor))
             Text(title, color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
             Spacer(Modifier.weight(1f))
-            Text(if (failed) "FAILED" else "DONE", color = if (failed) OrionUiPalette.danger else green, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Text(stateLabel, color = stateColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null, tint = ChatMuted, modifier = Modifier.size(16.dp))
         }
-        if (!open) Text(command.take(80), color = ChatMuted, fontSize = 11.sp, fontFamily = mono, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (!open) Text(command.take(100), color = ChatMuted, fontSize = 11.sp, fontFamily = mono, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (open) {
-        Text(buildAnnotatedString {
-            withStyle(SpanStyle(color = green)) { append("$ ") }
-            append(command)
-        }, color = OrionUiPalette.text, fontSize = 12.sp, fontFamily = mono)
-        if (code.isNotBlank()) {
-            val lines = code.lines()
-            val shown = if (expanded) lines else lines.take(10)
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(OrionUiPalette.panel).padding(8.dp)
-            ) {
-                shown.forEachIndexed { n, line ->
-                    Row {
-                        Text("${n + 1}".padStart(3), color = OrionUiPalette.muted, fontSize = 10.sp, fontFamily = mono)
-                        Spacer(Modifier.width(8.dp))
-                        Text(highlightCode(line.take(160)), color = OrionUiPalette.secondaryText, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = mono)
-                    }
+            Text(buildAnnotatedString {
+                withStyle(SpanStyle(color = stateColor)) { append("\$ ") }
+                append(command)
+            }, color = OrionUiPalette.text, fontSize = 12.sp, fontFamily = mono)
+            if (code.isNotBlank()) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("SOURCE", color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .7.sp)
+                    Spacer(Modifier.weight(1f))
+                    Text("${code.lineSequence().count()} LINES", color = OrionUiPalette.muted, fontSize = 8.sp)
                 }
-                if (lines.size > 10) Text(if (expanded) "SHOW LESS" else "+${lines.size - 10} more lines", color = OrionUiPalette.secondaryText, fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold, modifier = Modifier.clickable { expanded = !expanded }.padding(top = 6.dp))
+                val lines = code.lines()
+                val shown = if (expanded) lines.take(240) else lines.take(10)
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                        .background(OrionUiPalette.background).padding(8.dp)
+                ) {
+                    shown.forEachIndexed { n, line ->
+                        Row(Modifier.fillMaxWidth()) {
+                            Text("${n + 1}".padStart(3), color = OrionUiPalette.muted, fontSize = 10.sp, fontFamily = mono)
+                            Spacer(Modifier.width(8.dp))
+                            Text(highlightCode(line.take(240)), color = OrionUiPalette.secondaryText,
+                                fontSize = 11.sp, lineHeight = 15.sp, fontFamily = mono)
+                        }
+                    }
+                    if (lines.size > 10) Text(
+                        if (expanded) "SHOW LESS" else "+${lines.size - 10} more lines",
+                        color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { expanded = !expanded }.padding(top = 6.dp)
+                    )
+                }
             }
-        }
-        if (output.isNotBlank()) {
-            Text("OUTPUT", color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
-            Text(output.take(2400), color = if (failed) OrionUiPalette.danger else OrionUiPalette.secondaryText, fontSize = 11.sp, lineHeight = 16.sp, fontFamily = mono)
-        }
-        Text("COPY", color = ChatMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.clickable { clipboard.setText(AnnotatedString((if (code.isNotBlank()) code + "\n\n" else "") + output)) }.padding(vertical = 2.dp))
+            if (output.isNotBlank()) {
+                Text("OUTPUT", color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
+                Text(outputPreview, color = if (failed) OrionUiPalette.danger else OrionUiPalette.secondaryText,
+                    fontSize = 11.sp, lineHeight = 16.sp, fontFamily = mono)
+                if (output.length > 900) {
+                    Text(if (expanded) "SHOW LESS OUTPUT" else "SHOW FULL OUTPUT",
+                        color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { expanded = !expanded }.padding(vertical = 2.dp))
+                }
+            }
+            Text("COPY TRANSCRIPT", color = ChatMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable {
+                    val complete = buildString {
+                        if (command.isNotBlank()) append("\$ ").append(command).append("\n")
+                        if (code.isNotBlank()) append("\n").append(code).append("\n")
+                        if (output.isNotBlank()) append("\n").append(output)
+                    }
+                    clipboard.setText(AnnotatedString(complete))
+                }.padding(vertical = 2.dp))
         }
     }
 }
-
 @Composable
 private fun BrowserActivityCard(raw: String, onOpenBrowser: (String?) -> Unit) {
     val failed = raw.startsWith("[BROWSER:FAILED]")
