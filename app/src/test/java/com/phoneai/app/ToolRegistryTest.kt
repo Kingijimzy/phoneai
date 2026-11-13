@@ -309,6 +309,18 @@ class ToolRegistryNativeSelectionTest {
         assertTrue(selected.contains("read_screen"))
     }
 
+    @Test fun nativeCallableFoundationDoesNotChangeWithUserKeywords() {
+        val ordinary = ToolRegistry.nativeToolsFor("hello").map { it.name }.toSet()
+        val unrelated = ToolRegistry.nativeToolsFor("weather forex whatsapp github python").map { it.name }.toSet()
+        assertEquals("User vocabulary must not alter native tool routing.", ordinary, unrelated)
+        assertTrue(ordinary.containsAll(setOf(
+            "capability_search", "read_screen", "click", "swipe", "scroll",
+            "python_exec", "workspace_write", "mcp_list_tools", "task_add"
+        )))
+        assertFalse("Specialist tools are discovered by the model, not keyword coincidence.", ordinary.contains("weather"))
+        assertFalse(ordinary.contains("bybit_public_ticker"))
+    }
+
     @Test fun recentToolContextUsesOnlyTheLatestAssistantCallGroup() {
         val history = org.json.JSONArray()
             .put(org.json.JSONObject().put("role", "assistant").put("tool_calls", org.json.JSONArray().put(
