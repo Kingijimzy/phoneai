@@ -22,7 +22,7 @@ internal object OrionResearchCapabilityExecutor {
         tools: Tools,
         cancelled: AtomicBoolean
     ): String = when (tool) {
-        "web_search" -> tools.webSearch(args.optString("query"))
+        "web_search" -> LiveWebSearch.research(args.optString("query"), cancelled)
         "live_news" -> LiveNews.search(args.optString("query"))
         "live_web_search" -> LiveWebSearch.research(args.optString("query"), cancelled)
         "fetch_url", "research_web" -> if (args.optString("url").isBlank() && args.optString("query").isNotBlank()) {
