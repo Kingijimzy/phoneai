@@ -148,7 +148,7 @@ internal class CodexRuntimeInstaller(context: Context) {
                 timeoutMs = 15_000L
             )
             if (!probe.startsWith("exit=0")) {
-                val archive = File(app.cacheDir, ARCHIVE_NAME)
+                val archive = File(app.filesDir, ARCHIVE_NAME)
                 try {
                     downloadVerifiedArchive(archive, onOutput, shouldStop)
                     val result = runtime.execute(
@@ -157,7 +157,7 @@ internal class CodexRuntimeInstaller(context: Context) {
                         timeoutMs = 900_000L,
                         onOutput = onOutput,
                         shouldStop = shouldStop,
-                        androidAppDataPath = app.cacheDir.absolutePath
+                        androidAppDataPath = app.filesDir.absolutePath
                     )
                     check(result.startsWith("exit=0")) { result.takeLast(4_000) }
                 } finally {
@@ -175,7 +175,7 @@ internal class CodexRuntimeInstaller(context: Context) {
         vault.prepare()
         val config = runtime.interactiveLaunchConfig(
             workspaceHostPath = workspaceHostPath,
-            androidAppDataPath = app.cacheDir.absolutePath
+            androidAppDataPath = app.filesDir.absolutePath
         )
         val session = LinuxCommandSession.start(
             config,
