@@ -66,4 +66,22 @@ class OrionExecutiveStoreIntegrationTest {
         assertNotEquals(first.attemptId, second.attemptId)
         assertEquals(2, OrionExecutiveStore.dispatchAttempts(context, first.objectiveId).size)
     }
+
+    @Test fun verifiedTerminalDispatchReceiptRemainsVisibleToCentralBrain() {
+        val handle = OrionExecutiveStore.beginToolDispatch(
+            context, "session-context", "Verify terminal receipt visibility", "voice-test",
+            "voice_test", JSONObject().put("mode", "smoke"), System.currentTimeMillis()
+        )!!
+        assertTrue(OrionExecutiveStore.finishDispatchAttempt(
+            context, handle.attemptId, OrionExecutiveStore.DispatchOutcome.VERIFIED,
+            "evidence-voice-smoke-001", "Voice smoke test passed and output was observed"
+        ))
+
+        val brainContext = OrionExecutiveStore.contextBlock(context)
+        assertTrue(brainContext.contains("phase=COMPLETED"))
+        assertTrue(brainContext.contains("outcome=VERIFIED"))
+        assertTrue(brainContext.contains("evidence-voice-smoke-001"))
+        assertTrue(brainContext.contains("Voice smoke test passed"))
+    }
+
 }
