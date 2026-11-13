@@ -30,24 +30,24 @@ internal class CodexRuntimeInstaller(context: Context) {
             set -eu
             archive="/android-app/$ARCHIVE_NAME"
             work="/tmp/orion-codex-$VERSION"
-            test -s "$archive" || { echo "Host-verified Codex archive is missing from /android-app"; exit 30; }
-            mkdir -p "$work" /usr/local/bin
-            tar -tzf "$archive" > "$work/archive-files.txt"
-            tar -xzf "$archive" -C "$work"
-            find "$work" -type f -name '*-aarch64-unknown-linux-musl' -exec sh -c '
+            test -s "${'$'}archive" || { echo "Host-verified Codex archive is missing from /android-app"; exit 30; }
+            mkdir -p "${'$'}work" /usr/local/bin
+            tar -tzf "${'$'}archive" > "${'$'}work/archive-files.txt"
+            tar -xzf "${'$'}archive" -C "${'$'}work"
+            find "${'$'}work" -type f -name '*-aarch64-unknown-linux-musl' -exec sh -c '
               for file do
-                name=$(basename "$file")
-                case "$name" in
-                  *-aarch64-unknown-linux-musl) name=${name%-aarch64-unknown-linux-musl} ;;
+                name=$(basename "${'$'}file")
+                case "${'$'}name" in
+                  *-aarch64-unknown-linux-musl) name=${'$'}{name%-aarch64-unknown-linux-musl} ;;
                 esac
-                install -m 755 "$file" "/usr/local/bin/$name"
+                install -m 755 "${'$'}file" "/usr/local/bin/${'$'}name"
               done
             ' sh {} +
-            if ! test -x '$GUEST_BINARY'; then echo 'Codex archive missing app-server binary'; cat "$work/archive-files.txt" | head -80; find "$work" -maxdepth 4 -type f -print; exit 31; fi
-            if ! test -x '$GUEST_CODE_MODE_HOST'; then echo 'Codex archive missing code-mode-host binary'; find "$work" -maxdepth 4 -type f -print; exit 32; fi
-            if ! test -x '$GUEST_EXEC_SERVER'; then echo 'Codex archive missing exec-server binary'; find "$work" -maxdepth 4 -type f -print; exit 33; fi
+            if ! test -x '$GUEST_BINARY'; then echo 'Codex archive missing app-server binary'; cat "${'$'}work/archive-files.txt" | head -80; find "${'$'}work" -maxdepth 4 -type f -print; exit 31; fi
+            if ! test -x '$GUEST_CODE_MODE_HOST'; then echo 'Codex archive missing code-mode-host binary'; find "${'$'}work" -maxdepth 4 -type f -print; exit 32; fi
+            if ! test -x '$GUEST_EXEC_SERVER'; then echo 'Codex archive missing exec-server binary'; find "${'$'}work" -maxdepth 4 -type f -print; exit 33; fi
             '$GUEST_BINARY' --help >/dev/null
-            rm -rf "$work"
+            rm -rf "${'$'}work"
         """.trimIndent()
     }
 
