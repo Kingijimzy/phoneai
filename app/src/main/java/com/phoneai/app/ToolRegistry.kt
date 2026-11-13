@@ -7,14 +7,6 @@ internal data class ToolDefinition(
     val name: String,
     val promptLine: String,
     val description: String,
-    val access: ToolAccess,
-    val inputSchema: org.json.JSONObject = ToolInputSchema.fromContract(promptLine)
-)
-
-internal data class ToolDefinition(
-    val name: String,
-    val promptLine: String,
-    val description: String,
     val access: ToolAccess
 ) {
     /** Reuse the same authoritative contract parser across API, Codex and MCP transports. */
