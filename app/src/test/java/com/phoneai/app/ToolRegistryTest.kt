@@ -459,7 +459,7 @@ class ToolRegistryNativeSelectionTest {
     }
 
     @Test fun capabilitySearchPaginationKeepsZeroMatchToolsReachable() {
-        val first = JSONObject(ToolRegistry.searchCapabilities("zzq_no_registered_capability_matches", 5, 0))
+        val first = JSONObject(ToolRegistry.searchCapabilities("zzqvortexquux", 5, 0))
         assertEquals(5, first.getInt("count"))
         assertTrue(first.getBoolean("has_more"))
         assertEquals(0, first.getInt("offset"))
@@ -473,7 +473,7 @@ class ToolRegistryNativeSelectionTest {
         }
         var offset = first.getInt("next_offset")
         while (offset < total) {
-            val page = JSONObject(ToolRegistry.searchCapabilities("zzq_no_registered_capability_matches", 5, offset))
+            val page = JSONObject(ToolRegistry.searchCapabilities("zzqvortexquux", 5, offset))
             assertEquals(offset, page.getInt("offset"))
             val rows = page.getJSONArray("results")
             for (i in 0 until rows.length()) {
@@ -485,13 +485,13 @@ class ToolRegistryNativeSelectionTest {
         }
         assertEquals(total, seen.size)
         assertEquals(total, seen.toSet().size)
-        val end = JSONObject(ToolRegistry.searchCapabilities("zzq_no_registered_capability_matches", 5, total))
+        val end = JSONObject(ToolRegistry.searchCapabilities("zzqvortexquux", 5, total))
         assertEquals(0, end.getInt("count"))
         assertFalse(end.getBoolean("has_more"))
     }
 
     @Test fun capabilitySearchPaginationIsDeterministicAndClampsBounds() {
-        val query = "zzq_unmatched_query"
+        val query = "zzqvortexquux"
         val a = JSONObject(ToolRegistry.searchCapabilities(query, 4, 0))
         val b = JSONObject(ToolRegistry.searchCapabilities(query, 4, 0))
         assertEquals(a.getJSONArray("results").toString(), b.getJSONArray("results").toString())
