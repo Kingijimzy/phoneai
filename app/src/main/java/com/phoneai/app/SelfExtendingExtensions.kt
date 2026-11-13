@@ -79,8 +79,10 @@ internal data class ExtensionTestReport(
 )
 
 /**
- * Implementations must run untrusted code in a real isolated sandbox, not the app process.
- * Capabilities are deliberately passed as a narrow list, never as Android Context or shell.
+ * Runtime implementations: "python" is the restricted data-transform interpreter;
+ * "python_full" is the full CPython workspace runtime and runs with the app's Android UID.
+ * PRoot is not an OS security boundary. Android's own app sandbox and permission model remain
+ * authoritative for host resources.
  */
 internal interface ExtensionSandbox {
     fun test(extension: GeneratedExtension, testCases: List<JSONObject>): ExtensionTestReport
