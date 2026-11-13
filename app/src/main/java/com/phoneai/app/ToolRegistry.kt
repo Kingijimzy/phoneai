@@ -217,6 +217,7 @@ internal object ToolRegistry {
         tool("task_list", ToolAccess.READ, "task_list {}: list current saved tasks and their IDs/statuses"),
         tool("task_add", ToolAccess.WRITE, "task_add {title, details?, priority?, dueAt?}: create a persistent task; priority low, normal, high, or urgent"),
         tool("task_update", ToolAccess.WRITE, "task_update {id, title?, details?, status?, priority?, dueAt?, clearDueAt?}: update an existing task; status queued, running, paused, completed, failed, or cancelled"),
+        tool("complete_objective", ToolAccess.WRITE, "complete_objective {objective_id, evidence_id}: complete one exact durable objective-graph node only when evidence_id matches its latest trusted successful executor receipt and all dependencies are complete; never use this for Task Centre records"),
         tool("task_delete", ToolAccess.WRITE, "task_delete {id}: permanently delete a task; run immediately when explicitly requested"),
         tool("proactive_check", ToolAccess.READ, "proactive_check {}: evaluate pending calendar events, unfinished tasks, follow-ups and battery state; returns at most one proactive item to speak, gated by quiet period and throttling"),
         tool("proactive_status", ToolAccess.READ, "proactive_status {}: show proactive settings (quiet period, max per hour, min interval, battery low threshold, calendar lookahead) and whether proactive speaking is enabled"),
