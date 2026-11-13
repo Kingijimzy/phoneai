@@ -69,4 +69,30 @@ class CapabilityGapPlannerTest {
         assertEquals(CapabilityGapRoute.NEEDS_CLARIFICATION, result.route)
         assertTrue(result.nextActions.single().contains("intended outcome"))
     }
+
+    @Test fun verifiedExtensionsAreExecutedAndReusedBeforeNewGeneration() {
+        val source = "RESULT = INPUT['value']"
+        val extension = GeneratedExtension(
+            id = "value_helper", displayName = "Value helper", runtime = "python",
+            source = source, sourceSha256 = SelfExtendingExtensionPolicy.sha256(source),
+            description = "normalizes a value", createdAtMillis = 1L, enabled = true, verified = true
+        )
+        val result = CapabilityGapPlanner.assess(
+            request = "normalize this value", registeredTools = emptyList(), enabledSkills = emptyList(), extensions = listOf(extension)
+        )
+        assertTrue(result.nextActions.any { it.contains("extension_list") && it.contains("extension_run") })
+        assertTrue(result.nextActions.any { it.contains("exact source hash") && it.contains("real runtime") })
+    }
+
+    @Test fun nativeCapabilityGapsRouteThroughDeveloperBuildAndVerificationWorkflow() {
+        val result = CapabilityGapPlanner.assess(
+            request = "add a native Android accessibility capability", registeredTools = emptyList(), enabledSkills = emptyList(), extensions = emptyList()
+        )
+        val route = result.nextActions.joinToString(" ")
+        listOf("dev_understand", "dev_read", "dev_plan", "dev_write", "dev_shell", "Gradle", "unit tests", "artifacts", "GitHub").forEach {
+            assertTrue("Native developer route must include $it", route.contains(it, ignoreCase = true))
+        }
+        assertTrue(route.contains("Python extensions can add reusable data/workflow logic"))
+        assertTrue(route.contains("cannot add Android framework"))
+    }
 }
