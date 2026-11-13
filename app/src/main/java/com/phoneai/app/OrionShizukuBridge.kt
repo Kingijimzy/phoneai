@@ -46,13 +46,19 @@ internal object OrionShizukuBridge {
         listenersRegistered = true
         runCatching {
             Shizuku.addBinderReceivedListener {
-                appContext?.let { bindUserService(it) }
+                appContext?.let { app ->
+                    runCatching { SoulEngineState.recordWatcherStatus(app, "event_received", "Shizuku/Sui binder became available") }
+                    bindUserService(app)
+                }
             }
             Shizuku.addBinderDeadListener {
                 synchronized(this) {
                     remote = null
                     binding = false
                     connectionLatch.countDown()
+                }
+                appContext?.let { app ->
+                    runCatching { SoulEngineState.recordWatcherStatus(app, "event_received", "Shizuku/Sui binder disconnected") }
                 }
             }
             Shizuku.addRequestPermissionResultListener { requestCode, grantResult ->
@@ -143,6 +149,9 @@ internal object OrionShizukuBridge {
                     binding = false
                     connectionLatch.countDown()
                 }
+                appContext?.let { app ->
+                    runCatching { SoulEngineState.recordWatcherStatus(app, "event_received", "Shizuku UserService connected") }
+                }
                 binder?.let { b ->
                     runCatching {
                         b.linkToDeath({
@@ -159,6 +168,9 @@ internal object OrionShizukuBridge {
                 synchronized(this@OrionShizukuBridge) {
                     remote = null
                     binding = false
+                }
+                appContext?.let { app ->
+                    runCatching { SoulEngineState.recordWatcherStatus(app, "event_received", "Shizuku UserService disconnected") }
                 }
             }
         }
