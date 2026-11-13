@@ -55,7 +55,7 @@ internal object OrionChatAttachmentStore {
         return File(context.filesDir, "chat-attachments/$safeSession")
     }
 
-    fun import(
+    fun saveFromUri(
         context: Context,
         sessionId: String,
         uri: Uri,
