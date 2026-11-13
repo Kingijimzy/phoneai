@@ -1728,9 +1728,12 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 Toast.makeText(this, "Choose one text document at a time.", Toast.LENGTH_LONG).show()
                 return
             }
+            val sessionId = try { currentChatSessionId() } catch (error: Exception) {
+                Toast.makeText(this, error.message ?: "Could not create a chat session.", Toast.LENGTH_LONG).show()
+                return
+            }
             Thread {
                 try {
-                    val sessionId = currentChatSessionId()
                     val attachment = OrionChatAttachmentStore.saveFromUri(this, sessionId, uri)
                     val extracted = if (attachment.name.substringAfterLast('.', "").equals("pdf", true)) {
                         SafeDocumentExtractor.Extracted(
