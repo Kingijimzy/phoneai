@@ -547,6 +547,8 @@ data class OrionChatLine(
 internal fun OrionComposeChatScreen(
     lines: List<OrionChatLine>,
     activityEvents: List<OrionActivityEvent> = emptyList(),
+    attachments: List<OrionChatAttachmentStore.Attachment> = emptyList(),
+    onOpenAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
     status: String,
     orbMode: OrbView.Mode = OrbView.Mode.IDLE,
     orbMicLevel: Float = 0f,
@@ -814,6 +816,15 @@ internal fun OrionComposeChatScreen(
                             keyboardController?.show()
                         } else null
                     ) }
+                }
+                if (attachments.isNotEmpty()) {
+                    item(key = "orion-chat-attachments-heading") {
+                        Text("ATTACHMENTS", color = OrionUiPalette.muted, fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold, letterSpacing = .9.sp)
+                    }
+                    itemsIndexed(attachments, key = { _, item -> "chat-attachment-${item.id}" }) { _, item ->
+                        OrionChatAttachmentCard(item, onOpenAttachment)
+                    }
                 }
                 item(key = "orion-tool-pills") { OrionToolPills(lines) }
                 // Keep the conversation primary: show one live task card for the latest
@@ -1087,6 +1098,8 @@ internal fun OrionArchivedConversationScreen(
     date: String,
     messages: List<Pair<String, String>>,
     activityEvents: List<OrionConversationRepository.ChatEvent> = emptyList(),
+    attachments: List<OrionChatAttachmentStore.Attachment> = emptyList(),
+    onOpenAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
     onBack: () -> Unit,
     onCopy: () -> Unit,
     onContinue: () -> Unit,
@@ -1132,6 +1145,15 @@ internal fun OrionArchivedConversationScreen(
                     item = OrionChatLine(index.toLong(), item.first, item.second),
                     onOpenBrowser = onOpenBrowser
                 )
+            }
+            if (attachments.isNotEmpty()) {
+                item(key = "archive-attachments-heading") {
+                    Text("ATTACHMENTS", color = OrionUiPalette.muted, fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold, letterSpacing = .9.sp)
+                }
+                itemsIndexed(attachments, key = { _, item -> "archive-attachment-${item.id}" }) { _, item ->
+                    OrionChatAttachmentCard(item, onOpenAttachment)
+                }
             }
             if (activityEvents.isNotEmpty()) {
                 item(key = "archive-activity-heading") {
