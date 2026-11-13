@@ -523,12 +523,14 @@ internal object OrionExecutiveStore {
                 it.getLong(3),it.getLong(4),it.getString(5),it.getString(6),0L)
         } ?: return ""
         val steps = steps(context, objective.id)
+        val attempts = dispatchAttempts(context, objective.id)
         buildString {
             appendLine("SQLITE EXECUTIVE LEDGER — authoritative persisted state")
             appendLine("objective_id=${objective.id}; phase=${objective.phase}; revision=${objective.revision}; plan_revision=${objective.planRevision}")
             appendLine("intent=${objective.intent.take(500)}; recovery_cursor=${objective.recoveryCursor}; blocker=${objective.blocker}")
             steps.forEach { appendLine("step[${it.ordinal}]=${it.id}; ${it.status}; ${it.title}; capability=${it.capability}; attempts=${it.attempts}; evidence=${it.evidenceRef}; result=${it.resultSummary.take(180)}") }
-            appendLine("Only VERIFIED steps with evidence references are complete. Reconcile RUNNING steps before retrying; do not infer completion from a model response.")
+            attempts.forEach { appendLine("dispatch_attempt=${it.id}; capability=${it.capability}; outcome=${it.outcome}; evidence_ref=${it.evidenceRef}") }
+            appendLine("Only VERIFIED steps and dispatch attempts with durable evidence references are complete. BLOCKED or RECONCILIATION_REQUIRED attempts must be reconciled against current state before retrying. Never infer completion from a model response.")
         }
     }.getOrDefault("")
 }
