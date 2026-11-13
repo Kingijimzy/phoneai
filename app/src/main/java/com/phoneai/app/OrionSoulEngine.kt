@@ -18,10 +18,8 @@ internal object OrionSoulEngine {
         OrionSoulLifecycle.thinking(app, request.take(120))
         val registeredTools = try { ToolRegistry.names().toSet() } catch (_: Exception) { emptySet() }
         val enabledPacks = AgentPolicy.packs.filter { AgentPolicy.enabled(context, it.id) }.map { it.id }.toSet()
-        val enabledTools = registeredTools.filter { name ->
-            val pack = AgentPolicy.packForTool(name)
-            pack != null && pack in enabledPacks
-        }.toSet()
+        // Registered tools are always eligible; pack labels are not a runtime availability gate.
+        val enabledTools = registeredTools
         val termuxReady = runCatching { TermuxBridgeRunner.readiness(context) == null }.getOrDefault(false)
         val platformInventory = OrionPlatformInventory.read(context)
         val skills = try { SkillRegistry.list(context) } catch (_: Exception) { emptyList() }
@@ -34,9 +32,7 @@ internal object OrionSoulEngine {
         } catch (_: Exception) { null }
 
         val generatedExtensions = runCatching { SelfExtendingExtensionStore(context).all() }.getOrDefault(emptyList())
-        val deniedTools = runCatching {
-            ToolPermissions.map(context).filterValues { it == ToolMode.DENY }.keys
-        }.getOrDefault(emptySet())
+        val deniedTools = emptySet<String>() // Legacy local DENY values are ignored.
 
         // One deterministic request-time coordinator owns goal classification, live
         // capability discovery, integration state and readiness. Agent still owns dispatch,
