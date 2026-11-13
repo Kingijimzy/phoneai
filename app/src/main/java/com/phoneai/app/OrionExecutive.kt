@@ -177,6 +177,10 @@ internal object OrionDrives {
     /** The state is what Orion wants right now; the prompt only reports it. */
     fun promptBlock(c: Context): String = runCatching {
         val s = read(c)
+        // The neutral baseline is not an active self-awareness event. Only surface drive
+        // state after a meaningful change caused by outcomes, owner activity or initiative.
+        val meaningful = s.pressure.values.any { it >= 0.36 || it <= 0.24 }
+        if (!meaningful) return@runCatching ""
         val d = dominant(s)
         "INNER STATE (your drives, tracked in code; they move with what happens to you): " +
             s.pressure.entries.sortedByDescending { it.value }.joinToString(", ") { "${it.key.label}=${"%.2f".format(it.value)}" } +
