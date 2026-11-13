@@ -2045,7 +2045,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         // Talk and Command share one Agent/model/tool loop. Preserve the real entry surface
         // in the coordinator ledger; a constant routeToAgent previously made the CHAT branch
         // unreachable and mislabeled every typed conversation as COMMAND.
-        val requestSurface = if (conversationOnly) OrionCoordinator.Surface.CHAT else OrionCoordinator.Surface.COMMAND
+        val requestSurface = OrionCoordinator.surfaceForTypedRequest(conversationOnly)
 
         wakeGen++
         appendTranscript("me", t)
