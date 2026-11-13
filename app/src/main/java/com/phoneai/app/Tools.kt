@@ -521,17 +521,30 @@ class Tools(
                 val hour = parts[0].toIntOrNull() ?: return "error: alarm hour must be numeric"
                 val minute = if (parts.size == 2) parts[1].toIntOrNull() ?: return "error: alarm minute must be numeric" else 0
                 if (hour !in 0..23 || minute !in 0..59) return "error: alarm time is outside 24-hour range"
-                val alarm = Intent(AlarmClock.ACTION_SET_ALARM).putExtra(AlarmClock.EXTRA_HOUR, hour)
-                    .putExtra(AlarmClock.EXTRA_MINUTES, minute).putExtra(AlarmClock.EXTRA_MESSAGE, uriText)
-                return try { alarm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); svc.startActivity(alarm); "alarm request handed to the clock app; verify it was saved" }
+                val alarm = Intent(AlarmClock.ACTION_SET_ALARM)
+                    .putExtra(AlarmClock.EXTRA_HOUR, hour)
+                    .putExtra(AlarmClock.EXTRA_MINUTES, minute)
+                    .putExtra(AlarmClock.EXTRA_MESSAGE, uriText)
+                    .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+                return try {
+                    alarm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    svc.startActivity(alarm)
+                    "alarm request sent to Android Clock for %02d:%02d with UI suppression requested; Android does not return saved-alarm confirmation".format(hour, minute)
+                }
                     catch (e: Exception) { "error: clock app could not set alarm (" + e.javaClass.simpleName + ")" }
             }
             "timer" -> {
                 val seconds = query.toIntOrNull() ?: return "error: timer route needs duration in seconds"
                 if (seconds !in 1..86400) return "error: timer duration must be 1–86400 seconds"
-                val timer = Intent(AlarmClock.ACTION_SET_TIMER).putExtra(AlarmClock.EXTRA_LENGTH, seconds)
+                val timer = Intent(AlarmClock.ACTION_SET_TIMER)
+                    .putExtra(AlarmClock.EXTRA_LENGTH, seconds)
                     .putExtra(AlarmClock.EXTRA_MESSAGE, uriText)
-                return try { timer.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); svc.startActivity(timer); "timer request handed to the clock app; verify it was started" }
+                    .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+                return try {
+                    timer.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    svc.startActivity(timer)
+                    "timer request sent to Android Clock for $seconds seconds with UI suppression requested; Android does not return running-timer confirmation"
+                }
                     catch (e: Exception) { "error: clock app could not start timer (" + e.javaClass.simpleName + ")" }
             }
             "open_url" -> {
@@ -898,7 +911,7 @@ class Tools(
             .putExtra(AlarmClock.EXTRA_MESSAGE, label)
             .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
         val r = launch(i)
-        return if (r == "ok") "alarm set for %02d:%02d".format(hour, minute) else r
+        return if (r == "ok") "alarm request sent to Android Clock for %02d:%02d with UI suppression requested; Android does not return saved-alarm confirmation".format(hour, minute) else r
     }
 
     fun timer(seconds: Int, label: String): String {
@@ -907,7 +920,7 @@ class Tools(
             .putExtra(AlarmClock.EXTRA_MESSAGE, label)
             .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
         val r = launch(i)
-        return if (r == "ok") "timer set for $seconds seconds" else r
+        return if (r == "ok") "timer request sent to Android Clock for $seconds seconds with UI suppression requested; Android does not return running-timer confirmation" else r
     }
 
     fun volume(action: String, percent: Int): String {

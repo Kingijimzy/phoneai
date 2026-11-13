@@ -173,10 +173,10 @@ class ToolRegistryTest {
     }
 
     @Test fun promptCatalogIsGeneratedFromToolDefinitions() {
-        val prompt = ToolRegistry.promptSection()
+        val prompt = ToolRegistry.promptSection().lowercase()
         assertTrue(prompt.startsWith("Tools:\n"))
         ToolRegistry.all.forEach { tool ->
-            assertTrue("Prompt is missing ${tool.name}", prompt.contains("- " + tool.promptLine))
+            assertTrue("Prompt is missing ${tool.name}", prompt.contains("- " + tool.promptLine.lowercase()))
         }
         assertTrue(prompt.contains("Tool-use guidance:"))
         assertTrue(prompt.contains("SCREEN TARGET RULE"))
@@ -268,7 +268,7 @@ class ToolRegistryPromptAvailabilityTest {
     }
 
     @Test fun baselineAndFullRegistrySnapshotsRemainAvailableForDiagnostics() {
-        val prompt = ToolRegistry.promptSection()
+        val prompt = ToolRegistry.promptSection().lowercase()
         assertTrue(prompt.startsWith("Tools:\n"))
         ToolRegistry.all.forEach { tool -> assertTrue(prompt.contains("- " + tool.promptLine)) }
         assertTrue(prompt.contains("Tool-use guidance:"))
@@ -350,5 +350,46 @@ class ToolRegistryNativeSelectionTest {
             "python_exec", "workspace_read", "workspace_write", "dev_python", "dev_shell"
         )
         assertTrue("Combined task must expose all relevant tool families", selected.containsAll(required))
+    }
+}
+
+
+class ConversationGroundingPromptRegressionTest {
+    @Test fun contactResolutionUsesUniqueMatchesAndDoesNotAskForRedundantApproval() {
+        val contract = ToolRegistry.find("resolve_contact")!!.promptLine.lowercase()
+        assertTrue(contract.contains("single exact or unambiguous normalized match"))
+        assertTrue(contract.contains("without asking the owner to repeat"))
+        assertTrue(contract.contains("zero or multiple plausible matches"))
+        assertTrue(contract.contains("explicit send/call request is authorization"))
+        assertTrue(contract.contains("verify_send"))
+    }
+
+    @Test fun researchMustBindProductIdentitySizeAndCanonicalUrlToOnePage() {
+        val prompt = ToolRegistry.promptSection().lowercase()
+        assertTrue(prompt.contains("do not infer that rdr1 and rdr2 are interchangeable"))
+        assertTrue(prompt.contains("do not reuse one url for two different products"))
+        assertTrue(prompt.contains("canonical url"))
+        assertTrue(prompt.contains("withhold the disputed figure/link"))
+    }
+
+    @Test fun alarmsAndTimersMustUseNativeBackgroundToolsInsteadOfClockUiAutomation() {
+        val alarm = ToolRegistry.find("alarm")!!.promptLine.lowercase()
+        val timer = ToolRegistry.find("timer")!!.promptLine.lowercase()
+        val systemIntent = ToolRegistry.find("system_intent")!!.promptLine.lowercase()
+        assertTrue(alarm.contains("extra_skip_ui=true"))
+        assertTrue(alarm.contains("instead of opening clock"))
+        assertTrue(timer.contains("extra_skip_ui=true"))
+        assertTrue(timer.contains("instead of opening clock"))
+        assertTrue(systemIntent.contains("use the dedicated alarm tool"))
+        assertTrue(systemIntent.contains("never open clock or automate its screen"))
+        assertTrue(systemIntent.contains("never open clock or automate its screen"))
+    }
+
+    @Test fun skillAndDocumentRequestsUseAvailableCreationPaths() {
+        val prompt = ToolRegistry.promptSection().lowercase()
+        assertTrue(prompt.contains("do not answer that skill creation is contradictory or impossible"))
+        assertTrue(prompt.contains("document/pdf creation rule"))
+        assertTrue(prompt.contains("reportlab"))
+        assertTrue(prompt.contains("python-docx"))
     }
 }
