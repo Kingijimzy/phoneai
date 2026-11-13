@@ -1172,3 +1172,116 @@ internal fun OrionArchivedConversationScreen(
         }
     }
 }
+
+
+/** Compose-native archive list; live and archived chat surfaces share the same visual tokens. */
+@Composable
+internal fun OrionChatHistoryScreen(
+    chats: List<OrionConversationRepository.Session>,
+    onClose: () -> Unit,
+    onClearAll: () -> Unit,
+    onOpen: (OrionConversationRepository.Session) -> Unit,
+    onRename: (OrionConversationRepository.Session) -> Unit,
+    onDelete: (OrionConversationRepository.Session) -> Unit
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val filtered = remember(chats, query) {
+        val needle = query.trim().lowercase()
+        if (needle.isBlank()) chats else chats.filter { chat ->
+            chat.title.lowercase().contains(needle) ||
+                chat.messages.any { it.second.lowercase().contains(needle) }
+        }
+    }
+    val dateFormat = remember { java.text.SimpleDateFormat("d MMM yyyy · h:mm a", java.util.Locale.getDefault()) }
+    Column(Modifier.fillMaxSize().background(OrionUiPalette.background)) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 18.dp, end = 14.dp, top = 16.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("CHAT HISTORY", color = OrionUiPalette.muted, fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Text("Your conversations", color = OrionUiPalette.text, fontSize = 23.sp,
+                    fontWeight = FontWeight.SemiBold)
+                Text(chats.size.toString() + " saved conversations · stored on this device",
+                    color = OrionUiPalette.muted, fontSize = 11.sp)
+            }
+            Text("Clear all", color = OrionUiPalette.secondaryText, fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.clickable(enabled = chats.isNotEmpty(), onClick = onClearAll)
+                    .padding(horizontal = 8.dp, vertical = 12.dp))
+            Text("Close", color = OrionUiPalette.text, fontSize = 12.sp,
+                modifier = Modifier.clickable(onClick = onClose).padding(horizontal = 8.dp, vertical = 12.dp))
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(OrionUiPalette.border))
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+                .clip(RoundedCornerShape(12.dp)).background(OrionUiPalette.panel)
+                .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(12.dp))
+                .padding(horizontal = 13.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("⌕", color = OrionUiPalette.muted, fontSize = 20.sp)
+            Spacer(Modifier.width(9.dp))
+            Box(Modifier.weight(1f)) {
+                if (query.isBlank()) Text("Search conversations", color = OrionUiPalette.muted, fontSize = 13.sp)
+                BasicTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    textStyle = TextStyle(color = OrionUiPalette.text, fontSize = 13.sp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (query.isNotBlank()) {
+                Text("Clear", color = OrionUiPalette.secondaryText, fontSize = 11.sp,
+                    modifier = Modifier.clickable { query = "" }.padding(start = 8.dp))
+            }
+        }
+        if (filtered.isEmpty()) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (chats.isEmpty()) "No saved conversations yet" else "No matching conversations",
+                        color = OrionUiPalette.text, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    Text(if (chats.isEmpty()) "Start a conversation and Orion will keep it here."
+                        else "Try another title or phrase from the conversation.",
+                        color = OrionUiPalette.muted, fontSize = 12.sp)
+                }
+            }
+        } else {
+            LazyColumn(
+                Modifier.weight(1f).fillMaxWidth().padding(horizontal = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 22.dp)
+            ) {
+                itemsIndexed(filtered, key = { _, chat -> chat.id }) { _, chat ->
+                    val preview = chat.messages.lastOrNull()?.second.orEmpty().replace('\n', ' ').trim()
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
+                            .background(OrionUiPalette.panel)
+                            .border(1.dp, OrionUiPalette.border, RoundedCornerShape(13.dp))
+                            .clickable { onOpen(chat) }
+                            .padding(horizontal = 14.dp, vertical = 13.dp),
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(chat.title.ifBlank { "Untitled conversation" }, color = OrionUiPalette.text,
+                                fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f))
+                            Text("Rename", color = OrionUiPalette.secondaryText, fontSize = 10.sp,
+                                modifier = Modifier.clickable { onRename(chat) }.padding(horizontal = 7.dp, vertical = 7.dp))
+                            Text("Delete", color = OrionUiPalette.muted, fontSize = 10.sp,
+                                modifier = Modifier.clickable { onDelete(chat) }.padding(start = 5.dp, end = 2.dp, top = 7.dp, bottom = 7.dp))
+                        }
+                        Text(dateFormat.format(java.util.Date(chat.timestamp)) + "  ·  " +
+                            chat.messages.size + " messages", color = OrionUiPalette.muted, fontSize = 10.sp)
+                        Text(preview.ifBlank { "Open conversation to view messages" },
+                            color = OrionUiPalette.secondaryText, fontSize = 12.sp, lineHeight = 17.sp,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+}
