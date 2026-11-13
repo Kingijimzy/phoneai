@@ -19,8 +19,8 @@ internal object OrionPythonRuntime {
     private const val FULL_EXECUTION_TIMEOUT_MS = LinuxRuntimePolicy.MAX_PROCESS_TIMEOUT_MS
 
     @Synchronized
-    fun execute(context: Context, code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }, onOutput: (String) -> Unit = {}, toolInvoker: ((String, org.json.JSONObject) -> String)? = null): String {
-        val maxChars = PythonExecutionPolicy.maxCodeChars(context)
+    fun execute(context: Context, code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }, onOutput: (String) -> Unit = {}, toolInvoker: ((String, org.json.JSONObject) -> String)? = null, forceFullProfile: Boolean = false): String {
+        val maxChars = if (forceFullProfile) PythonExecutionPolicy.FULL_MAX_CODE_CHARS else PythonExecutionPolicy.maxCodeChars(context)
         if (code.isBlank()) return "error: Python code is required."
         if (code.length > maxChars) return "error: Python code exceeds the active profile limit of $maxChars characters."
         if (code.contains('\u0000')) return "error: Python code contains a forbidden NUL character."
@@ -87,7 +87,7 @@ internal object OrionPythonRuntime {
             return "error: could not start the private Python-to-Android bridge (${failure.javaClass.simpleName})."
         }
         val result = try {
-            val full = OrionOwnerDialSettings.read(app).pythonProfile == OrionPythonProfile.FULL
+            val full = forceFullProfile || OrionOwnerDialSettings.read(app).pythonProfile == OrionPythonProfile.FULL
             val bootstrap = OrionPythonPhoneBridge.bootstrapCommand(full)
             installer.execute(
                 manifest,
@@ -116,7 +116,37 @@ internal object OrionPythonRuntime {
         "[ran in Orion's built-in Python (workspace: ${workspaceRoot.name}); $why]\n" + r.take(MAX_OUTPUT_CHARS)
     } catch (e: Exception) { "error: built-in Python failed too (${(e.message ?: e.javaClass.simpleName).take(160)}); $why" }
 
-    /** Generated extensions remain restricted data transforms; they receive no host capabilities. */
+    /**
+     * Run a generated python_full extension in the full CPython workspace runtime.
+     * Source and input are base64-transported so user code cannot alter the wrapper quoting.
+     * The extension receives INPUT and returns RESULT.
+     */
+    @Synchronized
+    fun runFullExtension(context: Context, source: String, inputJson: String): String {
+        val source64 = android.util.Base64.encodeToString(source.toByteArray(Charsets.UTF_8), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP)
+        val input64 = android.util.Base64.encodeToString(inputJson.toByteArray(Charsets.UTF_8), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP)
+        val wrapper = """
+import base64, json, contextlib, io
+INPUT = json.loads(base64.urlsafe_b64decode("$input64").decode("utf-8"))
+__orion_source = base64.urlsafe_b64decode("$source64").decode("utf-8")
+__orion_printed = io.StringIO()
+try:
+    with contextlib.redirect_stdout(__orion_printed):
+        exec(compile(__orion_source, "<orion-full-extension>", "exec"), globals(), globals())
+    __orion_reply = {"ok": True, "result": globals().get("RESULT"), "printed": __orion_printed.getvalue()}
+except BaseException as __orion_error:
+    __orion_reply = {"ok": False, "error": type(__orion_error).__name__ + ": " + str(__orion_error)[:500], "printed": __orion_printed.getvalue()}
+print("__ORION_FULL_EXTENSION__" + json.dumps(__orion_reply, separators=(",", ":")))
+""".trimIndent()
+        val execution = execute(context, wrapper, forceFullProfile = true)
+        val marker = "__ORION_FULL_EXTENSION__"
+        val resultLine = execution.lineSequence().lastOrNull { it.startsWith(marker) }
+        return if (resultLine != null) resultLine.removePrefix(marker)
+        else org.json.JSONObject().put("ok", false)
+            .put("error", "Full CPython extension did not return a result: " + execution.take(500)).toString()
+    }
+
+    /** Restricted data-transform runner retained for extensions that explicitly select runtime=python. */
     @Synchronized
     fun runExtension(context: Context, source: String, inputJson: String): String = try {
         if (!Python.isStarted()) Python.start(AndroidPlatform(context.applicationContext))
