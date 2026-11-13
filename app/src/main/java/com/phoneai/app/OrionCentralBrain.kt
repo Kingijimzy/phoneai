@@ -56,12 +56,14 @@ internal object OrionCentralBrain {
         // This detects newly registered tools, skills, extensions, providers and enabled packs
         // for Talk, Command, voice and other callers that use this context builder.
         val capabilityDelta = runCatching { OrionCapabilityAwareness.scan(app) }.getOrNull()
-        if (capabilityDelta != null && (capabilityDelta.added.isNotEmpty() || capabilityDelta.removed.isNotEmpty())) {
+        if (capabilityDelta != null && (capabilityDelta.added.isNotEmpty() ||
+                capabilityDelta.removed.isNotEmpty() || capabilityDelta.environmentChanges.isNotEmpty())) {
             sections += buildString {
                 appendLine("ORION ENVIRONMENT CHANGE DETECTED")
                 if (capabilityDelta.added.isNotEmpty()) appendLine("New installed capabilities: " + capabilityDelta.added.joinToString())
                 if (capabilityDelta.removed.isNotEmpty()) appendLine("Capabilities no longer present: " + capabilityDelta.removed.joinToString())
-                appendLine("These are registry changes, not proof of live readiness. Inspect each capability's actual prerequisites before using it.")
+                if (capabilityDelta.environmentChanges.isNotEmpty()) appendLine("Live environment transitions: " + capabilityDelta.environmentChanges.joinToString("; "))
+                appendLine("These are observed transitions, not proof of a task succeeding. Re-check readiness before relying on a changed integration.")
             }
         }
         sections += OrionGraspProtocol.contextBlock()
