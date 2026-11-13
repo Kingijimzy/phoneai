@@ -325,7 +325,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             val previous = lastPythonOutputAt.get()
             if (now - previous >= 350L && lastPythonOutputAt.compareAndSet(previous, now)) {
                 val tail = pythonOutputBuffer.toString().takeLast(700).trim()
-                if (tail.isNotBlank()) ui.note("[TASK:OUTPUT]\\n$tail")
+                if (tail.isNotBlank()) ui.note("[TASK:OUTPUT]\n$tail")
             }
         }
     }
@@ -1251,7 +1251,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 messages.put(msg(
                     "user",
                     "CONTINUE THE SAME OBJECTIVE using the newly exposed registered tool functions. " +
-                        "The following tool calls have ALREADY executed; do not repeat them. Inspect their results and continue from the confirmed state:\\n" +
+                        "The following tool calls have ALREADY executed; do not repeat them. Inspect their results and continue from the confirmed state:\n" +
                         callbackToolReceipts.toString().take(12000)
                 ))
                 current = chatTurnWithNativeTools()
@@ -1598,7 +1598,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             }
             found
         }.getOrDefault("")
-        val context = recentConversationTurns().takeLast(6).joinToString("\\n") { (role, content) ->
+        val context = recentConversationTurns().takeLast(6).joinToString("\n") { (role, content) ->
             val label = if (role.equals("user", true)) "Kingi" else "Orion"
             "$label: ${content.trim().take(420)}"
         }
