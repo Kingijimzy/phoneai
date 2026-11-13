@@ -26,6 +26,9 @@ internal class OrionProactiveWorker(
         val proactiveEnabled = runCatching { AgentPolicy.backgroundEnabled(applicationContext, "proactive") }.getOrDefault(false)
         if (!OrionProactivePolicy.shouldRun(coreEnabled, proactiveEnabled)) return Result.success()
 
+        // Reconcile capability and environment changes even when the owner is not chatting.
+        // This is observational only; it does not invoke tools or grant permissions.
+        runCatching { OrionCapabilityAwareness.scan(applicationContext) }
         // Local health sensing still runs every heartbeat; unsolicited initiatives must pass the Proactive Gate.
         if (!OrionMasterControl.isEnabled(applicationContext)) return Result.success()
         OrionSoulLifecycle.watcherTick(applicationContext)
