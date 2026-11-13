@@ -3,6 +3,8 @@ package com.phoneai.app
 /** Bounded defaults for the explicitly opt-in Gemini Live voice mode. */
 internal object GeminiLivePolicy {
     const val MODEL = "models/gemini-3.8-live"
+    // Gemini 3.8 Live is a native-audio response model. Text is obtained through output transcription.
+    const val RESPONSE_MODALITY = "AUDIO"
     const val INPUT_SAMPLE_RATE = 16_000
     const val OUTPUT_SAMPLE_RATE = 24_000
     const val AUDIO_CHUNK_SAMPLES = 640 // 40 ms at 16 kHz
