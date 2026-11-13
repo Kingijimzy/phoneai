@@ -55,6 +55,11 @@ internal object MediaPlayRouting {
                 }
             }
         }
+        // An explicitly named app is a hard routing constraint. Never turn a failed
+        // YouTube Music/Spotify handoff into a browser URL that looks like success.
+        if (!app.isNullOrBlank()) {
+            return MediaPlaybackPolicy.unavailable(app, if (openOnly) "open app" else query)
+        }
         if (openOnly) {
             return "error: no installed music app found (YouTube Music / Spotify). Install one or name the app."
         }
