@@ -4,7 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 
 /**
- * Evidence-bounded self inventory: registered tools, enabled packs/skills/extensions and configured
+ * Evidence-bounded self inventory: registered tools, informational pack catalog, enabled skills/extensions and configured
  * providers. It detects local inventory changes; it does not claim that a configured remote provider
  * is healthy until a real request succeeds.
  */
@@ -59,7 +59,7 @@ internal object OrionCapabilityAwareness {
             OrionFollowUpStore.add(c, "New Orion capabilities appeared (${s.added.take(5).joinToString()}): verify one on a real task and record its actual readiness.")
         }
         if (s.removed.isNotEmpty()) {
-            OrionLessons.learn(c, "These Orion capabilities disappeared or were disabled: ${s.removed.take(8).joinToString()}. Do not assume they remain available; select a current alternative.")
+            OrionLessons.learn(c, "These Orion capabilities were removed from the installed registry: ${s.removed.take(8).joinToString()}. Do not assume they remain available; select a current alternative.")
             OrionFollowUpStore.add(c, "Capability change detected: ${s.removed.take(5).joinToString()} is no longer in the active inventory. Check whether a replacement is needed.")
         }
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -71,7 +71,7 @@ internal object OrionCapabilityAwareness {
         val s = state(c)
         val parts = buildList {
             if (s.added.isNotEmpty()) add("new since I last checked: ${s.added.take(8).joinToString()}")
-            if (s.removed.isNotEmpty()) add("removed or disabled: ${s.removed.take(8).joinToString()}")
+            if (s.removed.isNotEmpty()) add("removed from installed registry: ${s.removed.take(8).joinToString()}")
             if (s.failing.isNotEmpty()) add("degraded tools: ${s.failing.take(5).joinToString()}")
             if (s.untested.size >= 3) add("registered tools with no recorded use yet: ${s.untested.size} (e.g. ${s.untested.take(4).joinToString()})")
         }
