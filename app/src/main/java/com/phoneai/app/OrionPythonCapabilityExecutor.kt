@@ -46,7 +46,7 @@ internal class OrionPythonCapabilityExecutor(
             "extension_rollback" -> rollbackExtension(args)
             "extension_create" -> createDraft(args)
             "extension_update" -> updateDraft(args)
-            "extension_test" -> testDraft(args, stopped)
+            "extension_test" -> testDraft(args, confirm, stopped)
             "extension_enable" -> enable(args)
             "extension_run" -> runExtension(args, stopped)
             "extension_disable" -> disable(args)
@@ -143,12 +143,17 @@ internal class OrionPythonCapabilityExecutor(
         else "error: could not archive active version $id; the existing extension remains unchanged"
     }
 
-    private fun testDraft(args: JSONObject, stopped: () -> Boolean): String {
+    private fun testDraft(args: JSONObject, confirm: (String) -> Boolean, stopped: () -> Boolean): String {
         val id = args.optString("id").trim()
         val extension = try { extensionStore.all().firstOrNull { it.id == id } } catch (_: Exception) { null }
             ?: return "error: extension draft not found or registry unreadable"
         val sourceIssue = SelfExtendingExtensionPolicy.validateSource(extension.runtime, extension.source)
         if (sourceIssue != null) return "error: extension source validation failed: $sourceIssue"
+        if (extension.runtime == "python_full" && !confirm(
+                "Orion is about to execute this generated full-CPython extension with the Android app UID. " +
+                    "It may access resources available to the app. Review the source before allowing this test: " +
+                    extension.source.take(700)
+            )) return "error: owner declined full-CPython execution; the extension remains disabled and untested."
         val array = args.optJSONArray("tests")
         val cases = if (array == null) emptyList() else
             (0 until array.length()).mapNotNull { array.optJSONObject(it) }
