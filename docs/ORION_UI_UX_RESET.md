@@ -121,3 +121,14 @@ The main chat should remain the primary workspace. Secondary features should not
 - Copy transcript uses actual line separators.
 
 These changes do not yet solve general file/artifact persistence, message block typing, or the legacy history-list UI. Those remain explicit follow-on work.
+
+## Durable attachment implementation
+
+- Added `OrionChatAttachmentStore`: copies selected payloads into app-private, conversation-scoped storage and persists metadata (name, MIME type, byte size, SHA-256, relative path, timestamp) in SQLite.
+- Live chat and archived conversation views now render shared file cards with an explicit open action through Android's existing FileProvider.
+- Text/Office document selection and non-image workspace uploads are copied into the durable attachment store; image selections are also copied so the chat does not depend solely on a temporary content URI.
+- PDF files can be selected and retained as real attachments. PDF text extraction is not implemented yet; the prompt explicitly marks the PDF as unextracted rather than claiming Orion read it.
+- Deleting an archived chat or clearing history also removes its private attachment files and metadata.
+- Added Robolectric tests for persistence across store reopen, session isolation, and session-scoped deletion.
+
+Limits: the attachment payload limit is 25 MB. Existing document text extraction remains separately bounded by `SafeDocumentExtractor`; this work does not claim PDF OCR/text extraction or cloud sync.
