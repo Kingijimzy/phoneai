@@ -3,6 +3,8 @@ package com.phoneai.app
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 
 /**
  * Routes account-backed providers through their official native clients; all API-key
@@ -123,9 +125,12 @@ internal class AccountAwareModelProvider(
             // Bind the durable Codex thread to its model and exact dynamic-tool contract.
             // If either changes, create a fresh native thread rather than resuming a thread
             // whose provider/model or callable schema no longer matches Orion's current turn.
-            val toolFingerprint = tools.sortedBy { it.name }.joinToString("|") {
+            val canonicalToolContract = tools.sortedBy { it.name }.joinToString("|") {
                 it.name + ":" + it.inputSchema.toString()
             }
+            val toolFingerprint = MessageDigest.getInstance("SHA-256")
+                .digest(canonicalToolContract.toByteArray(StandardCharsets.UTF_8))
+                .joinToString("") { byte -> "%02x".format(byte) }
             val storedThread = preferences.getString("codex_native_thread_id", null)
             val storedModel = preferences.getString("codex_native_thread_model", null)
             val storedTools = preferences.getString("codex_native_thread_tools", null)
