@@ -481,7 +481,7 @@ class ToolRegistryNativeSelectionTest {
                 assertFalse("Duplicate capability across pages: $name", seen.contains(name))
                 seen += name
             }
-            offset = page.optInt("next_offset", total)
+            offset += rows.length()
         }
         assertEquals(total, seen.size)
         assertEquals(total, seen.toSet().size)
