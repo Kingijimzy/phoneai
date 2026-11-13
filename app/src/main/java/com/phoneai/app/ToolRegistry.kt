@@ -11,99 +11,15 @@ internal data class ToolDefinition(
     val inputSchema: org.json.JSONObject = ToolInputSchema.fromContract(promptLine)
 )
 
-/** Builds a useful JSON Schema from the same argument signature shown to Orion's model. */
-internal object ToolInputSchema {
-    fun fromContract(contract: String): org.json.JSONObject {
-        val start = contract.indexOf('{')
-        if (start < 0) return org.json.JSONObject().put("type", "object").put("additionalProperties", true)
-        var depth = 0
-        var end = -1
-        for (index in start until contract.length) {
-            when (contract[index]) {
-                '{' -> depth++
-                '}' -> { depth--; if (depth == 0) { end = index; break } }
-            }
-        }
-        if (end <= start) return org.json.JSONObject().put("type", "object").put("additionalProperties", true)
-        val signature = contract.substring(start + 1, end)
-        val fields = splitTopLevel(signature)
-        val properties = org.json.JSONObject()
-        val required = org.json.JSONArray()
-        fields.forEach { field ->
-            val colon = topLevelColon(field)
-            if (colon <= 0) return@forEach
-            val rawName = field.substring(0, colon).trim()
-            val name = rawName.removeSuffix("?").trim()
-            if (!name.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) return@forEach
-            val rawType = field.substring(colon + 1).trim()
-            val optional = rawName.endsWith("?") || rawType.contains("=")
-            val type = rawType.substringBefore(" = ").trim()
-            properties.put(name, propertySchema(type))
-            if (!optional) required.put(name)
-        }
-        return org.json.JSONObject()
-            .put("type", "object")
-            .put("properties", properties)
-            .put("required", required)
-            .put("additionalProperties", false)
-    }
-
-    private fun propertySchema(type: String): org.json.JSONObject {
-        val normalized = type.lowercase()
-        if (normalized.startsWith("enum[")) {
-            val values = org.json.JSONArray()
-            Regex("['\"]([^'\"]+)['\"]").findAll(type).forEach { values.put(it.groupValues[1]) }
-            return org.json.JSONObject().put("type", "string").put("enum", values)
-        }
-        if (normalized.startsWith("array") || normalized.startsWith("list") || normalized.startsWith("[")) {
-            val item = when {
-                normalized.contains("string") -> org.json.JSONObject().put("type", "string")
-                normalized.contains("int") || normalized.contains("number") -> org.json.JSONObject().put("type", "number")
-                normalized.contains("object") || type.contains("{") -> org.json.JSONObject().put("type", "object").put("additionalProperties", true)
-                else -> org.json.JSONObject()
-            }
-            return org.json.JSONObject().put("type", "array").put("items", item)
-        }
-        return when {
-            normalized.contains("bool") -> org.json.JSONObject().put("type", "boolean")
-            normalized.contains("int") -> org.json.JSONObject().put("type", "integer")
-            normalized.contains("number") || normalized.contains("float") || normalized.contains("double") -> org.json.JSONObject().put("type", "number")
-            normalized.contains("json object") || normalized == "object" || normalized.contains("map") ->
-                org.json.JSONObject().put("type", "object").put("additionalProperties", true)
-            else -> org.json.JSONObject().put("type", "string")
-        }
-    }
-
-    private fun splitTopLevel(value: String): List<String> {
-        val result = mutableListOf<String>()
-        var braces = 0; var brackets = 0; var parentheses = 0; var quote: Char? = null; var start = 0
-        value.forEachIndexed { index, char ->
-            if (quote != null) { if (char == quote) quote = null; return@forEachIndexed }
-            if (char == '\'' || char == '"') { quote = char; return@forEachIndexed }
-            when (char) {
-                '{' -> braces++; '}' -> braces--
-                '[' -> brackets++; ']' -> brackets--
-                '(' -> parentheses++; ')' -> parentheses--
-                ',' -> if (braces == 0 && brackets == 0 && parentheses == 0) {
-                    result += value.substring(start, index).trim(); start = index + 1
-                }
-            }
-        }
-        value.substring(start).trim().takeIf { it.isNotEmpty() }?.let(result::add)
-        return result
-    }
-
-    private fun topLevelColon(value: String): Int {
-        var depth = 0
-        value.forEachIndexed { index, char ->
-            when (char) {
-                '[', '{', '(' -> depth++
-                ']', '}', ')' -> depth--
-                ':' -> if (depth == 0) return index
-            }
-        }
-        return -1
-    }
+internal data class ToolDefinition(
+    val name: String,
+    val promptLine: String,
+    val description: String,
+    val access: ToolAccess
+) {
+    /** Reuse the same authoritative contract parser across API, Codex and MCP transports. */
+    val inputSchema: org.json.JSONObject
+        get() = OrionToolContractCodec.parameters(this)
 }
 
 internal object ToolRegistry {
