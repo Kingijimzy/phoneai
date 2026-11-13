@@ -11,11 +11,11 @@ class OrionNativeToolDispatcherTest {
     @Test fun dispatchesMultipleRegisteredCallsInOrder() {
         val executed = mutableListOf<String>()
         val outcomes = OrionNativeToolDispatcher.dispatch(
-            listOf(call("1", "media_status"), call("2", "read_battery")),
+            listOf(call("1", "media_status"), call("2", "device_operation", JSONObject().put("operation", "read_battery"))),
             cancelled = { false }, isRegistered = { true },
             execute = { name, _ -> executed += name; "result:$name" }
         )
-        assertEquals(listOf("media_status", "read_battery"), executed)
+        assertEquals(listOf("media_status", "device_operation"), executed)
         assertEquals(listOf("result:media_status", "result:read_battery"), outcomes.map { it.content })
         assertTrue(outcomes.all { it.dispatched })
     }
@@ -49,7 +49,7 @@ class OrionNativeToolDispatcherTest {
         var cancelled = false
         var executions = 0
         val outcomes = OrionNativeToolDispatcher.dispatch(
-            listOf(call("1", "media_status"), call("2", "read_battery")),
+            listOf(call("1", "media_status"), call("2", "device_operation", JSONObject().put("operation", "read_battery"))),
             cancelled = { cancelled }, isRegistered = { true },
             execute = { _, _ -> executions++; cancelled = true; "first result" }
         )
