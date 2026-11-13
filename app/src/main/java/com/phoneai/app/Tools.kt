@@ -954,6 +954,9 @@ class Tools(
     }
 
     fun flashlight(on: Boolean): String {
+        if (svc.checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            return "error: Android has not granted Camera permission. Open Orion's app settings, enable Camera, then retry the flashlight."
+        }
         return try {
             val cm = svc.getSystemService(Context.CAMERA_SERVICE) as CameraManager
             val id = cm.cameraIdList.firstOrNull {
