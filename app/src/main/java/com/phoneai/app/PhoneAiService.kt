@@ -2409,7 +2409,19 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         main.post { mainChatListener?.onMessage("ai", text) }
         // Keep the full answer in chat; speech is a separate concise channel.
-        if (Prefs.voice(this)) OrionVoiceOutputPolicy.forSpeech(text)?.let { voice.speak(it) }
+        if (Prefs.voice(this)) speakComposed(text)
+    }
+
+    private val speakSeq = java.util.concurrent.atomic.AtomicInteger()
+
+    /** Speech is a separate channel: the model writes what Orion says aloud, with a mood; chat keeps the full text. */
+    private fun speakComposed(text: String) {
+        val mine = speakSeq.incrementAndGet()
+        Thread {
+            val line = runCatching { agent.composeSpoken(text) }.getOrNull() ?: return@Thread
+            if (mine != speakSeq.get() || line.text.isBlank()) return@Thread
+            voice.speakLine(line)
+        }.apply { isDaemon = true }.start()
     }
 
     override fun progress(text: String) {
