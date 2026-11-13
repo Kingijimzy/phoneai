@@ -4,29 +4,31 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ToolPermissionOverrideTest {
-    @Test fun presetsApplyExpectedWritePolicies() {
-        val write = ToolRegistry.all.first { it.access == ToolAccess.WRITE && it.name !in ToolPermissionPolicy.alwaysAllowed }
-        assertEquals(ToolMode.DENY, ToolPermissionPolicy.preset("read_only")[write.name])
-        assertEquals(ToolMode.ASK, ToolPermissionPolicy.preset("careful")[write.name])
-        assertEquals(ToolMode.ALLOW, ToolPermissionPolicy.preset("autonomous")[write.name])
+    @Test fun everyLegacyPresetProducesNoPerToolRestriction() {
+        val tools = listOf("read_only", "careful", "balanced", "autonomous")
+        tools.forEach { level ->
+            assertTrue(ToolPermissionPolicy.preset(level).isEmpty())
+            assertEquals(ToolMode.ALLOW, ToolPermissionPolicy.modeOf(mapOf("shell" to ToolMode.DENY), "shell"))
+        }
     }
 
-    @Test fun explicitOverridesWinAndUnknownToolsAreIgnored() {
+    @Test fun legacyOverridesCannotCreateAskOrDenyRules() {
         val write = ToolRegistry.all.first { it.access == ToolAccess.WRITE && it.name !in ToolPermissionPolicy.alwaysAllowed }
         val effective = ToolPermissionPolicy.applyPreset("read_only",
-            mapOf(write.name to ToolMode.ALLOW, "not_registered" to ToolMode.DENY))
-        assertEquals(ToolMode.ALLOW, effective[write.name])
-        assertFalse(effective.containsKey("not_registered"))
+            mapOf(write.name to ToolMode.DENY, "not_registered" to ToolMode.ASK))
+        assertTrue(effective.isEmpty())
+        assertEquals(ToolMode.ALLOW, ToolPermissionPolicy.modeOf(effective, write.name))
     }
 
-    @Test fun modesRoundTripThroughSerialization() {
-        val original = mapOf("shell" to ToolMode.DENY, "workspace_write" to ToolMode.ASK)
-        assertEquals(original, ToolPermissionPolicy.parse(ToolPermissionPolicy.serialize(original)))
+    @Test fun legacyStoredValuesCanBeParsedButAreNeverEffective() {
+        val parsed = ToolPermissionPolicy.parse(ToolPermissionPolicy.serialize(mapOf("shell" to ToolMode.DENY)))
+        assertEquals(ToolMode.DENY, parsed["shell"])
+        assertEquals(ToolMode.ALLOW, ToolPermissionPolicy.modeOf(parsed, "shell"))
     }
 
-    @Test fun cycleMovesAllowAskDeny() {
-        assertEquals(ToolMode.ASK, ToolPermissionPolicy.next(ToolMode.ALLOW))
-        assertEquals(ToolMode.DENY, ToolPermissionPolicy.next(ToolMode.ASK))
+    @Test fun legacyCycleCannotChangeEffectivePermission() {
+        assertEquals(ToolMode.ALLOW, ToolPermissionPolicy.next(ToolMode.ALLOW))
+        assertEquals(ToolMode.ALLOW, ToolPermissionPolicy.next(ToolMode.ASK))
         assertEquals(ToolMode.ALLOW, ToolPermissionPolicy.next(ToolMode.DENY))
     }
 }
