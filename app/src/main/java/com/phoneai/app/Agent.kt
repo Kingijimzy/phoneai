@@ -696,7 +696,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             args.optString("code").isBlank() && args.optString("script").isNotBlank()) {
             JSONObject(args.toString()).put("code", args.optString("script"))
         } else args
-        val dispatchAction = {
+        val dispatchOnce = {
             OrionExecutionLoop.dispatch(tool, stopped) {
                 if (tool in nativeUiActions) {
                     val validationArgs = JSONObject(args.toString()).put("tool", tool)
@@ -707,6 +707,35 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     exec(tool, executionArgs)
                 }
             }
+        }
+        // Retry only idempotent READ tools after classified transient/ambiguous transport failures.
+        // Writes, consequential operations, permission failures and cancellations never replay.
+        val dispatchAction = {
+            val first = dispatchOnce()
+            if (ToolRegistry.access(tool) == ToolAccess.READ &&
+                first.state == OrionExecutionLoop.DispatchState.FAILED) {
+                val outcome = RecoveryPolicy.retryRead(
+                    first = first.value,
+                    isFailure = { value ->
+                        value.trimStart().startsWith("error", ignoreCase = true) ||
+                            value.startsWith("I couldn't retrieve", ignoreCase = true)
+                    },
+                    stopped = { stopped },
+                    budgetExhausted = { false },
+                    sleep = { delay -> Thread.sleep(delay) },
+                    onRetry = { attempt, failure ->
+                        ui.note("Retrying read-only '$tool' after ${failure.name.lowercase()} failure (attempt $attempt/${RecoveryPolicy.MAX_READ_RETRIES}).")
+                    },
+                    attempt = { dispatchOnce().value }
+                )
+                OrionExecutionLoop.DispatchResult(
+                    if (outcome.result.trimStart().startsWith("error", ignoreCase = true) ||
+                        outcome.result.startsWith("I couldn't retrieve", ignoreCase = true))
+                        OrionExecutionLoop.DispatchState.FAILED
+                    else OrionExecutionLoop.DispatchState.DISPATCHED,
+                    outcome.result
+                )
+            } else first
         }
         val dispatch = if (retrievalRequired) {
             when (val gate = OrionRetrieveBeforeActPolicy.dispatchIfValid(
