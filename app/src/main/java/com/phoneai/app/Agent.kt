@@ -192,22 +192,30 @@ internal object IrreversibleActionConfirmationPolicy {
     fun ownerApprovalDescription(tool: String, args: JSONObject): String? {
         destructiveAction(tool, args)?.let { return it }
         val payload = args.optJSONObject("arguments") ?: args
+        val targetTool = if (tool == "mcp_call") args.optString("name").ifBlank { tool } else tool
         val path = payload.optString("path").ifBlank { payload.optString("uri") }
             .ifBlank { payload.optString("filename") }.take(180)
         val detail = if (path.isBlank()) "" else " ($path)"
-        return when (tool.lowercase()) {
+        val normalized = targetTool.lowercase()
+        if (tool == "mcp_call" || normalized in setOf("mcp_read_resource", "mcp_list_resources", "mcp_list_prompts", "mcp_get_prompt")) {
+            val scope = if (tool == "mcp_call") McpConnector.scopeForTool(targetTool) else "read"
+            if (scope == "read") return "Orion is requesting access to private data exposed by the connected MCP service through $targetTool. Allow this read?"
+        }
+        return when (normalized) {
             "workspace_read", "dev_read", "open_file", "show_file", "document_extract", "image_read",
-            "find_files", "github_account_read", "gmail_list_messages", "telegram_inbox",
-            "read_notifications", "clipboard_read", "resolve_contact" ->
+            "find_files", "workspace_list", "workspace_read", "backup_list", "trash_list",
+            "dev_understand", "dev_read", "project_list", "project_inspect",
+            "github_account_read", "gmail_list_messages", "telegram_inbox",
+            "read_notifications", "clipboard_read", "resolve_contact", "device_location" ->
                 "Orion is requesting access to private or personal information using $tool$detail. Allow this access?"
-            "workspace_write", "dev_write", "save_file", "file_write", "project_create", "project_update" ->
+            "workspace_write", "dev_write", "save_file", "file_write", "project_create", "project_update", "project_plan" ->
                 "Orion is about to write or modify a file or project using $tool$detail. Allow this change?"
-            "python_exec", "dev_python" ->
+            "python_exec", "dev_python", "extension_run", "extension_test" ->
                 "Orion is about to execute a Python script in its configured runtime. Review the code shown in the task output and allow execution?"
             "shell", "dev_shell", "termux_command", "run_command" -> {
                 val command = payload.optString("command").ifBlank { payload.optString("cmd") }
                     .ifBlank { payload.optString("script") }
-                val scriptInstall = Regex("(?i)\\b(pip|pip3|npm|pnpm|yarn|gem|cargo|go)\\s+install\\b|\\b(apk|apt|apt-get)\\s+add\\b|\\b(curl|wget)\\b.{0,240}\\|\\s*(sh|bash)|\\b(sh|bash)\\s+[^;&|]+\\.(sh|bash)\\b")
+                val scriptInstall = Regex("(?i)\\b(pip|pip3|npm|pnpm|yarn|gem|cargo|go)\\s+install\\b|\\b(apk|apt|apt-get)\\s+add\\b|\\b(curl|wget)\\b.{0,240}\\|\\s*(sh|bash)|\\b(sh|bash|python3?|node|ruby|perl)\\s+[^;&|]+\\.(sh|bash|py|js|rb|pl)\\b|(?:^|\\s)\\./[^;&|]+\\.(sh|py|js|rb|pl)\\b")
                     .containsMatchIn(command)
                 if (scriptInstall) "Orion is about to download, install, or execute a script or package through $tool: ${command.take(220)}. Allow this operation?"
                 else null
