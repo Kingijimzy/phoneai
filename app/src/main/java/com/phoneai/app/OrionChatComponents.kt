@@ -776,3 +776,62 @@ internal fun ImageResultCard(raw: String) {
         if (caption.isNotBlank()) Text(caption, color = ChatMuted, fontSize = 11.sp, modifier = Modifier.padding(10.dp))
     }
 }
+
+
+/** Renders a durable SQLite activity receipt without inferring its state from free-form text. */
+@Composable
+internal fun OrionPersistedActivityCard(event: OrionConversationRepository.ChatEvent) {
+    val clipboard = LocalClipboardManager.current
+    val failed = event.status.equals("failed", true) ||
+        event.status.equals("error", true) || event.status.equals("denied", true)
+    val waiting = event.status.equals("waiting", true) ||
+        event.status.equals("pending", true) || event.status.equals("approval", true)
+    val accent = when {
+        failed -> OrionUiPalette.danger
+        waiting -> OrionUiPalette.warning
+        event.status.equals("completed", true) || event.status.equals("success", true) ->
+            OrionUiPalette.success
+        else -> OrionUiPalette.secondaryText
+    }
+    var expanded by remember(event.id) { mutableStateOf(false) }
+    val evidence = event.evidenceJson.orEmpty()
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(OrionUiPalette.panel)
+            .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(12.dp))
+            .padding(horizontal = 13.dp, vertical = 11.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.size(7.dp).clip(CircleShape).background(accent))
+            Text(event.type.replace('_', ' ').uppercase(), color = OrionUiPalette.text,
+                fontSize = 10.sp, fontWeight = FontWeight.SemiBold, letterSpacing = .5.sp)
+            Spacer(Modifier.weight(1f))
+            Text(event.status.replace('_', ' ').uppercase(), color = accent,
+                fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        }
+        Text(event.summary, color = OrionUiPalette.secondaryText, fontSize = 12.sp, lineHeight = 17.sp)
+        if (evidence.isNotBlank()) {
+            Text(
+                if (expanded) "HIDE STORED EVIDENCE" else "VIEW STORED EVIDENCE",
+                color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable { expanded = !expanded }.padding(vertical = 3.dp)
+            )
+            if (expanded) {
+                Text(evidence, color = OrionUiPalette.secondaryText,
+                    fontSize = 10.sp, lineHeight = 14.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Receipt " + event.id.take(8), color = OrionUiPalette.muted, fontSize = 9.sp)
+            Spacer(Modifier.weight(1f))
+            Text("COPY", color = OrionUiPalette.muted, fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable {
+                    clipboard.setText(AnnotatedString(event.summary + if (evidence.isNotBlank()) "\\n" + evidence else ""))
+                }.padding(5.dp))
+        }
+    }
+}
