@@ -71,7 +71,9 @@ object NeuralVoiceInstaller {
         val data = File(dir, "espeak-ng-data")
         return data.isDirectory &&
             File(data, "phontab").isFile &&
-            File(data, "phondata").isFile
+            File(data, "phonindex").isFile &&
+            File(data, "phondata").isFile &&
+            File(data, "intonations").isFile
     }
 
     fun install(
@@ -303,6 +305,9 @@ object NeuralVoiceInstaller {
         progress(98)
         if (!modelExtracted || !voicesExtracted || !tokensExtracted || !licenseExtracted || espeakBytes <= 0L) {
             throw IOException("The official Kokoro archive did not contain the expected model, voices, tokens, license and pronunciation data.")
+        }
+        if (!hasEspeakData(destination)) {
+            throw IOException("Kokoro pronunciation data is incomplete; phontab, phonindex, phondata and intonations are required.")
         }
     }
 }
