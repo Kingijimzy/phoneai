@@ -32,7 +32,7 @@ class OrionChatAttachmentStoreTest {
     @Test fun attachmentBytesAndMetadataSurviveStoreReopenAndStayScopedToSession() {
         val source = context.cacheDir.resolve("report.txt")
         source.writeText("Orion durable attachment test")
-        val imported = OrionChatAttachmentStore.import(
+        val imported = OrionChatAttachmentStore.saveFromUri(
             context, "session-a", Uri.fromFile(source)
         )
         val restored = OrionChatAttachmentStore.forSession(context, "session-a").single()
@@ -46,8 +46,8 @@ class OrionChatAttachmentStoreTest {
     @Test fun deletingOneSessionRemovesItsFilesAndMetadataOnly() {
         val a = context.cacheDir.resolve("a.txt").apply { writeText("A") }
         val b = context.cacheDir.resolve("b.txt").apply { writeText("B") }
-        OrionChatAttachmentStore.import(context, "session-a", Uri.fromFile(a))
-        val keep = OrionChatAttachmentStore.import(context, "session-b", Uri.fromFile(b))
+        OrionChatAttachmentStore.saveFromUri(context, "session-a", Uri.fromFile(a))
+        val keep = OrionChatAttachmentStore.saveFromUri(context, "session-b", Uri.fromFile(b))
         assertEquals(1, OrionChatAttachmentStore.deleteSession(context, "session-a"))
         assertTrue(OrionChatAttachmentStore.forSession(context, "session-a").isEmpty())
         assertTrue(OrionChatAttachmentStore.file(context, keep).exists())
