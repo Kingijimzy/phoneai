@@ -119,6 +119,11 @@ private fun Activity.showAndroidPermissionStatus() {
     rows += "Location: " + if (location) "GRANTED" else "not granted"
     rows += "Calendar read: " + if (granted(Manifest.permission.READ_CALENDAR)) "GRANTED" else "not granted"
     rows += "Calendar write: " + if (granted(Manifest.permission.WRITE_CALENDAR)) "GRANTED" else "not granted"
+    rows += "Phone state: " + if (granted(Manifest.permission.READ_PHONE_STATE)) "GRANTED" else "not granted"
+    rows += "Place calls: " + if (granted(Manifest.permission.CALL_PHONE)) "GRANTED" else "not granted"
+    if (Build.VERSION.SDK_INT >= 26) rows += "Answer calls: " + if (granted(Manifest.permission.ANSWER_PHONE_CALLS)) "GRANTED" else "not granted"
+    rows += "Modify system settings: " + if (Settings.System.canWrite(this)) "GRANTED" else "not granted (special app access)"
+    if (Build.VERSION.SDK_INT >= 31) rows += "Exact alarms: " + if (getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms()) "GRANTED" else "not granted (inexact fallback)"
     if (Build.VERSION.SDK_INT >= 33) {
         rows += "Photos: " + if (granted(Manifest.permission.READ_MEDIA_IMAGES)) "GRANTED" else "not granted / use Android Photo Picker"
         rows += "Videos: " + if (granted(Manifest.permission.READ_MEDIA_VIDEO)) "GRANTED" else "not granted / use Android Photo Picker"
