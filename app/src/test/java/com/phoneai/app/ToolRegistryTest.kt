@@ -458,6 +458,53 @@ class ToolRegistryNativeSelectionTest {
         }
     }
 
+    @Test fun capabilitySearchPaginationKeepsZeroMatchToolsReachable() {
+        val first = JSONObject(ToolRegistry.searchCapabilities("zzq_no_registered_capability_matches", 5, 0))
+        assertEquals(5, first.getInt("count"))
+        assertTrue(first.getBoolean("has_more"))
+        assertEquals(0, first.getInt("offset"))
+        val total = first.getInt("total")
+        assertTrue(total > 5)
+        val seen = mutableListOf<String>()
+        val firstRows = first.getJSONArray("results")
+        for (i in 0 until firstRows.length()) {
+            assertEquals(0, firstRows.getJSONObject(i).getInt("match_score"))
+            seen += firstRows.getJSONObject(i).getString("name")
+        }
+        var offset = first.getInt("next_offset")
+        while (offset < total) {
+            val page = JSONObject(ToolRegistry.searchCapabilities("zzq_no_registered_capability_matches", 5, offset))
+            assertEquals(offset, page.getInt("offset"))
+            val rows = page.getJSONArray("results")
+            for (i in 0 until rows.length()) {
+                val name = rows.getJSONObject(i).getString("name")
+                assertFalse("Duplicate capability across pages: $name", seen.contains(name))
+                seen += name
+            }
+            offset = page.optInt("next_offset", total)
+        }
+        assertEquals(total, seen.size)
+        assertEquals(total, seen.toSet().size)
+        val end = JSONObject(ToolRegistry.searchCapabilities("zzq_no_registered_capability_matches", 5, total))
+        assertEquals(0, end.getInt("count"))
+        assertFalse(end.getBoolean("has_more"))
+    }
+
+    @Test fun capabilitySearchPaginationIsDeterministicAndClampsBounds() {
+        val query = "zzq_unmatched_query"
+        val a = JSONObject(ToolRegistry.searchCapabilities(query, 4, 0))
+        val b = JSONObject(ToolRegistry.searchCapabilities(query, 4, 0))
+        assertEquals(a.getJSONArray("results").toString(), b.getJSONArray("results").toString())
+        val clamped = JSONObject(ToolRegistry.searchCapabilities(query, 999, -20))
+        assertEquals(12, clamped.getInt("limit"))
+        assertEquals(0, clamped.getInt("offset"))
+        assertEquals(12, clamped.getInt("count"))
+        val end = JSONObject(ToolRegistry.searchCapabilities(query, 5, clamped.getInt("total") + 100))
+        assertEquals(clamped.getInt("total"), end.getInt("offset"))
+        assertEquals(0, end.getInt("count"))
+        assertFalse(end.getBoolean("has_more"))
+    }
+
     @Test fun discoveredToolsAreAddedToTheNextTurnOnlyByExactRegistryName() {
         val exposed = ToolRegistry.nativeToolsFor("hello").toMutableList()
         assertTrue(!exposed.any { it.name == "trade_history_summary" })
