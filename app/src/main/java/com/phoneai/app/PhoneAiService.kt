@@ -2029,7 +2029,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             worker.execute {
                 try {
                     if (explicitCommand != null) OrionCoordinator.run(this, OrionCoordinator.Surface.VOICE, explicitCommand) { agent.run(explicitCommand) }
-                    else agent.runLiveConversation(t)
+                    else OrionCoordinator.run(this, OrionCoordinator.Surface.VOICE, t) { agent.runLiveConversation(t) }
                 } catch (e: Exception) {
                     say("I couldn't reach the AI just now. Please try again.")
                 }
