@@ -50,6 +50,13 @@ object AgentPolicy {
         // disabled by an Orion-local switch; its executor reports Android/service limits.
         return packs.any { it.id == id && it.implemented }
     }
+    /** Opt-in background observation is separate from capability/tool availability. */
+    fun backgroundEnabled(c: Context, id: String): Boolean {
+        val pack = packs.firstOrNull { it.id == id } ?: return false
+        if (!pack.implemented) return false
+        val prefs = p(c)
+        return if (prefs.contains("pack_$id")) prefs.getBoolean("pack_$id", false) else defaultOn(id)
+    }
     fun setEnabled(c: Context, id: String, on: Boolean) {
         val pack = packs.firstOrNull { it.id == id }
         p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
