@@ -446,10 +446,11 @@ class ToolRegistryNativeSelectionTest {
 
     @Test fun discoveredToolsAreAddedToTheNextTurnOnlyByExactRegistryName() {
         val exposed = ToolRegistry.nativeToolsFor("hello").toMutableList()
-        val result = JSONObject(ToolRegistry.searchCapabilities("inspect MCP resources", 8)).toString()
+        assertTrue(!exposed.any { it.name == "trade_history_summary" })
+        val result = JSONObject(ToolRegistry.searchCapabilities("trade_history_summary", 8)).toString()
         val added = ToolRegistry.addDiscoveredTools(exposed, result)
         assertTrue(added > 0)
-        assertTrue(exposed.any { it.name == "mcp_list_resources" })
+        assertTrue(exposed.any { it.name == "trade_history_summary" })
         val before = exposed.size
         assertEquals(0, ToolRegistry.addDiscoveredTools(exposed, """{"results":[{"name":"invented_tool"}]}"""))
         assertEquals(before, exposed.size)
