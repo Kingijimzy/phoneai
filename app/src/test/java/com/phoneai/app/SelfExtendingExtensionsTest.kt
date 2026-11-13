@@ -67,7 +67,23 @@ class SelfExtendingExtensionsTest {
         assertFalse(store.saveDraft(draft()))
         assertNotNull(SelfExtendingExtensionPolicy.validateSource("ruby", "puts 'hi'"))
         assertNotNull(SelfExtendingExtensionPolicy.validateSource("javascript", "function run(x) { return x; }"))
-        assertNotNull(SelfExtendingExtensionPolicy.validateSource("python_full", "import os\\nRESULT = os.listdir('/')"))
+        assertNull(SelfExtendingExtensionPolicy.validateSource("python_full", "import os\\nRESULT = os.listdir('/')"))
+    }
+
+    @Test fun fullPythonExtensionCanBePersistedAsAGeneratedDraft() {
+        val source = "import os\\nRESULT = os.getcwd()"
+        val extension = GeneratedExtension(
+            id = "full_python_tool",
+            displayName = "Full Python tool",
+            runtime = "python_full",
+            source = source,
+            sourceSha256 = SelfExtendingExtensionPolicy.sha256(source),
+            description = "Full CPython extension",
+            createdAtMillis = 101L
+        )
+        assertTrue(store.saveDraft(extension))
+        assertEquals("python_full", store.all().single().runtime)
+        assertNull(store.enabled(extension.id))
     }
 
     @Test fun disabledOrTamperedExtensionsAreNeverReturnedAsExecutable() {
