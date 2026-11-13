@@ -624,11 +624,20 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val dispatchStartedAt = System.currentTimeMillis()
         val dispatchTaskId = evidenceTaskId()
         val dispatchIntent = activeRequestScope.ifBlank { "Execute registered capability: $tool" }
+        // Bind the low-level receipt to the actual ready/running node in the durable task graph.
+        // This is traceability only: an unresolved graph node does not silently disable a registered tool.
+        val dispatchGraphStep = runCatching {
+            val graph = OrionObjectiveGraph.load(svc) ?: return@runCatching "unbound"
+            val requestedStep = args.optString("objective_id")
+                .ifBlank { args.optString("objectiveId") }
+                .takeIf { it.isNotBlank() }
+            OrionObjectiveGraph.resolveDispatchId(graph, requestedStep, tool) ?: "unresolved"
+        }.getOrDefault("unbound")
         val executiveHandle = OrionExecutiveStore.beginToolDispatch(
             svc,
             OrionObjectiveGraph.resolveSessionId(svc),
             dispatchIntent,
-            "native_tool",
+            dispatchGraphStep,
             tool,
             args,
             dispatchStartedAt
