@@ -712,7 +712,7 @@ internal fun orionWorkingPhrase(status: String): String {
         "search" in value || "research" in value || "browser" in value -> "Looking for relevant information"
         "code" in value || "build" in value || "develop" in value -> "Working on the implementation"
         "plan" in value || "think" in value -> "Thinking through the best approach"
-        "solve" in value || "tackle" in value || "work" in value || "act" in value -> "Working through the task"
+        "solv" in value || "tackl" in value || "work" in value || "act" in value -> "Working through the task"
         else -> "Working through the next step"
     }
 }

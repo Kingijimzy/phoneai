@@ -124,7 +124,7 @@ class OrionOrbPainter {
             val depth = ((depthZ + 1f) * .5f).coerceIn(0f, 1f)
             val alpha = ((.12f + .88f * depth * depth) * if (alert) .95f else .82f).coerceIn(0f, 1f)
             val size = pointScale * (.48f + depth * 1.08f) * (1f + voice * .45f)
-            val tint = if (alert) 0xFFFFC66E.toInt() else stateColor
+            val tint = stateColor
             val brightness = .78f + depth * .22f
             val rr = (android.graphics.Color.red(tint) * brightness).toInt().coerceIn(0, 255)
             val gg = (android.graphics.Color.green(tint) * brightness).toInt().coerceIn(0, 255)
