@@ -516,21 +516,29 @@ internal object OrionExecutiveStore {
 
     fun contextBlock(context: Context): String = runCatching {
         val db = Db(context.applicationContext).readableDatabase
-        val objective = db.rawQuery("""SELECT id,intent,phase,revision,plan_revision,recovery_cursor,blocker
-            FROM objectives WHERE phase NOT IN (?,?) ORDER BY updated_at DESC LIMIT 1""",
-            arrayOf(Phase.COMPLETED.name, Phase.FAILED.name)).use {
-            if (!it.moveToFirst()) null else Objective(it.getString(0),it.getString(1),Phase.valueOf(it.getString(2)),
-                it.getLong(3),it.getLong(4),it.getString(5),it.getString(6),0L)
-        } ?: return ""
-        val steps = steps(context, objective.id)
-        val attempts = dispatchAttempts(context, objective.id)
+        val recentObjectives = db.rawQuery("""SELECT id,intent,phase,revision,plan_revision,recovery_cursor,blocker
+            FROM objectives ORDER BY updated_at DESC LIMIT 8""", null).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) add(
+                    Objective(cursor.getString(0), cursor.getString(1), Phase.valueOf(cursor.getString(2)),
+                        cursor.getLong(3), cursor.getLong(4), cursor.getString(5), cursor.getString(6), 0L)
+                )
+            }
+        }
+        if (recentObjectives.isEmpty()) return ""
         buildString {
-            appendLine("SQLITE EXECUTIVE LEDGER — authoritative persisted state")
-            appendLine("objective_id=${objective.id}; phase=${objective.phase}; revision=${objective.revision}; plan_revision=${objective.planRevision}")
-            appendLine("intent=${objective.intent.take(500)}; recovery_cursor=${objective.recoveryCursor}; blocker=${objective.blocker}")
-            steps.forEach { appendLine("step[${it.ordinal}]=${it.id}; ${it.status}; ${it.title}; capability=${it.capability}; attempts=${it.attempts}; evidence=${it.evidenceRef}; result=${it.resultSummary.take(180)}") }
-            attempts.forEach { appendLine("dispatch_attempt=${it.id}; capability=${it.capability}; outcome=${it.outcome}; evidence_ref=${it.evidenceRef}") }
-            appendLine("Only VERIFIED steps and dispatch attempts with durable evidence references are complete. BLOCKED or RECONCILIATION_REQUIRED attempts must be reconciled against current state before retrying. Never infer completion from a model response.")
+            appendLine("SQLITE EXECUTIVE LEDGER — latest 8 durable dispatch/objective records, including terminal outcomes")
+            recentObjectives.forEach { objective ->
+                appendLine("objective_id=${objective.id}; phase=${objective.phase}; revision=${objective.revision}; plan_revision=${objective.planRevision}")
+                appendLine("intent=${objective.intent.take(500)}; recovery_cursor=${objective.recoveryCursor}; blocker=${objective.blocker}")
+                steps(context, objective.id).forEach { step ->
+                    appendLine("step[${step.ordinal}]=${step.id}; ${step.status}; ${step.title}; capability=${step.capability}; attempts=${step.attempts}; evidence=${step.evidenceRef}; result=${step.resultSummary.take(180)}")
+                }
+                dispatchAttempts(context, objective.id).forEach { attempt ->
+                    appendLine("dispatch_attempt=${attempt.id}; capability=${attempt.capability}; outcome=${attempt.outcome}; evidence_ref=${attempt.evidenceRef}; summary=${attempt.summary.take(180)}")
+                }
+            }
+            appendLine("Only VERIFIED steps and dispatch attempts with durable evidence references are complete. BLOCKED or RECONCILIATION_REQUIRED attempts must be reconciled against current state before retrying. Terminal records remain available as history; never infer completion from a model response.")
         }
     }.getOrDefault("")
 }
