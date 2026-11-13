@@ -396,37 +396,55 @@ internal object ToolRegistry {
      * through the normal permission and preflight gateway.
      */
     internal fun searchCapabilities(query: String, requestedLimit: Int = 8): String {
-        val tokens = Regex("[a-zA-Z0-9_]{3,}").findAll(query.lowercase())
-            .map { it.value }.filterNot { it in setOf("the", "and", "for", "you", "please", "what", "when", "where", "how", "can", "could", "with", "from", "that", "this") }
+        val stopWords: Set<String> = setOf(
+            "the", "and", "for", "you", "please", "what", "when", "where",
+            "how", "can", "could", "with", "from", "that", "this"
+        )
+        val tokens: Set<String> = Regex("[a-zA-Z0-9_]{3,}")
+            .findAll(query.lowercase())
+            .map { match -> match.value }
+            .filterNot { token -> token in stopWords }
             .toSet()
-        val candidates = all.mapIndexed { index, tool ->
+
+        val ranked: MutableList<Triple<ToolDefinition, Int, Int>> = ArrayList()
+        all.forEachIndexed { index: Int, tool: ToolDefinition ->
             val searchable = (tool.name + " " + tool.description + " " + tool.promptLine).lowercase()
-            val score = tokens.sumOf { token ->
-                when {
-                    tool.name == token || tool.name.split('_').contains(token) -> 8
-                    searchable.contains(token) -> 1
-                    else -> 0
-                }
+            var score = 0
+            for (token in tokens) {
+                score += if (tool.name == token || tool.name.split('_').contains(token)) 8
+                    else if (searchable.contains(token)) 1 else 0
             }
-            Triple(tool, score, index)
-        }.filter { (tool, _, _) ->
-            tool.name != "capability_search" &&
-                OrionCapabilityAdapters.route(tool.name) != null &&
-                OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.route(tool.name)!!.backend, tool.name)
-        }.sortedWith(compareByDescending<Triple<ToolDefinition, Int, Int>> { it.second }.thenBy { it.third })
+            ranked.add(Triple(tool, score, index))
+        }
+
+        val candidates: List<Triple<ToolDefinition, Int, Int>> = ranked
+            .filter { candidate ->
+                val tool = candidate.first
+                val route = OrionCapabilityAdapters.route(tool.name)
+                tool.name != "capability_search" && route != null &&
+                    OrionRuntimeCapabilityExecutor.supports(route.backend, tool.name)
+            }
+            .sortedWith(Comparator { left, right ->
+                val scoreOrder = right.second.compareTo(left.second)
+                if (scoreOrder != 0) scoreOrder else left.third.compareTo(right.third)
+            })
+
         val limit = requestedLimit.coerceIn(1, 12)
-        val selected = if (tokens.isEmpty()) candidates.take(limit)
-            else candidates.filter { it.second > 0 }.take(limit)
+        val selected: List<Triple<ToolDefinition, Int, Int>> =
+            if (tokens.isEmpty()) candidates.take(limit)
+            else candidates.filter { candidate -> candidate.second > 0 }.take(limit)
+
         val results = org.json.JSONArray()
-        selected.forEach { (tool, score, _) ->
-            val route = OrionCapabilityAdapters.route(tool.name) ?: return@forEach
+        for (candidate in selected) {
+            val tool = candidate.first
+            val route = OrionCapabilityAdapters.route(tool.name) ?: continue
             results.put(org.json.JSONObject()
                 .put("name", tool.name)
                 .put("purpose", tool.description)
                 .put("access", tool.access.name.lowercase())
                 .put("backend", route.backend.name.lowercase())
                 .put("schema", tool.inputSchema)
-                .put("match_score", score))
+                .put("match_score", candidate.second))
         }
         return org.json.JSONObject()
             .put("query", query.take(240))
