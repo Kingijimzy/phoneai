@@ -1749,9 +1749,12 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 Thread {
                     val notes = ArrayList<String>()
                     var name0: String? = null
+                    val sessionId = currentChatSessionId()
                     files.take(4).forEach { uri ->
                         try {
-                            val name = (contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                            val savedAttachment = OrionChatAttachmentStore.import(this, sessionId, uri)
+                            val name = savedAttachment.name
+                            val unusedNameQuery = (contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
                                 ?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: "upload_${System.currentTimeMillis()}")
                                 .replace(Regex("[^A-Za-z0-9._-]"), "_").take(100)
                             val dir = java.io.File(filesDir, "orion-python/workspace/uploads").apply { mkdirs() }
@@ -1764,10 +1767,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                         } catch (e: Exception) { notes.add("[Could not copy a file: ${e.message}]") }
                     }
                     runOnUiThread {
+                        composeAttachments.value = OrionChatAttachmentStore.forSession(this, sessionId)
                         selectedDocumentName = name0 ?: "file"
                         selectedDocumentText = notes.joinToString("\n\n")
                         refreshDocumentPreview(selectedDocumentName)
-                        Toast.makeText(this, "Attached ${files.size} file(s). Orion can read them.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Saved ${files.size} file(s) to this conversation.", Toast.LENGTH_SHORT).show()
                     }
                 }.start()
             }
