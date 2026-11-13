@@ -16,6 +16,18 @@ class OrionExecutiveTest {
         assertEquals(a, OrionExperience.signature("open_app", JSONObject().put("package", "COM.google.android.youtube")))
     }
 
+    @Test fun futureDatedFailuresAreNotRetrieved() {
+        val future = listOf(r("youtube_open", false, "opened browser instead of app", at = now + 60_000))
+        assertTrue(OrionExperience.unresolvedFailures(future, now).isEmpty())
+    }
+
+    @Test fun signatureDoesNotPersistRawSensitiveArguments() {
+        val secretPath = "/storage/emulated/0/Private/secret.txt"
+        val key = OrionExperience.signature("read_file", JSONObject().put("path", secretPath))
+        assertFalse(key.contains(secretPath))
+        assertTrue(key.startsWith("read_file|"))
+    }
+
     @Test fun failureStaysUnresolvedUntilTheSameActionSucceeds() {
         val list = listOf(r("gmail_list", false, "401 auth", at = 100), r("gmail_list", true, at = 200))
         assertTrue(OrionExperience.unresolvedFailures(list, 300).isEmpty())
