@@ -198,6 +198,33 @@ class OrionExtensionLifecycleIntegrationTest {
     }
 
     @Test
+    fun fullCpythonNeverAutoActivatesEvenWhenSafePythonAutonomyIsEnabled() {
+        ExtensionAutonomySettings.setAutoActivationEnabled(context, true)
+        val fullRuntimeSandbox = object : ExtensionSandbox {
+            override fun test(extension: GeneratedExtension, testCases: List<JSONObject>) =
+                ExtensionTestReport(true, extension.sourceSha256, "full runtime tests passed")
+            override fun execute(extension: GeneratedExtension, input: JSONObject, grantedCapabilities: Set<String>) =
+                JSONObject().put("ok", true).put("result", "executed")
+        }
+        val guarded = OrionPythonCapabilityExecutor(context, null, extensionSandbox = fullRuntimeSandbox)
+        val id = "full_python_tool"
+        val source = "import math\\nRESULT = math.sqrt(16)"
+        val created = guarded.execute("extension_create", JSONObject()
+            .put("id", id).put("name", "Full Python tool").put("runtime", "python_full")
+            .put("source", source).put("description", "Requires full CPython"), confirm, stopped)
+        assertTrue(created.orEmpty().contains("Saved disabled extension draft"))
+        val tested = guarded.execute("extension_test", JSONObject().put("id", id).put("tests", JSONArray().put(
+            JSONObject().put("input", JSONObject()).put("expect", 4)
+        )), confirm, stopped)
+        assertTrue(tested.orEmpty().contains("FULL CPYTHON TEST PASSED"))
+        assertTrue(tested.orEmpty().contains("never auto-activate") || tested.orEmpty().contains("explicit owner approval"))
+        assertNull(SelfExtendingExtensionStore(context).enabled(id))
+        val enabled = guarded.execute("extension_enable", JSONObject().put("id", id), confirm, stopped)
+        assertTrue(enabled.orEmpty().contains("is enabled"))
+        assertNotNull(SelfExtendingExtensionStore(context).enabled(id))
+    }
+
+    @Test
     fun failedTestNeverActivatesExtension() {
         val id = "broken_tool"
         val source = extensionSource("sum_values").replace("RESULT = 0", "RESULT = bad syntax here !!!")
