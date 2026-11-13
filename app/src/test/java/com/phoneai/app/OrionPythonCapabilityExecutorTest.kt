@@ -60,6 +60,26 @@ class OrionPythonCapabilityExecutorTest {
         "extension_enable", JSONObject().put("id", "live_helper"), { true }, { false }
     ).orEmpty()
 
+    @Test fun extensionCreateDefaultsToFullPythonAndUsesTheFullRuntimeLabel() {
+        val source = "import os\\nRESULT = os.getcwd()"
+        val created = executor.execute(
+            "extension_create",
+            JSONObject().put("id", "full_helper").put("name", "Full helper")
+                .put("source", source).put("description", "full runtime test"),
+            { true }, { false }
+        ).orEmpty()
+        assertTrue(created, created.contains("disabled extension draft"))
+        assertEquals("python_full", SelfExtendingExtensionStore(context).all().single().runtime)
+
+        val tested = executor.execute(
+            "extension_test",
+            JSONObject().put("id", "full_helper").put("tests",
+                org.json.JSONArray().put(JSONObject().put("input", JSONObject()).put("expect", source))),
+            { true }, { false }
+        ).orEmpty()
+        assertTrue(tested, tested.contains("FULL CPYTHON TEST PASSED and AUTO-ACTIVATED"))
+    }
+
     @Test fun exactTestedSourceIsLoadedForEveryLiveInvocation() {
         val v1 = source(1)
         assertTrue(create(v1).contains("disabled extension draft"))
