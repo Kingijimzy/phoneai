@@ -1785,11 +1785,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 }.start()
             }
             if (picked.size == files.size) return
-            val chosen = ArrayList<Uri>()
-            data?.clipData?.let { clip ->
-                for (index in 0 until minOf(clip.itemCount, 4)) chosen.add(clip.getItemAt(index).uri)
-            }
-            data?.data?.let { if (chosen.isEmpty()) chosen.add(it) }
+            val chosen = picked.filter { contentResolver.getType(it)?.startsWith("image/") == true }
+                .distinct().take(4)
             val flags = data?.flags ?: 0
             chosen.distinct().take(4).forEach { uri ->
                 try {
