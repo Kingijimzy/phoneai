@@ -63,7 +63,11 @@ internal object OrionChatAttachmentStore {
     ): Attachment {
         require(uri.scheme == "content" || uri.scheme == "file") { "Unsupported attachment source." }
         val id = UUID.randomUUID().toString()
-        var displayName = "attachment"
+        // Some file:// sources and document providers return no OpenableColumns row.
+        // Derive a display-name fallback from the URI before applying the same sanitization.
+        var displayName = if (uri.scheme == "file") {
+            uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast('\\')?.takeIf { it.isNotBlank() } ?: "attachment"
+        } else "attachment"
         var declaredSize = -1L
         resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) {

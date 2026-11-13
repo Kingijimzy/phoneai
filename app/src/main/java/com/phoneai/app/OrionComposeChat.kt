@@ -836,7 +836,7 @@ internal fun OrionComposeChatScreen(
                     it.kind == "ai" && it.text.isNotBlank()
                 } == true
                 if (busy && !assistantAlreadyStreaming) {
-                    item(key = "orion-thinking-indicator") { ThinkingIndicator() }
+                    item(key = "orion-thinking-indicator") { ThinkingIndicator(displayStatus) }
                 }
             }
         }

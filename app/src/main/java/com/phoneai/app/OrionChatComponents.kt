@@ -710,7 +710,24 @@ private fun TaskActivityCard(raw: String) {
 }
 
 @Composable
-internal fun ThinkingIndicator() {
+internal internal fun orionWorkingPhrase(status: String): String {
+    val value = status.lowercase()
+    return when {
+        "recover" in value || "retry" in value -> "Recovering and trying another route"
+        "fix" in value || "repair" in value -> "Fixing the issue"
+        "verif" in value || "test" in value -> "Checking that the result works"
+        "terminal" in value || "command" in value || "execut" in value || "run" in value -> "Running the next step"
+        "search" in value || "research" in value || "browser" in value -> "Looking for relevant information"
+        "code" in value || "build" in value || "develop" in value -> "Working on the implementation"
+        "plan" in value || "think" in value -> "Thinking through the best approach"
+        "solve" in value || "tackle" in value || "work" in value || "act" in value -> "Working through the task"
+        else -> "Working through the next step"
+    }
+}
+
+@Composable
+fun ThinkingIndicator(status: String = "Thinking") {
+    val phrase = remember(status) { orionWorkingPhrase(status) }
     val transition = rememberInfiniteTransition(label = "thinking-dots")
     val phase by transition.animateFloat(
         initialValue = 0f,
@@ -724,7 +741,7 @@ internal fun ThinkingIndicator() {
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         OrionOrb(Modifier.size(44.dp), busy = true)
-        Text("Orion is thinking", color = ChatMuted, fontSize = 12.sp)
+        Text(phrase, color = ChatMuted, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
             repeat(3) { index ->
                 val distance = kotlin.math.abs(((phase * 3f + index) % 3f) - 1.5f) / 1.5f

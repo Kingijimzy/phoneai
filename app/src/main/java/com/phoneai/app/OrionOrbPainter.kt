@@ -77,7 +77,17 @@ class OrionOrbPainter {
         val ct = cos(tilt)
         val st = sin(tilt)
         val r = radius * (1f + .025f * sin(t * 1.6f) + voice * .06f)
-        val glowColor = if (alert) 0x33E7BD7B else 0x33BFC5CC
+        // Preserve the silver point-cloud identity while tinting each real runtime state.
+        val stateColor = when (mode) {
+            OrbView.Mode.IDLE -> 0xFFBFC5CC.toInt()
+            OrbView.Mode.LISTENING -> 0xFF62CBE8.toInt()
+            OrbView.Mode.THINKING -> 0xFF9B91F2.toInt()
+            OrbView.Mode.SPEAKING -> 0xFF62D6C5.toInt()
+            OrbView.Mode.ACTING -> 0xFFFFB86B.toInt()
+            OrbView.Mode.WAITING_APPROVAL -> 0xFFFFC857.toInt()
+            OrbView.Mode.ERROR -> 0xFFFF7777.toInt()
+        }
+        val glowColor = (stateColor and 0x00FFFFFF) or 0x33000000
         glow.shader = RadialGradient(cx, cy, r * 1.55f, intArrayOf(glowColor, 0x00000000), floatArrayOf(.08f, 1f), Shader.TileMode.CLAMP)
         canvas.drawCircle(cx, cy, r * 1.55f, glow)
         glow.shader = null
@@ -114,9 +124,11 @@ class OrionOrbPainter {
             val depth = ((depthZ + 1f) * .5f).coerceIn(0f, 1f)
             val alpha = ((.12f + .88f * depth * depth) * if (alert) .95f else .82f).coerceIn(0f, 1f)
             val size = pointScale * (.48f + depth * 1.08f) * (1f + voice * .45f)
-            val rr = if (alert) (231f + 24f * depth).toInt() else (191f + 64f * depth).toInt()
-            val gg = if (alert) (189f + 40f * depth).toInt() else (197f + 58f * depth).toInt()
-            val bb = if (alert) (123f + 60f * depth).toInt() else (204f + 51f * depth).toInt()
+            val tint = if (alert) 0xFFFFC66E.toInt() else stateColor
+            val brightness = .78f + depth * .22f
+            val rr = (android.graphics.Color.red(tint) * brightness).toInt().coerceIn(0, 255)
+            val gg = (android.graphics.Color.green(tint) * brightness).toInt().coerceIn(0, 255)
+            val bb = (android.graphics.Color.blue(tint) * brightness).toInt().coerceIn(0, 255)
             point.color = android.graphics.Color.argb((alpha * 255f).toInt(), rr, gg, bb)
             canvas.drawCircle(sx, sy, size, point)
         }

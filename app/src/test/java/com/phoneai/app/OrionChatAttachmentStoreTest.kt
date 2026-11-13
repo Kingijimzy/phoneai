@@ -38,6 +38,7 @@ class OrionChatAttachmentStoreTest {
         val restored = OrionChatAttachmentStore.forSession(context, "session-a").single()
         assertEquals(imported.id, restored.id)
         assertEquals("report.txt", restored.name)
+        assertEquals("text/plain", restored.mimeType)
         assertEquals(source.length(), restored.sizeBytes)
         assertEquals(source.readBytes().toList(), OrionChatAttachmentStore.file(context, restored).readBytes().toList())
         assertTrue(OrionChatAttachmentStore.forSession(context, "session-b").isEmpty())
