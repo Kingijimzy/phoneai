@@ -28,10 +28,12 @@ class OrionMessageContentTest {
     }
 
     @Test fun fencedCodeBecomesAnExplicitCodeBlockWithoutChangingSource() {
-        val source = "Intro\\n\\n```python\\nprint('ok')\\n```\\nDone"
+        val source = "Intro\\n\\n```python\\nprint('ok')\\n```\\nDone".replace("\\\\n", "\\n")
         val content = OrionMessageContent.fromLegacy("ai", source)
         assertTrue(content.blocks.any { it is OrionMessageBlock.Code && it.language == "python" })
-        assertEquals(source, listOf("Intro", "", "```python", "print('ok')", "```", "Done").joinToString("\\n").let { source })
+        assertEquals("Intro\\n\\n", (content.blocks[0] as OrionMessageBlock.Text).markdown)
+        assertEquals("print('ok')", (content.blocks[1] as OrionMessageBlock.Code).source)
+        assertEquals("\\nDone", (content.blocks[2] as OrionMessageBlock.Text).markdown)
     }
 
     @Test fun userTextIsNeverReinterpretedAsAnExecutionBlock() {
