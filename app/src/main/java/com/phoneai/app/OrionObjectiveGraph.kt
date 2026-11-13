@@ -185,7 +185,7 @@ internal object OrionObjectiveGraph {
         val resolved = resolveDispatchId(graph, id) ?: return false
         if (canExecute(graph, resolved) != null) return false
         val node = graph.nodes.firstOrNull { it.id == resolved } ?: return false
-        if (node.evidence != evidenceId) return false
+        if (node.status != Status.RUNNING || node.evidence != evidenceId) return false
         val receipt = ChatHistoryStore.objectiveEvidence(context, resolved).firstOrNull {
             it.id == evidenceId && it.outcome == "success"
         } ?: return false
