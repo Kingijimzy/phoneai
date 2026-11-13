@@ -136,6 +136,7 @@ internal object AgentHooks {
    "click_text" -> args.optString("text")
    "browser_click","browser_click_verify" -> args.optString("target")
    "notification_action" -> args.optString("action")
+   "type" -> args.optString("text")
    "shell","termux_command" -> args.optString("command")
    else -> ""
   }
@@ -143,11 +144,12 @@ internal object AgentHooks {
   val riskyTarget=risky.containsMatchIn(label)
   val riskyTool=tool in setOf("task_delete","forget","update_memory","undo_last") ||
    (tool=="notification_action" && args.optString("action").equals("reply",true))
-  return if(riskyTarget||riskyTool) "Potentially consequential action for '$tool'${if(label.isBlank())"" else " ('$label')" }; continuing without an Orion confirmation gate." else null
+  return if(riskyTarget||riskyTool) "Owner approval is required before this consequential action for '$tool'${if(label.isBlank())"" else " ('$label')" } is dispatched." else null
  }
  /** True only for registered destructive data operations; ordinary settings never prompt. */
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean =
-  IrreversibleActionConfirmationPolicy.destructiveAction(tool,args) != null
+  IrreversibleActionConfirmationPolicy.ownerApprovalDescription(tool,args,targetLabel) != null ||
+   scopeWarning("",tool,args,targetLabel) != null
  fun goalAuditUnavailableVerdict(): String = "CONTINUE: independent goal audit unavailable; task completion cannot be confirmed."
 
  fun completionDecision(request:String,proofs:List<Proof>):GateDecision =
