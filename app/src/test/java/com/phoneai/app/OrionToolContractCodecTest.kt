@@ -96,7 +96,7 @@ class OrionToolContractCodecTest {
 
     @Test fun selectsRelevantNativeToolsWithinProviderLimit() {
         val selected = ToolRegistry.nativeToolsFor("inspect MCP servers and list remote tools")
-        assertTrue(selected.size <= 64)
+        assertTrue(selected.size <= 96)
         assertTrue(selected.any { it.name == "mcp_status" })
         assertTrue(selected.any { it.name == "mcp_list_tools" })
         assertTrue(selected.any { it.name == "mcp_call" })
@@ -112,6 +112,19 @@ class OrionToolContractCodecTest {
         assertTrue(phone.any { it.name == "open_app" })
         val resumed = ToolRegistry.nativeToolsFor("continue", setOf("browser_click_verify"))
         assertTrue(resumed.any { it.name == "browser_click_verify" })
+    }
+
+
+    @Test fun everyRegisteredAccessibilityOperationIsCallableInTheDefaultModelTurn() {
+        val exposed = ToolRegistry.nativeToolsFor("hello").map { it.name }.toSet()
+        val missing = ToolRegistry.names()
+            .filter { ToolRegistry.requiresAccessibility(it) && it !in exposed }
+        assertTrue("Accessibility capabilities hidden from the model: $missing", missing.isEmpty())
+        assertTrue(exposed.containsAll(setOf(
+            "read_screen", "click", "click_text", "tap", "long_press", "swipe",
+            "swipe_path", "scroll", "type", "key", "look", "play",
+            "routine_run", "routine_resume", "open_app"
+        )))
     }
 
     @Test fun parsesActualRegistryContractsWithoutLosingNames() {
