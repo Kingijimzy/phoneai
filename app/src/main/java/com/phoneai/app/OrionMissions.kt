@@ -148,7 +148,7 @@ internal object OrionMissions {
         val line = reply.lineSequence().map { it.trim() }.lastOrNull { it.uppercase().startsWith("MISSION") } ?: reply.trim().takeLast(160)
         val updated = afterAttempt(m, outcome, line, now)
         save(c, list.map { if (it.id == id) updated else it })
-        if (updated.state == State.DONE) runCatching { OrionLessons.learn(c, "Finished mission: ${m.title.take(100)}. ${updated.note.take(80)}", now) }
+        if (updated.state == State.DONE) runCatching { OrionDrives.onMissionDone(c); OrionLessons.learn(c, "Finished mission: ${m.title.take(100)}. ${updated.note.take(80)}", now) }
     }
 
     /** What Orion currently owes: shown in every prompt so it knows its own standing work. */

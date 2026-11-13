@@ -105,8 +105,10 @@ object OrionLivingLoop {
         val lessons = OrionLessons.all(c).takeLast(maxLessons)
         val broken = OrionSelfModel.degraded(c).take(4)
         val missions = OrionMissions.promptBlock(c)
-        if (lessons.isEmpty() && broken.isEmpty() && missions.isEmpty()) return ""
+        val drives = OrionDrives.promptBlock(c)
+        if (lessons.isEmpty() && broken.isEmpty() && missions.isEmpty() && drives.isEmpty()) return ""
         return buildString {
+            if (drives.isNotEmpty()) append(drives).append("\n")
             if (missions.isNotEmpty()) append(missions).append("\n")
             append("SELF-AWARENESS (from your own recent history):")
             if (broken.isNotEmpty()) {

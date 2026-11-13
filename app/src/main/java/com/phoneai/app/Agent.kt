@@ -988,7 +988,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "For phone actions (open apps, tap, send, search, inspect the screen, media control), call the exact registered native tool directly. Inspect its result and verify the outcome. Use the registered native tool directly. Android OS permissions and external authentication remain authoritative. Obtain owner approval at the exact operation boundary for private-data access, file writes/modifications, destructive deletion/wipe, and script/package installation or execution. Do not ask again after the exact operation was approved. Never emit an ACTION marker or route the request to a second planner. " +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
-            "\n\n" + ToolRegistry.promptSection(q, ToolGate.statusFor(svc)) + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCapabilityAwareness.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + capabilityGap.let { if (it.isBlank()) "" else "\n\n" + it } + OrionCoordinator.summary().let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc), svc) + "\n\n" + OrionIdentity.LOCK
+            "\n\n" + ToolRegistry.promptSection(q, ToolGate.statusFor(svc)) + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + OrionCapabilityAwareness.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + capabilityGap.let { if (it.isBlank()) "" else "\n\n" + it } + OrionCoordinator.summary().let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc), svc) + OrionExperience.requestBlock(svc, q).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + OrionIdentity.LOCK
     }
 
     /**
@@ -2152,6 +2152,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             traceId = traceId,
             correlationId = correlationId
         )
+        val priorNote = OrionExperience.priorNote(svc, tool, a)
         val result = runCatching { OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
             val preflight = preflightTool(route.tool, args)
             val backendResult = if (preflight != null) preflight else runCatching {
@@ -2189,6 +2190,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         val failed = result.trimStart().startsWith("error", ignoreCase = true)
         val failureCategory = if (failed) ActionLearningPolicy.classifyFailure(result).ifBlank { "execution_error" } else ""
         OrionSelfModel.record(svc, tool, !failed, if (failed) result else "")
+        val finalResult = OrionExecutive.afterTool(svc, tool, a, result, failed, priorNote)
         if (!nonLoggedAction) {
         svc.recordChatEvent(
             "tool_result",
@@ -2199,7 +2201,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             correlationId = correlationId
         )
         }
-        return result
+        return finalResult
     }
 
     /** Shared preflight runs before every backend, including extracted executors. */

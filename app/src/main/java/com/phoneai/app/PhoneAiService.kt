@@ -2159,8 +2159,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 }
                 return
             }
+            OrionDrives.onInitiative(this)
             val initiativePrompt = (
-                "[ORION INITIATIVE — Kingi did not ask for this; you are acting on your own judgment] Review your mood, lessons, " +
+                "[ORION INITIATIVE — Kingi did not ask for this; you are acting on your own judgment] " + OrionDrives.initiativeHint(this) + " Review your mood, lessons, " +
                     "memory and recent failures. Decide whether there is something worth doing now for Kingi or for yourself " +
                     "(finish unfinished work, fix a tool that keeps failing, build a missing capability, check something he cares about). " +
                     "If yes, do it with your tools and report briefly what you did. If not, reply with one short line saying nothing is needed."
