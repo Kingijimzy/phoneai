@@ -14,7 +14,8 @@ internal class OrionPythonCapabilityExecutor(
     private val tools: Tools?,
     private val extensionStore: SelfExtendingExtensionStore = SelfExtendingExtensionStore(context),
     private val extensionSandbox: ExtensionSandbox = FullPythonSandbox(
-        RestrictedPythonSandbox { source, inputJson -> OrionPythonRuntime.runExtension(context, source, inputJson) }
+        restricted = RestrictedPythonSandbox { source, inputJson -> OrionPythonRuntime.runExtension(context, source, inputJson) },
+        runFull = { source, inputJson -> OrionPythonRuntime.runFullExtension(context, source, inputJson) }
     )
 ) {
     private val testReceipts = ExtensionTestReceiptStore(context)
