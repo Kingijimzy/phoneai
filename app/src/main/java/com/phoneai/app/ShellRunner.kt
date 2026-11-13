@@ -91,7 +91,7 @@ object ShellRunner {
             if (!p.waitFor(timeoutSec.coerceIn(1, 30), TimeUnit.SECONDS)) { p.destroyForcibly(); reader.join(500); return ShellPolicy.clip(out.toString()) + "\n[timed out after ${timeoutSec}s and was stopped]" }
             reader.join(1000)
             val text = ShellPolicy.clip(out.toString().trimEnd())
-            (if (p.exitValue() == 0) "EXIT 0 · SUCCESS\n" else "exit ${p.exitValue()}\n") + text.ifBlank { "(no output)" }
+            (if (p.exitValue() == 0) "EXIT 0 · SUCCESS\n" else "exit=${p.exitValue()}\n") + text.ifBlank { "(no output)" }
         } catch (e: Exception) { "error: could not run the command (" + (e.message ?: e.javaClass.simpleName).take(120) + ")" }
     }
 
@@ -236,8 +236,10 @@ object ShellRunner {
         // Dedicated shell command record with secret redaction for independent audit.
         val exitCode = when {
             verifiedResult.startsWith("EXIT 0 · SUCCESS\n") -> 0
+            verifiedResult.startsWith("exit=") -> verifiedResult.lineSequence().first()
+                .removePrefix("exit=").takeWhile { it == '-' || it.isDigit() }.toIntOrNull()
             verifiedResult.startsWith("error: EXIT ") -> {
-                val tail = verifiedResult.substringAfter("error: EXIT ").takeWhile { it.isDigit() }
+                val tail = verifiedResult.substringAfter("error: EXIT ").takeWhile { it == '-' || it.isDigit() }
                 tail.toIntOrNull()
             }
             else -> null
