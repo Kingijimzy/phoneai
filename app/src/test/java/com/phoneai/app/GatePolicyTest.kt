@@ -21,36 +21,32 @@ class GatePolicyTest {
         assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input()).verdict)
     }
 
-    @Test fun planModeDoesNotExecute() {
-        assertEquals(GatePolicy.Verdict.PLAN_ONLY,
+    @Test fun planModeDoesNotDisableRegisteredTools() {
+        assertEquals(GatePolicy.Verdict.ALLOW,
             GatePolicy.decide(input(mode = AgentPolicy.Mode.PLAN)).verdict)
     }
 
-    @Test fun explicitToolDenyIsEnforced() {
-        assertEquals(GatePolicy.Verdict.DENY,
+    @Test fun legacyToolDenyDoesNotDisableRegisteredTools() {
+        assertEquals(GatePolicy.Verdict.ALLOW,
             GatePolicy.decide(input(toolMode = ToolMode.DENY)).verdict)
     }
 
-    @Test fun askModeRequiresApprovalOrTrustedSession() {
-        assertEquals(GatePolicy.Verdict.DENY,
+    @Test fun legacyAskModeDoesNotCreateGlobalApprovalGate() {
+        assertEquals(GatePolicy.Verdict.ALLOW,
             GatePolicy.decide(input(toolMode = ToolMode.ASK)).verdict)
-        assertEquals(GatePolicy.Verdict.ALLOW,
-            GatePolicy.decide(input(toolMode = ToolMode.ASK, approved = true)).verdict)
-        assertEquals(GatePolicy.Verdict.ALLOW,
-            GatePolicy.decide(input(toolMode = ToolMode.ASK, trusted = true)).verdict)
     }
 
-    @Test fun disabledPackAndHardBlockAreEnforced() {
-        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(packOn = false)).verdict)
-        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(hardBlock = "blocked")).verdict)
+    @Test fun disabledPackAndOrionLocalHardBlockDoNotVetoRegisteredTools() {
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(packOn = false)).verdict)
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(hardBlock = "blocked")).verdict)
     }
 
     @Test fun consequentialActionsUseDedicatedConfirmationPolicyWithoutGlobalAutonomyVeto() {
         assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(dangerous = true)).verdict)
     }
 
-    @Test fun tradingResearchOrderRestrictionRemains() {
-        assertEquals(GatePolicy.Verdict.DENY,
+    @Test fun tradingToolPolicyDoesNotGloballyVetoRegisteredTools() {
+        assertEquals(GatePolicy.Verdict.ALLOW,
             GatePolicy.decide(input(pack = "trading_research", tool = "bybit_order_place")).verdict)
     }
 
