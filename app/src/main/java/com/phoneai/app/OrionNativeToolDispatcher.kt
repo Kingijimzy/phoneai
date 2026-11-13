@@ -31,6 +31,16 @@ internal object OrionNativeToolDispatcher {
                     "error: tool '${call.name}' is not registered or available in this Orion build; no action was dispatched.",
                     false
                 )
+                ToolRegistry.find(call.name) == null -> Outcome(
+                    call,
+                    "error: tool '${call.name}' has no authoritative registered argument contract; no action was dispatched.",
+                    false
+                )
+                OrionToolContractCodec.validateArguments(ToolRegistry.find(call.name)!!, args) != null -> Outcome(
+                    call,
+                    "error: invalid arguments for '${call.name}': ${OrionToolContractCodec.validateArguments(ToolRegistry.find(call.name)!!, args)}. No action was dispatched.",
+                    false
+                )
                 else -> {
                     val result = try {
                         execute(call.name, args)
