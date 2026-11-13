@@ -49,3 +49,16 @@ This branch contains source-level reliability changes plus explicit remaining de
 - Record voice latency distributions and audio route behavior; test AEC capability and echo behavior on POCO F3; test app launch package/activity; verify tool UI event receipts; exercise retries under injected transient/permanent/ambiguous failures.
 - Verify the web search source extraction against live result layouts and connected API Anything operation discovery/calls. Browser navigation should be reserved for explicit site interaction.
 - No merge or physical-device pass is implied by this audit.
+
+
+## Follow-up: native tool exposure and callback validation
+
+Source changes on the reliability candidate:
+
+- Provider callback tool calls now pass through `OrionNativeToolDispatcher.dispatchCallback`, which checks cancellation, current-request registration, the registered argument contract, and only then enters the existing guarded executor. Both the initial provider callback and follow-up callback use this path.
+- The normal returned-tool-call path continues to reject malformed, unavailable, unregistered, and schema-invalid calls before executor invocation.
+- MCP discovery/call functions are exposed on ordinary-language requests instead of requiring literal terms such as "MCP" or "API tools".
+- Core phone and developer tool families are exposed on every model turn; actual execution remains subject to registered access class, skill allowlists, Android permissions, owner approvals, and executor preflight.
+- Added tests for callback invalid-argument rejection, cancellation, unregistered tools, executor feedback, and ordinary-language MCP/phone/developer tool exposure.
+
+Remaining architectural gap: the provider tool window is still bounded (64 by default), and non-core registered tools outside that window are not all native-callable on every turn. The human-readable prompt-signature fallback is not equivalent to a callable provider function. The contract codec still derives JSON schemas from `promptLine`; it has not yet been replaced with typed schema declarations. CI and provider-specific round-trip results for the updated head are pending; no device acceptance is claimed.
