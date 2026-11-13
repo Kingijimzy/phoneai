@@ -1177,10 +1177,10 @@ internal fun OrionArchivedConversationScreen(
 /** Compose-native archive list; live and archived chat surfaces share the same visual tokens. */
 @Composable
 internal fun OrionChatHistoryScreen(
-    chats: List<OrionConversationRepository.Session>,
+    chats: List<OrionSavedChat>,
     onClose: () -> Unit,
     onClearAll: () -> Unit,
-    onOpen: (OrionConversationRepository.Session) -> Unit,
+    onOpen: (OrionSavedChat) -> Unit,
     onRename: (OrionConversationRepository.Session) -> Unit,
     onDelete: (OrionConversationRepository.Session) -> Unit
 ) {
@@ -1254,7 +1254,7 @@ internal fun OrionChatHistoryScreen(
                 verticalArrangement = Arrangement.spacedBy(9.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 22.dp)
             ) {
-                itemsIndexed(filtered, key = { _, chat -> chat.id }) { _, chat ->
+                itemsIndexed(filtered, key = { _, chat -> chat.sessionId }) { _, chat ->
                     val preview = chat.messages.lastOrNull()?.second.orEmpty().replace('\n', ' ').trim()
                     Column(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
