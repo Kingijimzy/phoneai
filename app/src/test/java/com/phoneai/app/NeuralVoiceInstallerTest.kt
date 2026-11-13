@@ -33,7 +33,10 @@ class NeuralVoiceInstallerTest {
                 "package/voices.bin" to ByteArray(512) { 2 },
                 "package/tokens.txt" to "token vocabulary".toByteArray(),
                 "package/LICENSE" to ByteArray(1024) { 3 },
-                "package/espeak-ng-data/phontab" to "pronunciation data".toByteArray()
+                "package/espeak-ng-data/phontab" to "pronunciation table".toByteArray(),
+                "package/espeak-ng-data/phonindex" to "phoneme index".toByteArray(),
+                "package/espeak-ng-data/phondata" to "phoneme data".toByteArray(),
+                "package/espeak-ng-data/intonations" to "intonation data".toByteArray()
             )
             BZip2CompressorOutputStream(archive.outputStream().buffered()).use { compressed ->
                 TarArchiveOutputStream(compressed).use { tar ->
@@ -53,6 +56,9 @@ class NeuralVoiceInstallerTest {
             assertTrue(File(destination, "tokens.txt").isFile)
             assertTrue(File(destination, "LICENSE").isFile)
             assertTrue(File(destination, "espeak-ng-data/phontab").isFile)
+            assertTrue(File(destination, "espeak-ng-data/phonindex").isFile)
+            assertTrue(File(destination, "espeak-ng-data/phondata").isFile)
+            assertTrue(File(destination, "espeak-ng-data/intonations").isFile)
             assertTrue(progress.isNotEmpty())
             assertTrue(progress.all { it in 80..98 })
             assertEquals(98, progress.last())
