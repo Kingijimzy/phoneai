@@ -830,7 +830,7 @@ internal fun OrionPersistedActivityCard(event: OrionConversationRepository.ChatE
             Text("COPY", color = OrionUiPalette.muted, fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.clickable {
-                    clipboard.setText(AnnotatedString(event.summary + if (evidence.isNotBlank()) "\\n" + evidence else ""))
+                    clipboard.setText(AnnotatedString(event.summary + if (evidence.isNotBlank()) "\n" + evidence else ""))
                 }.padding(5.dp))
         }
     }
