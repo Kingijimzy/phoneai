@@ -17,8 +17,8 @@ internal object CodexAppServerProtocol {
     const val CLIENT_TITLE = "Orion"
 
     data class Request(val id: Int, val method: String, val params: JSONObject) {
+        // Codex app-server uses JSON-RPC-shaped JSONL but explicitly omits jsonrpc.
         fun toJson(): JSONObject = JSONObject()
-            .put("jsonrpc", "2.0")
             .put("id", id)
             .put("method", method)
             .put("params", params)
@@ -41,6 +41,13 @@ internal object CodexAppServerProtocol {
             .put("clientInfo", JSONObject().put("name", CLIENT_NAME).put("title", CLIENT_TITLE).put("version", SERVER_VERSION))
             .put("capabilities", JSONObject().put("experimentalApi", true))
     )
+
+    /** Exact response contract for the pinned Codex app-server InitializeResponse. */
+    fun isInitializeResponse(result: JSONObject): Boolean =
+        result.optString("userAgent").isNotBlank() &&
+            result.optString("codexHome").isNotBlank() &&
+            result.optString("platformFamily").isNotBlank() &&
+            result.optString("platformOs").isNotBlank()
 
     fun startChatGptDeviceLogin(id: Int): Request = Request(
         id, "account/login/start",
