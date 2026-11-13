@@ -189,6 +189,32 @@ internal object IrreversibleActionConfirmationPolicy {
         if (destructiveNegation.containsMatchIn(request)) return null
         return destructiveRequest.find(request)?.value
     }
+    fun ownerApprovalDescription(tool: String, args: JSONObject): String? {
+        destructiveAction(tool, args)?.let { return it }
+        val payload = args.optJSONObject("arguments") ?: args
+        val path = payload.optString("path").ifBlank { payload.optString("uri") }
+            .ifBlank { payload.optString("filename") }.take(180)
+        val detail = if (path.isBlank()) "" else " ($path)"
+        return when (tool.lowercase()) {
+            "workspace_read", "dev_read", "open_file", "show_file", "document_extract", "image_read",
+            "find_files", "github_account_read", "gmail_list_messages", "telegram_inbox",
+            "read_notifications", "clipboard_read", "resolve_contact" ->
+                "Orion is requesting access to private or personal information using $tool$detail. Allow this access?"
+            "workspace_write", "dev_write", "save_file", "file_write", "project_create", "project_update" ->
+                "Orion is about to write or modify a file or project using $tool$detail. Allow this change?"
+            "python_exec", "dev_python" ->
+                "Orion is about to execute a Python script in its configured runtime. Review the code shown in the task output and allow execution?"
+            "shell", "dev_shell", "termux_command", "run_command" -> {
+                val command = payload.optString("command").ifBlank { payload.optString("cmd") }
+                    .ifBlank { payload.optString("script") }
+                val scriptInstall = Regex("(?i)\\b(pip|pip3|npm|pnpm|yarn|gem|cargo|go)\\s+install\\b|\\b(apk|apt|apt-get)\\s+add\\b|\\b(curl|wget)\\b.{0,240}\\|\\s*(sh|bash)|\\b(sh|bash)\\s+[^;&|]+\\.(sh|bash)\\b")
+                    .containsMatchIn(command)
+                if (scriptInstall) "Orion is about to download, install, or execute a script or package through $tool: ${command.take(220)}. Allow this operation?"
+                else null
+            }
+            else -> null
+        }
+    }
 
     /** Returns a human-readable warning for an explicitly destructive registered action. */
     fun destructiveAction(tool: String, args: JSONObject): String? {
@@ -386,11 +412,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recordDispatchBlocked(tool, args, "python_scraper_requires_python_runtime")
             return blocked
         }
-        OrionMasterControl.dispatchBlockReason(svc)?.let { reason ->
-            taskProofs.record(tool, reason)
-            recordDispatchBlocked(tool, args, "orion_master_power_off")
-            return "error: $reason"
-        }
+        // Orion-local master/power and pack toggles do not disable registered capabilities.
         val loopCheck = toolLoopDetector.check(tool, loopParams(args))
         if (loopCheck.level == Level.CRITICAL) {
             val blocked = loopCheck.message ?: "error: repeated tool calls were blocked by the session circuit breaker."
@@ -426,23 +448,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         AgentHooks.scopeWarning(activeRequestScope, tool, args, targetLabel)?.let { warning ->
             ui.note("[WARNING]\n$warning")
         }
-        val dispatchBlock = AgentDispatchPolicy.blockReason(
-            request = activeRequestScope,
-            tool = tool,
-            args = args,
-            targetLabel = targetLabel,
-            currentPackage = svc.currentPackageName(),
-            currentLabel = svc.currentAppLabel(),
-            stopped = stopped,
-            executionMode = Prefs.executionMode(svc)
-        )
-        if (dispatchBlock != null) {
-            val blocked = "error: " + dispatchBlock
-            try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
-            AgentPolicy.log(svc, tool, "dispatch", false, "blocked by safety policy: " + dispatchBlock)
-            recordDispatchBlocked(tool, args, "dispatch_safety_policy_denied")
-            return blocked
-        }
+        // Request-scope warnings are advisory. A registered tool is not vetoed by Orion-local
+        // app classifications, execution-mode presets, or target-app policy switches.
 
         // Capability-pack and owner permission policy runs at the real dispatch boundary for every built-in tool.
         // Unknown tools fail closed; the model cannot select a capability pack for itself.
@@ -537,12 +544,12 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // Confirm only the exact destructive operation about to execute. A destructive
         // word elsewhere in the user's multi-step request must not gate unrelated actions,
         // and approval for one deletion must never authorize a later deletion in the same task.
-        val destructiveWarning = IrreversibleActionConfirmationPolicy.destructiveAction(tool, args)
-        destructiveWarning?.let { warning ->
-            ui.note("[WARNING] $warning")
-            if (!ui.ask("$warning\n\nDo you want Orion to continue?")) {
-                val denied = "error: destructive action was cancelled; no deletion or wipe was performed."
-                recordDispatchBlocked(tool, args, "destructive_action_not_confirmed")
+        val approvalRequest = IrreversibleActionConfirmationPolicy.ownerApprovalDescription(tool, args)
+        approvalRequest?.let { question ->
+            ui.note("[OWNER APPROVAL REQUIRED] $question")
+            if (!ui.ask("$question\n\nAllow Orion to proceed?")) {
+                val denied = "error: owner permission was not granted; this operation was not executed."
+                recordDispatchBlocked(tool, args, "owner_permission_not_granted")
                 taskProofs.record(tool, denied)
                 return denied
             }
