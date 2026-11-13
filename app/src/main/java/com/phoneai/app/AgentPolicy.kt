@@ -122,7 +122,7 @@ object AgentPolicy {
         "shell", "workspace_list", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "python_exec", "project_create", "project_list", "project_inspect", "project_plan", "project_verify" -> "workspace_shell"
         "self_diagnose", "repair_apply", "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get",
         "goal_add", "goal_list", "goal_remove", "goal_toggle", "complete_objective" -> "orion_core"
-        "model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state",
+        "model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state", "capability_search",
         "proactive_check", "proactive_status", "followup_add", "followup_list", "followup_done", "quiet_period_set" -> "orion_core"
         "chronos_awareness", "calendar_events", "voice_speak", "voice_listen" -> "phone_control"
         "document_extract", "image_read", "image_generate", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty",
