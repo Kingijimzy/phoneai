@@ -81,4 +81,40 @@ class OrionExecutiveStoreTest {
         ))
     }
 
+
+    @Test fun eachToolDispatchRunsTheExecutiveLifecycleBeforeExecution() {
+        assertEquals(
+            listOf(
+                OrionExecutiveStore.Phase.RETRIEVE,
+                OrionExecutiveStore.Phase.ASSESS,
+                OrionExecutiveStore.Phase.SELECT,
+                OrionExecutiveStore.Phase.PERFORM
+            ),
+            OrionExecutiveStore.dispatchStartPath()
+        )
+    }
+
+    @Test fun onlyVerifiedDispatchesCanCompleteTheExecutiveLifecycle() {
+        assertEquals(
+            listOf(
+                OrionExecutiveStore.Phase.VERIFY,
+                OrionExecutiveStore.Phase.LEARN,
+                OrionExecutiveStore.Phase.COMPLETED
+            ),
+            OrionExecutiveStore.dispatchFinishPath(OrionExecutiveStore.DispatchOutcome.VERIFIED)
+        )
+        assertEquals(
+            listOf(OrionExecutiveStore.Phase.VERIFY, OrionExecutiveStore.Phase.BLOCKED),
+            OrionExecutiveStore.dispatchFinishPath(OrionExecutiveStore.DispatchOutcome.EXECUTED_UNVERIFIED)
+        )
+        assertEquals(
+            listOf(OrionExecutiveStore.Phase.BLOCKED),
+            OrionExecutiveStore.dispatchFinishPath(OrionExecutiveStore.DispatchOutcome.FAILED)
+        )
+        assertEquals(
+            listOf(OrionExecutiveStore.Phase.BLOCKED),
+            OrionExecutiveStore.dispatchFinishPath(OrionExecutiveStore.DispatchOutcome.RECONCILIATION_REQUIRED)
+        )
+    }
+
 }
