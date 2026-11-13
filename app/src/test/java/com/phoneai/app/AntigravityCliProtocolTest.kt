@@ -62,4 +62,27 @@ class AntigravityCliProtocolTest {
         assertEquals("Done.", result?.text)
         assertNull(AntigravityCliProtocol.parseStreamEvent("not-json"))
     }
+    @Test fun compactPromptKeepsNewestContextWithinConfiguredLimit() {
+        val original = "older-context " + "x".repeat(50_000) + " NEWEST-USER-REQUEST"
+        val compact = AntigravityCliProtocol.compactPrompt(original, 2_000)
+        assertTrue(compact.length <= 2_000)
+        assertTrue(compact.contains("Earlier conversation context omitted"))
+        assertTrue(compact.endsWith("NEWEST-USER-REQUEST"))
+    }
+
+    @Test fun contextOverflowDetectorRecognizesCompactionFailure() {
+        assertTrue(AntigravityCliProtocol.isContextOverflow(
+            "The conversation is still too large after context compaction (214052 characters)"
+        ))
+        assertTrue(!AntigravityCliProtocol.isContextOverflow("Google account authentication required"))
+    }
+
+    @Test fun promptInvocationRejectsOversizedContextAfterCompaction() {
+        val compact = AntigravityCliProtocol.compactPrompt("x".repeat(100_000))
+        assertTrue(compact.length <= AntigravityCliProtocol.MAX_PROMPT_CHARS)
+        assertThrows(IllegalArgumentException::class.java) {
+            AntigravityCliProtocol.headlessPrompt("x".repeat(AntigravityCliProtocol.MAX_PROMPT_CHARS + 1))
+        }
+    }
+
 }
