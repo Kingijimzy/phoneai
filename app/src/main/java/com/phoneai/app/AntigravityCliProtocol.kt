@@ -40,7 +40,7 @@ internal object AntigravityCliProtocol {
         require(maxChars >= 512) { "Antigravity prompt budget is too small" }
         val clean = prompt.trim()
         if (clean.length <= maxChars) return clean
-        val marker = "[Earlier conversation context omitted to recover Antigravity context budget.]\\n\\n"
+        val marker = "[Earlier conversation context omitted to recover Antigravity context budget.]\n\n"
         val available = (maxChars - marker.length).coerceAtLeast(1)
         return marker + clean.takeLast(available)
     }
