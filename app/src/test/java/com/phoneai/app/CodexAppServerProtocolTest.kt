@@ -7,6 +7,7 @@ import org.junit.Test
 class CodexAppServerProtocolTest {
     @Test fun deviceLoginUsesOfficialChatGptDeviceFlow() {
         val request = CodexAppServerProtocol.startChatGptDeviceLogin(7).toJson()
+        assertEquals("2.0", request.getString("jsonrpc"))
         assertEquals("account/login/start", request.getString("method"))
         assertEquals("chatgptDeviceCode", request.getJSONObject("params").getString("type"))
     }
@@ -61,6 +62,8 @@ class CodexAppServerProtocolTest {
         assertEquals("battery", dynamic.getJSONObject(0).getString("name"))
         assertTrue(dynamic.getJSONObject(0).getString("description").contains("report battery status"))
         assertEquals("object", dynamic.getJSONObject(0).getJSONObject("inputSchema").getString("type"))
+        assertEquals("string", dynamic.getJSONObject(1).getJSONObject("inputSchema").getJSONObject("properties").getJSONObject("name").getString("type"))
+        assertTrue(dynamic.getJSONObject(1).getJSONObject("inputSchema").getJSONArray("required").toString().contains("name"))
         assertEquals("gpt-5-codex", params.getString("model"))
     }
 
