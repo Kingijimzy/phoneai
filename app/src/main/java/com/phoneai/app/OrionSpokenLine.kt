@@ -38,9 +38,11 @@ object OrionSpokenLine {
         "Use commas and short sentences for rhythm. Ask a question only if it helps. Do not announce what you are about to say. " +
         "Never claim anything the written reply does not confirm. If nothing is worth saying aloud, return {\"say\":\"\",\"mood\":\"neutral\"}."
 
-    fun userMessage(written: String, heard: String): String =
-        "KINGI JUST SAID: " + heard.trim().take(300).ifBlank { "(no earlier message)" } +
-            "\nWRITTEN REPLY (shown on screen):\n" + written.trim().take(1400)
+    fun userMessage(written: String, heard: String, recentContext: String = ""): String =
+        "RECENT CONVERSATION (oldest first; use only what is relevant):\\n" +
+            recentContext.trim().takeLast(1800).ifBlank { "(no earlier context)" } +
+            "\\nLATEST USER MESSAGE: " + heard.trim().take(300).ifBlank { "(no earlier message)" } +
+            "\\nWRITTEN REPLY (shown on screen):\\n" + written.trim().take(1400)
 
     private val jsonShaped = Regex("[`|{}\\[\\]<>#*_]|https?://|\\n\\s*[-•\\d]+[.)]?\\s")
 
