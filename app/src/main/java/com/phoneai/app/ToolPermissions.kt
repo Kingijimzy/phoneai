@@ -13,10 +13,7 @@ internal object ToolPermissionPolicy {
         "Autonomous: every registered tool is available. Android OS permissions and operation-specific owner confirmations still apply."
     fun preset(level: String, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> = emptyMap()
     fun modeOf(map: Map<String, ToolMode>, tool: String): ToolMode = ToolMode.ALLOW
-    fun applyPreset(level: String, overrides: Map<String, ToolMode>, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> {
-        val known = tools.mapTo(mutableSetOf()) { it.name }
-        return preset(level, tools).toMutableMap().apply { overrides.filterKeys { it in known }.forEach { (k, v) -> put(k, v) } }
-    }
+    fun applyPreset(level: String, overrides: Map<String, ToolMode>, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> = emptyMap()
     fun serializeOverrides(map: Map<String, ToolMode>): String = JSONObject().apply { map.forEach { (k, v) -> put(k, v.name) } }.toString()
     fun serialize(map: Map<String, ToolMode>) = serializeOverrides(map)
     fun next(mode: ToolMode) = ToolMode.ALLOW
