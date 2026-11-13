@@ -40,6 +40,20 @@ object ChatHistoryStore {
     fun save(context: Context, transcript: List<Pair<String, String>>) = repo(context).saveActive(context, transcript)
 
     @Synchronized
+    fun loadStructured(context: Context): List<OrionChatLine> = repo(context).loadActiveStructured(context)
+
+    @Synchronized
+    fun saveStructured(context: Context, lines: List<OrionChatLine>) = repo(context).saveActiveStructured(context, lines)
+
+    @Synchronized
+    fun structuredMessagesForSession(context: Context, sessionId: String): List<OrionChatLine> =
+        repo(context).structuredMessagesForSession(context, sessionId)
+
+    @Synchronized
+    fun archiveAndClearStructured(context: Context, lines: List<OrionChatLine>) =
+        repo(context).archiveAndClearStructured(context, lines)
+
+    @Synchronized
     fun archiveAndClear(context: Context, transcript: List<Pair<String, String>>) =
         repo(context).archiveAndClear(context, transcript)
 

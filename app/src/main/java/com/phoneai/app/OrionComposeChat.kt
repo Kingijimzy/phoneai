@@ -1099,6 +1099,7 @@ internal fun OrionArchivedConversationScreen(
     title: String,
     date: String,
     messages: List<Pair<String, String>>,
+    structuredMessages: List<OrionChatLine> = emptyList(),
     activityEvents: List<OrionConversationRepository.ChatEvent> = emptyList(),
     attachments: List<OrionChatAttachmentStore.Attachment> = emptyList(),
     onOpenAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
@@ -1107,6 +1108,8 @@ internal fun OrionArchivedConversationScreen(
     onContinue: () -> Unit,
     onOpenBrowser: (String?) -> Unit
 ) {
+    val renderedMessages = if (structuredMessages.isNotEmpty()) structuredMessages else
+        messages.mapIndexed { index, pair -> OrionChatLine(index.toLong(), pair.first, pair.second) }
     Column(Modifier.fillMaxSize().background(OrionUiPalette.background)) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
@@ -1135,18 +1138,15 @@ internal fun OrionArchivedConversationScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 22.dp, bottom = 22.dp)
         ) {
-            if (messages.isEmpty() && activityEvents.isEmpty()) {
+            if (renderedMessages.isEmpty() && activityEvents.isEmpty()) {
                 item(key = "archive-empty") {
                     Box(Modifier.fillMaxWidth().padding(vertical = 28.dp), contentAlignment = Alignment.Center) {
                         Text("This conversation has no saved messages or activity.", color = OrionUiPalette.muted, fontSize = 13.sp)
                     }
                 }
             }
-            itemsIndexed(messages, key = { index, item -> "archive-$index-${item.first}" }) { index, item ->
-                ChatBubble(
-                    item = OrionChatLine(index.toLong(), item.first, item.second),
-                    onOpenBrowser = onOpenBrowser
-                )
+            itemsIndexed(renderedMessages, key = { index, item -> "archive-" + index + "-" + item.id }) { _, item ->
+                ChatBubble(item = item, onOpenBrowser = onOpenBrowser)
             }
             if (attachments.isNotEmpty()) {
                 item(key = "archive-attachments-heading") {

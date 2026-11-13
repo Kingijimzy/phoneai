@@ -480,7 +480,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         when (action) {
             "new_chat" -> {
                 PhoneAiService.instance?.startNewChat() ?: run {
-                    ChatHistoryStore.archiveAndClear(this, composeLines.map { it.kind to it.text })
+                    ChatHistoryStore.archiveAndClearStructured(this, composeLines.toList())
                     composeLines.clear()
                     composeAttachments.value = emptyList()
                 }
@@ -495,7 +495,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 .setNegativeButton("CANCEL", null)
                 .setPositiveButton("CLEAR CHAT") { _, _ ->
                     PhoneAiService.instance?.startNewChat() ?: run {
-                        ChatHistoryStore.archiveAndClear(this, composeLines.map { it.kind to it.text })
+                        ChatHistoryStore.archiveAndClearStructured(this, composeLines.toList())
                         composeLines.clear()
                         composeAttachments.value = emptyList()
                     }
@@ -785,6 +785,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         val persistedEvents = runCatching {
             OrionConversationRepository.get(this).eventsForSession(this, sessionId)
         }.getOrDefault(emptyList())
+        val structuredMessages = runCatching {
+            ChatHistoryStore.structuredMessagesForSession(this, sessionId)
+        }.getOrDefault(emptyList())
         val dialog = android.app.Dialog(this)
         val content = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
@@ -793,6 +796,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     title = title,
                     date = date,
                     messages = messages,
+                    structuredMessages = structuredMessages,
                     activityEvents = persistedEvents,
                     attachments = OrionChatAttachmentStore.forSession(this@MainChatActivity, sessionId),
                     onOpenAttachment = { openChatAttachment(it) },
@@ -1934,7 +1938,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     private fun currentChatSessionId(): String {
         ChatHistoryStore.activeSessionId(this)?.let { return it }
-        ChatHistoryStore.save(this, composeLines.map { it.kind to it.text })
+        ChatHistoryStore.saveStructured(this, composeLines.toList())
         return ChatHistoryStore.activeSessionId(this)
             ?: throw IllegalStateException("Could not create a conversation session for this attachment.")
     }
@@ -2146,9 +2150,14 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             // cards from the previous session attached to the newly restored transcript.
             composeLines.clear()
             composeAttachments.value = emptyList()
-            messages.forEachIndexed { index, pair ->
-                val (kind, text) = pair
-                composeLines.add(OrionChatLine(System.nanoTime() + index, kind, text))
+            val structured = runCatching { ChatHistoryStore.loadStructured(this@MainChatActivity) }.getOrDefault(emptyList())
+            if (structured.isNotEmpty()) {
+                composeLines.addAll(structured)
+            } else {
+                messages.forEachIndexed { index, pair ->
+                    val (kind, text) = pair
+                    composeLines.add(OrionChatLine(System.nanoTime() + index, kind, text))
+                }
             }
             // Lifecycle events are stored separately from transcript messages. Reload them
             // after the active-session pointer changes so restored chats show only their own events.
