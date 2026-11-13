@@ -372,4 +372,18 @@ class ToolRegistryNativeSelectionTest {
         assertTrue("objective completion must be discoverable in the native tool window", selected.contains("complete_objective"))
     }
 
+
+    @Test fun derivesTypedSchemasFromToolSignatures() {
+        val schema = ToolInputSchema.fromContract("demo {name:string, enabled:boolean, count?:integer, mode:enum['fast'|'safe'], items:[{id:string}]}: test")
+        val properties = schema.getJSONObject("properties")
+        assertEquals("string", properties.getJSONObject("name").getString("type"))
+        assertEquals("boolean", properties.getJSONObject("enabled").getString("type"))
+        assertEquals("integer", properties.getJSONObject("count").getString("type"))
+        assertEquals("fast", properties.getJSONObject("mode").getJSONArray("enum").getString(0))
+        val required = schema.getJSONArray("required").toString()
+        assertTrue(required.contains("name"))
+        assertTrue(required.contains("enabled"))
+        assertTrue(!required.contains("count"))
+        assertEquals(false, schema.getBoolean("additionalProperties"))
+    }
 }
