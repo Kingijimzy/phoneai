@@ -34,12 +34,12 @@ internal class CodexRuntimeInstaller(context: Context) {
             mkdir -p "${'$'}work" /usr/local/bin
             tar -tzf "${'$'}archive" > "${'$'}work/archive-files.txt"
             tar -xzf "${'$'}archive" -C "${'$'}work"
-            # The upstream package has used both suffixed and plain executable names.
-            # Install the three required helpers explicitly instead of assuming every
-            # executable carries the target-triple suffix.
+            # Upstream archives may use plain names or target-triple-suffixed names.
             for binary in codex-app-server codex-code-mode-host codex-exec-server; do
-              candidate=$(find "${'$'}work" \\( -type f -o -type l \\) \\
-                \\( -name "${'$'}binary" -o -name "${'$'}binary-aarch64-unknown-linux-musl" \\) -print -quit)
+              candidate=$(find "${'$'}work" -type f -name "${'$'}binary" -print -quit)
+              if [ -z "${'$'}candidate" ]; then
+                candidate=$(find "${'$'}work" -type f -name "${'$'}binary-aarch64-unknown-linux-musl" -print -quit)
+              fi
               if [ -z "${'$'}candidate" ]; then
                 echo "Codex archive missing required executable: ${'$'}binary"
                 cat "${'$'}work/archive-files.txt" | head -100
