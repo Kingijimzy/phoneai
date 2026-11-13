@@ -38,10 +38,22 @@ class OrionToolContractCodecTest {
         val arguments = OrionToolContractCodec.parameters(mcp)
             .getJSONObject("properties").getJSONObject("arguments")
         assertEquals("object", arguments.getString("type"))
-        assertFalse(arguments.has("additionalProperties"))
+        assertTrue(arguments.getBoolean("additionalProperties"))
         val extension = ToolRegistry.find("extension_run") ?: error("extension_run must be registered")
-        assertEquals("object", OrionToolContractCodec.parameters(extension)
-            .getJSONObject("properties").getJSONObject("input").getString("type"))
+        val extensionInput = OrionToolContractCodec.parameters(extension)
+            .getJSONObject("properties").getJSONObject("input")
+        assertEquals("object", extensionInput.getString("type"))
+        assertTrue(extensionInput.getBoolean("additionalProperties"))
+
+        // MCP arguments are supplied by each remote tool's own schema, not by Orion's
+        // generic mcp_call wrapper. They must pass through without rejecting valid fields.
+        val call = org.json.JSONObject()
+            .put("name", "mcp_list_tools")
+            .put("arguments", org.json.JSONObject()
+                .put("server_id", "roamies")
+                .put("limit", 10)
+                .put("filters", org.json.JSONObject().put("enabled", true)))
+        assertNull(OrionToolContractCodec.validateArguments(mcp, call))
     }
 
     @Test fun infersArrayAndDefaultedLiteralContracts() {
