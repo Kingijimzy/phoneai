@@ -80,6 +80,14 @@ internal object OrionCapabilityAwareness {
         }.getOrDefault("UNKNOWN"))
     }
 
+    internal fun diffEnvironment(previous: Map<String, String>?, current: Map<String, String>): List<String> =
+        if (previous == null) emptyList() else current.keys.union(previous.keys).sorted()
+            .mapNotNull { key ->
+                val before = previous[key] ?: "NOT_OBSERVED"
+                val after = current[key] ?: "NOT_PRESENT"
+                if (before == after) null else "$key: $before -> $after"
+            }
+
     private fun environmentDiff(c: Context, current: Map<String, String>): List<String> {
         val prefs = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val previous = prefs.getString(ENV_KEY, null)?.let { raw ->
@@ -88,12 +96,7 @@ internal object OrionCapabilityAwareness {
                 buildMap { json.keys().forEach { key -> put(key, json.optString(key, "UNKNOWN")) } }
             }.getOrNull()
         }
-        val changes = if (previous == null) emptyList() else current.keys.union(previous.keys).sorted()
-            .mapNotNull { key ->
-                val before = previous[key] ?: "NOT_OBSERVED"
-                val after = current[key] ?: "NOT_PRESENT"
-                if (before == after) null else "$key: $before -> $after"
-            }
+        val changes = diffEnvironment(previous, current)
         val json = JSONObject()
         current.toSortedMap().forEach { (key, value) -> json.put(key, value) }
         if (!prefs.edit().putString(ENV_KEY, json.toString()).commit()) {
