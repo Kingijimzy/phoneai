@@ -15,6 +15,10 @@ internal object OrionCoordinator {
     }
     data class Entry(val at: Long, val surface: Surface, val summary: String, val admitted: Boolean)
 
+    /** Typed Talk/Command requests share execution but retain their actual source surface. */
+    fun surfaceForTypedRequest(conversationOnly: Boolean): Surface =
+        if (conversationOnly) Surface.CHAT else Surface.COMMAND
+
     private val ring = ArrayDeque<Entry>()
     private const val MAX = 40
 
