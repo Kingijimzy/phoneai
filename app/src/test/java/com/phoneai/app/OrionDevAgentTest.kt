@@ -79,4 +79,32 @@ class OrionDevAgentTest {
         assertTrue(result.blocker.orEmpty().contains("no verifiable exit status"))
         assertFalse(result.summary.contains("exited with status 0"))
     }
+
+    @Test fun repositoryInspectionUsesSelectedProjectSubdirectory() {
+        val context = RuntimeEnvironment.getApplication()
+        val workspace = OrionPythonWorkspace(context)
+        assertTrue(workspace.write("project/build.gradle.kts", "plugins {}").startsWith("saved "))
+        assertTrue(workspace.write("project/src/Main.kt", "fun main() = Unit").startsWith("saved "))
+        assertTrue(workspace.write("other/README.md", "not this project").startsWith("saved "))
+
+        val agent = OrionDevAgent(context, OrionPythonCapabilityExecutor(context, null))
+        val result = agent.understandRepository("project")
+
+        assertTrue(result.blocker.orEmpty().isBlank())
+        assertTrue(result.evidence.contains("Android/Kotlin Gradle"))
+        assertTrue(result.evidence.contains("build.gradle.kts"))
+        assertTrue(result.evidence.contains("src/Main.kt"))
+        assertFalse(result.evidence.contains("README.md"))
+    }
+
+    @Test fun repositoryInspectionRejectsWorkspaceTraversal() {
+        val context = RuntimeEnvironment.getApplication()
+        val workspace = OrionPythonWorkspace(context)
+        assertTrue(workspace.write("project/Main.kt", "fun main() = Unit").startsWith("saved "))
+
+        val agent = OrionDevAgent(context, OrionPythonCapabilityExecutor(context, null))
+        val result = agent.understandRepository("../")
+
+        assertTrue(result.blocker.orEmpty().contains("invalid or missing workspace directory"))
+    }
 }
