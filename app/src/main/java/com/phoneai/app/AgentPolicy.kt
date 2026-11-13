@@ -46,10 +46,9 @@ object AgentPolicy {
 
     /** An explicit user choice always wins; only a never-set pack falls back to its default. */
     fun enabled(c: Context, id: String): Boolean {
-        val pack = packs.firstOrNull { it.id == id } ?: return false
-        if (!pack.implemented) return false
-        val prefs = p(c)
-        return if (prefs.contains("pack_$id")) prefs.getBoolean("pack_$id", false) else defaultOn(id)
+        // Pack switches are organisational UI only. A registered capability is never
+        // disabled by an Orion-local switch; its executor reports Android/service limits.
+        return packs.any { it.id == id && it.implemented }
     }
     fun setEnabled(c: Context, id: String, on: Boolean) {
         val pack = packs.firstOrNull { it.id == id }
