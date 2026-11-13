@@ -150,7 +150,7 @@ internal object OrionToolContractCodec {
         return null
     }
 
-    private fun objectSchema(fields: List<Field>): JSONObject {
+    private fun objectSchema(fields: List<Field>, allowAdditional: Boolean = false): JSONObject {
         val properties = JSONObject()
         val required = JSONArray()
         fields.forEach { field ->
@@ -161,7 +161,7 @@ internal object OrionToolContractCodec {
             .put("type", "object")
             .put("properties", properties)
             .put("required", required)
-            .put("additionalProperties", false)
+            .put("additionalProperties", allowAdditional)
     }
 
     private fun signature(contract: String): String {
@@ -207,6 +207,7 @@ internal object OrionToolContractCodec {
         val lower = hint.lowercase()
         val schema = when {
             lower.startsWith("json") -> JSONObject().put("type", "object")
+            hint.startsWith("<") && hint.endsWith(">") -> JSONObject()
             lower.startsWith("boolean") || value in setOf("true", "false") ->
                 JSONObject().put("type", "boolean")
             lower.startsWith("integer") || value.matches(Regex("-?\\d+")) ->
@@ -220,9 +221,10 @@ internal object OrionToolContractCodec {
                     else -> hint.substringAfter("array", "").trim().removePrefix("of").trim()
                 }
                 val itemSchema = when {
-                    itemHint.startsWith("{") -> objectSchema(parseFields(
-                        itemHint.substring(1).substringBeforeLast("}")
-                    )).put("additionalProperties", false)
+                    itemHint.startsWith("{") -> {
+                        val inner = itemHint.substring(1).substringBeforeLast("}")
+                        objectSchema(parseFields(inner), splitTopLevel(inner).any { it.trim() == "..." })
+                    }
                     itemHint.isBlank() -> JSONObject().put("type", "string")
                     else -> inferSchema(itemHint)
                 }
@@ -231,7 +233,7 @@ internal object OrionToolContractCodec {
             lower.startsWith("object") || hint.startsWith("{") -> {
                 val inner = if (hint.startsWith("{")) hint.substring(1).substringBeforeLast("}")
                     else hint.substringAfter("object", "").trim().removePrefix("of").trim()
-                objectSchema(parseFields(inner))
+                objectSchema(parseFields(inner), splitTopLevel(inner).any { it.trim() == "..." })
             }
             else -> JSONObject().put("type", "string")
         }
