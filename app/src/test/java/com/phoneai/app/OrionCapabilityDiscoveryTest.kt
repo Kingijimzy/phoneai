@@ -168,7 +168,7 @@ class OrionCapabilityDiscoveryTest {
         val prompt = snapshot.promptLines().joinToString("\n")
         assertTrue(snapshot.tools.single().available)
         assertTrue(prompt.contains("GRANTED CAPABILITY RULE"))
-        assertTrue(prompt.contains("use it fully"))
+        assertTrue(prompt.contains("use its documented functions"))
         assertTrue(prompt.contains("Do not invent extra application-level restrictions"))
         assertTrue(prompt.contains("actual Android OS/runtime permissions"))
         assertTrue(prompt.contains("operation-specific owner confirmations"))
