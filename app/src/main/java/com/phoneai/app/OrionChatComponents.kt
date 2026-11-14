@@ -244,17 +244,24 @@ private fun OrionStructuredBlockCard(
                     .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp)).padding(11.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Text("GENERATED FILE", color = OrionUiPalette.success, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
-                Text(block.fileName, color = ChatCopy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text(block.mimeType + " · " + block.sizeBytes + " bytes", color = ChatMuted, fontSize = 10.sp)
-                Text("Artifact " + block.artifactId.take(12) + " · " + block.state, color = ChatMuted, fontSize = 9.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(
+                        Modifier.size(46.dp).clip(RoundedCornerShape(10.dp)).background(OrionUiPalette.background)
+                            .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center
+                    ) { Text(orionFileKind(block.fileName, block.mimeType), color = OrionUiPalette.text, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp) }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(block.fileName, color = ChatCopy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+                        Text(orionHumanSize(block.sizeBytes) + " · " + block.state, color = ChatMuted, fontSize = 11.sp)
+                    }
+                }
                 if (stored != null) {
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(18.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("OPEN", color = OrionUiPalette.secondaryText, fontSize = 10.sp,
+                        Text("OPEN", color = OrionUiPalette.text, fontSize = 11.sp,
                             fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onOpenAttachment(stored) }.padding(vertical = 8.dp))
                         Text("SHARE", color = OrionUiPalette.secondaryText, fontSize = 10.sp,
                             fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onShareAttachment(stored) }.padding(vertical = 8.dp))

@@ -92,6 +92,13 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             contentDescription = "Live voice visual. Tap to start listening or interrupt the current response."
             isFocusable = true
         }
+        // Glass halo behind the orb: a soft silver radial that reads as a lens, not a flat black canvas.
+        visual.background = GradientDrawable().apply {
+            gradientType = GradientDrawable.RADIAL_GRADIENT
+            gradientRadius = dp(210).toFloat()
+            setGradientCenter(.5f, .5f)
+            colors = intArrayOf(0x2ABFC5CC, 0x0ABFC5CC, 0x00000000)
+        }
         root.addView(visual, LinearLayout.LayoutParams(-1, 0, 1f))
 
         stepChip = label("", 12f, Theme.SILVER, true).apply {
@@ -111,6 +118,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             gravity = Gravity.START or Gravity.TOP
             textAlignment = View.TEXT_ALIGNMENT_VIEW_START
             maxLines = 6
+            isVerticalFadingEdgeEnabled = true
+            setFadingEdgeLength(dp(46))
             ellipsize = android.text.TextUtils.TruncateAt.END
             setLineSpacing(dp(3).toFloat(), 1f)
             alpha = .88f
@@ -141,10 +150,11 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             }, LinearLayout.LayoutParams(dp(24), dp(24)))
             setOnClickListener { action() }
         }
-        controls.addView(roundButton("plus", "Open chat to attach a file or image") {
+        controls.addView(roundButton("photo", "Take or attach a photo or file") {
             PhoneAiService.instance?.endLiveConversation()
             listeningRequested = false
             startActivity(Intent(this@LiveConversationActivity, MainChatActivity::class.java)
+                .putExtra(MainChatActivity.EXTRA_PICK_IMAGE, true)
                 .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
             finish()
         }, LinearLayout.LayoutParams(dp(56), dp(56)))

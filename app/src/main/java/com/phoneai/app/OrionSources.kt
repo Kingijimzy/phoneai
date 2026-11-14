@@ -72,3 +72,22 @@ internal fun OrionSourcesRow(text: String, onOpen: (String) -> Unit) {
         }
     }
 }
+
+/** Short badge for a document card: PDF, DOCX, XLSX, CSV, IMG, CODE, FILE. */
+internal fun orionFileKind(fileName: String, mime: String): String {
+    val ext = fileName.substringAfterLast('.', "").lowercase()
+    return when {
+        ext == "pdf" || mime.contains("pdf") -> "PDF"
+        ext in setOf("doc", "docx") -> "DOC"
+        ext in setOf("xls", "xlsx", "csv") -> ext.uppercase().take(4)
+        ext in setOf("png", "jpg", "jpeg", "webp", "gif") || mime.startsWith("image/") -> "IMG"
+        ext in setOf("kt", "py", "js", "ts", "html", "css", "json", "md", "txt", "sh") -> "CODE"
+        else -> "FILE"
+    }
+}
+
+internal fun orionHumanSize(bytes: Long): String = when {
+    bytes < 1024 -> "$bytes B"
+    bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
+    else -> "%.1f MB".format(bytes / 1048576.0)
+}
