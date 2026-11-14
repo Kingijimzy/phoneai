@@ -96,7 +96,9 @@ class OrionToolContractCodecTest {
 
     @Test fun selectsRelevantNativeToolsWithinProviderLimit() {
         val selected = ToolRegistry.nativeToolsFor("inspect MCP servers and list remote tools")
-        assertTrue(selected.size <= 96)
+        assertTrue("Native tool selection must respect the configured 112-tool window", selected.size <= 112)
+        assertTrue("Image generation must be callable in the default native tool window", selected.any { it.name == "image_generate" })
+        assertTrue("Weather must be callable in the default native tool window", selected.any { it.name == "weather" })
         assertTrue(selected.any { it.name == "mcp_status" })
         assertTrue(selected.any { it.name == "mcp_list_tools" })
         assertTrue(selected.any { it.name == "mcp_call" })
