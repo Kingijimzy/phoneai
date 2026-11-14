@@ -69,6 +69,7 @@ class Voice(private val ctx: Context) {
     @Volatile private var bargeInRecorder: AudioRecord? = null
     @Volatile private var bargeInThread: Thread? = null
     private val bargeInGeneration = AtomicInteger(0)
+    @Volatile private var bargeInPreviousAudioMode: Int? = null
     @Volatile private var listeningOnDevice = false
     private val callbacks = ConcurrentHashMap<String, () -> Unit>()
     private val pending = AtomicInteger(0)
@@ -303,6 +304,15 @@ class Voice(private val ctx: Context) {
             recorder.release()
             return false
         }
+        // Put the audio path into communication mode while AEC is active, but never
+        // override an existing call/communication mode owned by another application.
+        try {
+            val manager = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            if (manager.mode == AudioManager.MODE_NORMAL) {
+                bargeInPreviousAudioMode = manager.mode
+                manager.mode = AudioManager.MODE_IN_COMMUNICATION
+            }
+        } catch (_: Exception) { }
         val token = bargeInGeneration.incrementAndGet()
         bargeInRecorder = recorder
         val monitorThread = Thread({
@@ -336,7 +346,10 @@ class Voice(private val ctx: Context) {
                 try { recorder.release() } catch (_: Exception) { }
                 try { aec.release() } catch (_: Exception) { }
                 if (bargeInRecorder === recorder) bargeInRecorder = null
-                if (token == bargeInGeneration.get()) bargeInThread = null
+                if (token == bargeInGeneration.get()) {
+                    bargeInThread = null
+                    restoreBargeInAudioMode()
+                }
             }
         }, "Orion-BargeIn-AEC").apply { isDaemon = true }
         bargeInThread = monitorThread
@@ -354,6 +367,16 @@ class Voice(private val ctx: Context) {
         }
         bargeInThread?.interrupt()
         bargeInThread = null
+        restoreBargeInAudioMode()
+    }
+
+    private fun restoreBargeInAudioMode() {
+        val previous = bargeInPreviousAudioMode ?: return
+        bargeInPreviousAudioMode = null
+        try {
+            val manager = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            if (manager.mode == AudioManager.MODE_IN_COMMUNICATION) manager.mode = previous
+        } catch (_: Exception) { }
     }
 
     fun isSpeaking(): Boolean = pending.get() > 0 || tts?.isSpeaking == true
