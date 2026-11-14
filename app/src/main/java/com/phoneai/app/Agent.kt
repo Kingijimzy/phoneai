@@ -411,7 +411,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         // Objective graphs are context only. The native model tool loop is the sole
         // capability dispatcher; stale/incomplete graph state must never veto a registered tool.
-        // Cancellation is terminal for this dispatch attempt, including paths that would otherwise require one of the three irreversible-setting confirmations.
+        // Cancellation is terminal for this dispatch attempt, including paths that would otherwise require an exact destructive delete/wipe confirmation.
         if (stopped) {
             val cancelled = "error: task was stopped before capability checks; no action was dispatched."
             taskProofs.record(tool, cancelled)
