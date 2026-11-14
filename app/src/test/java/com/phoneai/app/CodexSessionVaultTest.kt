@@ -48,4 +48,21 @@ class CodexSessionVaultTest {
             root.deleteRecursively()
         }
     }
+
+    @Test fun migrationSucceedsWhenTheFilesParentDirectoryAlreadyExists() {
+        // Real devices: filesDir always exists, so mkdirs() on the parent returns false even though nothing is wrong.
+        val root = createTempDir(prefix = "codex-home-parent-")
+        try {
+            val legacy = File(root, "cache/codex-session").apply { mkdirs() }
+            File(legacy, "auth.json").writeText("legacy-auth")
+            val filesDir = File(root, "files").apply { mkdirs() }
+            val persistent = File(filesDir, "codex-session")
+
+            CodexSessionVault.migrateLegacyHome(legacy, persistent)
+
+            assertEquals("legacy-auth", File(persistent, "auth.json").readText())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
 }
