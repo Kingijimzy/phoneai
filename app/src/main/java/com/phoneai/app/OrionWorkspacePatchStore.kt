@@ -109,14 +109,19 @@ internal object OrionWorkspacePatchStore {
         if (ownerApproval.isBlank()) return false
         val file = proposalFile(context, proposalId)
         val row = runCatching { JSONObject(file.readText()) }.getOrNull() ?: return false
-        if (row.optString("status") != "pending_owner_approval" ||
+        if (row.optString("id") != proposalId ||
+            row.optString("status") != "pending_owner_approval" ||
             row.optString("sourceSha256") != expectedSourceHash) return false
         val uri = runCatching { Uri.parse(row.getString("treeUri")) }.getOrNull() ?: return false
+        if (uri.scheme != "content") return false
         val name = row.optString("fileName")
         if (!name.matches(Regex("^[A-Za-z0-9_.-]{1,120}$"))) return false
         val source = runCatching { Base64.decode(row.getString("sourceBase64"), Base64.NO_WRAP) }.getOrNull() ?: return false
         val replacement = runCatching { Base64.decode(row.getString("replacementBase64"), Base64.NO_WRAP) }.getOrNull() ?: return false
-        if (digest(source) != expectedSourceHash || digest(replacement) != row.optString("replacementSha256")) return false
+        if (source.size > MAX_BYTES || replacement.size > MAX_BYTES ||
+            source.any { it == 0.toByte() } || replacement.any { it == 0.toByte() } ||
+            digest(source) != expectedSourceHash ||
+            digest(replacement) != row.optString("replacementSha256")) return false
         return try {
             val treeId = DocumentsContract.getTreeDocumentId(uri)
             val children = DocumentsContract.buildChildDocumentsUriUsingTree(uri, treeId)
@@ -144,9 +149,16 @@ internal object OrionWorkspacePatchStore {
             }
             row.put("status", "applied").put("ownerApproval", ownerApproval.take(240))
                 .put("appliedAt", System.currentTimeMillis())
-            val tmp = File(file.parentFile, "$proposalId.tmp")
-            tmp.writeText(row.toString(), Charsets.UTF_8)
-            tmp.renameTo(file)
+            if (!persistRow(file, row)) {
+                // Do not leave a changed workspace file with a still-pending proposal.
+                runCatching {
+                    context.contentResolver.openOutputStream(document, "wt")?.use {
+                        it.write(source)
+                        it.flush()
+                    }
+                }
+                false
+            } else true
         } catch (_: Exception) { false }
     }
 }
