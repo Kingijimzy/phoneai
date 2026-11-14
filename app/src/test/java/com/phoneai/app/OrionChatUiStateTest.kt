@@ -32,6 +32,7 @@ class OrionChatUiStateTest {
         assertFalse(isOrionChatBusy(OrbView.Mode.IDLE))
         assertFalse(isOrionChatBusy(OrbView.Mode.LISTENING))
         assertFalse(isOrionChatBusy(OrbView.Mode.ERROR))
+        assertTrue(isOrionChatBusy(OrbView.Mode.IDLE, taskRunning = true))
     }
 
     @Test fun coordinatorOwnsMessageAndRuntimeProjection() {
@@ -50,6 +51,7 @@ class OrionChatUiStateTest {
         coordinator.onRuntimeStatus("ACTING", OrbView.Mode.ACTING)
         assertEquals("ACTING", state.status.value)
         assertEquals(OrbView.Mode.ACTING, state.orbMode.value)
+        assertTrue(state.taskRunning.value)
     }
 
     @Test fun coordinatorRestoresTranscriptAndClearsStaleSessionProjection() {
