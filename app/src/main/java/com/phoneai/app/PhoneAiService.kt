@@ -1033,8 +1033,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     /**
      * Explicit live-call or specialist-agent handoff into the shared, guarded tool executor.
-     * This is not a permission bypass: Agent dispatch still checks tool modes, packs, Android
-     * grants, and action-specific confirmation before each tool runs.
+     * This is not a permission bypass: Agent dispatch still checks registered tool contracts, Android
+     * grants, and the shared confirmation guard for destructive deletion/wipe actions.
      */
     fun executeSharedToolRequest(text: String, source: String = "alternate surface", completion: ((String) -> Unit)? = null) {
         val command = text.trim()
