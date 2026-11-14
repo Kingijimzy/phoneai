@@ -30,6 +30,20 @@ class ProviderFallbackPolicyTest {
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("OpenRouter: out of credit (402).", 402), false))
     }
 
+    @Test fun explicitNativeToolProtocolRejectionCanRotateButGenericBadRequestCannot() {
+        assertTrue(ProviderFallbackPolicy.isToolProtocolUnsupported(
+            AiException("HTTP 400 unknown parameter: tools", 400)
+        ))
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(
+            AiException("HTTP 400 unknown parameter: tools", 400)
+        ))
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(
+            AiException("HTTP 400 tool calling is not supported", 400)
+        ))
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 400 invalid arguments", 400)))
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 400 unknown parameter: tools", 400), false))
+    }
+
     @Test fun authenticationAndUnclassifiedFailuresNeverRotate() {
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("API key rejected (401)", 401)))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 403", 403)))
