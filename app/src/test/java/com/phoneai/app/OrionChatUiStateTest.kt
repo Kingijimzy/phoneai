@@ -34,6 +34,40 @@ class OrionChatUiStateTest {
         assertFalse(isOrionChatBusy(OrbView.Mode.ERROR))
     }
 
+    @Test fun coordinatorOwnsMessageAndRuntimeProjection() {
+        val state = OrionChatUiState()
+        val coordinator = OrionChatCoordinator(state)
+        coordinator.onMessage("me", "Hi Orion")
+        coordinator.onAssistantDelta("Hello")
+        val streamedId = state.lines.last().id
+        coordinator.onAssistantDelta(" there")
+        coordinator.onMessage("ai", "Hello there!")
+        assertEquals(2, state.lines.size)
+        assertEquals(streamedId, state.lines.last().id)
+        assertEquals("Hello there!", state.lines.last().text)
+        assertFalse(state.hasAssistantStream())
+
+        coordinator.onRuntimeStatus("ACTING", OrbView.Mode.ACTING)
+        assertEquals("ACTING", state.status.value)
+        assertEquals(OrbView.Mode.ACTING, state.orbMode.value)
+    }
+
+    @Test fun coordinatorRestoresTranscriptAndClearsStaleSessionProjection() {
+        val state = OrionChatUiState()
+        val coordinator = OrionChatCoordinator(state)
+        state.append(OrionChatLine(1L, "me", "Old session"))
+        state.activityEvents.value = emptyList()
+        coordinator.restoreTranscript(
+            structured = listOf(OrionChatLine(2L, "me", "Restored session")),
+            fallback = listOf("me" to "Legacy fallback"),
+            events = emptyList()
+        )
+        assertEquals(1, state.lines.size)
+        assertEquals("Restored session", state.lines.single().text)
+        assertFalse(state.hasAssistantStream())
+        assertTrue(state.activityEvents.value.isEmpty())
+    }
+
     @Test fun startsWithSafeChatDefaults() {
         val state = OrionChatUiState()
         assertTrue(state.lines.isEmpty())
