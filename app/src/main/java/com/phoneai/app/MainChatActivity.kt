@@ -49,7 +49,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private var selectedDocumentName: String? = null
     private var selectedDocumentText: String? = null
     private var imagePreviewPanel: LinearLayout? = null
-    private var commandMode = false
     private var pendingInitialPrompt: String? = null
     private lateinit var talkModeChip: LinearLayout
     private lateinit var commandModeChip: LinearLayout
@@ -69,6 +68,10 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     // Keep UI state separate from Activity lifecycle and Android/service orchestration.
     private val chatUiState = OrionChatUiState()
     private val chatCoordinator = OrionChatCoordinator(chatUiState)
+    // Talk/Command selection has one source of truth shared by native controls and Compose.
+    private var commandMode: Boolean
+        get() = chatUiState.commandMode.value
+        set(value) { chatUiState.commandMode.value = value }
     private val composeLines get() = chatUiState.lines
     private val composeProviderLabel get() = chatUiState.providerLabel
     private val composeModelLabel get() = chatUiState.modelLabel
