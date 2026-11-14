@@ -36,6 +36,34 @@ class OrionChatUiStateTest {
         assertTrue(state.selectedImages.value.isEmpty())
     }
 
+    @Test fun assistantDeltasUpdateOneStableMessageAndFinalTextReconcilesIt() {
+        val state = OrionChatUiState()
+        val first = state.appendAssistantDelta("Hello ")
+        val second = state.appendAssistantDelta("there")
+        assertEquals(first?.id, second?.id)
+        assertEquals(1, state.lines.size)
+        assertEquals("Hello there", state.lines.single().text)
+        assertTrue(state.hasAssistantStream())
+
+        val final = state.completeAssistantStream("Hello there!")
+        assertEquals(first?.id, final.id)
+        assertEquals(1, state.lines.size)
+        assertEquals("Hello there!", state.lines.single().text)
+        assertFalse(state.hasAssistantStream())
+    }
+
+    @Test fun stoppingAStreamPreservesPartialTextButStartsNextTurnFresh() {
+        val state = OrionChatUiState()
+        val partial = state.appendAssistantDelta("Partial answer")
+        state.resetAssistantStream()
+        assertFalse(state.hasAssistantStream())
+        assertEquals("Partial answer", state.lines.single().text)
+
+        val next = state.appendAssistantDelta("Next answer")
+        assertTrue(partial!!.id != next!!.id)
+        assertEquals(2, state.lines.size)
+    }
+
     @Test fun providerAndModelUpdatesStayInUiState() {
         val state = OrionChatUiState()
         state.setProvider("Gemini", true)
