@@ -372,7 +372,10 @@ internal class GeminiLiveSession(
             }
         }
         if (serverContent.optBoolean("turnComplete", false)) {
-            outputQueue.offer(ShortArray(0))
+            if (!outputQueue.offer(ShortArray(0))) {
+                fail("Gemini Live output queue could not finish the audio turn.")
+                return
+            }
             modelTextBuffer.markTurnComplete()
             scheduleTranscriptFlushIfReady()
             listener.onStatus("Gemini Live ready · speak naturally")
