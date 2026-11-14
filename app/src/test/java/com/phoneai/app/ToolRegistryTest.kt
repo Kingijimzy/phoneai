@@ -515,6 +515,29 @@ class ToolRegistryNativeSelectionTest {
         assertFalse(finalPage.getBoolean("generated_extensions_has_more"))
     }
 
+    @Test fun generatedExtensionCursorIsIndependentFromNativeCapabilityCursor() {
+        val source = """def run(INPUT):
+    RESULT = {"ok": True}
+"""
+        val hash = SelfExtendingExtensionPolicy.sha256(source)
+        val extensions = (0 until 17).map { index ->
+            GeneratedExtension(
+                id = "cursor_tool_$index", displayName = "Cursor tool $index", runtime = "python",
+                source = source, sourceSha256 = hash, description = "Cursor test capability $index",
+                createdAtMillis = index.toLong(), enabled = true, verified = true
+            )
+        }
+        val result = JSONObject(ToolRegistry.searchCapabilities(
+            "MCP", 5, 0, extensions, requestedGeneratedExtensionOffset = 10
+        ))
+        assertEquals(0, result.getInt("offset"))
+        assertEquals(10, result.getInt("generated_extension_offset"))
+        val page = result.getJSONArray("generated_extensions")
+        assertEquals(5, page.length())
+        assertEquals("cursor_tool_10", page.getJSONObject(0).getString("id"))
+        assertEquals(15, result.getInt("generated_extension_next_offset"))
+    }
+
     @Test fun capabilitySearchReturnsSimpleCandidatesAndLoadReturnsTheExactSchema() {
         val result = JSONObject(ToolRegistry.searchCapabilities("inspect MCP resources", 8))
         val rows = result.getJSONArray("results")
