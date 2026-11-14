@@ -96,7 +96,16 @@ internal fun OrionModelSheet(onDismiss: () -> Unit, onNeedKey: () -> Unit, onCha
                         Box(Modifier.size(38.dp).clip(CircleShape).background(OrionUiPalette.background), contentAlignment = Alignment.Center) {
                             Text(p.label.take(1).uppercase(), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         }
-                        Text(p.label, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(p.label, color = OrionUiPalette.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text(
+                                Prefs.model(c, p, false),
+                                color = OrionUiPalette.muted,
+                                fontSize = 9.sp,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
                         Text(
                             if (selected) "IN USE"
                             else if (p.id == "codex" || p.id == "antigravity") "CONNECT"
