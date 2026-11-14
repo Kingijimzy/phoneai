@@ -254,7 +254,12 @@ class Voice(private val ctx: Context) {
         val callback = callbacks.remove(id)
         val remaining = pending.updateAndGet { current -> (current - 1).coerceAtLeast(0) }
         if (remaining == 0) {
-            main.post { if (pending.get() == 0) onSpeaking?.invoke(false) }
+            main.post {
+                if (pending.get() == 0) {
+                    abandonNeuralAudioFocus()
+                    onSpeaking?.invoke(false)
+                }
+            }
         }
         callback?.let { cb -> main.post { cb() } }
     }
@@ -605,9 +610,24 @@ class Voice(private val ctx: Context) {
                     throw IllegalStateException("Kokoro generated silent PCM audio.")
                 }
                 val activeTrack = track
-                if (activeTrack != null) awaitNeuralPlayback(activeTrack, neuralFramesWritten, token)
-                if (token != playbackGeneration.get()) return@execute
-                finished(ids.last())
+                if (activeTrack != null) {
+                    // Do not pin the single inference worker until the speaker finishes.
+                    // The next streamed sentence can now be synthesized while this PCM is audible.
+                    val playbackTargetFrames = neuralFramesWritten
+                    Thread({
+                        try {
+                            awaitNeuralPlayback(activeTrack, playbackTargetFrames, token)
+                            if (token == playbackGeneration.get()) finished(ids.last())
+                        } catch (error: Throwable) {
+                            if (token == playbackGeneration.get()) {
+                                main.post { onProblem?.invoke("Kokoro playback completion failed: " + (error.message ?: error.javaClass.simpleName)) }
+                                finished(ids.last())
+                            }
+                        }
+                    }, "Orion-Neural-PlaybackWait").apply { isDaemon = true; start() }
+                } else {
+                    finished(ids.last())
+                }
             } catch (error: Throwable) {
                 pcmWriter?.cancel()
                 pcmWriter = null
@@ -637,13 +657,14 @@ class Voice(private val ctx: Context) {
                 }
             } finally {
                 pcmWriter?.cancel()
-                abandonNeuralAudioFocus()
             }
         }
     }
 
     /** Acquire transient speech focus before opening AudioTrack; stop on a competing exclusive focus owner. */
+    @Synchronized
     private fun requestNeuralAudioFocus() {
+        if (neuralAudioFocusRequest != null || legacyAudioFocusListener != null) return
         val manager = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val listener = AudioManager.OnAudioFocusChangeListener { change ->
             if (change == AudioManager.AUDIOFOCUS_LOSS ||
@@ -682,6 +703,7 @@ class Voice(private val ctx: Context) {
         neuralAudioFocusListener = listener
     }
 
+    @Synchronized
     private fun abandonNeuralAudioFocus() {
         val manager = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -806,6 +828,7 @@ class Voice(private val ctx: Context) {
             try { activeTrack.release() } catch (_: Exception) {}
         }
         if (pending.getAndSet(0) > 0) main.post { onSpeaking?.invoke(false) }
+        abandonNeuralAudioFocus()
     }
 
     /** Calls cb once nothing is being spoken (or after a timeout). Runs on the main thread. */
