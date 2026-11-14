@@ -57,7 +57,7 @@ class SelfExtendingExtensionsTest {
         assertEquals(extension.source, store.enabled(extension.id)?.source)
     }
 
-    @Test fun fullCpythonNeverAutoPromotesEvenWhenRestrictedPythonAutoActivationIsEnabled() {
+    @Test fun fullCpythonAutoPromotesOnlyAfterExactSourceTestsWhenAutonomousActivationIsEnabled() {
         ExtensionAutonomySettings.setAutoActivationEnabled(context, true)
         val source = "import os\\nRESULT = os.getcwd()"
         val extension = GeneratedExtension(
@@ -71,12 +71,16 @@ class SelfExtendingExtensionsTest {
         )
         assertTrue(store.saveDraft(extension))
         val report = ExtensionTestReport(true, extension.sourceSha256, "passed")
-        assertFalse(store.promote(extension.id, report, userApproved = false))
-        assertNull(store.enabled(extension.id))
-        assertTrue(store.promote(extension.id, report, userApproved = true))
+        assertTrue(store.promote(extension.id, report, userApproved = false))
         assertEquals(extension.source, store.enabled(extension.id)?.source)
         ExtensionAutonomySettings.setAutoActivationEnabled(context, false)
-        assertFalse(SelfExtendingExtensionPolicy.mayPromote(true, extension.sourceSha256, extension.sourceSha256, userApproved = false, autoActivateSafePython = false, runtime = "python_full"))
+        val disabledSource = "import os\\nRESULT = os.path.basename('/')"
+        val disabled = GeneratedExtension("full_python_disabled", "Full Python disabled", "python_full", disabledSource,
+            SelfExtendingExtensionPolicy.sha256(disabledSource), "auto activation disabled", 102L)
+        assertTrue(store.saveDraft(disabled))
+        assertFalse(store.promote(disabled.id, ExtensionTestReport(true, disabled.sourceSha256, "passed"), userApproved = false))
+        assertNull(store.enabled(disabled.id))
+        assertFalse(SelfExtendingExtensionPolicy.mayPromote(true, disabled.sourceSha256, disabled.sourceSha256, userApproved = false, autoActivateVerified = false, runtime = "python_full"))
     }
 
     @Test fun changedSourceCannotBePromotedUsingStaleTestReport() {
