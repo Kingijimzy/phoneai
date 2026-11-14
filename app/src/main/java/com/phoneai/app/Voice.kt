@@ -334,7 +334,6 @@ class Voice(private val ctx: Context) {
                         speed = (speeds?.getOrNull(index) ?: Prefs.rate(ctx)).coerceIn(0.85f, 1.15f)
                     )
                     var callbackFrames = 0
-                    val chunkGenerationStartedAtMs = SystemClock.elapsedRealtime()
                     val generatedAudio = engine.generateWithConfigAndCallback(
                         text = chunks[index],
                         config = generation,
@@ -343,8 +342,14 @@ class Voice(private val ctx: Context) {
                                 0
                             } else {
                                 val activeTrack = track
-                                if (activeTrack == null || !writeNeuralSamples(activeTrack, samples, token)) 0
+                                val writeStartedAtMs = SystemClock.elapsedRealtime()
+                                val writeSucceeded = activeTrack != null && writeNeuralSamples(activeTrack, samples, token)
+                                audioTrackWriteMs += (SystemClock.elapsedRealtime() - writeStartedAtMs).coerceAtLeast(0L)
+                                if (!writeSucceeded) 0
                                 else {
+                                    if (samples.isNotEmpty() && firstAudioLatencyMs == null) {
+                                        firstAudioLatencyMs = (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(0L)
+                                    }
                                     callbackFrames += samples.size
                                     if (samples.isNotEmpty()) {
                                         for (sample in samples) peakSampleAmplitude = maxOf(peakSampleAmplitude, kotlin.math.abs(sample))
@@ -371,11 +376,15 @@ class Voice(private val ctx: Context) {
                     check(generatedAudio.sampleRate == engine.sampleRate()) {
                         "Kokoro returned audio at an unexpected sample rate."
                     }
+                    generatedPcmFrames += generatedAudio.samples.size.toLong()
                     val missingPcm = pcmNotDeliveredByCallback(generatedAudio.samples, callbackFrames)
                     if (missingPcm.isNotEmpty()) {
                         val activeTrack = track
                             ?: throw IllegalStateException("Neural audio output was not initialized.")
-                        check(writeNeuralSamples(activeTrack, missingPcm, token)) {
+                        val recoveryWriteStartedAtMs = SystemClock.elapsedRealtime()
+                        val recoveryWriteSucceeded = writeNeuralSamples(activeTrack, missingPcm, token)
+                        audioTrackWriteMs += (SystemClock.elapsedRealtime() - recoveryWriteStartedAtMs).coerceAtLeast(0L)
+                        check(recoveryWriteSucceeded) {
                             "Kokoro PCM recovery was interrupted."
                         }
                         for (sample in missingPcm) peakSampleAmplitude = maxOf(peakSampleAmplitude, kotlin.math.abs(sample))
