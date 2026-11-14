@@ -375,7 +375,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                     throw AiException("${p.label}: stopped after three identical HTTP failures (HTTP $code). No more identical retries will be sent.")
                 }
             }
-            val ra = conn.getHeaderField("Retry-After")?.trim()?.toDoubleOrNull()?.toInt() ?: -1
+            val ra = OrionRetryPolicy.parseRetryAfter(conn.getHeaderField("Retry-After"))
             return Http(code, text, ra)
         } finally {
             try { conn.disconnect() } catch (_: Exception) { }
@@ -418,7 +418,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             val code = conn.responseCode
             if (code !in 200..299) {
                 val error = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-                val retry = conn.getHeaderField("Retry-After")?.trim()?.toDoubleOrNull()?.toInt() ?: -1
+                val retry = OrionRetryPolicy.parseRetryAfter(conn.getHeaderField("Retry-After"))
                 return Http(code, error, retry)
             }
             conn.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
