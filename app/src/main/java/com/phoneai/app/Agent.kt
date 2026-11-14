@@ -189,70 +189,13 @@ internal object IrreversibleActionConfirmationPolicy {
         if (destructiveNegation.containsMatchIn(request)) return null
         return destructiveRequest.find(request)?.value
     }
-    fun ownerApprovalDescription(tool: String, args: JSONObject, targetLabel: String = ""): String? {
-        destructiveAction(tool, args)?.let { return it }
-        val payload = args.optJSONObject("arguments") ?: args
-        val targetTool = if (tool == "mcp_call") args.optString("name").ifBlank { tool } else tool
-        val path = payload.optString("path").ifBlank { payload.optString("uri") }
-            .ifBlank { payload.optString("filename") }.take(180)
-        val detail = if (path.isBlank()) "" else " ($path)"
-        val normalized = targetTool.lowercase()
-        if (tool == "mcp_call" || normalized in setOf("mcp_read_resource", "mcp_list_resources", "mcp_list_prompts", "mcp_get_prompt")) {
-            val scope = if (tool == "mcp_call") McpConnector.scopeForTool(targetTool) else "read"
-            if (scope == "read") return "Orion is requesting access to private data exposed by the connected MCP service through $targetTool. Allow this read?"
-        }
-        return when (normalized) {
-            "workspace_read", "dev_read", "open_file", "show_file", "document_extract", "image_read",
-            "find_files", "workspace_list", "workspace_read", "backup_list", "trash_list",
-            "dev_understand", "dev_read", "project_list", "project_inspect",
-            "github_account_read", "gmail_list_messages", "telegram_inbox",
-            "read_notifications", "clipboard_read", "resolve_contact", "device_location" ->
-                "Orion is requesting access to private or personal information using $tool$detail. Allow this access?"
-            "workspace_write", "dev_write", "save_file", "file_write", "project_create", "project_update", "project_plan",
-            "workspace_move", "backup_restore", "trash_restore", "undo_last" ->
-                "Orion is about to write, move, restore or modify a file/project using $tool$detail. Allow this change?"
-            "project_verify" -> if (payload.optBoolean("run_tests", false))
-                "Orion is about to execute the project's test command using $tool$detail. Allow this execution?" else null
-            "extension_enable" -> "Orion is requesting approval to activate the exact-source-tested generated extension '${payload.optString("id").take(80)}'. This makes the tool available for later calls. Allow activation?"
-            "python_exec", "dev_python", "extension_run" -> {
-                val code = payload.optString("code").ifBlank { payload.optString("script") }.take(700)
-                "Orion is about to execute code using $tool. Code preview: ${code.ifBlank { "(source is held by the tool runtime)" }}. Allow execution?"
-            }
-            "type" -> {
-                val value = payload.optString("text").take(300)
-                "Orion is about to enter text into the active app field${if (targetLabel.isBlank()) "" else " in $targetLabel"}: ${value.ifBlank { "(text unavailable)" }}. Allow this write?"
-            }
-            "computer_settings" -> when (payload.optString("action").lowercase()) {
-                "restart", "shutdown", "wifi_toggle" ->
-                    "Orion is about to change a critical device setting (${payload.optString("action")}). Allow this operation?"
-                else -> null
-            }
-            "telegram_send", "sms", "notification_action" ->
-                "Orion is about to send or reply through $tool. Target/action: ${payload.optString("contact").ifBlank { payload.optString("action") }.take(120)}. Allow this external action?"
-            "web_api" -> if (!payload.optString("method", "GET").equals("GET", true))
-                "Orion is about to modify a remote resource using ${payload.optString("method")}. Allow this external write?" else null
-            "shell", "dev_shell", "termux_command", "run_command" -> {
-                val command = payload.optString("command").ifBlank { payload.optString("cmd") }
-                    .ifBlank { payload.optString("script") }
-                val scriptInstall = Regex("(?i)\\b(pip|pip3|npm|pnpm|yarn|gem|cargo|go)\\s+install\\b|\\b(apk|apt|apt-get)\\s+add\\b|\\b(curl|wget)\\b.{0,240}\\|\\s*(sh|bash)|\\b(sh|bash|python3?|node|ruby|perl)\\s+[^;&|]+\\.(sh|bash|py|js|rb|pl)\\b|(?:^|\\s)\\./[^;&|]+\\.(sh|py|js|rb|pl)\\b")
-                    .containsMatchIn(command)
-                val fileWrite = Regex("(?i)(?:^|[;&|]\\s*)(?:touch|mkdir|cp|mv|tee|install)\\b|(?:>|>>)[^;&|]+|\\bsed\\s+-i\\b")
-                    .containsMatchIn(command)
-                when {
-                    scriptInstall -> "Orion is about to download, install, or execute a script or package through $tool: ${command.take(220)}. Allow this operation?"
-                    fileWrite -> "Orion is about to create or modify files through $tool: ${command.take(220)}. Allow this write?"
-                    else -> null
-                }
-            }
-            else -> {
-                val consequentialUi = AgentHooks.scopeWarning("", tool, args, targetLabel)
-                if (consequentialUi != null) "Orion is about to perform a consequential UI action using $tool${if (targetLabel.isBlank()) "" else " on $targetLabel"}. $consequentialUi Allow this operation?"
-                else if (tool == "mcp_call" && McpConnector.scopeForTool(targetTool) == "write")
-                    "Orion is about to write or modify data through the connected MCP service using $targetTool. Allow this operation?"
-                else null
-            }
-        }
-    }
+    /**
+     * Kingi and Orion share this platform: the only owner approval is for deleting or wiping data
+     * (per-trade approvals live in the Trading Desk). Reads, writes, scripts, messages and settings run
+     * without prompts; Android's own permissions still apply.
+     */
+    fun ownerApprovalDescription(tool: String, args: JSONObject, targetLabel: String = ""): String? =
+        destructiveAction(tool, args)
 
     /** Returns a human-readable warning for an explicitly destructive registered action. */
     fun destructiveAction(tool: String, args: JSONObject): String? {
