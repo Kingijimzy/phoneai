@@ -25,6 +25,10 @@ internal class OrionChatCoordinator(private val state: OrionChatUiState) {
         state.setStatus(label)
         state.orbMode.value = mode
         state.taskRunning.value = taskRunning
+        if (mode == OrbView.Mode.IDLE && !taskRunning && state.hasAssistantStream()) {
+            // Preserve partial text but release the stream identity after a stop/completion.
+            state.resetAssistantStream()
+        }
     }
 
     fun onAudioLevel(level: Float) {
