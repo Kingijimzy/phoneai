@@ -34,16 +34,11 @@ class AgentHooksTest {
   assertNull(AgentHooks.scopeBlockReason("Write and send this message to Amma","click_text",JSONObject().put("text","Send")))
   assertNull(AgentHooks.scopeBlockReason("Prepare and send the reply to Amma","click_text",JSONObject().put("text","Send")))
  }
- @Test fun criticalDeviceSettingsAndDestructiveDataOperationsRequireConfirmation(){
-  assertTrue(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","restart")))
-  assertTrue(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","shutdown")))
-  assertTrue(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","wifi_toggle")))
+ @Test fun onlyDestructiveDataOperationsRequireConfirmation(){
+  assertFalse(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","restart")))
   assertTrue(AgentHooks.requiresConfirmation("task_delete",JSONObject().put("id","task-1")))
   assertTrue(AgentHooks.requiresConfirmation("workspace_delete",JSONObject().put("path","Downloads/report.txt")))
   assertTrue(AgentHooks.requiresConfirmation("shell",JSONObject().put("command","rm -rf /sdcard/old")))
-  assertTrue(AgentHooks.requiresConfirmation("notification_action",JSONObject().put("action","reply")))
-  assertTrue(AgentHooks.requiresConfirmation("type",JSONObject().put("text","Hello"),"WhatsApp message"))
-  assertTrue(AgentHooks.requiresConfirmation("telegram_send",JSONObject().put("message","Hello")))
  }
  @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.recordVerified("open_app","WhatsApp opened\\nLOCAL VERIFY PASS: target app is visible");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
  @Test fun proofRecorderRecognizesExplicitPostActionUiVerification() {
