@@ -24,6 +24,7 @@ import java.util.Locale
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.Executors
 
@@ -89,12 +90,18 @@ class Voice(private val ctx: Context) {
     ) {
         private val queue = ArrayBlockingQueue<FloatArray?>(24)
         private val failure = AtomicReference<Throwable?>(null)
+        private val writeNanos = AtomicLong(0L)
         private val closed = AtomicInteger(0)
         private val worker = Thread({
             try {
                 while (token == playbackGeneration.get()) {
                     val block = queue.take() ?: break
-                    if (block.isNotEmpty() && !writeNeuralSamples(output, block, token)) break
+                    if (block.isNotEmpty()) {
+                        val started = SystemClock.elapsedRealtimeNanos()
+                        val succeeded = writeNeuralSamples(output, block, token)
+                        writeNanos.addAndGet((SystemClock.elapsedRealtimeNanos() - started).coerceAtLeast(0L))
+                        if (!succeeded) break
+                    }
                 }
             } catch (interrupted: InterruptedException) {
                 Thread.currentThread().interrupt()
@@ -112,6 +119,8 @@ class Voice(private val ctx: Context) {
             }
             return false
         }
+
+        fun audioWriteMs(): Long = writeNanos.get() / 1_000_000L
 
         fun finish() {
             if (closed.compareAndSet(0, 1)) {
@@ -384,7 +393,7 @@ class Voice(private val ctx: Context) {
                 val generationStartedAtMs = SystemClock.elapsedRealtime()
                 var generatedPcmFrames = 0L
                 var audioTrackWriteMs = 0L
-                var firstPcmCallbackLatencyMs: Long? = null
+                val firstPcmCallbackLatencyMs = AtomicLong(-1L)
                 for (index in chunks.indices) {
                     if (token != playbackGeneration.get()) return@execute
                     fallbackStart = index
@@ -403,8 +412,11 @@ class Voice(private val ctx: Context) {
                                 val writeSucceeded = pcmWriter?.enqueue(samples) == true
                                 if (!writeSucceeded) 0
                                 else {
-                                    if (samples.isNotEmpty() && firstPcmCallbackLatencyMs == null) {
-                                        firstPcmCallbackLatencyMs = (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(0L)
+                                    if (samples.isNotEmpty()) {
+                                        firstPcmCallbackLatencyMs.compareAndSet(
+                                            -1L,
+                                            (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(0L)
+                                        )
                                     }
                                     callbackFrames.addAndGet(samples.size)
                                     if (samples.isNotEmpty()) {
@@ -466,7 +478,9 @@ class Voice(private val ctx: Context) {
                 }
 
                 // Drain all queued PCM before measuring completion or waiting for audible playback.
-                pcmWriter?.finish()
+                val completedPcmWriter = pcmWriter
+                completedPcmWriter?.finish()
+                audioTrackWriteMs = completedPcmWriter?.audioWriteMs() ?: 0L
                 pcmWriter = null
                 val generationWallMs = (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(1L)
                 // AudioTrack.write() is blocking and callback writes may overlap in wall
@@ -482,7 +496,7 @@ class Voice(private val ctx: Context) {
                         generatedAudioSeconds,
                         generationWallMs / 1000.0,
                         realTimeFactor,
-                        firstPcmCallbackLatencyMs ?: -1L,
+                        firstPcmCallbackLatencyMs.get(),
                         audioTrackWriteMs / 1000.0,
                         chunks.sumOf { it.length },
                         chunks.size
