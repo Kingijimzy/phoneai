@@ -181,7 +181,7 @@ internal class SelfExtendingExtensionStore(context: Context) {
             sourceHash = target.sourceSha256,
             testedHash = report.testedSourceSha256,
             userApproved = userApproved,
-            autoActivateSafePython = ExtensionAutonomySettings.autoActivationEnabled(appContext),
+            autoActivateVerified = ExtensionAutonomySettings.autoActivationEnabled(appContext),
             runtime = target.runtime
         )
         if (!allowed) return@synchronized false
@@ -195,7 +195,7 @@ internal class SelfExtendingExtensionStore(context: Context) {
                 sourceHash = version.sourceSha256,
                 testedHash = report.testedSourceSha256,
                 userApproved = approved,
-                autoActivateSafePython = ExtensionAutonomySettings.autoActivationEnabled(appContext),
+                autoActivateVerified = ExtensionAutonomySettings.autoActivationEnabled(appContext),
                 runtime = version.runtime
             )) return@synchronized false
         if (SelfExtendingExtensionPolicy.validateIdentity(version.id, version.displayName) != null ||
