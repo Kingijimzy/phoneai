@@ -300,7 +300,7 @@ class Voice(private val ctx: Context) {
         }
         val token = bargeInGeneration.incrementAndGet()
         bargeInRecorder = recorder
-        bargeInThread = Thread({
+        val monitorThread = Thread({
             val samples = ShortArray(320)
             var speechFrames = 0
             try {
@@ -333,7 +333,9 @@ class Voice(private val ctx: Context) {
                 if (bargeInRecorder === recorder) bargeInRecorder = null
                 if (token == bargeInGeneration.get()) bargeInThread = null
             }
-        }, "Orion-BargeIn-AEC").apply { isDaemon = true; start() }
+        }, "Orion-BargeIn-AEC").apply { isDaemon = true }
+        bargeInThread = monitorThread
+        monitorThread.start()
         return true
     }
 
@@ -342,8 +344,8 @@ class Voice(private val ctx: Context) {
         val recorder = bargeInRecorder
         bargeInRecorder = null
         if (recorder != null) {
+            // The capture thread owns final release (including the AEC effect) in its finally block.
             try { recorder.stop() } catch (_: Exception) { }
-            try { recorder.release() } catch (_: Exception) { }
         }
         bargeInThread?.interrupt()
         bargeInThread = null
