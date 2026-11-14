@@ -481,7 +481,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 PhoneAiService.instance?.startNewChat() ?: run {
                     ChatHistoryStore.archiveAndClearStructured(this, composeLines.toList())
                     chatCoordinator.clearSessionProjection()
-                    composeAttachments.value = emptyList()
+                    chatCoordinator.setAttachments(emptyList())
                 }
                 composeChatTitle.value = "Orion"
                 getSharedPreferences("orion_chat_history", MODE_PRIVATE).edit().remove("active_title").apply()
@@ -496,7 +496,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     PhoneAiService.instance?.startNewChat() ?: run {
                         ChatHistoryStore.archiveAndClearStructured(this, composeLines.toList())
                         chatCoordinator.clearSessionProjection()
-                        composeAttachments.value = emptyList()
+                        chatCoordinator.setAttachments(emptyList())
                     }
                     composeChatTitle.value = "Orion"
                     getSharedPreferences("orion_chat_history", MODE_PRIVATE).edit().remove("active_title").apply()
@@ -682,7 +682,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                                     service.deleteAllChatHistory { deleted, message ->
                                         if (deleted) {
                                             chatCoordinator.clearSessionProjection()
-                                            composeAttachments.value = emptyList()
+                                            chatCoordinator.setAttachments(emptyList())
                                             dialog.dismiss()
                                             Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_SHORT).show()
                                         } else {
@@ -693,7 +693,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                                     val deleted = ChatHistoryStore.clearAll(this@MainChatActivity)
                                     if (deleted) {
                                         chatCoordinator.clearSessionProjection()
-                                        composeAttachments.value = emptyList()
+                                        chatCoordinator.setAttachments(emptyList())
                                         dialog.dismiss()
                                     }
                                     Toast.makeText(this@MainChatActivity,
@@ -1434,7 +1434,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         root.addView(dock, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4); bottomMargin = dp(1) })
         animateIn(dock, 120)
         composeChatActive = true
-        composeCompanionLook.value = Prefs.companionChar(this).coerceIn(0, 2)
+        chatCoordinator.setCompanionLook(Prefs.companionChar(this).coerceIn(0, 2))
         composeChatTitle.value = getSharedPreferences("orion_chat_history", MODE_PRIVATE).getString("active_title", "Orion")?.take(48)?.ifBlank { "Orion" } ?: "Orion"
         val composeRoot = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
@@ -1454,7 +1454,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     companionLook = composeCompanionLook.value,
                     onCompanionLookChanged = { look ->
                         val safeLook = look.coerceIn(0, 2)
-                        composeCompanionLook.value = safeLook
+                        chatCoordinator.setCompanionLook(safeLook)
                         Prefs.setCompanionChar(this@MainChatActivity, safeLook)
                     },
                     chatTitle = composeChatTitle.value,
@@ -1473,7 +1473,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                         else {
                             ChatHistoryStore.archiveAndClearStructured(this@MainChatActivity, composeLines.toList())
                             chatCoordinator.clearSessionProjection()
-                            composeAttachments.value = emptyList()
+                            chatCoordinator.setAttachments(emptyList())
                             Toast.makeText(this@MainChatActivity, "New chat ready", Toast.LENGTH_SHORT).show()
                         }
                     },
@@ -1751,7 +1751,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     runOnUiThread {
                         selectedDocumentName = extracted.name
                         selectedDocumentText = extracted.text
-                        composeAttachments.value = OrionChatAttachmentStore.forSession(this, sessionId)
+                        chatCoordinator.setAttachments(OrionChatAttachmentStore.forSession(this, sessionId))
                         selectedImageUris.clear()
                         composeSelectedImages.value = emptyList()
                         refreshImagePreview(null)
@@ -1795,7 +1795,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                         } catch (e: Exception) { notes.add("[Could not copy a file: ${e.message}]") }
                     }
                     runOnUiThread {
-                        composeAttachments.value = OrionChatAttachmentStore.forSession(this, sessionId)
+                        chatCoordinator.setAttachments(OrionChatAttachmentStore.forSession(this, sessionId))
                         selectedDocumentName = name0 ?: "file"
                         selectedDocumentText = notes.joinToString("\n\n")
                         refreshDocumentPreview(selectedDocumentName)
@@ -1824,7 +1824,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                         runCatching { OrionChatAttachmentStore.saveFromUri(this, sessionId, uri) }
                     }
                     runOnUiThread {
-                        composeAttachments.value = OrionChatAttachmentStore.forSession(this, sessionId)
+                        chatCoordinator.setAttachments(OrionChatAttachmentStore.forSession(this, sessionId))
                     }
                 }.start()
             }
@@ -1947,8 +1947,10 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     private fun refreshChatAttachments() {
         val sessionId = ChatHistoryStore.activeSessionId(this)
-        composeAttachments.value = if (sessionId.isNullOrBlank()) emptyList()
+        chatCoordinator.setAttachments(
+            if (sessionId.isNullOrBlank()) emptyList()
             else runCatching { OrionChatAttachmentStore.forSession(this, sessionId) }.getOrDefault(emptyList())
+        )
     }
 
     private fun openChatAttachment(attachment: OrionChatAttachmentStore.Attachment) {
@@ -2153,7 +2155,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         runOnUiThread {
             // Rebuild the entire visible timeline on session switches: never leave activity
             // cards from the previous session attached to the newly restored transcript.
-            composeAttachments.value = emptyList()
+            chatCoordinator.setAttachments(emptyList())
             val structured = runCatching { ChatHistoryStore.loadStructured(this@MainChatActivity) }.getOrDefault(emptyList())
             // Lifecycle events are stored separately from transcript messages. Restore both
             // projections together so a session switch cannot show stale events from another chat.
@@ -2175,23 +2177,23 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     }
 
     override fun onAudioLevel(level: Float) {
-        runOnUiThread { composeOrbMicLevel.value = level.coerceIn(0f, 1f) }
+        runOnUiThread { chatCoordinator.onAudioLevel(level) }
     }
 
     override fun onAudioAmplitude(amplitude: Float) {
-        runOnUiThread { composeOrbSpeechAmplitude.value = amplitude.coerceIn(0f, 1f) }
+        runOnUiThread { chatCoordinator.onAudioAmplitude(amplitude) }
     }
 
     override fun onSpeechWord() {
-        runOnUiThread { composeOrbWordPulse.value = 1f }
+        runOnUiThread { chatCoordinator.onSpeechWord() }
     }
 
     override fun onStatus(text: String, mode: OrbView.Mode) {
         runOnUiThread {
             val changed = lastMode != mode
             lastMode = mode
-            if (mode != OrbView.Mode.SPEAKING) composeOrbSpeechAmplitude.value = 0f
-            if (mode != OrbView.Mode.LISTENING) composeOrbMicLevel.value = 0f
+            if (mode != OrbView.Mode.SPEAKING) chatCoordinator.onAudioAmplitude(0f)
+            if (mode != OrbView.Mode.LISTENING) chatCoordinator.onAudioLevel(0f)
             val state: Triple<String, Int, Pair<Int, Int>> = when (mode) {
                 OrbView.Mode.IDLE -> Triple("READY", Theme.MUTED, Pair(Theme.BG, Theme.LINE))
                 OrbView.Mode.LISTENING -> Triple("LISTENING", Theme.CYAN, Pair(Theme.BG, Theme.LINE))
