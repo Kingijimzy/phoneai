@@ -545,6 +545,7 @@ internal fun OrionComposeChatScreen(
     onShareAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
     status: String,
     orbMode: OrbView.Mode = OrbView.Mode.IDLE,
+    taskRunning: Boolean = false,
     orbMicLevel: Float = 0f,
     orbSpeechAmplitude: Float = 0f,
     orbWordPulse: Float = 0f,
@@ -587,7 +588,7 @@ internal fun OrionComposeChatScreen(
     var sheetTick by remember { mutableStateOf(0) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val effectiveOrbMode = orionModeForStatus(displayStatus, orbMode)
-    val busy = isOrionChatBusy(effectiveOrbMode)
+    val busy = isOrionChatBusy(effectiveOrbMode) || taskRunning
     val shownProvider = remember(sheetTick, providerLabel) { if (sheetTick == 0) providerLabel else Prefs.provider(ctx, false).label }
     if (showModelSheet) OrionModelSheet(onDismiss = { showModelSheet = false }, onNeedKey = onProviderClick, onChanged = { sheetTick++ })
     var inlineBrowserUrl by rememberSaveable { mutableStateOf<String?>(null) }
