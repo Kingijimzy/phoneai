@@ -455,6 +455,37 @@ class ToolRegistryNativeSelectionTest {
         assertEquals(ToolAccess.READ, ToolRegistry.find("capability_load")?.access)
     }
 
+    @Test fun capabilitySearchIncludesGeneratedExtensionsWithTruthfulCallableState() {
+        val source = """def run(INPUT):
+    RESULT = {"value": INPUT.get("value", 0) * 2}
+"""
+        val hash = SelfExtendingExtensionPolicy.sha256(source)
+        val enabled = GeneratedExtension(
+            id = "double_value", displayName = "Double value", runtime = "python",
+            source = source, sourceSha256 = hash, description = "Doubles a numeric input",
+            createdAtMillis = 1L, enabled = true, verified = true
+        )
+        val draft = enabled.copy(
+            id = "draft_value", displayName = "Draft value",
+            enabled = false, verified = false
+        )
+        val result = JSONObject(ToolRegistry.searchCapabilities(
+            "double numeric value", 8, 0, listOf(enabled, draft)
+        ))
+        val extensions = result.getJSONArray("generated_extensions")
+        assertEquals(2, extensions.length())
+        val rows = (0 until extensions.length()).map { extensions.getJSONObject(it) }
+        val active = rows.single { it.getString("id") == "double_value" }
+        assertTrue(active.getBoolean("callable"))
+        assertEquals("verified-enabled", active.getString("state"))
+        assertEquals("extension_run", active.getString("invoke_with"))
+        val inactive = rows.single { it.getString("id") == "draft_value" }
+        assertFalse(inactive.getBoolean("callable"))
+        assertEquals("draft-or-unverified", inactive.getString("state"))
+        assertTrue(inactive.isNull("invoke_with"))
+        rows.forEach { assertFalse("Generated source must never be exposed by discovery", it.has("source")) }
+    }
+
     @Test fun capabilitySearchReturnsSimpleCandidatesAndLoadReturnsTheExactSchema() {
         val result = JSONObject(ToolRegistry.searchCapabilities("inspect MCP resources", 8))
         val rows = result.getJSONArray("results")
