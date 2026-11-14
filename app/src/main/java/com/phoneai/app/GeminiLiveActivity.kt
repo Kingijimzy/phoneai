@@ -28,7 +28,6 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
 
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var session: GeminiLiveSession? = null
-    @Volatile private var orionVoice: Voice? = null
     @Volatile private var liveConversationId: String? = null
     private var attachedService: PhoneAiService? = null
     @Volatile private var active = false
@@ -43,7 +42,6 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         if (active) {
             session?.stop()
             session = null
-            orionVoice?.stopSpeaking()
             active = false
             visual.mode = OrbView.Mode.IDLE
             visual.speechAmplitude = 0f
@@ -173,25 +171,6 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
                 .show()
             return
         }
-        orionVoice = Voice(this).apply {
-            onSpeaking = { speaking ->
-                session?.setLocalSpeechActive(speaking)
-                if (::visual.isInitialized) {
-                    visual.speechAmplitude = if (speaking) visual.speechAmplitude else 0f
-                    visual.mode = if (speaking) OrbView.Mode.SPEAKING
-                        else if (active && microphoneEnabled) OrbView.Mode.LISTENING else OrbView.Mode.IDLE
-                }
-            }
-            onAudioAmplitude = { level ->
-                if (::visual.isInitialized && active) {
-                    visual.speechAmplitude = level.coerceIn(0f, 1f)
-                    if (level > 0.006f) visual.mode = OrbView.Mode.SPEAKING
-                }
-            }
-            onProblem = { problem ->
-                runOnUiThread { if (!isFinishing) Toast.makeText(this@GeminiLiveActivity, problem, Toast.LENGTH_LONG).show() }
-            }
-        }
         ensureMicrophoneThenWarn()
     }
 
@@ -284,7 +263,6 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         main.removeCallbacks(connectTimeout)
         session?.stop()
         session = null
-        orionVoice?.stopSpeaking()
         active = false
         visual.mode = OrbView.Mode.IDLE
         liveConnected = false
@@ -362,7 +340,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             if (fromModel) {
                 visual.mode = OrbView.Mode.SPEAKING
                 // Native Gemini audio is played by GeminiLiveSession. This transcript is captions/history only.
-            } else if (microphoneEnabled && orionVoice?.isSpeaking() != true) {
+            } else if (microphoneEnabled) {
                 // The user's completed turn has arrived; show the real response-planning phase.
                 visual.mode = OrbView.Mode.THINKING
             }
@@ -515,8 +493,6 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         main.removeCallbacks(connectTimeout)
         session?.stop()
         session = null
-        orionVoice?.shutdown()
-        orionVoice = null
         active = false
         attachedService?.detachMainChat(this)
         attachedService = null
