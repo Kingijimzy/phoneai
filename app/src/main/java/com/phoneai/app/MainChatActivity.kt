@@ -2222,10 +2222,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
             }
             val busy = mode != OrbView.Mode.IDLE || PhoneAiService.instance?.isTaskRunning() == true
-            if (!busy && chatUiState.hasAssistantStream()) {
-                // Preserve partial text after Stop, but let the next request create a fresh row.
-                chatUiState.resetAssistantStream()
-            }
             stop.visibility = if (busy) View.VISIBLE else View.GONE
             stop.isEnabled = busy
             // The stop control keeps its vector stop glyph; only enabled state changes.
