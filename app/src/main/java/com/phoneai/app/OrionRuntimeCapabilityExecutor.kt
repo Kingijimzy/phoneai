@@ -90,7 +90,8 @@ internal object OrionRuntimeCapabilityExecutor {
                 args.optString("query"),
                 args.optInt("limit", 8),
                 args.optInt("offset", 0),
-                runCatching { pythonExecutor?.discoverableExtensions().orEmpty() }.getOrDefault(emptyList())
+                runCatching { pythonExecutor?.discoverableExtensions().orEmpty() }.getOrDefault(emptyList()),
+                args.optInt("generated_extension_offset", args.optInt("offset", 0))
             )
             "capability_load" -> capabilityLoad(args.optString("tool_name"))
 
