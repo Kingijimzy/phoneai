@@ -24,6 +24,16 @@ class OrionChatUiStateTest {
         assertEquals(OrbView.Mode.SPEAKING, orionModeForStatus("Approval pending", OrbView.Mode.SPEAKING))
     }
 
+    @Test fun busyControlsFollowRuntimeModeNotStatusText() {
+        assertTrue(isOrionChatBusy(OrbView.Mode.THINKING))
+        assertTrue(isOrionChatBusy(OrbView.Mode.SPEAKING))
+        assertTrue(isOrionChatBusy(OrbView.Mode.ACTING))
+        assertTrue(isOrionChatBusy(OrbView.Mode.WAITING_APPROVAL))
+        assertFalse(isOrionChatBusy(OrbView.Mode.IDLE))
+        assertFalse(isOrionChatBusy(OrbView.Mode.LISTENING))
+        assertFalse(isOrionChatBusy(OrbView.Mode.ERROR))
+    }
+
     @Test fun startsWithSafeChatDefaults() {
         val state = OrionChatUiState()
         assertTrue(state.lines.isEmpty())
