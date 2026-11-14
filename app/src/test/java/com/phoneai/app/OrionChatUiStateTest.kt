@@ -48,7 +48,7 @@ class OrionChatUiStateTest {
         assertEquals("Hello there!", state.lines.last().text)
         assertFalse(state.hasAssistantStream())
 
-        coordinator.onRuntimeStatus("ACTING", OrbView.Mode.ACTING)
+        coordinator.onRuntimeStatus("ACTING", OrbView.Mode.ACTING, taskRunning = true)
         assertEquals("ACTING", state.status.value)
         assertEquals(OrbView.Mode.ACTING, state.orbMode.value)
         assertTrue(state.taskRunning.value)
