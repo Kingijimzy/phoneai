@@ -926,6 +926,7 @@ internal fun OrionComposeChatScreen(
             }
         }
 
+    }
     inlineBrowserUrl?.let { url ->
         ChatInlineBrowserDialog(
             initialUrl = url,
