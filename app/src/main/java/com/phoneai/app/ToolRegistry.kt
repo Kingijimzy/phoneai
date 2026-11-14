@@ -426,6 +426,7 @@ internal object ToolRegistry {
             tokens.isEmpty() || (extension.id + " " + extension.displayName + " " + extension.description)
                 .lowercase().let { searchable -> tokens.any { it in searchable } }
         }.sortedWith(compareByDescending<Triple<GeneratedExtension, Boolean, String>> { it.second }
+            .thenBy { it.first.createdAtMillis }
             .thenBy { it.first.displayName.lowercase() })
         val extensionOffset = requestedGeneratedExtensionOffset.coerceAtLeast(0).coerceAtMost(extensionMatches.size)
         val extensionPage = extensionMatches.drop(extensionOffset).take(limit)
