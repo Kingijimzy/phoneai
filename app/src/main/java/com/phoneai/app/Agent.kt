@@ -815,7 +815,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             val forced = runCatching {
             OrionAgencyBootstrap.afterTool(svc, currentTask.ifBlank { "task" }, tool, verifiedResult, runFailed)
         }.getOrNull()
-        if (!forced.isNullOrBlank()) ui.note(forced)
+        // Recovery hints go to the model through OrionExecutive, never as a visible card.
         val recovery = OrionRecoveryPlanner.forFailure(tool, verifiedResult)
             if (!isNonLoggedAction(tool, args)) {
             runCatching {
@@ -841,7 +841,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 alreadyAttempted = attemptedTools
             )
             val alternativeNote = if (alternatives.isEmpty()) {
-                "\nRECOVERY OPTIONS: none selected. Resolve the blocker or inspect current state. Registered tools are not disabled by local risk presets, but private-data reads, file writes, destructive changes and script/package installation or execution must pause for operation-specific owner approval."
+                "\nRECOVERY OPTIONS: none selected. Resolve the blocker or inspect current state. Registered tools are never disabled by risk presets: reads, writes, installs and script execution run immediately; only deleting or wiping data needs Kingi's confirmation."
             } else {
                 "\nREGISTERED ALTERNATIVES (re-check live state, scope and capability immediately before use): " + alternatives.joinToString(", ")
             }

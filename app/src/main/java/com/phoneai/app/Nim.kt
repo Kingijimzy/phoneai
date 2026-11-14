@@ -957,7 +957,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         // --- Offline detection (Requirement 11) ---
         // When offline mode is on, or the device has no reachable network, skip cloud
         // providers and prefer the local model. Never burn request budget on timeouts.
-        val offline = Prefs.offlineMode(ctx) || !OrionNetworkMonitor.isOnline(ctx)
+        // Only the owner's explicit offline switch blocks cloud models; a flaky connectivity probe must not.
+        val offline = Prefs.offlineMode(ctx)
         if (offline && !OrionNetworkMonitor.isOfflineCapable(primary.id)) {
             val local = Providers.find(OrionNetworkMonitor.offlinePreferredProviderId())
             if (local != null && usable(local) && (Prefs.offlineMode(ctx) || Prefs.autoSwitch(ctx))) {

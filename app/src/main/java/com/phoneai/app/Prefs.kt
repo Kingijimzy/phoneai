@@ -385,7 +385,8 @@ object Prefs {
     fun setModel(c: Context, p: Provider, vision: Boolean, m: String) =
         sp(c).edit().putString((if (vision) "vm_" else "tm_") + p.id, m).apply()
 
-    fun autoSwitch(c: Context): Boolean = sp(c).getBoolean("autoswitch", true)
+    /** Failover is always on: a busy or erroring selected model must never strand the owner. */
+    fun autoSwitch(c: Context): Boolean = true
     fun setAutoSwitch(c: Context, v: Boolean) = sp(c).edit().putBoolean("autoswitch", v).apply()
 
     /** Defaults on to avoid burning free-tier quota through repeated provider/model fallbacks. */
