@@ -437,7 +437,6 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             active = false
             liveConnected = false
             session = null
-            orionVoice?.stopSpeaking()
             visual.mode = OrbView.Mode.IDLE
             visual.speechAmplitude = 0f
             visual.errorState = true
