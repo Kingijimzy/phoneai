@@ -488,7 +488,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 74)
             return
         }
-        if (service.isVoiceActive()) service.endLiveConversation() else service.startLiveConversation()
+        service.toggleChatVoice()
     }
 
     private fun handleChatMenuAction(action: String) {

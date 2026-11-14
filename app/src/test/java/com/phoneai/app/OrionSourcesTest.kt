@@ -15,3 +15,13 @@ class OrionSourcesTest {
         assertEquals(6, orionSourcesIn(t).size)
     }
 }
+
+class OrionFileCardTest {
+    @Test fun kindsAndSizes() {
+        assertEquals("PDF", orionFileKind("a.PDF", ""))
+        assertEquals("IMG", orionFileKind("x", "image/png"))
+        assertEquals("CODE", orionFileKind("main.kt", ""))
+        assertEquals("2.0 KB", orionHumanSize(2048))
+        assertEquals("12 B", orionHumanSize(12))
+    }
+}

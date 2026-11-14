@@ -2205,6 +2205,17 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     /** Starts the continuous, user-initiated live conversation used by the full-screen voice UI. */
+    /** One tap in the chat composer: interrupts speech and listens, stops listening, or starts a turn. */
+    fun toggleChatVoice() {
+        main.post {
+            when {
+                voice.isSpeaking() -> { voice.stopSpeaking(); startLiveConversation() }
+                listening || handsActive -> endLiveConversation()
+                else -> startLiveConversation()
+            }
+        }
+    }
+
     fun isVoiceActive(): Boolean = listening || handsActive || voice.isSpeaking()
 
     fun startLiveConversation() {
