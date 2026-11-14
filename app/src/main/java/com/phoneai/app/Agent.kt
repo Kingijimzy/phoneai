@@ -137,6 +137,8 @@ interface AgentUi {
     fun status(text: String)
     /** One concise cue before a potentially slow operation; default remains visual-only. */
     fun progress(text: String) { status(text) }
+    /** A short first-person line about what Orion is doing right now; spoken when voice is on. */
+    fun narrate(text: String) { status(text) }
     fun note(text: String)
     fun stream(text: String) {}
 
@@ -1218,12 +1220,14 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 return
             }
             var progressCueSent = false
+            val narrator = OrionNarrator.Tracker()
             while (turn.toolCalls.isNotEmpty() && !stopped && toolRounds < OrionNativeToolDispatcher.MAX_ROUNDS_PER_COMMAND) {
                 if (!progressCueSent && OrionProgressCuePolicy.shouldAnnounce(turn.toolCalls.map { it.name })) {
                     ui.progress("I'm working through that now.")
                     progressCueSent = true
                 }
                 toolRounds++
+                turn.toolCalls.firstNotNullOfOrNull { narrator.next(it.name, it.arguments) }?.let { ui.narrate(it) }
                 val callEnvelope = JSONArray()
                 turn.toolCalls.forEach { call ->
                     callEnvelope.put(JSONObject()

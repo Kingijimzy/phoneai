@@ -193,7 +193,9 @@ private fun OrionStructuredBlockCard(
     val clipboard = LocalClipboardManager.current
     when (block) {
         is OrionMessageBlock.Text -> Text(block.markdown, color = ChatCopy, fontSize = 13.sp, lineHeight = 20.sp)
-        is OrionMessageBlock.Code -> Column(
+        is OrionMessageBlock.Code -> if (block.language.lowercase() in setOf("diff", "patch") || looksLikeUnifiedDiff(block.source)) {
+            OrionDiffCard(block.source, block.filename)
+        } else Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
                 .background(OrionUiPalette.background)
                 .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp))
@@ -228,7 +230,7 @@ private fun OrionStructuredBlockCard(
                     Spacer(Modifier.weight(1f))
                     Text(block.state.uppercase(), color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
-                if (block.command.isNotBlank()) Text("$ " + block.command, color = ChatCopy, fontSize = 11.sp, fontFamily = mono)
+                if (block.command.isNotBlank()) Text(buildAnnotatedString { withStyle(SpanStyle(color = OrionUiPalette.success, fontWeight = FontWeight.Bold)) { append("$ ") }; append(block.command) }, color = ChatCopy, fontSize = 12.sp, fontFamily = mono)
                 if (block.source.isNotBlank()) Text(block.source, color = ChatMuted, fontSize = 10.sp, fontFamily = mono, lineHeight = 15.sp)
                 if (block.stdout.isNotBlank()) Text(block.stdout.takeLast(5000), color = ChatCopy, fontSize = 11.sp, fontFamily = mono, lineHeight = 15.sp)
                 if (block.stderr.isNotBlank()) Text(block.stderr.takeLast(3000), color = OrionUiPalette.danger, fontSize = 11.sp, fontFamily = mono, lineHeight = 15.sp)

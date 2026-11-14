@@ -2450,6 +2450,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    override fun narrate(text: String) {
+        status(text)
+        // Companion presence: say what I am doing, briefly, without talking over myself.
+        if (Prefs.voice(this) && !voice.isSpeaking() && !listening) voice.speak(text)
+    }
+
     override fun status(text: String) {
         main.post {
             if (panel != null) {
