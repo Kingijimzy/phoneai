@@ -480,7 +480,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             "new_chat" -> {
                 PhoneAiService.instance?.startNewChat() ?: run {
                     ChatHistoryStore.archiveAndClearStructured(this, composeLines.toList())
-                    composeLines.clear()
+                    chatCoordinator.clearSessionProjection()
                     composeAttachments.value = emptyList()
                 }
                 composeChatTitle.value = "Orion"
@@ -495,7 +495,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 .setPositiveButton("CLEAR CHAT") { _, _ ->
                     PhoneAiService.instance?.startNewChat() ?: run {
                         ChatHistoryStore.archiveAndClearStructured(this, composeLines.toList())
-                        composeLines.clear()
+                        chatCoordinator.clearSessionProjection()
                         composeAttachments.value = emptyList()
                     }
                     composeChatTitle.value = "Orion"
@@ -681,7 +681,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                                 if (service != null) {
                                     service.deleteAllChatHistory { deleted, message ->
                                         if (deleted) {
-                                            composeLines.clear()
+                                            chatCoordinator.clearSessionProjection()
                                             composeAttachments.value = emptyList()
                                             dialog.dismiss()
                                             Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_SHORT).show()
@@ -692,7 +692,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                                 } else {
                                     val deleted = ChatHistoryStore.clearAll(this@MainChatActivity)
                                     if (deleted) {
-                                        composeLines.clear()
+                                        chatCoordinator.clearSessionProjection()
                                         composeAttachments.value = emptyList()
                                         dialog.dismiss()
                                     }
@@ -1472,7 +1472,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                         if (service != null) service.startNewChat()
                         else {
                             ChatHistoryStore.archiveAndClearStructured(this@MainChatActivity, composeLines.toList())
-                            composeLines.clear()
+                            chatCoordinator.clearSessionProjection()
                             composeAttachments.value = emptyList()
                             Toast.makeText(this@MainChatActivity, "New chat ready", Toast.LENGTH_SHORT).show()
                         }
