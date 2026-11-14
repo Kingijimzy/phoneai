@@ -71,10 +71,13 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(dp(22), dp(12), dp(22), dp(12))
-            setBackgroundColor(android.graphics.Color.BLACK)
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(Theme.BG, Theme.BG, Theme.PANEL, Theme.PANEL2)
+            )
         }
 
-        status = label("ORION  ·  READY", 11f, Theme.SILVER, true).apply {
+        status = label("ORION  ·  LIVE VOICE  ·  READY", 10f, Theme.SILVER, true).apply {
             gravity = Gravity.CENTER
             contentDescription = "Orion live conversation status"
             letterSpacing = .16f
