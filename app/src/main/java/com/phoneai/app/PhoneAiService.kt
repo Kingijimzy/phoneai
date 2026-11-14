@@ -2238,6 +2238,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         handsActive = true
         emptyListens = 0
         closePanel(false)
+        // Warm the on-device Kokoro engine during the user's first turn so model loading
+        // is not added to the first response's time-to-audio.
+        voice.prepareNeuralVoice()
         // A spoken greeting adds a full TTS cycle before the microphone opens and is a
         // common cause of users thinking the live call has timed out. Start listening now.
         voice.stopSpeaking()
