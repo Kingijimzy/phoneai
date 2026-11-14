@@ -177,7 +177,7 @@ dependencies {
     // Explicit view-tree owner APIs used by ComposeView instances hosted in Dialog windows.
     implementation("androidx.lifecycle:lifecycle-runtime-android:2.8.4")
     implementation("androidx.lifecycle:lifecycle-viewmodel-android:2.8.4")
-    implementation("androidx.savedstate:savedstate-android:1.2.1")
+    implementation("androidx.savedstate:savedstate:1.2.1")
     implementation("androidx.webkit:webkit:1.11.0")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("com.google.mlkit:text-recognition:16.0.1")
