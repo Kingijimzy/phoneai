@@ -323,7 +323,9 @@ class Voice(private val ctx: Context) {
                 val engine = obtainNeuralEngine(model)
                 track = obtainNeuralTrack(engine.sampleRate())
                 val generationStartedAtMs = SystemClock.elapsedRealtime()
-                val framesBeforeGeneration = neuralFramesWritten
+                var generatedPcmFrames = 0L
+                var audioTrackWriteMs = 0L
+                var firstAudioLatencyMs: Long? = null
                 for (index in chunks.indices) {
                     if (token != playbackGeneration.get()) return@execute
                     fallbackStart = index
@@ -332,6 +334,7 @@ class Voice(private val ctx: Context) {
                         speed = (speeds?.getOrNull(index) ?: Prefs.rate(ctx)).coerceIn(0.85f, 1.15f)
                     )
                     var callbackFrames = 0
+                    val chunkGenerationStartedAtMs = SystemClock.elapsedRealtime()
                     val generatedAudio = engine.generateWithConfigAndCallback(
                         text = chunks[index],
                         config = generation,
@@ -400,17 +403,20 @@ class Voice(private val ctx: Context) {
                     }
                 }
 
-                val generationElapsedMs = (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(1L)
-                val generatedFrames = (neuralFramesWritten - framesBeforeGeneration).coerceAtLeast(0L)
-                val generatedAudioSeconds = generatedFrames.toDouble() / engine.sampleRate().coerceAtLeast(1)
-                if (generatedFrames > 0L) {
-                    val realTimeFactor = generatedAudioSeconds / (generationElapsedMs / 1000.0)
+                val generationWallMs = (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(1L)
+                val synthesisAndCallbackMs = (generationWallMs - audioTrackWriteMs).coerceAtLeast(1L)
+                val generatedAudioSeconds = generatedPcmFrames.toDouble() / engine.sampleRate().coerceAtLeast(1)
+                if (generatedPcmFrames > 0L) {
+                    val realTimeFactor = generatedAudioSeconds / (synthesisAndCallbackMs / 1000.0)
                     setKokoroPerformance(String.format(
                         Locale.US,
-                        "Kokoro synthesis: %.2f seconds of audio in %d ms; real-time factor %.2fx; %d characters across %d chunk(s).",
+                        "Kokoro: %.2fs generated audio; %.2fs non-playback generation time; %.2fx RTF; first audio %dms; AudioTrack writes %.2fs; total generation wall %.2fs; %d chars / %d chunks.",
                         generatedAudioSeconds,
-                        generationElapsedMs,
+                        synthesisAndCallbackMs / 1000.0,
                         realTimeFactor,
+                        firstAudioLatencyMs ?: -1L,
+                        audioTrackWriteMs / 1000.0,
+                        generationWallMs / 1000.0,
                         chunks.sumOf { it.length },
                         chunks.size
                     ))
