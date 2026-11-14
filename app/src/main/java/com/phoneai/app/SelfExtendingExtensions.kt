@@ -35,6 +35,9 @@ internal object SelfExtendingExtensionPolicy {
 
     fun validateSource(runtime: String, source: String): String? {
         if (source.isBlank()) return "Generated source is empty."
+        // Secret scanning applies to every runtime. Full CPython's broader execution
+        // permissions do not make hard-coded credentials safe to persist in an extension.
+        OrionSecurityPolicy.findEmbeddedSecret(source)?.let { return it.message }
         if (runtime != "python_full" && source.toByteArray(Charsets.UTF_8).size > MAX_SOURCE_BYTES) return "Generated source exceeds the 8,000-byte runtime limit."
         if (runtime == "python_full") {
             if (source.toByteArray(Charsets.UTF_8).size > MAX_FULL_SOURCE_BYTES) {

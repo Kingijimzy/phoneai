@@ -253,16 +253,33 @@ internal class AccountAwareModelProvider(
         val installer = AntigravityRuntimeInstaller(app)
         installer.install().getOrThrow()
         val model = requestedModel?.takeIf { it.isNotBlank() }
+        val compactPrompt = AntigravityCliProtocol.compactPrompt(prompt)
+        val toolDispatches = java.util.concurrent.atomic.AtomicInteger(0)
+        val trackedToolCall: ((String, JSONObject) -> String)? = onToolCall?.let { callback ->
+            { name, args ->
+                toolDispatches.incrementAndGet()
+                callback(name, args)
+            }
+        }
+        fun invoke(value: String): String = installer.runPrompt(
+            app.filesDir.absolutePath,
+            value,
+            model,
+            tools = tools,
+            onToolCall = trackedToolCall,
+            onDelta = onDelta,
+            onSession = { session -> activeAntigravity = session }
+        )
         try {
-            val answer = installer.runPrompt(
-                app.filesDir.absolutePath,
-                prompt,
-                model,
-                tools = tools,
-                onToolCall = onToolCall,
-                onDelta = onDelta,
-                onSession = { session -> activeAntigravity = session }
-            )
+            val answer = try {
+                invoke(compactPrompt)
+            } catch (failure: Exception) {
+                // Only retry a provider-declared context overflow before any Orion tool was
+                // dispatched. Never replay a turn after a possible side effect.
+                if (toolDispatches.get() == 0 && AntigravityCliProtocol.isContextOverflow(failure.message.orEmpty())) {
+                    invoke(AntigravityCliProtocol.compactPrompt(prompt, 12_000))
+                } else throw failure
+            }
             check(answer.isNotBlank()) { "Antigravity returned an empty model response." }
             Prefs.setAccountConnected(app, "antigravity", true)
             accountRequests++

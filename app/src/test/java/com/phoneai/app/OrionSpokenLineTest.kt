@@ -57,4 +57,21 @@ class OrionSpokenLineTest {
         assertTrue(OrionSpokenLine.needsComposing("See https://example.com"))
         assertTrue(OrionSpokenLine.needsComposing("x ".repeat(100)))
     }
+
+    @Test fun spokenComposerSupportsTypedChatWithoutARequiredLiveCall() {
+        assertTrue(OrionSpokenLine.SYSTEM.contains("ordinary typed chat"))
+        assertTrue(OrionSpokenLine.SYSTEM.contains("no live call or microphone is required"))
+        assertTrue(OrionSpokenLine.SYSTEM.contains("visible chat"))
+        assertFalse(OrionSpokenLine.SYSTEM.contains("only for live voice calls"))
+    }
+
+    @Test fun spokenComposerReceivesRecentConversationWithoutDumpingItAll() {
+        val context = "Kingi: I normally wake up early.\nOrion: That is part of your routine.\nKingi: Help me plan today."
+        val prompt = OrionSpokenLine.userMessage("Let's start with the first task.", "Help me plan today.", context)
+        assertTrue(prompt.contains("I normally wake up early"))
+        assertTrue(prompt.contains("That is part of your routine"))
+        assertTrue(prompt.contains("LATEST USER MESSAGE"))
+        assertTrue(prompt.contains("WRITTEN REPLY"))
+        assertFalse(prompt.contains("x".repeat(1900)))
+    }
 }

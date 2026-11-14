@@ -3,7 +3,7 @@ package com.phoneai.app
 import org.json.JSONObject
 
 /**
- * What Orion actually says aloud, composed for a live voice call rather than read from the chat text.
+ * What Orion says aloud for ordinary chat, hands-free conversation, or a live call. The spoken line is a separate channel from the full written answer.
  *
  * The written answer stays on screen untouched. For speech, the model writes a separate short line and
  * picks a mood; the mood and the sentence shape then set pace and breathing room, so delivery changes
@@ -27,22 +27,24 @@ object OrionSpokenLine {
     data class Line(val text: String, val mood: Mood, val source: String)
     data class Chunk(val text: String, val speed: Float, val pauseAfterMs: Int)
 
-    const val SYSTEM: String = "You are Orion's voice. Turn the written reply into what Orion would actually SAY out loud in a live voice call with Kingi. " +
+    const val SYSTEM: String = "You are Orion's spoken-response composer. This is used for ordinary typed chat as well as hands-free or live voice; no live call or microphone is required. Turn the written reply into what Orion would naturally SAY to Kingi, not a read-aloud version of the text. " +
         "Reply with ONLY JSON: {\"say\": string, \"mood\": \"neutral|warm|calm|focused|urgent|light\"}. " +
-        "Rules: talk like a person on a call: contractions, plain words, one to three short sentences, the useful point first. " +
+        "Rules: sound like a thoughtful person continuing an existing conversation: contractions, plain words, one to three short sentences, the useful point first. Respond to the user's actual intent and relevant context; do not mechanically summarize or repeat the written answer. " +
         "Match the moment for mood: casual or friendly -> light or warm; Kingi stressed, something went wrong, or bad news -> calm; " +
         "technical work in progress or a result to report -> focused; a real risk, failure or time-critical thing -> urgent; otherwise neutral. " +
-        "Never read out code, file paths, URLs, JSON, tables, lists, IDs, hashes or tool names. If the written reply is mostly that kind of material, " +
+        "Never read out code, file paths, URLs, JSON, tables, lists, IDs, hashes or tool names. Preserve the important meaning and result while leaving implementation detail in the visible chat. If the written reply is mostly technical material, " +
         "say one sentence about the outcome and point to the screen, for example that the details are on screen. " +
         "No greeting or sign-off unless this is clearly the start or end of the conversation. No emoji, no stage directions, no markdown. " +
         "Use commas and short sentences for rhythm. Ask a question only if it helps. Do not announce what you are about to say. " +
         "Never claim anything the written reply does not confirm. If nothing is worth saying aloud, return {\"say\":\"\",\"mood\":\"neutral\"}."
 
-    fun userMessage(written: String, heard: String): String =
-        "KINGI JUST SAID: " + heard.trim().take(300).ifBlank { "(no earlier message)" } +
+    fun userMessage(written: String, heard: String, recentContext: String = ""): String =
+        "RECENT CONVERSATION (oldest first; use only what is relevant):\n" +
+            recentContext.trim().takeLast(1800).ifBlank { "(no earlier context)" } +
+            "\nLATEST USER MESSAGE: " + heard.trim().take(300).ifBlank { "(no earlier message)" } +
             "\nWRITTEN REPLY (shown on screen):\n" + written.trim().take(1400)
 
-    private val jsonShaped = Regex("[`|{}\\[\\]<>#*_]|https?://|\\n\\s*[-•\\d]+[.)]?\\s")
+    private val jsonShaped = Regex("[`|{}\\[\\]<>#*_]|https?://|\n\\s*[-•\\d]+[.)]?\\s")
 
     /** Short plain replies are already speakable; skip the extra model call so they stay instant. */
     fun needsComposing(written: String): Boolean {
