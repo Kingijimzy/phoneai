@@ -732,7 +732,7 @@ internal fun OrionComposeChatScreen(
                     fun choose(action: String) { menuExpanded = false; onMenuAction(action) }
                     DropdownMenuItem(text = { Text("Chat history", color = ChatCopy) }, onClick = { menuExpanded = false; onHistory() })
                     DropdownMenuItem(text = { Text("Rename chat", color = ChatCopy) }, onClick = { choose("rename_chat") })
-                    DropdownMenuItem(text = { Text("Choose model", color = ChatCopy) }, onClick = { menuExpanded = false; onModelClick() })
+                    DropdownMenuItem(text = { Text("Choose model", color = ChatCopy) }, onClick = { menuExpanded = false; showModelSheet = true })
                     DropdownMenuItem(text = { Text("Clear Chat", color = OrionUiPalette.danger) }, onClick = { choose("clear_chat") })
                     DropdownMenuItem(text = { Text("Open Terminal", color = ChatCopy) }, onClick = { choose("terminal") })
                     DropdownMenuItem(text = { Text("Open Browser", color = ChatCopy) }, onClick = { choose("browser") })
