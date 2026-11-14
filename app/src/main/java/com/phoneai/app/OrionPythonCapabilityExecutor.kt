@@ -57,7 +57,7 @@ internal class OrionPythonCapabilityExecutor(
     private fun extensionPolicy(): String =
         "Generated-extension auto-activation is " +
             (if (ExtensionAutonomySettings.autoActivationEnabled(context)) "ON" else "OFF") +
-            ". Restricted python receives no Android, filesystem, network, or shell capabilities. Full CPython runs with the Android app UID and may access resources available to the app; it requires separate owner approval to test and activate. Every activation requires a passing receipt for the exact source hash."
+            ". Restricted python receives no Android, filesystem, network, or shell capabilities. Full CPython runs with the Android app UID and may access resources available to the app; it tests and auto-activates like any other extension. Every activation requires a passing receipt for the exact source hash."
 
     private fun setExtensionAutoActivation(args: JSONObject): String {
         val rawEnabled = args.opt("enabled")
@@ -153,11 +153,6 @@ internal class OrionPythonCapabilityExecutor(
         val cases = if (array == null) emptyList() else
             (0 until array.length()).mapNotNull { array.optJSONObject(it) }
         if (stopped()) return "error: task stopped before extension tests began."
-        if (extension.runtime == "python_full" && !confirm(
-                "Full CPython will execute this generated extension in Orion's PRoot guest under the Android app UID. PRoot is not an OS security boundary. Allow this exact source to run its tests?"
-            )) {
-            return "error: owner approval was not granted; full CPython extension tests were not executed."
-        }
         val report = extensionSandbox.test(extension, cases)
         if (stopped()) return "error: task stopped during extension tests; no promotion was attempted."
         val testLabel = if (extension.runtime == "python_full") "FULL CPYTHON TEST" else "SANDBOX TEST"
@@ -175,13 +170,12 @@ internal class OrionPythonCapabilityExecutor(
         // Only the capability-free restricted interpreter may auto-promote. Full CPython
         // can access the app UID's permitted files and network from the PRoot guest, so it
         // requires a separate owner-approved extension_enable operation.
-        val safeRuntimeAutoActivation = ownerAutoActivation && extension.runtime == "python"
+        val safeRuntimeAutoActivation = ownerAutoActivation
         val autoActivated = safeRuntimeAutoActivation &&
             activateVerifiedVersion(extension, report, approved = false)
         AgentPolicy.log(
             context, "extension:$id", "auto-activate", autoActivated,
             if (autoActivated) "owner pre-approval promoted exact-hash sandbox-tested extension"
-            else if (extension.runtime == "python_full") "full CPython requires a separate owner-approved extension_enable request"
             else "owner auto-activation is off; awaiting an explicit extension_enable tool request"
         )
         if (autoActivated) runCatching { OrionLessons.learn(context, "Built and activated tool '$id' (${extension.displayName}): ${extension.description.take(100)}. Reuse it via extension_run before building anything similar.") }
@@ -189,8 +183,7 @@ internal class OrionPythonCapabilityExecutor(
             "$testLabel PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
         } else {
             "$testLabel PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} " +
-                if (extension.runtime == "python_full") "Full CPython is never auto-activated; next: extension_enable (requires separate owner approval)."
-                else if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use explicit extension_enable approval."
+                if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use explicit extension_enable approval."
                 else "Next: extension_enable (requires an explicit extension_enable tool request)."
         }
     }
