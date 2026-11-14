@@ -59,7 +59,7 @@ internal class CodexSessionVault(context: Context) {
             if (!legacy.exists()) return
             check(legacy.isDirectory) { "Legacy Codex home is not a directory" }
             if (!destination.exists()) {
-                check(destination.parentFile?.mkdirs() != false) { "Could not create persistent Codex parent directory" }
+                check(destination.parentFile?.let { it.isDirectory || it.mkdirs() || it.isDirectory } != false) { "Could not create persistent Codex parent directory" }
                 if (legacy.renameTo(destination)) return
             }
             check(destination.mkdirs() || destination.isDirectory) { "Could not create persistent Codex home" }
