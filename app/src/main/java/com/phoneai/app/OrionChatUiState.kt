@@ -23,6 +23,11 @@ internal class OrionChatUiState {
     val orbMode = mutableStateOf(OrbView.Mode.IDLE)
     val taskRunning = mutableStateOf(false)
     val activityEvents = mutableStateOf<List<OrionActivityEvent>>(emptyList())
+    val attachments = mutableStateOf<List<OrionChatAttachmentStore.Attachment>>(emptyList())
+    val companionLook = mutableStateOf(0)
+    val orbMicLevel = mutableStateOf(0f)
+    val orbSpeechAmplitude = mutableStateOf(0f)
+    val orbWordPulse = mutableStateOf(0f)
 
     private var streamingMessageId: Long? = null
     private val streamingBuffer = StringBuilder()
