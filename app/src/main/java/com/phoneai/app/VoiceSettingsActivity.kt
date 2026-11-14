@@ -425,17 +425,52 @@ class VoiceSettingsActivity : Activity() {
     }
 
     private fun testVoice() {
+        val kokoroInstalled = NeuralVoiceInstaller.isInstalled(this)
+        if (kokoroInstalled) {
+            // The dedicated diagnostic must exercise Kokoro, not silently test Android TTS.
+            Prefs.setNeuralVoice(this, true)
+            Prefs.setVoice(this, true)
+            bindingControls = true
+            neuralSwitch?.isChecked = true
+            bindingControls = false
+        }
         val voice = Voice(this)
         previewVoice = voice
+        var playbackProblem: String? = null
         voice.onProblem = { message ->
-            runOnUiThread {
-                if (!isFinishing && !isDestroyed) {
-                    Toast.makeText(this, "Voice test failed: $message", Toast.LENGTH_LONG).show()
-                }
-            }
+            playbackProblem = message
         }
-        voice.speak("Hello. This is Orion. This is a test of the current spoken voice.") {
-            runOnUiThread { voice.shutdown(); if (previewVoice === voice) previewVoice = null }
+        val sample = if (kokoroInstalled) {
+            "Hello. This is Orion's Kokoro neural voice test. I am checking speech generation and audio playback."
+        } else {
+            "Hello. This is Orion. Kokoro is not installed, so this is an Android voice fallback test."
+        }
+        voice.speak(sample) {
+            val metrics = Voice.kokoroPerformanceSummary()
+            val problem = playbackProblem
+            runOnUiThread {
+                voice.shutdown()
+                if (previewVoice === voice) previewVoice = null
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                val title = if (kokoroInstalled && problem == null &&
+                    metrics.contains("Kokoro synthesis:") &&
+                    !metrics.contains("no audio frames") &&
+                    !metrics.contains("PCM output was silent") &&
+                    !metrics.contains("failed (")
+                ) "Kokoro playback test completed" else if (kokoroInstalled) "Kokoro test needs attention" else "Android voice test completed"
+                val detail = buildString {
+                    append(if (kokoroInstalled) "Engine requested: Kokoro / Sherpa-ONNX\\n" else "Engine requested: Android Text-to-Speech\\n")
+                    append("Model installed: ").append(if (kokoroInstalled) "yes" else "no").append("\\n")
+                    append(metrics)
+                    if (problem != null) append("\\nPlayback warning: ").append(problem)
+                    if (kokoroInstalled) append("\\n\\nListen for the spoken sample. A completed callback confirms the playback queue drained; it does not replace a physical listening check.")
+                }
+                AlertDialog.Builder(this)
+                    .setTitle(title)
+                    .setMessage(detail)
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
         }
     }
 

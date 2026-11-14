@@ -17,9 +17,11 @@ class OrionPythonCapabilityExecutorTest {
     private lateinit var context: Context
     private lateinit var executor: OrionPythonCapabilityExecutor
     private var executedSource = ""
+    private var testedSource = ""
 
     private val sandbox = object : ExtensionSandbox {
         override fun test(extension: GeneratedExtension, testCases: List<JSONObject>): ExtensionTestReport {
+            testedSource = extension.source
             val passed = testCases.isNotEmpty() && testCases.all { it.has("expect") }
             return ExtensionTestReport(passed, extension.sourceSha256, if (passed) "all fake cases passed" else "missing expected value")
         }
@@ -40,6 +42,7 @@ class OrionPythonCapabilityExecutorTest {
         context.getSharedPreferences("orion_extension_autonomy", Context.MODE_PRIVATE)
             .edit().clear().commit()
         executedSource = ""
+        testedSource = ""
         executor = OrionPythonCapabilityExecutor(context, null, extensionSandbox = sandbox)
     }
 
@@ -163,6 +166,25 @@ class OrionPythonCapabilityExecutorTest {
         assertTrue(afterVerification.contains("EXTENSION RESULT"))
         assertEquals("Only the exact source that passed the sandbox may auto-activate", v2, executedSource)
     }
+    @Test fun fullPythonTestsRequireOwnerApprovalBeforeRunningGeneratedCode() {
+        val source = "import os\\nRESULT = os.getcwd()"
+        val created = executor.execute(
+            "extension_create",
+            JSONObject().put("id", "full_denied").put("name", "Full denied")
+                .put("source", source).put("description", "approval test"),
+            { true }, { false }
+        ).orEmpty()
+        assertTrue(created, created.contains("draft"))
+        val result = executor.execute(
+            "extension_test",
+            JSONObject().put("id", "full_denied").put("tests",
+                org.json.JSONArray().put(JSONObject().put("input", JSONObject()).put("expect", "/"))),
+            { false }, { false }
+        ).orEmpty()
+        assertTrue(result, result.contains("owner approval was not granted"))
+        assertEquals("Unapproved full CPython source must never reach the runtime", "", testedSource)
+    }
+
     @Test fun extensionCreateDefaultsToFullPythonAndUsesTheFullRuntimeLabel() {
         val source = "import os\nRESULT = os.getcwd()"
         val created = executor.execute(
@@ -180,7 +202,11 @@ class OrionPythonCapabilityExecutorTest {
                 org.json.JSONArray().put(JSONObject().put("input", JSONObject()).put("expect", source))),
             { true }, { false }
         ).orEmpty()
-        assertTrue(tested, tested.contains("FULL CPYTHON TEST PASSED and AUTO-ACTIVATED"))
+        assertTrue(tested, tested.contains("FULL CPYTHON TEST PASSED"))
+        assertFalse("Full CPython must not auto-activate", tested.contains("AUTO-ACTIVATED"))
+        assertTrue(executor.execute("extension_run", JSONObject().put("id", "full_helper"), { true }, { false }).orEmpty().startsWith("error:"))
+        val enabled = executor.execute("extension_enable", JSONObject().put("id", "full_helper"), { true }, { false }).orEmpty()
+        assertTrue(enabled, enabled.contains("enabled"))
     }
 }
 

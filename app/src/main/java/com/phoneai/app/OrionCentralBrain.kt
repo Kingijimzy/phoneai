@@ -52,6 +52,20 @@ internal object OrionCentralBrain {
     fun contextFor(context: Context, request: String): String {
         val app = context.applicationContext
         val sections = mutableListOf<String>()
+        // Reconcile the installed capability inventory at the shared brain boundary.
+        // This detects newly registered tools, skills, extensions, providers and enabled packs
+        // for Talk, Command, voice and other callers that use this context builder.
+        val capabilityDelta = runCatching { OrionCapabilityAwareness.scan(app) }.getOrNull()
+        if (capabilityDelta != null && (capabilityDelta.added.isNotEmpty() ||
+                capabilityDelta.removed.isNotEmpty() || capabilityDelta.environmentChanges.isNotEmpty())) {
+            sections += buildString {
+                appendLine("ORION ENVIRONMENT CHANGE DETECTED")
+                if (capabilityDelta.added.isNotEmpty()) appendLine("New installed capabilities: " + capabilityDelta.added.joinToString())
+                if (capabilityDelta.removed.isNotEmpty()) appendLine("Capabilities no longer present: " + capabilityDelta.removed.joinToString())
+                if (capabilityDelta.environmentChanges.isNotEmpty()) appendLine("Live environment transitions: " + capabilityDelta.environmentChanges.joinToString("; "))
+                appendLine("These are observed transitions, not proof of a task succeeding. Re-check readiness before relying on a changed integration.")
+            }
+        }
         sections += OrionGraspProtocol.contextBlock()
         sections += OrionAmbientAwareness.systemContext()
         sections += OrionPlatformSelfKnowledge.promptBlock(app)
@@ -92,6 +106,10 @@ internal object OrionCentralBrain {
 
         // Preserve the existing capability-aware Soul Engine as the source of live state.
         addObservedSection("soul_engine_context") { OrionSoulEngine.contextFor(app, request) }
+        // Include the persisted self-model, lessons, mission queue and drive state in the
+        // same provider-neutral executive context used by every surface. This is additive
+        // to the structured ExperienceStore recall below; it does not create another store.
+        addObservedSection("living_loop_state") { OrionLivingLoop.promptBlock(app) }
         addObservedSection("chronos_awareness") { OrionChronosAwareness.summary(app) }
         addObservedSection("proactive_awareness") {
             val item = OrionProactiveEngine.evaluate(app)

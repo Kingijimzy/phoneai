@@ -63,7 +63,7 @@ internal object SelfExtendingExtensionPolicy {
         runtime: String = ""
     ): Boolean =
         testPassed && sourceHash.isNotBlank() && sourceHash == testedHash &&
-            (userApproved || (autoActivateSafePython && (runtime == "python" || runtime == "python_full")))
+            (userApproved || (autoActivateSafePython && runtime == "python"))
 }
 
 /**

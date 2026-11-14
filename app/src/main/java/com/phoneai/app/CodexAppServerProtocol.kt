@@ -17,6 +17,7 @@ internal object CodexAppServerProtocol {
     const val CLIENT_TITLE = "Orion"
 
     data class Request(val id: Int, val method: String, val params: JSONObject) {
+        // Codex app-server uses JSON-RPC-shaped JSONL but explicitly omits jsonrpc.
         fun toJson(): JSONObject = JSONObject()
             .put("id", id)
             .put("method", method)
@@ -41,6 +42,24 @@ internal object CodexAppServerProtocol {
             .put("capabilities", JSONObject().put("experimentalApi", true))
     )
 
+    /** Exact response contract for the pinned Codex app-server InitializeResponse. */
+    fun isInitializeResponse(result: JSONObject): Boolean =
+        result.optString("userAgent").isNotBlank() &&
+            result.optString("codexHome").isNotBlank() &&
+            result.optString("platformFamily").isNotBlank() &&
+            result.optString("platformOs").isNotBlank()
+
+    /** App-server item/tool/call params must match both the active thread and turn. */
+    fun toolCallBelongsToActiveTurn(
+        params: JSONObject,
+        activeThreadId: String?,
+        activeTurnId: String?
+    ): Boolean {
+        if (activeThreadId.isNullOrBlank() || activeTurnId.isNullOrBlank()) return false
+        return params.optString("threadId") == activeThreadId &&
+            params.optString("turnId") == activeTurnId
+    }
+
     fun startChatGptDeviceLogin(id: Int): Request = Request(
         id, "account/login/start",
         JSONObject().put("type", "chatgptDeviceCode")
@@ -59,11 +78,10 @@ internal object CodexAppServerProtocol {
             tools.take(128).forEach { tool ->
                 dynamicTools.put(
                     JSONObject()
+                        .put("type", "function")
                         .put("name", tool.name)
                         .put("description", tool.promptLine.take(4_000))
-                        .put("inputSchema", JSONObject()
-                            .put("type", "object")
-                            .put("additionalProperties", true))
+                        .put("inputSchema", JSONObject(tool.inputSchema.toString()))
                 )
             }
             params.put("dynamicTools", dynamicTools)

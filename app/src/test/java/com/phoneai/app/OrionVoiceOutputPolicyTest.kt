@@ -59,4 +59,12 @@ print("hello.world")
         assertTrue(prompt.contains("full technical explanation remains in chat"))
         assertFalse(prompt.contains("read every tool"))
     }
+
+    @Test fun recoversOnlyPcmNotDeliveredBySherpaCallback() {
+        val generated = floatArrayOf(0.1f, 0.2f, 0.3f, 0.4f)
+        assertEquals(listOf(0.3f, 0.4f), Voice.pcmNotDeliveredByCallback(generated, 2).toList())
+        assertEquals(generated.toList(), Voice.pcmNotDeliveredByCallback(generated, 0).toList())
+        assertTrue(Voice.pcmNotDeliveredByCallback(generated, 4).isEmpty())
+        assertTrue(Voice.pcmNotDeliveredByCallback(generated, 99).isEmpty())
+    }
 }

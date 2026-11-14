@@ -17,6 +17,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -137,8 +138,11 @@ jobs:
       - name: Test the restricted Python sandbox
         run: python3 tests/python/test_orion_exec.py
 
-      - name: Run unit tests and build debug APK
-        run: gradle testDebugUnitTest assembleDebug --no-daemon --stacktrace
+      - name: Run unit tests
+        run: gradle testDebugUnitTest --no-daemon --stacktrace --console=plain
+
+      - name: Assemble debug APK
+        run: gradle assembleDebug --no-daemon --stacktrace --console=plain
 
       - name: Validate APK package and signature before publishing
         shell: bash

@@ -2,6 +2,7 @@ package com.phoneai.app
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -33,5 +34,13 @@ class ShellRunnerPolicyTest {
         val context = org.robolectric.RuntimeEnvironment.getApplication()
         assertEquals("cwd: /", ShellRunner.runBuiltin(context, "cd /"))
         assertEquals("/", ShellRunner.runBuiltin(context, "pwd"))
+    }
+
+    @Test fun shellExitReceiptsPreserveSuccessFailureAndUnknownStates() {
+        assertEquals(0, ShellRunner.exitCodeFromResult("EXIT 0 · SUCCESS\ncommand output"))
+        assertEquals(17, ShellRunner.exitCodeFromResult("exit=17\ncompile failed"))
+        assertEquals(23, ShellRunner.exitCodeFromResult("error: EXIT 23 · FAILED\ncommand failed"))
+        assertNull(ShellRunner.exitCodeFromResult("command output says exit=0"))
+        assertNull(ShellRunner.exitCodeFromResult("error: command timed out"))
     }
 }

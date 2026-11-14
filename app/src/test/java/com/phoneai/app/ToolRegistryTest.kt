@@ -372,4 +372,50 @@ class ToolRegistryNativeSelectionTest {
         assertTrue("objective completion must be discoverable in the native tool window", selected.contains("complete_objective"))
     }
 
+
+    @Test fun validatesRequiredTypesAndUnknownArgumentsAtRuntime() {
+        val tool = ToolDefinition("demo", "demo {name:string, enabled:boolean, count?:integer}: test", "test", ToolAccess.WRITE)
+        assertNull(OrionToolContractCodec.validateArguments(tool, org.json.JSONObject().put("name", "ok").put("enabled", true)))
+        assertTrue(OrionToolContractCodec.validateArguments(tool, org.json.JSONObject().put("enabled", true))!!.contains("missing required"))
+        assertTrue(OrionToolContractCodec.validateArguments(tool, org.json.JSONObject().put("name", "ok").put("enabled", "true"))!!.contains("must be boolean"))
+        assertTrue(OrionToolContractCodec.validateArguments(tool, org.json.JSONObject().put("name", "ok").put("enabled", true).put("unexpected", "x"))!!.contains("unknown argument"))
+    }
+
+    @Test fun untypedJsonArgumentsRemainCompatibleWithExistingToolContracts() {
+        val tool = ToolDefinition("mcp_call", "mcp_call {name, arguments: json object}: call a paired MCP tool", "call", ToolAccess.WRITE)
+        assertNull(OrionToolContractCodec.validateArguments(tool, org.json.JSONObject().put("name", "read_status").put("arguments", org.json.JSONObject().put("detail", "full"))))
+    }
+
+    @Test fun validatesNestedOpenJsonObjectsInsideExtensionTestArrays() {
+        val tool = ToolDefinition(
+            "extension_test",
+            "extension_test {id, tests:[{input:{...}, expect:<json>}]}: test extension source",
+            "test",
+            ToolAccess.WRITE
+        )
+        val args = org.json.JSONObject().put("id", "sample").put("tests", org.json.JSONArray().put(
+            org.json.JSONObject().put("input", org.json.JSONObject().put("value", 2)).put("expect", 4)
+        ))
+        assertNull(OrionToolContractCodec.validateArguments(tool, args))
+    }
+
+    @Test fun derivesTypedSchemasFromToolSignatures() {
+        val tool = ToolDefinition(
+            "demo",
+            "demo {name:string, enabled:boolean, count?:integer, mode:enum['fast'|'safe'], items:[{id:string}]}: test",
+            "test",
+            ToolAccess.READ
+        )
+        val schema = tool.inputSchema
+        val properties = schema.getJSONObject("properties")
+        assertEquals("string", properties.getJSONObject("name").getString("type"))
+        assertEquals("boolean", properties.getJSONObject("enabled").getString("type"))
+        assertEquals("integer", properties.getJSONObject("count").getString("type"))
+        assertEquals("fast", properties.getJSONObject("mode").getJSONArray("enum").getString(0))
+        val required = schema.getJSONArray("required").toString()
+        assertTrue(required.contains("name"))
+        assertTrue(required.contains("enabled"))
+        assertTrue(!required.contains("count"))
+        assertEquals(false, schema.getBoolean("additionalProperties"))
+    }
 }

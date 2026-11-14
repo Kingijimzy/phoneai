@@ -10,7 +10,7 @@ import org.json.JSONObject
  * being guessed as executable objects. Runtime dispatch remains the final validator.
  */
 internal object OrionToolContractCodec {
-    private data class Field(val name: String, val schema: JSONObject, val required: Boolean)
+    private data class Field(val name: String, val schema: JSONObject, val required: Boolean, val typeSpecified: Boolean)
 
     fun openAi(tools: List<ToolDefinition>, descriptionLimit: Int = 1000): JSONArray = JSONArray().apply {
         tools.forEach { tool ->
@@ -84,10 +84,75 @@ internal object OrionToolContractCodec {
         return convert(parameters(tool))
     }
 
-    internal fun parameters(tool: ToolDefinition): JSONObject =
-        objectSchema(parseFields(signature(tool.promptLine)))
+    internal fun parameters(tool: ToolDefinition): JSONObject {
+        val contract = signature(tool.promptLine)
+        return objectSchema(parseFields(contract), splitTopLevel(contract).any { it.trim() == "..." })
+    }
 
-    private fun objectSchema(fields: List<Field>): JSONObject {
+    /** Validate provider arguments again at the shared execution boundary. */
+    internal fun validateArguments(tool: ToolDefinition, args: JSONObject): String? {
+        val contract = signature(tool.promptLine)
+        val fields = parseFields(contract)
+        val allowAdditional = splitTopLevel(contract).any { it.trim() == "..." }
+        val known = fields.map { it.name }.toSet()
+        if (!allowAdditional) {
+            val keys = args.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                if (key !in known) return "unknown argument '$key'"
+            }
+        }
+        fields.forEach { field ->
+            if (field.required && !args.has(field.name)) return "missing required argument '${field.name}'"
+            if (args.has(field.name) && field.typeSpecified) {
+                validateValue(args.opt(field.name), field.schema, "arguments.${field.name}")?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun validateValue(value: Any?, schema: JSONObject, path: String): String? {
+        val type = schema.optString("type")
+        val valid = when (type) {
+            "string" -> value is String
+            "boolean" -> value is Boolean
+            "integer" -> value is Number && value.toDouble().isFinite() && value.toDouble() % 1.0 == 0.0
+            "number" -> value is Number && value.toDouble().isFinite()
+            "object" -> value is JSONObject
+            "array" -> value is JSONArray
+            else -> true
+        }
+        if (!valid) return "$path must be $type"
+        val enum = schema.optJSONArray("enum")
+        if (enum != null) {
+            val allowed = (0 until enum.length()).map { enum.optString(it) }
+            if (value !is String || value !in allowed) return "$path has an unsupported value"
+        }
+        if (value is JSONObject) {
+            val properties = schema.optJSONObject("properties") ?: return null
+            val required = schema.optJSONArray("required") ?: JSONArray()
+            for (i in 0 until required.length()) {
+                val key = required.optString(i)
+                if (!value.has(key)) return "$path is missing required field '$key'"
+            }
+            val keys = value.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val child = properties.optJSONObject(key)
+                if (child == null) {
+                    if (!schema.optBoolean("additionalProperties", false)) return "$path contains unknown field '$key'"
+                } else validateValue(value.opt(key), child, "$path.$key")?.let { return it }
+            }
+        } else if (value is JSONArray) {
+            val itemSchema = schema.optJSONObject("items")
+            if (itemSchema != null) for (i in 0 until value.length()) {
+                validateValue(value.opt(i), itemSchema, "$path[$i]")?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun objectSchema(fields: List<Field>, allowAdditional: Boolean = false): JSONObject {
         val properties = JSONObject()
         val required = JSONArray()
         fields.forEach { field ->
@@ -98,7 +163,7 @@ internal object OrionToolContractCodec {
             .put("type", "object")
             .put("properties", properties)
             .put("required", required)
-            .put("additionalProperties", false)
+            .put("additionalProperties", allowAdditional)
     }
 
     private fun signature(contract: String): String {
@@ -134,7 +199,7 @@ internal object OrionToolContractCodec {
             val hint = key.groupValues[3].trim()
             val defaulted = hint.contains('=') || hint.startsWith("optional", true) ||
                 hint.startsWith("'") || hint.startsWith("\"")
-            Field(name, inferSchema(hint), !optional && !defaulted)
+            Field(name, inferSchema(hint), !optional && !defaulted, hint.isNotBlank() && !hint.startsWith("<"))
         }.distinctBy { it.name }
     }
 
@@ -144,6 +209,7 @@ internal object OrionToolContractCodec {
         val lower = hint.lowercase()
         val schema = when {
             lower.startsWith("json") -> JSONObject().put("type", "object")
+            hint.startsWith("<") && hint.endsWith(">") -> JSONObject()
             lower.startsWith("boolean") || value in setOf("true", "false") ->
                 JSONObject().put("type", "boolean")
             lower.startsWith("integer") || value.matches(Regex("-?\\d+")) ->
@@ -157,9 +223,10 @@ internal object OrionToolContractCodec {
                     else -> hint.substringAfter("array", "").trim().removePrefix("of").trim()
                 }
                 val itemSchema = when {
-                    itemHint.startsWith("{") -> objectSchema(parseFields(
-                        itemHint.substring(1).substringBeforeLast("}")
-                    )).put("additionalProperties", false)
+                    itemHint.startsWith("{") -> {
+                        val inner = itemHint.substring(1).substringBeforeLast("}")
+                        objectSchema(parseFields(inner), splitTopLevel(inner).any { it.trim() == "..." })
+                    }
                     itemHint.isBlank() -> JSONObject().put("type", "string")
                     else -> inferSchema(itemHint)
                 }
@@ -168,7 +235,7 @@ internal object OrionToolContractCodec {
             lower.startsWith("object") || hint.startsWith("{") -> {
                 val inner = if (hint.startsWith("{")) hint.substring(1).substringBeforeLast("}")
                     else hint.substringAfter("object", "").trim().removePrefix("of").trim()
-                objectSchema(parseFields(inner))
+                objectSchema(parseFields(inner), splitTopLevel(inner).any { it.trim() == "..." })
             }
             else -> JSONObject().put("type", "string")
         }

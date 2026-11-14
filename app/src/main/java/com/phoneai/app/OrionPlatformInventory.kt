@@ -3,6 +3,8 @@ package com.phoneai.app
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.work.WorkManager
@@ -110,6 +112,37 @@ internal object OrionPlatformInventory {
             }
         }.getOrElse { "UNKNOWN (${it.javaClass.simpleName})" }
         lines += "Proactive worker: core=${core?.let { if (it) "ON" else "OFF" } ?: "UNKNOWN"}, proactive pack=${proactive?.let { if (it) "ON" else "OFF" } ?: "UNKNOWN"}, WorkManager=$workState. Android may defer scheduled work."
+
+        // Optional bridges are inspected through their own readiness APIs, not package presence alone.
+        val shizuku = runCatching { OrionShizukuBridge.state() }.getOrNull()
+        lines += if (shizuku == null) {
+            "Shizuku/Sui: UNKNOWN; bridge state could not be read."
+        } else {
+            "Shizuku/Sui: manager_running=${shizuku.installedAndRunning}; permission_granted=${shizuku.permissionGranted}; identity_uid=${shizuku.uid ?: "unknown"}; user_service_connected=${shizuku.userServiceConnected}; operation_ready=${shizuku.canExecute}. ${shizuku.detail}"
+        }
+
+        val termux = runCatching { TermuxBridgeRunner.readiness(app) }.getOrElse { "UNKNOWN: ${it.javaClass.simpleName}" }
+        lines += "Termux bridge: ${if (termux == null) "LOCAL PREFLIGHT READY (actual command callback still required)" else "NOT READY — $termux"}"
+
+        val linuxReady = runCatching {
+            LinuxRuntimeInstaller(app).isReady(LinuxRuntimePolicy.productionManifest)
+        }.getOrNull()
+        lines += "Alpine/PRoot Linux: ${linuxReady?.let { if (it) "INSTALLED AND CHECKSUM-READY" else "NOT READY / NOT INSTALLED" } ?: "UNKNOWN; runtime inspection failed"}. A successful command is still required to prove execution."
+
+        val network = runCatching {
+            val manager = app.getSystemService(ConnectivityManager::class.java)
+            val active = manager?.activeNetwork
+            val caps = active?.let { manager.getNetworkCapabilities(it) }
+            when {
+                caps == null -> "DISCONNECTED"
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) -> "CONNECTED / VALIDATED"
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) -> "NETWORK PRESENT / INTERNET NOT VALIDATED"
+                else -> "LOCAL NETWORK ONLY"
+            }
+        }.getOrElse { "UNKNOWN (${it.javaClass.simpleName})" }
+        lines += "Android network: $network. This is device network validation, not proof that any specific remote provider is reachable."
+
         lines += "PERMISSION REQUEST BEHAVIOUR: before a task, inspect its required permission. If OFF, explain the exact permission and purpose, ask the owner to grant it, and wait. If UNKNOWN, say it cannot be verified and do not treat it as granted. Never claim permission was granted or try to bypass Android settings."
         lines += "STATE HONESTY: owner switches and WorkManager registration are not proof a service process is alive. Provider credentials require verification and successful requests. Label unobservable runtime states UNKNOWN."
         return Snapshot(permissions, lines)

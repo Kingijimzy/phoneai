@@ -37,7 +37,7 @@ internal object OrionOwnerDialSettings {
             .apply()
     }
 
-    /** GUARDED/DEVELOPER relax size only. FULL (owner opt-in, set in the credential-gated Owner Control Centre) also lifts the in-guest socket/subprocess block; per-run approval and the guest isolation stay. */
+    /** GUARDED/DEVELOPER relax code-size limits only. FULL (owner opt-in) also lifts the guest-level socket/subprocess restrictions. Full CPython still runs in PRoot under the Android app UID: PRoot is not an OS security boundary, and the app's granted Android permissions remain authoritative. Per-run approval is enforced by the live Agent dispatch path. */
     fun pythonMaxCodeChars(context: Context): Int = when (read(context).pythonProfile) {
         OrionPythonProfile.GUARDED -> PythonExecutionPolicy.GUARDED_MAX_CODE_CHARS
         OrionPythonProfile.DEVELOPER -> PythonExecutionPolicy.DEVELOPER_MAX_CODE_CHARS

@@ -24,7 +24,7 @@ class AntigravityOrionMcpBridgeTest {
 
     @Test fun exposesOnlyCurrentToolsAndRoutesCallsToTheSuppliedExecutor() {
         val calls = AtomicInteger()
-        val tool = ToolDefinition("battery", "battery {}: report battery status", "report battery status", ToolAccess.READ)
+        val tool = ToolDefinition("battery", "battery {detail:string}: report battery status", "report battery status", ToolAccess.READ)
         AntigravityOrionMcpBridge(listOf(tool)) { name, args ->
             assertEquals("battery", name)
             assertEquals("full", args.getString("detail"))
@@ -49,6 +49,8 @@ class AntigravityOrionMcpBridgeTest {
             )
             val listResult = JSONObject(list.inputStream.bufferedReader().use { it.readText() })
             assertEquals("battery", listResult.getJSONObject("result").getJSONArray("tools").getJSONObject(0).getString("name"))
+            assertEquals("object", listResult.getJSONObject("result").getJSONArray("tools").getJSONObject(0).getJSONObject("inputSchema").getString("type"))
+            assertEquals("string", listResult.getJSONObject("result").getJSONArray("tools").getJSONObject(0).getJSONObject("inputSchema").getJSONObject("properties").getJSONObject("detail").getString("type"))
             list.disconnect()
 
             val call = post(

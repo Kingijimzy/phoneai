@@ -57,7 +57,7 @@ class SelfExtendingExtensionsTest {
         assertEquals(extension.source, store.enabled(extension.id)?.source)
     }
 
-    @Test fun fullCpythonAutoPromotesWhenAutoActivationIsEnabledAndNeedsApprovalWhenItIsOff() {
+    @Test fun fullCpythonNeverAutoPromotesEvenWhenRestrictedPythonAutoActivationIsEnabled() {
         ExtensionAutonomySettings.setAutoActivationEnabled(context, true)
         val source = "import os\\nRESULT = os.getcwd()"
         val extension = GeneratedExtension(
@@ -71,7 +71,10 @@ class SelfExtendingExtensionsTest {
         )
         assertTrue(store.saveDraft(extension))
         val report = ExtensionTestReport(true, extension.sourceSha256, "passed")
-        assertTrue(store.promote(extension.id, report, userApproved = false))
+        assertFalse(store.promote(extension.id, report, userApproved = false))
+        assertNull(store.enabled(extension.id))
+        assertTrue(store.promote(extension.id, report, userApproved = true))
+        assertEquals(extension.source, store.enabled(extension.id)?.source)
         ExtensionAutonomySettings.setAutoActivationEnabled(context, false)
         assertFalse(SelfExtendingExtensionPolicy.mayPromote(true, extension.sourceSha256, extension.sourceSha256, userApproved = false, autoActivateSafePython = false, runtime = "python_full"))
     }

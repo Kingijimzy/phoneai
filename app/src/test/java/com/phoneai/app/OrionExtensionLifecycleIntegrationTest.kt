@@ -199,7 +199,7 @@ class OrionExtensionLifecycleIntegrationTest {
     }
 
     @Test
-    fun fullCpythonAutoActivatesWithoutPromptsWhenAutonomyIsEnabled() {
+    fun fullCpythonRequiresApprovalToTestAndSeparateApprovalToActivate() {
         ExtensionAutonomySettings.setAutoActivationEnabled(context, true)
         val fullRuntimeSandbox = object : ExtensionSandbox {
             override fun test(extension: GeneratedExtension, testCases: List<JSONObject>) =
@@ -218,8 +218,14 @@ class OrionExtensionLifecycleIntegrationTest {
         val tested = guarded.execute("extension_test", JSONObject().put("id", id).put("tests", JSONArray().put(
             JSONObject().put("input", JSONObject()).put("expect", 4)
         )), { question -> approvalRequests += question; true }, stopped)
-        assertTrue(approvalRequests.isEmpty())
-        assertTrue(tested.orEmpty().contains("FULL CPYTHON TEST PASSED and AUTO-ACTIVATED"))
+        assertEquals(1, approvalRequests.size)
+        assertTrue(approvalRequests.single().contains("PRoot guest under the Android app UID"))
+        assertTrue(tested.orEmpty().contains("FULL CPYTHON TEST PASSED"))
+        assertFalse(tested.orEmpty().contains("AUTO-ACTIVATED"))
+        assertNull(SelfExtendingExtensionStore(context).enabled(id))
+
+        val enabled = guarded.execute("extension_enable", JSONObject().put("id", id), confirm, stopped)
+        assertTrue(enabled.orEmpty().contains("enabled"))
         assertNotNull(SelfExtendingExtensionStore(context).enabled(id))
     }
 

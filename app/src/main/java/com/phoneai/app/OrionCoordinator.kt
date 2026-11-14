@@ -15,6 +15,10 @@ internal object OrionCoordinator {
     }
     data class Entry(val at: Long, val surface: Surface, val summary: String, val admitted: Boolean)
 
+    /** Typed Talk/Command requests share execution but retain their actual source surface. */
+    fun surfaceForTypedRequest(conversationOnly: Boolean): Surface =
+        if (conversationOnly) Surface.CHAT else Surface.COMMAND
+
     private val ring = ArrayDeque<Entry>()
     private const val MAX = 40
 
@@ -30,14 +34,19 @@ internal object OrionCoordinator {
     /** Pure: how many requests each surface made lately, for the self-diagnosis view. */
     fun surfaceCounts(entries: List<Entry>): Map<Surface, Int> = entries.groupingBy { it.surface }.eachCount()
 
+    /** Unknown master-control state is not permission to execute. */
+    internal fun shouldAdmit(masterEnabled: Boolean?): Boolean = masterEnabled == true
+
     /** Admission: the master switch is the only gate here; everything else is decided inside the agent. */
     fun admit(c: Context, surface: Surface, text: String): Boolean {
-        val ok = runCatching { OrionMasterControl.isEnabled(c) }.getOrDefault(true)
+        val masterEnabled = runCatching { OrionMasterControl.isEnabled(c) }.getOrNull()
+        val ok = shouldAdmit(masterEnabled)
         record(surface, text, ok)
         if (ok && surface.ownerInitiated) {
             runCatching {
                 c.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
                     .putLong("owner_last_active", System.currentTimeMillis()).apply()
+                OrionDrives.onOwnerActive(c)
             }
         }
         runCatching { AgentPolicy.log(c, "coordinator", surface.name.lowercase(), ok, text.take(80)) }

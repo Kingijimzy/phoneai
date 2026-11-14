@@ -10,15 +10,16 @@ import org.json.JSONObject
  * The Dev Agent understands repositories, reads and modifies multiple files, plans code
  * changes, executes tests, diagnoses build failures, repairs code, verifies changes and
  * generates project summaries. It is read-only-by-default on user workspaces: code edits
- * require an explicit workspace folder selection, and no generated code executes without
- * a separate owner-approved Python extension workflow.
+ * require an explicit workspace folder selection, and code execution uses the same
+ * operation-specific owner approval and runtime policy as every other execution surface.
  *
  * Honesty contract: the Dev Agent reports four distinct states — code written, code
  * compiled, tests passed, software installed — and never conflates one with another.
  */
 internal class OrionDevAgent(
     private val context: Context,
-    private val pythonExecutor: OrionPythonCapabilityExecutor
+    private val pythonExecutor: OrionPythonCapabilityExecutor,
+    private val shellRunner: (Context, String, String) -> String = ShellRunner::run
 ) {
     private val workspace = OrionPythonWorkspace(context)
 
@@ -59,7 +60,8 @@ internal class OrionDevAgent(
                 summary = "Repository understanding requires an owner-selected workspace."
             )
         }
-        val listing = workspace.list()
+        val listing = if (workspacePath.isBlank() || workspacePath == ".") workspace.list()
+            else workspace.list(workspacePath)
         if (listing.startsWith("error:")) {
             return DevResult(action = "understand_repository", blocker = listing, summary = "Could not list the workspace.")
         }
@@ -119,8 +121,8 @@ internal class OrionDevAgent(
     }
 
     /**
-     * Execute Python code in the restricted sandbox. Returns a DevResult that clearly
-     * distinguishes execution from compilation or test success.
+     * Execute Python code using the owner's configured GUARDED, DEVELOPER or FULL runtime
+     * profile. Returns a DevResult that distinguishes execution from compilation or test success.
      */
     fun runPythonCode(code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }): DevResult {
         if (code.isBlank()) {
@@ -137,7 +139,7 @@ internal class OrionDevAgent(
         return DevResult(
             action = "run_python_code",
             evidence = result.take(8_000),
-            summary = "Python code executed in the sandbox. Output above is execution evidence, not proof of compilation or test success."
+            summary = "Python code executed in Orion's configured runtime. Output is execution evidence, not proof of compilation or test success."
         )
     }
 
@@ -146,23 +148,46 @@ internal class OrionDevAgent(
      * Output is captured honestly; exit status is part of the evidence.
      * Uses the existing ShellRunner; shell risk classifications are warnings only.
      */
-    fun runShellCommand(command: String, stopped: () -> Boolean = { false }): DevResult {
+    fun runShellCommand(
+        command: String,
+        confirm: (String) -> Boolean = { false },
+        stopped: () -> Boolean = { false }
+    ): DevResult {
+        if (stopped()) {
+            return DevResult(action = "run_shell_command", blocker = "shell command cancelled before launch.", summary = "No shell command was executed.")
+        }
+        if (command.isBlank()) {
+            return DevResult(action = "run_shell_command", blocker = "shell command is required.", summary = "No shell command was executed.")
+        }
+        val approval = "Orion is about to execute this command in the Alpine/PRoot development workspace under the Android app UID. The guest is not an OS security boundary. Command: ${command.take(700)}. Allow this execution?"
+        if (!confirm(approval)) {
+            return DevResult(action = "run_shell_command", blocker = "owner approval was not granted; the Linux command was not executed.", summary = "No shell command was executed.")
+        }
         if (stopped()) {
             return DevResult(action = "run_shell_command", blocker = "shell command cancelled before launch.", summary = "No shell command was executed.")
         }
         val warning = ShellPolicy.warning(command)
-        val result = ShellRunner.runBuiltin(context, command)
-        if (result.startsWith("error:")) {
+        // Dev builds and tests belong in the same Alpine workspace used by CPython,
+        // not Android's minimal /system/bin/sh environment.
+        val result = shellRunner(context.applicationContext, "cd /workspace && $command", "linux")
+        val exitCode = shellExitCode(result)
+        if (result.startsWith("error:", ignoreCase = true) || exitCode == null || exitCode != 0) {
+            val reason = when {
+                result.startsWith("error:", ignoreCase = true) -> result
+                exitCode == null -> "Linux runtime returned no verifiable exit status. Raw result: ${result.take(2_000)}"
+                else -> "Linux command exited with status $exitCode. Raw result: ${result.take(6_000)}"
+            }
             return DevResult(
                 action = "run_shell_command",
-                blocker = result,
-                summary = "Shell command was not executed: $result"
+                blocker = reason,
+                evidence = result.take(8_000),
+                summary = "Linux development command did not pass execution verification."
             )
         }
         return DevResult(
             action = "run_shell_command",
             evidence = (warning ?: "") + result.take(8_000),
-            summary = "Shell command executed. Exit status and output are evidence; command acceptance is not task completion."
+            summary = "Linux development command exited with status 0. This verifies process success only; it does not prove compilation, tests, or installation unless those were explicitly run."
         )
     }
 
@@ -215,6 +240,15 @@ internal class OrionDevAgent(
         if (files.any { it.endsWith(".js") || it.endsWith(".ts") || it.equals("package.json") }) return "JavaScript/TypeScript"
         if (files.any { it.equals("AndroidManifest.xml") }) return "Android"
         return "unknown"
+    }
+
+    internal fun shellExitCode(result: String): Int? {
+        val firstLine = result.lineSequence().firstOrNull()?.trim().orEmpty()
+        return when {
+            firstLine.startsWith("exit=") -> firstLine.removePrefix("exit=").takeWhile { it == '-' || it.isDigit() }.toIntOrNull()
+            firstLine.startsWith("EXIT ") -> Regex("^EXIT\\s+(-?\\d+)\\b").find(firstLine)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            else -> null
+        }
     }
 
     companion object {

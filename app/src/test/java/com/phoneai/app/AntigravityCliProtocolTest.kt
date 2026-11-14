@@ -52,4 +52,14 @@ class AntigravityCliProtocolTest {
         val event = AntigravityCliProtocol.Event("error", error = "Authentication required")
         assertTrue(AntigravityCliProtocol.isAuthenticationRequired(event))
     }
+
+    @Test fun parsesTerminalResultAndRejectsUnrecognizedLines() {
+        val result = AntigravityCliProtocol.parseStreamEvent(
+            """{"event":"result","result":{"status":"SUCCESS","response":"Done."}}"""
+        )
+        assertEquals("result", result?.type)
+        assertEquals("SUCCESS", result?.status)
+        assertEquals("Done.", result?.text)
+        assertNull(AntigravityCliProtocol.parseStreamEvent("not-json"))
+    }
 }

@@ -8,7 +8,11 @@ internal data class ToolDefinition(
     val promptLine: String,
     val description: String,
     val access: ToolAccess
-)
+) {
+    /** Reuse the same authoritative contract parser across API, Codex and MCP transports. */
+    val inputSchema: org.json.JSONObject
+        get() = OrionToolContractCodec.parameters(this)
+}
 
 internal object ToolRegistry {
     private fun tool(name: String, access: ToolAccess, contract: String): ToolDefinition {
@@ -19,11 +23,11 @@ internal object ToolRegistry {
     val all: List<ToolDefinition> = listOf(
         tool("extension_list", ToolAccess.READ, "extension_list {}: list saved self-extending tool drafts and enabled status"),
         tool("extension_policy", ToolAccess.READ, "extension_policy {}: report whether exact-source tests in the selected extension runtime automatically activate generated extensions"),
-        tool("extension_auto_activation", ToolAccess.WRITE, "extension_auto_activation {enabled:boolean}: persist the owner's preference for automatic activation after exact-source runtime tests pass; python_full uses full CPython with the Android app UID, while python remains restricted"),
-        tool("extension_create", ToolAccess.WRITE, "extension_create {id, name, runtime?:enum['python_full'|'python'] = 'python_full', source, description}: create a reusable self-built tool draft. Default is python_full (full CPython in Orion's workspace; imports, files and network available). Choose python only for a pure bounded JSON-to-JSON transform. A passing exact-source test auto-activates the tool. Define INPUT and RESULT, include clear input validation and bounded output."),
+        tool("extension_auto_activation", ToolAccess.WRITE, "extension_auto_activation {enabled:boolean}: persist the owner's preference for automatic activation of exact-source-tested restricted python extensions only; python_full always requires separate owner approval to test and activate"),
+        tool("extension_create", ToolAccess.WRITE, "extension_create {id, name, runtime?:enum['python_full'|'python'] = 'python_full', source, description}: create a reusable self-built tool draft. Default is python_full (full CPython in Orion's workspace; standard library, dependencies, files and network available within the app UID's Android permissions). Full CPython tests require exact owner approval and activation requires separate owner approval. Choose python only for a pure bounded JSON-to-JSON transform; only restricted python may auto-activate after exact-source tests when the owner setting permits. Define INPUT and RESULT, validate inputs and bound outputs."),
         tool("extension_update", ToolAccess.WRITE, "extension_update {id, name, runtime?:enum['python_full'|'python'], source, description}: replace an existing extension source under the same ID. Omit runtime to preserve the existing runtime; otherwise choose python_full or python. The new source must pass extension_test before activation."),
-        tool("extension_test", ToolAccess.WRITE, "extension_test {id, tests:[{input:{...}, expect:<json>}]}: execute the draft in its selected runtime against 1-12 expected-result cases. Use at least 3 cases for a new tool when practical: normal input, boundary/empty input, and invalid input. A passing exact-source receipt is mandatory; failures must be diagnosed and the source revised before retrying. python_full runs in Orion's workspace runtime."),
-        tool("extension_enable", ToolAccess.WRITE, "extension_enable {id}: enable a saved extension only after its exact source has a passing runtime test receipt"),
+        tool("extension_test", ToolAccess.WRITE, "extension_test {id, tests:[{input:{...}, expect:<json>}]}: execute the draft in its selected runtime against 1-12 expected-result cases. Use at least 3 cases for a new tool when practical: normal input, boundary/empty input, and invalid input. A passing exact-source receipt is mandatory; failures must be diagnosed and the source revised before retrying. Restricted python tests are bounded; python_full executes code with the app UID in PRoot and therefore requires explicit owner approval before any test execution. A full CPython test receipt never auto-activates that extension."),
+        tool("extension_enable", ToolAccess.WRITE, "extension_enable {id}: after a passing exact-source test receipt, request explicit owner approval and enable the saved extension; python_full always requires this separate approval and never auto-activates"),
         tool("extension_run", ToolAccess.WRITE, "extension_run {id, input?: json object}: run an enabled, verified extension in its selected runtime (full CPython for python_full, restricted interpreter for python); pass the input as INPUT and read the RESULT value"),
         tool("extension_disable", ToolAccess.WRITE, "extension_disable {id}: disable a saved extension without deleting its source"),
         tool("extension_history", ToolAccess.READ, "extension_history {id}: list immutable activated extension versions and identify the active source hash"),

@@ -75,6 +75,7 @@ internal object OrionPlatformSelfKnowledge {
             appendLine("- RESOURCE ADAPTATION: consider current battery, thermal, network and foreground/background constraints when those snapshots are available. Prefer bounded local work on constrained/offline devices, defer non-urgent background work when Android may restrict it, and avoid unnecessary heavy models or repeated polling.")
             appendLine("- DISCOVERY: all registered tool names and argument signatures are exposed in the tool catalog. Use the exact registered contract; a missing detailed description can be retrieved from the source/tool registry rather than guessed. Never invent a tool name.")
             appendLine(OrionIdentity.changeBlock(app))
+            appendLine(OrionWakeCheck.block(app))
             appendLine("TRUTH BOUNDARY: REGISTERED means present in the installed local registry; INSTALLED BUILD means the APK version and update timestamp reported above; SOURCE-UPDATED means a repository change exists but may not yet be installed; PERMISSIONED means the relevant OS grant is observed; CONNECTED means the required service/session is actually connected; VERIFIED means a real operation produced confirming evidence. These states are distinct.")
         }
     }.getOrElse { failure ->

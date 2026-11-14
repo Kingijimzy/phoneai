@@ -7,6 +7,7 @@ import org.junit.Test
 class CodexAppServerProtocolTest {
     @Test fun deviceLoginUsesOfficialChatGptDeviceFlow() {
         val request = CodexAppServerProtocol.startChatGptDeviceLogin(7).toJson()
+        assertFalse(request.has("jsonrpc"))
         assertEquals("account/login/start", request.getString("method"))
         assertEquals("chatgptDeviceCode", request.getJSONObject("params").getString("type"))
     }
@@ -58,10 +59,26 @@ class CodexAppServerProtocolTest {
         assertEquals("auto_review", params.getString("approvalsReviewer"))
         val dynamic = params.getJSONArray("dynamicTools")
         assertEquals(2, dynamic.length())
+        assertEquals("function", dynamic.getJSONObject(0).getString("type"))
         assertEquals("battery", dynamic.getJSONObject(0).getString("name"))
         assertTrue(dynamic.getJSONObject(0).getString("description").contains("report battery status"))
         assertEquals("object", dynamic.getJSONObject(0).getJSONObject("inputSchema").getString("type"))
+        assertEquals("string", dynamic.getJSONObject(1).getJSONObject("inputSchema").getJSONObject("properties").getJSONObject("name").getString("type"))
+        assertTrue(dynamic.getJSONObject(1).getJSONObject("inputSchema").getJSONArray("required").toString().contains("name"))
         assertEquals("gpt-5-codex", params.getString("model"))
+    }
+
+    @Test fun initializeAcknowledgementMatchesPinnedCodexResponseContract() {
+        assertTrue(CodexAppServerProtocol.isInitializeResponse(
+            JSONObject().put("userAgent", "codex-app-server/0.167.1")
+                .put("codexHome", "/root/.codex")
+                .put("platformFamily", "unix")
+                .put("platformOs", "linux")
+        ))
+        assertFalse(CodexAppServerProtocol.isInitializeResponse(
+            JSONObject().put("serverInfo", JSONObject().put("name", "codex"))
+                .put("capabilities", JSONObject())
+        ))
     }
 
     @Test fun initializeOptsIntoExperimentalDynamicToolApi() {
@@ -81,5 +98,23 @@ class CodexAppServerProtocolTest {
     @Test fun notificationsAreNotResponses() {
         assertTrue(CodexAppServerProtocol.isNotification(JSONObject().put("method", "account/login/completed")))
         assertFalse(CodexAppServerProtocol.isNotification(JSONObject().put("id", 1).put("method", "account/login/completed")))
+    }
+
+    @Test fun validatesCodexDynamicToolCallsAgainstTheExactActiveThreadAndTurn() {
+        val actualServerPayload = JSONObject()
+            .put("threadId", "thread-1")
+            .put("turnId", "turn-1")
+            .put("callId", "call-1")
+            .put("namespace", JSONObject.NULL)
+            .put("tool", "battery")
+            .put("arguments", JSONObject().put("detail", "full"))
+        assertTrue(CodexAppServerProtocol.toolCallBelongsToActiveTurn(actualServerPayload, "thread-1", "turn-1"))
+        assertFalse(CodexAppServerProtocol.toolCallBelongsToActiveTurn(actualServerPayload, "thread-1", "turn-2"))
+        assertFalse(CodexAppServerProtocol.toolCallBelongsToActiveTurn(actualServerPayload, "other-thread", "turn-1"))
+        assertFalse(CodexAppServerProtocol.toolCallBelongsToActiveTurn(
+            JSONObject(actualServerPayload.toString()).put("threadId", ""),
+            "thread-1",
+            "turn-1"
+        ))
     }
 }
