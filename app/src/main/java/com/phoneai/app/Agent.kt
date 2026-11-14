@@ -243,8 +243,12 @@ internal object IrreversibleActionConfirmationPolicy {
         return null
     }
 
-    /** Computer settings are ordinary operations under the owner's direct-execution policy. */
-    fun requiresConfirmation(actionDescription: String): Boolean = false
+    /** Nested executor callbacks may request confirmation only for an actual delete/wipe description. */
+    fun requiresConfirmation(actionDescription: String): Boolean {
+        val lower = actionDescription.lowercase()
+        return Regex("\\b(delete|wipe|erase|shred|format|remove|uninstall|empty)\\b").containsMatchIn(lower) ||
+            destructiveShell.containsMatchIn(lower)
+    }
     fun computerSettingAction(tool: String, args: JSONObject): String? = null
 }
 /** The brain: asks the AI what to do, runs the tool it picks, repeats. */
@@ -372,10 +376,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
 
     /** Restart, shutdown and Wi-Fi changes surface a warning but do not prompt or veto execution. */
     private fun requestGateApproval(question: String): Boolean {
-        if (IrreversibleActionConfirmationPolicy.requiresConfirmation(question)) {
-            ui.note("[WARNING]\n$question. Continuing under the owner's warning-only execution policy.")
-        }
-        return true
+        if (!IrreversibleActionConfirmationPolicy.requiresConfirmation(question)) return true
+        ui.note("[OWNER APPROVAL REQUIRED] $question")
+        return ui.ask("$question\n\nAllow Orion to proceed?")
     }
 
     private val consequentialTools = setOf("telegram_send", "notification_action", "mcp_call", "sms")
