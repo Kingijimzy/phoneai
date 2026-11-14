@@ -404,7 +404,9 @@ class Voice(private val ctx: Context) {
                         val gapTrack = track
                         if (gapMs > 0 && gapTrack != null) {
                             // A breath between sentences: silence the orb can relax into.
+                            val pauseWriteStartedAtMs = SystemClock.elapsedRealtime()
                             writeNeuralSamples(gapTrack, FloatArray(engine.sampleRate() * gapMs / 1000), token)
+                            audioTrackWriteMs += (SystemClock.elapsedRealtime() - pauseWriteStartedAtMs).coerceAtLeast(0L)
                             main.post { if (token == playbackGeneration.get()) onAudioAmplitude?.invoke(0f) }
                         }
                         finished(ids[index])
@@ -419,7 +421,7 @@ class Voice(private val ctx: Context) {
                     val realTimeFactor = generatedAudioSeconds / (synthesisAndCallbackMs / 1000.0)
                     setKokoroPerformance(String.format(
                         Locale.US,
-                        "Kokoro: %.2fs generated audio; %.2fs non-playback generation time; %.2fx RTF; first audio %dms; AudioTrack writes %.2fs; total generation wall %.2fs; %d chars / %d chunks.",
+                        "Kokoro: %.2fs generated audio; %.2fs generation + callback time (excluding AudioTrack writes); %.2fx RTF; first audio %dms; AudioTrack writes %.2fs; total generation wall %.2fs; %d chars / %d chunks.",
                         generatedAudioSeconds,
                         synthesisAndCallbackMs / 1000.0,
                         realTimeFactor,
