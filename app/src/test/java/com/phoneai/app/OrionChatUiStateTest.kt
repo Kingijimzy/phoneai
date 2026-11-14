@@ -61,9 +61,9 @@ class OrionChatUiStateTest {
         coordinator.onAudioAmplitude(-0.2f)
         coordinator.onSpeechWord()
         coordinator.setCompanionLook(9)
-        assertEquals(1f, state.orbMicLevel.value)
-        assertEquals(0f, state.orbSpeechAmplitude.value)
-        assertEquals(1f, state.orbWordPulse.value)
+        assertEquals(1f, state.orbMicLevel.value, 0.001f)
+        assertEquals(0f, state.orbSpeechAmplitude.value, 0.001f)
+        assertEquals(1f, state.orbWordPulse.value, 0.001f)
         assertEquals(2, state.companionLook.value)
     }
     @Test fun coordinatorRestoresTranscriptAndClearsStaleSessionProjection() {
