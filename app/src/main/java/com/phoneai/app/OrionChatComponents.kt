@@ -404,10 +404,10 @@ private fun OrionStructuredBlockCard(
 private fun formatOrionResearchSummary(summary: String, sources: List<String>): AnnotatedString {
     val formatted = formatOrionMarkdown(summary)
     val builder = AnnotatedString.Builder(formatted)
-    Regex("""\\[(\\d{1,2})]""").findAll(formatted.text).forEach { match ->
+    Regex("""\[(\d{1,2})]""").findAll(formatted.text).forEach { match ->
         val index = match.groupValues[1].toIntOrNull()?.minus(1) ?: return@forEach
         val source = sources.getOrNull(index) ?: return@forEach
-        val url = Regex("https?://[^\\\\s)]+").find(source)?.value ?: return@forEach
+        val url = Regex("""https?://[^\s)]+""").find(source)?.value ?: return@forEach
         builder.addStringAnnotation("URL", url, match.range.first, match.range.last + 1)
         builder.addStyle(
             SpanStyle(color = OrionUiPalette.accent, fontWeight = FontWeight.SemiBold,
