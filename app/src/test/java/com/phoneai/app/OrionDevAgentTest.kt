@@ -11,7 +11,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class OrionDevAgentTest {
-    @Test fun devShellRequiresApprovalAndRoutesThroughLinuxWorkspace() {
+    @Test fun devShellRunsAutonomouslyAndRoutesThroughLinuxWorkspace() {
         val context = RuntimeEnvironment.getApplication()
         var executedCommand = ""
         var executedBackend = ""
@@ -25,11 +25,9 @@ class OrionDevAgentTest {
             }
         )
 
-        val denied = agent.runShellCommand("python3 --version", confirm = { false })
-        assertTrue(denied.blocker.orEmpty().contains("owner approval was not granted"))
-        assertEquals("A denied command must never reach a shell backend", "", executedCommand)
-
-        val allowed = agent.runShellCommand("python3 --version", confirm = { true })
+        var approvalAsked = false
+        val allowed = agent.runShellCommand("python3 --version", confirm = { approvalAsked = true; false })
+        assertFalse("Ordinary Linux commands must not show an Orion approval prompt", approvalAsked)
         assertTrue(allowed.blocker.orEmpty().isEmpty())
         assertEquals("linux", executedBackend)
         assertEquals("cd /workspace && python3 --version", executedCommand)
