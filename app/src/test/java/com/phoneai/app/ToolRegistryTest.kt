@@ -455,6 +455,89 @@ class ToolRegistryNativeSelectionTest {
         assertEquals(ToolAccess.READ, ToolRegistry.find("capability_load")?.access)
     }
 
+    @Test fun capabilitySearchIncludesGeneratedExtensionsWithTruthfulCallableState() {
+        val source = """def run(INPUT):
+    RESULT = {"value": INPUT.get("value", 0) * 2}
+"""
+        val hash = SelfExtendingExtensionPolicy.sha256(source)
+        val enabled = GeneratedExtension(
+            id = "double_value", displayName = "Double value", runtime = "python",
+            source = source, sourceSha256 = hash, description = "Doubles a numeric input",
+            createdAtMillis = 1L, enabled = true, verified = true
+        )
+        val draft = enabled.copy(
+            id = "draft_value", displayName = "Draft value",
+            enabled = false, verified = false
+        )
+        val result = JSONObject(ToolRegistry.searchCapabilities(
+            "double numeric value", 8, 0, listOf(enabled, draft)
+        ))
+        val extensions = result.getJSONArray("generated_extensions")
+        assertEquals(2, extensions.length())
+        val rows = (0 until extensions.length()).map { extensions.getJSONObject(it) }
+        val active = rows.single { it.getString("id") == "double_value" }
+        assertTrue(active.getBoolean("callable"))
+        assertEquals("verified-enabled", active.getString("state"))
+        assertEquals("extension_run", active.getString("invoke_with"))
+        val inactive = rows.single { it.getString("id") == "draft_value" }
+        assertFalse(inactive.getBoolean("callable"))
+        assertEquals("draft-or-unverified", inactive.getString("state"))
+        assertTrue(inactive.isNull("invoke_with"))
+        rows.forEach { assertFalse("Generated source must never be exposed by discovery", it.has("source")) }
+    }
+
+    @Test fun generatedExtensionInventoryHasIndependentPagination() {
+        val source = """def run(INPUT):
+    RESULT = {"ok": True}
+"""
+        val hash = SelfExtendingExtensionPolicy.sha256(source)
+        val extensions = (0 until 17).map { index ->
+            GeneratedExtension(
+                id = "saved_tool_$index", displayName = "Saved tool $index", runtime = "python",
+                source = source, sourceSha256 = hash, description = "Reusable saved capability $index",
+                createdAtMillis = index.toLong(), enabled = true, verified = true
+            )
+        }
+        val first = JSONObject(ToolRegistry.searchCapabilities("", 5, 0, extensions))
+        assertEquals(5, first.getJSONArray("generated_extensions").length())
+        assertEquals(17, first.getInt("generated_extension_count"))
+        assertEquals(5, first.getInt("generated_extension_next_offset"))
+        assertTrue(first.getBoolean("generated_extensions_has_more"))
+
+        val second = JSONObject(ToolRegistry.searchCapabilities("", 5, 5, extensions))
+        assertEquals(5, second.getJSONArray("generated_extensions").length())
+        assertEquals(10, second.getInt("generated_extension_next_offset"))
+        assertTrue(second.getBoolean("generated_extensions_has_more"))
+
+        val finalPage = JSONObject(ToolRegistry.searchCapabilities("", 5, 15, extensions))
+        assertEquals(2, finalPage.getJSONArray("generated_extensions").length())
+        assertTrue(finalPage.isNull("generated_extension_next_offset"))
+        assertFalse(finalPage.getBoolean("generated_extensions_has_more"))
+    }
+
+    @Test fun generatedExtensionCursorIsIndependentFromNativeCapabilityCursor() {
+        val source = """def run(INPUT):
+    RESULT = {"ok": True}
+"""
+        val hash = SelfExtendingExtensionPolicy.sha256(source)
+        val extensions = (0 until 17).map { index ->
+            GeneratedExtension(
+                id = "cursor_tool_$index", displayName = "Cursor tool $index", runtime = "python",
+                source = source, sourceSha256 = hash, description = "Cursor test capability $index",
+                createdAtMillis = index.toLong(), enabled = true, verified = true
+            )
+        }
+        val result = JSONObject(ToolRegistry.searchCapabilities(
+            "tool", 5, 0, extensions, requestedGeneratedExtensionOffset = 10
+        ))
+        assertEquals(0, result.getInt("offset"))
+        assertEquals(10, result.getInt("generated_extension_offset"))
+        val page = result.getJSONArray("generated_extensions")
+        assertEquals(5, page.length())
+        assertEquals("cursor_tool_10", page.getJSONObject(0).getString("id"))
+        assertEquals(15, result.getInt("generated_extension_next_offset"))
+    }
+
     @Test fun capabilitySearchReturnsSimpleCandidatesAndLoadReturnsTheExactSchema() {
         val result = JSONObject(ToolRegistry.searchCapabilities("inspect MCP resources", 8))
         val rows = result.getJSONArray("results")

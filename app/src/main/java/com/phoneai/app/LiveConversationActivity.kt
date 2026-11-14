@@ -30,6 +30,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     private var attachedService: PhoneAiService? = null
     private var lastMode = OrbView.Mode.IDLE
     private var listeningRequested = false
+    private val liveCaptionBuffer = StringBuilder()
     private var autoStarted = false
     private var redirectedToGemini = false
     private val main = Handler(Looper.getMainLooper())
@@ -319,8 +320,21 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         super.onDestroy()
     }
 
+    override fun onAssistantDelta(text: String) {
+        if (text.isEmpty()) return
+        runOnUiThread {
+            liveCaptionBuffer.append(text)
+            caption.animate().cancel()
+            caption.text = liveCaptionBuffer.toString()
+            caption.alpha = 1f
+            main.removeCallbacks(captionFade)
+            main.postDelayed(captionFade, 7200L)
+        }
+    }
+
     override fun onMessage(kind: String, message: String) {
         runOnUiThread {
+            if (kind == "me") liveCaptionBuffer.setLength(0)
             caption.animate().cancel()
             caption.text = message
             caption.alpha = 1f

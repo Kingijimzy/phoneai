@@ -209,6 +209,19 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         voice = Voice(this)
         voice.onSpeaking = { s ->
             speaking = s
+            if (s && handsActive) {
+                // While Kokoro is speaking, AEC-backed capture watches for the owner's voice.
+                // A detected interruption stops output immediately and hands the mic to STT.
+                voice.startBargeInMonitor {
+                    if (handsActive && speaking && !listening && !running) {
+                        voice.stopBargeInMonitor()
+                        voice.stopSpeaking()
+                        listenNow()
+                    }
+                }
+            } else {
+                voice.stopBargeInMonitor()
+            }
             if (!s) for (o in orbs()) o.speechAmplitude = 0f
             refreshMode()
         }
@@ -2036,6 +2049,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         // Do not route everyday words through the command detector; the user can switch
         // to the separate chat command workflow when they want phone actions.
         if (handsActive) {
+            resetLiveSpeechTurn()
             wakeGen++
             appendTranscript("me", t)
             mainChatListener?.onMessage("me", t)
@@ -2224,6 +2238,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         handsActive = true
         emptyListens = 0
         closePanel(false)
+        // Warm the on-device Kokoro engine during the user's first turn so model loading
+        // is not added to the first response's time-to-audio.
+        voice.prepareNeuralVoice()
         // A spoken greeting adds a full TTS cycle before the microphone opens and is a
         // common cause of users thinking the live call has timed out. Start listening now.
         voice.stopSpeaking()
@@ -2424,8 +2441,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             }
         }
         main.post { mainChatListener?.onMessage("ai", text) }
-        // Keep the full answer in chat; speech is a separate concise channel.
-        if (Prefs.voice(this)) speakComposed(text)
+        // In live calls, speak the provider's arriving text deltas through Kokoro.
+        // Do not wait for the final answer or synthesize the same reply twice.
+        if (Prefs.voice(this)) {
+            val streamedLiveSpeech = flushLiveSpeechTail()
+            if (!streamedLiveSpeech) speakComposed(text)
+        }
     }
 
     private val speakSeq = java.util.concurrent.atomic.AtomicInteger()
@@ -2461,8 +2482,62 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    private val liveSpeechLock = Any()
+    private val liveSpeechBuffer = StringBuilder()
+    @Volatile private var liveSpeechTurn = false
+
+    /**
+     * Live-call speech is fed from model deltas, not synthesized only after the final answer.
+     * Completed sentences are handed to Voice in order; the final say() flushes the tail.
+     */
+    private fun enqueueLiveSpeechDelta(delta: String) {
+        if (delta.isEmpty() || !handsActive || !Prefs.voice(this)) return
+        val ready = ArrayList<String>()
+        synchronized(liveSpeechLock) {
+            liveSpeechTurn = true
+            liveSpeechBuffer.append(delta)
+            while (liveSpeechBuffer.isNotEmpty()) {
+                val value = liveSpeechBuffer.toString()
+                var boundary = -1
+                for (i in value.indices) {
+                    if (value[i] in ".!?") {
+                        val followedByBoundary = i == value.lastIndex || value[i + 1].isWhitespace()
+                        if (followedByBoundary && i >= 3) { boundary = i + 1; break }
+                    }
+                }
+                if (boundary < 0 && liveSpeechBuffer.length > 180) {
+                    val splitAt = value.lastIndexOf(' ', 180).takeIf { it >= 80 } ?: -1
+                    if (splitAt > 0) boundary = splitAt
+                }
+                if (boundary <= 0) break
+                val piece = liveSpeechBuffer.substring(0, boundary).trim()
+                liveSpeechBuffer.delete(0, boundary)
+                if (piece.isNotBlank()) ready += piece
+                while (liveSpeechBuffer.isNotEmpty() && liveSpeechBuffer[0].isWhitespace()) liveSpeechBuffer.deleteCharAt(0)
+            }
+        }
+        ready.forEach { voice.speak(it) }
+    }
+
+    private fun flushLiveSpeechTail(): Boolean {
+        val tail = synchronized(liveSpeechLock) {
+            if (!liveSpeechTurn) return false
+            liveSpeechBuffer.toString().trim().also { liveSpeechBuffer.setLength(0) }
+        }
+        if (tail.isNotBlank()) voice.speak(tail)
+        return true
+    }
+
+    private fun resetLiveSpeechTurn() {
+        synchronized(liveSpeechLock) {
+            liveSpeechBuffer.setLength(0)
+            liveSpeechTurn = false
+        }
+    }
+
     override fun stream(text: String) {
         if (text.isEmpty()) return
+        enqueueLiveSpeechDelta(text)
         main.post { mainChatListener?.onAssistantDelta(text) }
     }
 

@@ -7,6 +7,9 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioFocusRequest
 import android.media.AudioTrack
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
 import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.getOfflineTtsConfig
@@ -21,8 +24,11 @@ import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.Executors
 
 /** Android speech recognition with optional sentence-streamed on-device neural TTS and Android TTS fallback. */
@@ -60,6 +66,10 @@ class Voice(private val ctx: Context) {
     @Volatile private var ttsInitFinished = false
     private val queuedSpeech = java.util.concurrent.ConcurrentLinkedQueue<Pair<List<String>, (() -> Unit)?>>()
     private var rec: SpeechRecognizer? = null
+    @Volatile private var bargeInRecorder: AudioRecord? = null
+    @Volatile private var bargeInThread: Thread? = null
+    private val bargeInGeneration = AtomicInteger(0)
+    @Volatile private var bargeInPreviousAudioMode: Int? = null
     @Volatile private var listeningOnDevice = false
     private val callbacks = ConcurrentHashMap<String, () -> Unit>()
     private val pending = AtomicInteger(0)
@@ -75,6 +85,70 @@ class Voice(private val ctx: Context) {
     @Volatile private var legacyAudioFocusListener: AudioManager.OnAudioFocusChangeListener? = null
     private var neuralTrackSampleRate = 0
     private var neuralFramesWritten = 0L
+
+    /**
+     * Decouples Sherpa's native PCM callback from blocking AudioTrack writes.
+     * The bounded queue caps buffering; enqueue applies back-pressure only when
+     * the consumer genuinely falls behind. A single consumer preserves PCM order.
+     */
+    private inner class NeuralPcmWriter(
+        private val output: AudioTrack,
+        private val token: Int
+    ) {
+        private val queue = ArrayBlockingQueue<FloatArray>(24)
+        private val endOfStream = FloatArray(0)
+        private val failure = AtomicReference<Throwable?>(null)
+        private val writeNanos = AtomicLong(0L)
+        private val closed = AtomicInteger(0)
+        private val worker = Thread({
+            try {
+                while (token == playbackGeneration.get()) {
+                    val block = queue.take()
+                    if (block === endOfStream) break
+                    if (block.isNotEmpty()) {
+                        val started = SystemClock.elapsedRealtimeNanos()
+                        val succeeded = writeNeuralSamples(output, block, token)
+                        writeNanos.addAndGet((SystemClock.elapsedRealtimeNanos() - started).coerceAtLeast(0L))
+                        if (!succeeded) break
+                    }
+                }
+            } catch (interrupted: InterruptedException) {
+                Thread.currentThread().interrupt()
+            } catch (error: Throwable) {
+                failure.compareAndSet(null, error)
+            }
+        }, "Orion-Neural-PCM").apply { isDaemon = true; start() }
+
+        fun enqueue(samples: FloatArray): Boolean {
+            if (samples.isEmpty()) return token == playbackGeneration.get()
+            // Sherpa may reuse callback storage after return; own the PCM before returning.
+            val owned = samples.copyOf()
+            while (token == playbackGeneration.get() && failure.get() == null) {
+                if (queue.offer(owned, 100, java.util.concurrent.TimeUnit.MILLISECONDS)) return true
+            }
+            return false
+        }
+
+        fun audioWriteMs(): Long = writeNanos.get() / 1_000_000L
+
+        fun finish() {
+            if (closed.compareAndSet(0, 1)) {
+                while (token == playbackGeneration.get() && failure.get() == null) {
+                    if (queue.offer(endOfStream, 100, java.util.concurrent.TimeUnit.MILLISECONDS)) break
+                }
+            }
+            worker.join()
+            failure.get()?.let { throw IllegalStateException("Neural PCM playback failed.", it) }
+            check(token == playbackGeneration.get()) { "Neural PCM playback was cancelled." }
+        }
+
+        fun cancel() {
+            closed.set(1)
+            queue.clear()
+            worker.interrupt()
+        }
+    }
+
     // Accessed only by neuralWorker so native inference and release are serialized.
     private var neuralEngine: OfflineTts? = null
     private var neuralEnginePath: String? = null
@@ -181,7 +255,12 @@ class Voice(private val ctx: Context) {
         val callback = callbacks.remove(id)
         val remaining = pending.updateAndGet { current -> (current - 1).coerceAtLeast(0) }
         if (remaining == 0) {
-            main.post { if (pending.get() == 0) onSpeaking?.invoke(false) }
+            main.post {
+                if (pending.get() == 0) {
+                    abandonNeuralAudioFocus()
+                    onSpeaking?.invoke(false)
+                }
+            }
         }
         callback?.let { cb -> main.post { cb() } }
     }
@@ -192,6 +271,130 @@ class Voice(private val ctx: Context) {
     /** Keep split logic isolated so queue boundaries can be tested without a TTS engine. */
     private fun splitForSpeech(text: String, limit: Int = 420): List<String> =
         SpeechChunker.split(text, limit)
+
+    /**
+     * Full-duplex interruption monitor for live calls. It uses VOICE_COMMUNICATION capture
+     * with hardware AEC so Orion's own speaker output is less likely to trigger a false barge-in.
+     * If AEC is unavailable, this deliberately stays disabled; the visible interrupt control remains.
+     */
+    fun startBargeInMonitor(onUserSpeech: () -> Unit): Boolean {
+        stopBargeInMonitor()
+        if (ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) return false
+        if (!AcousticEchoCanceler.isAvailable()) return false
+        val sampleRate = 16_000
+        val minimum = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        if (minimum <= 0) return false
+        val recorder = try {
+            AudioRecord.Builder()
+                .setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+                .setAudioFormat(
+                    AudioFormat.Builder().setSampleRate(sampleRate)
+                        .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build()
+                )
+                .setBufferSizeInBytes(maxOf(minimum * 2, sampleRate / 2))
+                .build()
+        } catch (_: Exception) { return false }
+        if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+            recorder.release()
+            return false
+        }
+        val aec = try { AcousticEchoCanceler.create(recorder.audioSessionId)?.apply { enabled = true } } catch (_: Exception) { null }
+        if (aec == null || !aec.enabled) {
+            try { aec?.release() } catch (_: Exception) { }
+            recorder.release()
+            return false
+        }
+        // Put the audio path into communication mode while AEC is active, but never
+        // override an existing call/communication mode owned by another application.
+        try {
+            val manager = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            if (manager.mode == AudioManager.MODE_NORMAL) {
+                bargeInPreviousAudioMode = manager.mode
+                manager.mode = AudioManager.MODE_IN_COMMUNICATION
+            }
+        } catch (_: Exception) { }
+        val token = bargeInGeneration.incrementAndGet()
+        bargeInRecorder = recorder
+        val monitorThread = Thread({
+            val samples = ShortArray(320)
+            var speechFrames = 0
+            try {
+                recorder.startRecording()
+                while (token == bargeInGeneration.get()) {
+                    val count = recorder.read(samples, 0, samples.size, AudioRecord.READ_BLOCKING)
+                    if (count <= 0) {
+                        if (token != bargeInGeneration.get() ||
+                            count == AudioRecord.ERROR_DEAD_OBJECT ||
+                            count == AudioRecord.ERROR_INVALID_OPERATION
+                        ) break
+                        continue
+                    }
+                    var power = 0.0
+                    for (i in 0 until count) {
+                        val value = samples[i].toDouble() / Short.MAX_VALUE
+                        power += value * value
+                    }
+                    val rms = kotlin.math.sqrt(power / count).toFloat()
+                    speechFrames = if (rms >= 0.055f) speechFrames + 1 else (speechFrames - 1).coerceAtLeast(0)
+                    if (speechFrames >= 4 && token == bargeInGeneration.get()) {
+                        main.post {
+                            if (token == bargeInGeneration.get()) onUserSpeech()
+                        }
+                        break
+                    }
+                }
+            } catch (_: Exception) {
+            } finally {
+                try { recorder.stop() } catch (_: Exception) { }
+                try { recorder.release() } catch (_: Exception) { }
+                try { aec.release() } catch (_: Exception) { }
+                if (bargeInRecorder === recorder) bargeInRecorder = null
+                if (token == bargeInGeneration.get()) {
+                    bargeInThread = null
+                    restoreBargeInAudioMode()
+                }
+            }
+        }, "Orion-BargeIn-AEC").apply { isDaemon = true }
+        bargeInThread = monitorThread
+        monitorThread.start()
+        return true
+    }
+
+    fun stopBargeInMonitor() {
+        bargeInGeneration.incrementAndGet()
+        val recorder = bargeInRecorder
+        bargeInRecorder = null
+        if (recorder != null) {
+            // The capture thread owns final release (including the AEC effect) in its finally block.
+            try { recorder.stop() } catch (_: Exception) { }
+        }
+        bargeInThread?.interrupt()
+        bargeInThread = null
+        restoreBargeInAudioMode()
+    }
+
+    private fun restoreBargeInAudioMode() {
+        val previous = bargeInPreviousAudioMode ?: return
+        bargeInPreviousAudioMode = null
+        try {
+            val manager = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            if (manager.mode == AudioManager.MODE_IN_COMMUNICATION) manager.mode = previous
+        } catch (_: Exception) { }
+    }
+
+    /** Warm the installed Kokoro model while the owner is speaking/listening, not after the reply arrives. */
+    fun prepareNeuralVoice() {
+        if (!Prefs.neuralVoice(ctx) || Locale.getDefault().language != "en" || !NeuralVoiceInstaller.isInstalled(ctx)) return
+        neuralWorker.execute {
+            runCatching { obtainNeuralEngine(NeuralVoiceInstaller.modelFile(ctx)) }
+                .onFailure { error ->
+                    main.post {
+                        onProblem?.invoke("Kokoro could not be prepared (" + (error.message ?: error.javaClass.simpleName) + "). Android TTS remains available as fallback.")
+                    }
+                }
+        }
+    }
 
     fun isSpeaking(): Boolean = pending.get() > 0 || tts?.isSpeaking == true
 
@@ -294,9 +497,9 @@ class Voice(private val ctx: Context) {
     }
 
     /**
-     * Each sentence is inferred separately, while sherpa-onnx's native callback feeds
-     * PCM blocks directly into AudioTrack. Blocking writes add back-pressure; synthesis
-     * of the next sentence overlaps playback of the current sentence.
+     * Each sentence is inferred separately. Sherpa's callback copies PCM into a bounded
+     * queue; a dedicated consumer performs blocking AudioTrack writes. This lets inference
+     * run ahead of playback while preserving order and applying bounded back-pressure.
      */
     private fun speakNeural(chunks: List<String>, onDone: (() -> Unit)?, speeds: List<Float>? = null, pausesMs: List<Int>? = null) {
         val token = playbackGeneration.get()
@@ -313,6 +516,7 @@ class Voice(private val ctx: Context) {
             var completedBeforeFallback = 0
             var peakSampleAmplitude = 0f
             var kokoroMetricsRecorded = false
+            var pcmWriter: NeuralPcmWriter? = null
             try {
                 if (token != playbackGeneration.get()) return@execute
                 val model = NeuralVoiceInstaller.modelFile(ctx)
@@ -322,8 +526,11 @@ class Voice(private val ctx: Context) {
                 requestNeuralAudioFocus()
                 val engine = obtainNeuralEngine(model)
                 track = obtainNeuralTrack(engine.sampleRate())
+                pcmWriter = NeuralPcmWriter(track!!, token)
                 val generationStartedAtMs = SystemClock.elapsedRealtime()
-                val framesBeforeGeneration = neuralFramesWritten
+                var generatedPcmFrames = 0L
+                var audioTrackWriteMs = 0L
+                val firstPcmCallbackLatencyMs = AtomicLong(-1L)
                 for (index in chunks.indices) {
                     if (token != playbackGeneration.get()) return@execute
                     fallbackStart = index
@@ -331,7 +538,7 @@ class Voice(private val ctx: Context) {
                         sid = Prefs.kokoroSpeakerId(ctx),
                         speed = (speeds?.getOrNull(index) ?: Prefs.rate(ctx)).coerceIn(0.85f, 1.15f)
                     )
-                    var callbackFrames = 0
+                    val callbackFrames = AtomicInteger(0)
                     val generatedAudio = engine.generateWithConfigAndCallback(
                         text = chunks[index],
                         config = generation,
@@ -339,10 +546,16 @@ class Voice(private val ctx: Context) {
                             if (token != playbackGeneration.get()) {
                                 0
                             } else {
-                                val activeTrack = track
-                                if (activeTrack == null || !writeNeuralSamples(activeTrack, samples, token)) 0
+                                val writeSucceeded = pcmWriter?.enqueue(samples) == true
+                                if (!writeSucceeded) 0
                                 else {
-                                    callbackFrames += samples.size
+                                    if (samples.isNotEmpty()) {
+                                        firstPcmCallbackLatencyMs.compareAndSet(
+                                            -1L,
+                                            (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(0L)
+                                        )
+                                    }
+                                    callbackFrames.addAndGet(samples.size)
                                     if (samples.isNotEmpty()) {
                                         for (sample in samples) peakSampleAmplitude = maxOf(peakSampleAmplitude, kotlin.math.abs(sample))
                                         var sumSquares = 0.0
@@ -368,11 +581,10 @@ class Voice(private val ctx: Context) {
                     check(generatedAudio.sampleRate == engine.sampleRate()) {
                         "Kokoro returned audio at an unexpected sample rate."
                     }
-                    val missingPcm = pcmNotDeliveredByCallback(generatedAudio.samples, callbackFrames)
+                    generatedPcmFrames += generatedAudio.samples.size.toLong()
+                    val missingPcm = pcmNotDeliveredByCallback(generatedAudio.samples, callbackFrames.get())
                     if (missingPcm.isNotEmpty()) {
-                        val activeTrack = track
-                            ?: throw IllegalStateException("Neural audio output was not initialized.")
-                        check(writeNeuralSamples(activeTrack, missingPcm, token)) {
+                        check(pcmWriter?.enqueue(missingPcm) == true) {
                             "Kokoro PCM recovery was interrupted."
                         }
                         for (sample in missingPcm) peakSampleAmplitude = maxOf(peakSampleAmplitude, kotlin.math.abs(sample))
@@ -392,7 +604,9 @@ class Voice(private val ctx: Context) {
                         val gapTrack = track
                         if (gapMs > 0 && gapTrack != null) {
                             // A breath between sentences: silence the orb can relax into.
-                            writeNeuralSamples(gapTrack, FloatArray(engine.sampleRate() * gapMs / 1000), token)
+                            check(pcmWriter?.enqueue(FloatArray(engine.sampleRate() * gapMs / 1000)) == true) {
+                                "Kokoro sentence pause was interrupted."
+                            }
                             main.post { if (token == playbackGeneration.get()) onAudioAmplitude?.invoke(0f) }
                         }
                         finished(ids[index])
@@ -400,17 +614,25 @@ class Voice(private val ctx: Context) {
                     }
                 }
 
-                val generationElapsedMs = (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(1L)
-                val generatedFrames = (neuralFramesWritten - framesBeforeGeneration).coerceAtLeast(0L)
-                val generatedAudioSeconds = generatedFrames.toDouble() / engine.sampleRate().coerceAtLeast(1)
-                if (generatedFrames > 0L) {
-                    val realTimeFactor = generatedAudioSeconds / (generationElapsedMs / 1000.0)
+                // Drain all queued PCM before measuring completion or waiting for audible playback.
+                val completedPcmWriter = pcmWriter
+                completedPcmWriter?.finish()
+                audioTrackWriteMs = completedPcmWriter?.audioWriteMs() ?: 0L
+                pcmWriter = null
+                val generationWallMs = (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(1L)
+                // End-to-end RTF includes inference, queueing and any bounded-queue
+                // back-pressure. AudioTrack write time is reported separately for diagnosis.
+                val generatedAudioSeconds = generatedPcmFrames.toDouble() / engine.sampleRate().coerceAtLeast(1)
+                if (generatedPcmFrames > 0L) {
+                    val realTimeFactor = generatedAudioSeconds / (generationWallMs / 1000.0)
                     setKokoroPerformance(String.format(
                         Locale.US,
-                        "Kokoro synthesis: %.2f seconds of audio in %d ms; real-time factor %.2fx; %d characters across %d chunk(s).",
+                        "Kokoro: %.2fs generated PCM; %.2fs end-to-end generation wall (includes AudioTrack back-pressure); %.2fx end-to-end RTF; first PCM callback %dms; AudioTrack write time %.2fs (diagnostic, not subtracted); %d chars / %d chunks.",
                         generatedAudioSeconds,
-                        generationElapsedMs,
+                        generationWallMs / 1000.0,
                         realTimeFactor,
+                        firstPcmCallbackLatencyMs.get(),
+                        audioTrackWriteMs / 1000.0,
                         chunks.sumOf { it.length },
                         chunks.size
                     ))
@@ -428,17 +650,35 @@ class Voice(private val ctx: Context) {
                     throw IllegalStateException("Kokoro generated silent PCM audio.")
                 }
                 val activeTrack = track
-                if (activeTrack != null) awaitNeuralPlayback(activeTrack, neuralFramesWritten, token)
-                if (token != playbackGeneration.get()) return@execute
-                finished(ids.last())
+                if (activeTrack != null) {
+                    // Do not pin the single inference worker until the speaker finishes.
+                    // The next streamed sentence can now be synthesized while this PCM is audible.
+                    val playbackTargetFrames = neuralFramesWritten
+                    Thread({
+                        try {
+                            awaitNeuralPlayback(activeTrack, playbackTargetFrames, token)
+                            if (token == playbackGeneration.get()) finished(ids.last())
+                        } catch (error: Throwable) {
+                            if (token == playbackGeneration.get()) {
+                                main.post { onProblem?.invoke("Kokoro playback completion failed: " + (error.message ?: error.javaClass.simpleName)) }
+                                finished(ids.last())
+                            }
+                        }
+                    }, "Orion-Neural-PlaybackWait").apply { isDaemon = true; start() }
+                } else {
+                    finished(ids.last())
+                }
             } catch (error: Throwable) {
+                pcmWriter?.cancel()
+                pcmWriter = null
                 // Never fail silently: say why the neural voice did not speak.
                 main.post { onProblem?.invoke("Neural voice failed (" + error.javaClass.simpleName + (error.message?.let { ": " + it.take(120) } ?: "") + "). Try Reinstall / repair neural voice in Settings.") }
                 if (!kokoroMetricsRecorded) {
                     setKokoroPerformance("Kokoro synthesis: failed (${error.javaClass.simpleName}); Android TTS fallback may be used. No successful Kokoro speed measurement was recorded.")
                 }
-                // Drain any already-written sentence before switching engines so the
-                // fallback doesn't overlap neural playback. A stopped turn never falls back.
+                // Cancel queued neural PCM, then drain the frames already accepted by
+                // AudioTrack before switching engines so fallback audio cannot overlap.
+                // A stopped turn never falls back.
                 if (token != playbackGeneration.get()) return@execute
                 try {
                     val activeTrack = track
@@ -456,13 +696,15 @@ class Voice(private val ctx: Context) {
                     for (index in completedBeforeFallback until chunks.size) finished(ids[index])
                 }
             } finally {
-                abandonNeuralAudioFocus()
+                pcmWriter?.cancel()
             }
         }
     }
 
     /** Acquire transient speech focus before opening AudioTrack; stop on a competing exclusive focus owner. */
+    @Synchronized
     private fun requestNeuralAudioFocus() {
+        if (neuralAudioFocusRequest != null || legacyAudioFocusListener != null) return
         val manager = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val listener = AudioManager.OnAudioFocusChangeListener { change ->
             if (change == AudioManager.AUDIOFOCUS_LOSS ||
@@ -501,6 +743,7 @@ class Voice(private val ctx: Context) {
         neuralAudioFocusListener = listener
     }
 
+    @Synchronized
     private fun abandonNeuralAudioFocus() {
         val manager = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -625,6 +868,7 @@ class Voice(private val ctx: Context) {
             try { activeTrack.release() } catch (_: Exception) {}
         }
         if (pending.getAndSet(0) > 0) main.post { onSpeaking?.invoke(false) }
+        abandonNeuralAudioFocus()
     }
 
     /** Calls cb once nothing is being spoken (or after a timeout). Runs on the main thread. */
@@ -652,6 +896,7 @@ class Voice(private val ctx: Context) {
         // opening the recognizer so Orion does not transcribe its own voice.
         // SpeechRecognizer owns the recording pipeline, so app-level AcousticEchoCanceler
         // cannot be attached here; stopping playback is the reliable platform-safe guard.
+        stopBargeInMonitor()
         stopSpeaking()
         stopListening()
         if (ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -799,6 +1044,7 @@ class Voice(private val ctx: Context) {
     }
 
     fun shutdown() {
+        stopBargeInMonitor()
         stopListening()
         stopSpeaking()
         tts?.shutdown()
