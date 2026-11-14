@@ -21,6 +21,9 @@ internal class OrionPythonCapabilityExecutor(
     private val testReceipts = ExtensionTestReceiptStore(context)
     private val versionHistory = ExtensionVersionHistory(context)
 
+    /** Read-only generated-extension inventory for Central Brain capability discovery. */
+    fun discoverableExtensions(): List<GeneratedExtension> = extensionStore.all()
+
     fun execute(
         tool: String,
         args: JSONObject,
