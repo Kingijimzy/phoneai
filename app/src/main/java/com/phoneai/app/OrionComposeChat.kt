@@ -670,11 +670,11 @@ internal fun OrionComposeChatScreen(
     Column(Modifier.fillMaxSize().background(OrionUiPalette.background).imePadding()) {
         // Editorial header: quiet branding, no oversized pill around every element.
         Row(
-            Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 11.dp),
+            Modifier.fillMaxWidth().padding(start = 10.dp, end = 9.dp, top = 8.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                Modifier.size(44.dp).clip(CircleShape).background(OrionUiPalette.panel)
+                Modifier.size(36.dp).clip(CircleShape).background(OrionUiPalette.panel)
                     .border(1.dp, ChatHairline, CircleShape)
                     .semantics { contentDescription = "Back to chat list"; role = Role.Button }
                     .clickable(role = Role.Button, onClick = onBack),
@@ -683,7 +683,7 @@ internal fun OrionComposeChatScreen(
             Spacer(Modifier.width(10.dp))
             AndroidView(
                 factory = { context -> OrionLivingOrbView(context) },
-                modifier = Modifier.size(48.dp).semantics {
+                modifier = Modifier.size(40.dp).semantics {
                     contentDescription = "Orion living orb. Tap to start voice chat."
                     role = Role.Button
                 },
@@ -697,7 +697,7 @@ internal fun OrionComposeChatScreen(
             )
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(chatTitle, color = ChatCopy, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(chatTitle, color = ChatCopy, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(Modifier.size(12.dp), contentAlignment = Alignment.Center) {
                         if (presenceActive) {
@@ -716,7 +716,7 @@ internal fun OrionComposeChatScreen(
                 }
             }
             Box(
-                Modifier.size(44.dp).clip(RoundedCornerShape(10.dp))
+                Modifier.size(32.dp).clip(RoundedCornerShape(10.dp))
                     .semantics { contentDescription = "Start a new chat"; role = Role.Button }
                     .clickable(onClick = onNewChat),
                 contentAlignment = Alignment.Center
@@ -763,11 +763,11 @@ internal fun OrionComposeChatScreen(
                 }
             }
             Box(
-                Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(9.dp)).background(modeChipFill)
+                Modifier.heightIn(min = 36.dp).clip(RoundedCornerShape(9.dp)).background(modeChipFill)
                     .border(1.dp, ChatHairline, RoundedCornerShape(9.dp))
                     .semantics { contentDescription = if (commandMode) "Switch to Talk mode" else "Switch to Command mode"; role = Role.Button }
                     .clickable(role = Role.Button) { onModeChange(!commandMode) }
-                    .padding(horizontal = 8.dp, vertical = 9.dp)
+                    .padding(horizontal = 7.dp, vertical = 7.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Icon(if (commandMode) Icons.Rounded.Tune else Icons.Rounded.Waves, null,
