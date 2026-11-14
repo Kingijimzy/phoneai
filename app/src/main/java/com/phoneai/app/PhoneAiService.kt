@@ -2499,7 +2499,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 for (i in value.indices) {
                     if (value[i] in ".!?") {
                         val followedByBoundary = i == value.lastIndex || value[i + 1].isWhitespace()
-                        if (followedByBoundary && i >= 24) { boundary = i + 1; break }
+                        if (followedByBoundary && i >= 3) { boundary = i + 1; break }
                     }
                 }
                 if (boundary < 0 && liveSpeechBuffer.length > 180) {
