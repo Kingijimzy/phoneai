@@ -11,7 +11,7 @@ import org.json.JSONObject
  * changes, executes tests, diagnoses build failures, repairs code, verifies changes and
  * generates project summaries. It is read-only-by-default on user workspaces: code edits
  * require an explicit workspace folder selection, and code execution uses the same
- * operation-specific owner approval and runtime policy as every other execution surface.
+ * the shared delete/wipe confirmation guard and Android OS permission rules as every other execution surface.
  *
  * Honesty contract: the Dev Agent reports four distinct states — code written, code
  * compiled, tests passed, software installed — and never conflates one with another.
@@ -151,7 +151,7 @@ internal class OrionDevAgent(
     fun runShellCommand(
         command: String,
         verification: String = "other",
-        confirm: (String) -> Boolean = { false },
+        @Suppress("UNUSED_PARAMETER") confirm: (String) -> Boolean = { false },
         stopped: () -> Boolean = { false }
     ): DevResult {
         val kind = verification.trim().lowercase()
@@ -166,10 +166,6 @@ internal class OrionDevAgent(
         }
         if (command.isBlank()) {
             return DevResult(action = "run_shell_command", blocker = "shell command is required.", summary = "No shell command was executed.")
-        }
-        val approval = "Orion is about to execute this $kind development command in the Alpine/PRoot workspace under the Android app UID. The guest is not an OS security boundary. Command: ${command.take(700)}. Allow this execution?"
-        if (!confirm(approval)) {
-            return DevResult(action = "run_shell_command", blocker = "owner approval was not granted; the Linux command was not executed.", summary = "No shell command was executed.")
         }
         if (stopped()) {
             return DevResult(action = "run_shell_command", blocker = "shell command cancelled before launch.", summary = "No shell command was executed.")
@@ -242,7 +238,7 @@ internal class OrionDevAgent(
             appendLine("Proposed change: $proposedChange")
             appendLine("Current size: ${current.length} bytes")
             appendLine("Verification required: read-back the written file, run project build/tests, confirm install artifact.")
-            appendLine("Safety: this plan does not modify any file. Apply only through writeSourceFile after owner approval.")
+            appendLine("Safety: this plan does not modify any file. Apply through writeSourceFile when the requested objective requires it, then read back and verify the result.")
         }
         return DevResult(
             action = "plan_change",
