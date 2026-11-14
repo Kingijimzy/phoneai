@@ -21,9 +21,10 @@ internal class OrionChatCoordinator(private val state: OrionChatUiState) {
         state.appendAssistantDelta(delta)
     }
 
-    fun onRuntimeStatus(label: String, mode: OrbView.Mode) {
+    fun onRuntimeStatus(label: String, mode: OrbView.Mode, taskRunning: Boolean = false) {
         state.setStatus(label)
         state.orbMode.value = mode
+        state.taskRunning.value = taskRunning
     }
 
     fun onActivityEvents(events: List<OrionConversationRepository.ChatEvent>) {
