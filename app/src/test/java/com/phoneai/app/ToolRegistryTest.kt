@@ -528,7 +528,7 @@ class ToolRegistryNativeSelectionTest {
             )
         }
         val result = JSONObject(ToolRegistry.searchCapabilities(
-            "MCP", 5, 0, extensions, requestedGeneratedExtensionOffset = 10
+            "tool", 5, 0, extensions, requestedGeneratedExtensionOffset = 10
         ))
         assertEquals(0, result.getInt("offset"))
         assertEquals(10, result.getInt("generated_extension_offset"))
