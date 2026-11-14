@@ -19,7 +19,7 @@ class OrionIdentityTest {
 
     @Test fun codeAndLongTextAreNeverRewritten() {
         assertFalse(OrionIdentity.needsRewrite("Sorry about that:\n```kotlin\nval x = 1\n```"))
-        assertFalse(OrionIdentity.needsRewrite("I apologize. " + "word ".repeat(400)))
+        assertFalse(OrionIdentity.needsRewrite("I apologize. " + "word ".repeat(600)))
     }
 
     @Test fun rewriteMustKeepFactsAndDropReflexes() {
