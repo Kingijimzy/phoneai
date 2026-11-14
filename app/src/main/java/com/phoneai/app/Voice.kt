@@ -294,9 +294,10 @@ class Voice(private val ctx: Context) {
     }
 
     /**
-     * Each sentence is inferred separately, while sherpa-onnx's native callback feeds
-     * PCM blocks directly into AudioTrack. Blocking writes add back-pressure; synthesis
-     * of the next sentence overlaps playback of the current sentence.
+     * Each sentence is inferred separately. Sherpa's callback currently writes PCM
+     * synchronously to AudioTrack, so playback back-pressure is included in generation
+     * wall time. Metrics report that end-to-end time rather than subtracting summed write
+     * durations, which may overlap and would under-report elapsed time.
      */
     private fun speakNeural(chunks: List<String>, onDone: (() -> Unit)?, speeds: List<Float>? = null, pausesMs: List<Int>? = null) {
         val token = playbackGeneration.get()
@@ -325,7 +326,7 @@ class Voice(private val ctx: Context) {
                 val generationStartedAtMs = SystemClock.elapsedRealtime()
                 var generatedPcmFrames = 0L
                 var audioTrackWriteMs = 0L
-                var firstAudioLatencyMs: Long? = null
+                var firstPcmCallbackLatencyMs: Long? = null
                 for (index in chunks.indices) {
                     if (token != playbackGeneration.get()) return@execute
                     fallbackStart = index
@@ -347,8 +348,8 @@ class Voice(private val ctx: Context) {
                                 audioTrackWriteMs += (SystemClock.elapsedRealtime() - writeStartedAtMs).coerceAtLeast(0L)
                                 if (!writeSucceeded) 0
                                 else {
-                                    if (samples.isNotEmpty() && firstAudioLatencyMs == null) {
-                                        firstAudioLatencyMs = (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(0L)
+                                    if (samples.isNotEmpty() && firstPcmCallbackLatencyMs == null) {
+                                        firstPcmCallbackLatencyMs = (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(0L)
                                     }
                                     callbackFrames += samples.size
                                     if (samples.isNotEmpty()) {
@@ -415,19 +416,21 @@ class Voice(private val ctx: Context) {
                 }
 
                 val generationWallMs = (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(1L)
-                val synthesisAndCallbackMs = (generationWallMs - audioTrackWriteMs).coerceAtLeast(1L)
+                // AudioTrack.write() is blocking and callback writes may overlap in wall
+                // time across native callback threads. Never subtract their accumulated
+                // duration from wall time: doing so can manufacture an invalid RTF.
+                // This RTF is explicitly end-to-end and includes playback back-pressure.
                 val generatedAudioSeconds = generatedPcmFrames.toDouble() / engine.sampleRate().coerceAtLeast(1)
                 if (generatedPcmFrames > 0L) {
-                    val realTimeFactor = generatedAudioSeconds / (synthesisAndCallbackMs / 1000.0)
+                    val realTimeFactor = generatedAudioSeconds / (generationWallMs / 1000.0)
                     setKokoroPerformance(String.format(
                         Locale.US,
-                        "Kokoro: %.2fs generated audio; %.2fs generation + callback time (excluding AudioTrack writes); %.2fx RTF; first audio %dms; AudioTrack writes %.2fs; total generation wall %.2fs; %d chars / %d chunks.",
+                        "Kokoro: %.2fs generated PCM; %.2fs end-to-end generation wall (includes AudioTrack back-pressure); %.2fx end-to-end RTF; first PCM callback %dms; AudioTrack write time %.2fs (diagnostic, not subtracted); %d chars / %d chunks.",
                         generatedAudioSeconds,
-                        synthesisAndCallbackMs / 1000.0,
-                        realTimeFactor,
-                        firstAudioLatencyMs ?: -1L,
-                        audioTrackWriteMs / 1000.0,
                         generationWallMs / 1000.0,
+                        realTimeFactor,
+                        firstPcmCallbackLatencyMs ?: -1L,
+                        audioTrackWriteMs / 1000.0,
                         chunks.sumOf { it.length },
                         chunks.size
                     ))
