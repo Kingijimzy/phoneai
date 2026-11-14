@@ -2128,7 +2128,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     /**
      * Run at most one due autonomy goal, only in AUTOPILOT and never while a user task runs.
-     * The goal goes through the normal agent loop, so every gate and approval still applies.
+     * The goal goes through the normal agent loop; only destructive deletion/wipe actions require owner confirmation, while Android OS permissions remain authoritative.
      */
     private fun runDueAutonomyGoal() {
         if (!OrionAutonomyRunPolicy.canRun(
