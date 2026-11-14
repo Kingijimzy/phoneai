@@ -27,9 +27,9 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.lifecycle.ViewTreeLifecycleOwner
-import androidx.lifecycle.ViewTreeViewModelStoreOwner
-import androidx.savedstate.ViewTreeSavedStateRegistryOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 
 /** Full-screen conversation. The floating orb keeps its separate, compact command panel. */
 class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
@@ -689,9 +689,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
      * Dialog compositions still dispose on detach when the dialog is dismissed.
      */
     private fun ComposeView.bindActivityViewTreeOwners() {
-        ViewTreeLifecycleOwner.set(this, this@MainChatActivity)
-        ViewTreeViewModelStoreOwner.set(this, this@MainChatActivity)
-        ViewTreeSavedStateRegistryOwner.set(this, this@MainChatActivity)
+        setViewTreeLifecycleOwner(this@MainChatActivity)
+        setViewTreeViewModelStoreOwner(this@MainChatActivity)
+        setViewTreeSavedStateRegistryOwner(this@MainChatActivity)
     }
 
     private fun showChatHistory() {
