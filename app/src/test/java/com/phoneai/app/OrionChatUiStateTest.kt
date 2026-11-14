@@ -54,6 +54,14 @@ class OrionChatUiStateTest {
         assertTrue(state.taskRunning.value)
     }
 
+    @Test fun coordinatorReleasesStreamOnIdleWithoutDiscardingPartialText() {
+        val state = OrionChatUiState()
+        val coordinator = OrionChatCoordinator(state)
+        coordinator.onAssistantDelta("Partial answer")
+        coordinator.onRuntimeStatus("READY", OrbView.Mode.IDLE, taskRunning = false)
+        assertFalse(state.hasAssistantStream())
+        assertEquals("Partial answer", state.lines.single().text)
+    }
     @Test fun coordinatorOwnsLivePresenceAndCompanionProjection() {
         val state = OrionChatUiState()
         val coordinator = OrionChatCoordinator(state)
