@@ -11,7 +11,7 @@ internal object OrionRules {
         Regex("""(?i)^(?:ok(?:ay)?[,. ]+|and\s+)?(?:from now on|going forward|from here on)[,: ]+(.{6,200})"""),
         Regex("""(?i)\b((?:always|never)\s+.{4,160})"""),
         Regex("""(?i)\b(i\s+prefer\s+.{3,80}?\s+(?:over|to|instead of)\s+.{3,80})"""),
-        Regex("""(?i)^(?:no[,. ]+)?(?:don'?t|do not|stop)\s+(.{4,160}?)(?:[,;]\s*(?:use|do|say)\s+(.{3,120}))?$"""),
+        Regex("""(?i)^(?:no[,. ]+)?(?:don'?t|do not|stop)\s+(.{4,160}?)(?:[,;]\s*((?:use|do|say)\s+.{3,120}))?$"""),
         Regex("""(?i)\b(?:remember (?:to|that)|keep in mind (?:that)?)\s+(.{6,200})""")
     )
     private val QUESTION = Regex("""(?i)^\s*(?:why|how|what|when|where|who|can|could|should|is|are|do|does|did|will|would)\b""")
