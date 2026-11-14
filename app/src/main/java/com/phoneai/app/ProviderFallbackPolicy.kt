@@ -19,6 +19,25 @@ internal object ProviderFallbackPolicy {
     private val recoverableHttpStatuses = setOf(
         402, 404, 408, 410, 413, 422, 425, 429, 500, 502, 503, 504
     )
+    private val unsupportedToolMarkers = listOf(
+        "does not support tools", "doesn't support tools",
+        "does not support tool calling", "doesn't support tool calling",
+        "tool calling is not supported", "tool calls are not supported",
+        "function calling is not supported", "tools are not supported",
+        "tool use is not supported", "tool_choice is not supported",
+        "unsupported tool type", "unknown parameter: tools",
+        "unrecognized request argument: tools", "tools is not supported"
+    )
+
+    /** True only for an explicit HTTP 400 rejection of the native tool protocol. */
+    fun isToolProtocolUnsupported(error: Throwable): Boolean {
+        val chain = generateSequence(error as Throwable?) { it.cause }.toList()
+        val hasBadRequest = chain.any { it is AiException && it.httpStatus == 400 } ||
+            chain.any { it.message.orEmpty().contains("400") }
+        if (!hasBadRequest) return false
+        val messages = chain.joinToString(" ") { it.message.orEmpty() }.lowercase()
+        return unsupportedToolMarkers.any(messages::contains)
+    }
 
     fun shouldTryBackup(error: Throwable, autoSwitchEnabled: Boolean = true): Boolean {
         if (!autoSwitchEnabled || error is InterruptedException) return false
@@ -36,8 +55,10 @@ internal object ProviderFallbackPolicy {
             message.contains("paid-provider use is off") ||
             message.contains("blocked the request")) return false
 
-        // Rotate only for known provider/model failures. A generic exception or an
-        // unclassified 400 must not silently spend another provider's quota.
+        // A provider that explicitly rejects native tool calling is also recoverable:
+        // the same registered tool contract can be sent to another configured provider.
+        // Generic HTTP 400s remain non-recoverable and never spend another provider's quota.
+        if (isToolProtocolUnsupported(error)) return true
         return error is AiException && error.httpStatus?.let { it in recoverableHttpStatuses } == true
     }
 }

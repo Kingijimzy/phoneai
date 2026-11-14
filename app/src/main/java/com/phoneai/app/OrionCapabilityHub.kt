@@ -77,12 +77,12 @@ internal object OrionCapabilityHub {
             }
         }
         val capabilities = grouped.map { (group, facts) ->
-            val ready = facts.count { it.available }
-            val detail = facts.filterNot { it.available }.take(4).joinToString("; ") { "${it.name}: ${it.state.name.lowercase()} — ${it.reason}" }
+            val ready = facts.count { it.operationallyUsable }
+            val detail = facts.filterNot { it.operationallyUsable }.take(4).joinToString("; ") { "${it.name}: ${it.state.name.lowercase()} — ${it.reason}" }
             val states = facts.map { it.state }.toSet()
             val groupState = when {
                 states.all { it == CapabilityRegistry.State.AVAILABLE } -> State.READY
-                facts.any { it.available } -> State.LIMITED
+                facts.any { it.operationallyUsable } -> State.LIMITED
                 states.all { it == CapabilityRegistry.State.DISABLED } -> State.DISABLED
                 states.any { it == CapabilityRegistry.State.UNSUPPORTED } && states.size == 1 -> State.UNKNOWN
                 states.any { it == CapabilityRegistry.State.PERMISSION_REQUIRED ||
@@ -96,7 +96,7 @@ internal object OrionCapabilityHub {
                 name = group,
                 group = group,
                 state = groupState,
-                detail = if (detail.isBlank()) "${ready}/${facts.size} registered tools available under current policy." else "${ready}/${facts.size} tools available. ${detail}",
+                detail = if (detail.isBlank()) "${ready}/${facts.size} tools are operationally usable under observed conditions." else "${ready}/${facts.size} tools operationally usable. ${detail}",
                 tools = facts.map { it.name }
             )
         }.toMutableList()

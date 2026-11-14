@@ -44,4 +44,53 @@ class OrionWorkspacePatchStoreTest {
             OrionWorkspacePatchStore.stage(c, Uri.parse("content://workspace/tree/root"), "Safe.kt", ByteArray(80_001), source)
         }
     }
+
+    @Test fun stagedProposalCanBeInspectedAndListedWithoutApplyingIt() {
+        val ctx = context()
+        val source = "before".toByteArray()
+        val replacement = "after".toByteArray()
+        val proposal = OrionWorkspacePatchStore.stage(ctx, Uri.parse("content://workspace/tree/root"),
+            "notes.txt", source, replacement)
+        val details = OrionWorkspacePatchStore.inspect(ctx, proposal.id)
+        assertNotNull(details)
+        assertEquals("pending_owner_approval", details!!.status)
+        assertArrayEquals(source, details.source)
+        assertArrayEquals(replacement, details.replacement)
+        assertEquals(listOf(proposal), OrionWorkspacePatchStore.pending(ctx))
+    }
+
+    @Test fun rejectIsTerminalAndRemovesProposalFromPendingQueue() {
+        val ctx = context()
+        val proposal = OrionWorkspacePatchStore.stage(ctx, Uri.parse("content://workspace/tree/root"),
+            "notes.txt", "before".toByteArray(), "after".toByteArray())
+        assertTrue(OrionWorkspacePatchStore.reject(ctx, proposal.id, "User rejected this change"))
+        assertEquals("rejected", OrionWorkspacePatchStore.inspect(ctx, proposal.id)?.status)
+        assertEquals("User rejected this change", OrionWorkspacePatchStore.inspect(ctx, proposal.id)?.terminalReason)
+        assertTrue(OrionWorkspacePatchStore.pending(ctx).isEmpty())
+        assertTrue(OrionWorkspacePatchStore.reject(ctx, proposal.id))
+        assertFalse(OrionWorkspacePatchStore.applyApproved(ctx, proposal.id, proposal.sourceSha256, "approved"))
+    }
+
+    @Test fun appliedProposalCannotBeRejectedAgain() {
+        val ctx = context()
+        val proposal = OrionWorkspacePatchStore.stage(ctx, Uri.parse("content://workspace/tree/root"),
+            "notes.txt", "before".toByteArray(), "after".toByteArray())
+        val file = java.io.File(ctx.filesDir, "orion_patch_proposals/${proposal.id}.json")
+        val row = org.json.JSONObject(file.readText()).put("status", "applied")
+        file.writeText(row.toString())
+        assertFalse(OrionWorkspacePatchStore.reject(ctx, proposal.id))
+        assertTrue(OrionWorkspacePatchStore.pending(ctx).isEmpty())
+    }
+
+    @Test fun corruptedProposalPayloadIsNotExposedForReview() {
+        val ctx = context()
+        val proposal = OrionWorkspacePatchStore.stage(ctx, Uri.parse("content://workspace/tree/root"),
+            "notes.txt", "before".toByteArray(), "after".toByteArray())
+        val file = java.io.File(ctx.filesDir, "orion_patch_proposals/${proposal.id}.json")
+        val row = org.json.JSONObject(file.readText()).put("replacementBase64", "dGFtcGVyZWQ=")
+        file.writeText(row.toString())
+        assertNull(OrionWorkspacePatchStore.inspect(ctx, proposal.id))
+        assertTrue(OrionWorkspacePatchStore.pending(ctx).isEmpty())
+    }
+
 }

@@ -45,7 +45,16 @@ internal fun OrionHome(
     val chips = if (commandMode) listOf("Check my battery and storage", "Summarise my notifications", "Build me a small tool", "What can you do?")
     else listOf("Tell me a fun fact", "Help me think something through", "Explain it simply", "Plan my next step")
     Box(
-        modifier.background(Brush.verticalGradient(listOf(Color(0xFF000000), Color(0xFF000000))))
+        modifier.background(
+            Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0.0f to OrionUiPalette.background,
+                    0.58f to OrionUiPalette.background,
+                    0.82f to OrionUiPalette.panel,
+                    1.0f to OrionUiPalette.raised
+                )
+            )
+        )
     ) {
         Column(Modifier.fillMaxSize().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.weight(1f))
@@ -57,16 +66,16 @@ internal fun OrionHome(
                 wordPulse = orbWordPulse
             )
             Spacer(Modifier.height(6.dp))
-            Text("Hello $name", color = Color(0xFF9AA0AD), fontSize = 15.sp)
+            Text("Hello $name", color = OrionUiPalette.muted, fontSize = 15.sp)
             Spacer(Modifier.height(6.dp))
-            Text(if (commandMode) "What should I\ndo for you?" else "How can I help\nyou today?", color = Color.White,
+            Text(if (commandMode) "What should I\ndo for you?" else "How can I help\nyou today?", color = OrionUiPalette.text,
                 fontSize = 32.sp, lineHeight = 37.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
             Spacer(Modifier.weight(1f))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 chips.forEach { c ->
-                    Text(c, color = Color(0xFFD8DCFF), fontSize = 13.sp,
-                        modifier = Modifier.pressScale(0.94f).clip(RoundedCornerShape(22.dp)).background(Color(0xFF2C2C30))
-                            .border(1.dp, Color(0x40545458), RoundedCornerShape(22.dp))
+                    Text(c, color = OrionUiPalette.secondaryText, fontSize = 13.sp,
+                        modifier = Modifier.pressScale(0.94f).clip(RoundedCornerShape(22.dp)).background(OrionUiPalette.panel)
+                            .border(1.dp, OrionUiPalette.border, RoundedCornerShape(22.dp))
                             .clickable { onSend(c) }.padding(horizontal = 16.dp, vertical = 11.dp))
                 }
             }

@@ -6,5 +6,5 @@ internal object GatePolicy {
     data class Result(val verdict: Verdict, val reason: String)
     @Suppress("UNUSED_PARAMETER") fun hardBlockReason(tool: String, args: org.json.JSONObject): String? = null
     fun decide(i: Input): Result =
-        Result(Verdict.ALLOW, "Registered tool allowed. Android OS permissions and operation-specific owner confirmation still apply.")
+        Result(Verdict.ALLOW, "Registered tool allowed. Android OS permissions apply; owner confirmation is reserved for destructive deletion and wipe actions.")
 }

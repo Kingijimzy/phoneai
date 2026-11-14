@@ -28,6 +28,7 @@ class OrionCapabilityDiscoveryTest {
             termuxReady = false
         )
         assertTrue(snapshot.tools.single().available)
+        assertFalse(snapshot.tools.single().operationallyUsable)
         assertEquals(CapabilityRegistry.State.SETUP_REQUIRED, snapshot.tools.single().state)
         assertTrue(snapshot.tools.single().reason.contains("not ready"))
     }
@@ -55,6 +56,7 @@ class OrionCapabilityDiscoveryTest {
             permissionStates = mapOf("contacts" to OrionCapabilityDiscovery.PermissionState.MISSING)
         )
         assertTrue(snapshot.tools.single().available)
+        assertFalse(snapshot.tools.single().operationallyUsable)
         assertEquals(CapabilityRegistry.State.PERMISSION_REQUIRED, snapshot.tools.single().state)
         assertTrue(snapshot.tools.single().reason.contains("permission"))
     }
@@ -63,6 +65,7 @@ class OrionCapabilityDiscoveryTest {
         val snapshot = OrionCapabilityDiscovery.discover(listOf(tool("read_notifications")), setOf("phone_control"), true)
         assertTrue(snapshot.tools.single().available)
         assertEquals(CapabilityRegistry.State.AVAILABLE_LIMITED, snapshot.tools.single().state)
+        assertTrue(snapshot.tools.single().operationallyUsable)
     }
 
     @Test fun grantedAndroidPermissionsMakeMatchingCapabilitiesAvailable() {

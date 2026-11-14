@@ -12,7 +12,10 @@ internal object OrionCapabilityDiscovery {
         val access: ToolAccess,
         val entry: CapabilityRegistry.Entry
     ) {
-        val available: Boolean get() = true // Registration makes a tool dispatch-eligible; executor checks actual prerequisites.
+        /** Registered tools remain dispatch-selectable; the executor owns real prerequisite checks. */
+        val available: Boolean get() = true
+        /** Whether the observed facts say the backend can operate now (UNKNOWN health is limited, not blocked). */
+        val operationallyUsable: Boolean get() = entry.usable
         val reason: String get() = entry.reason
         val state: CapabilityRegistry.State get() = entry.state
     }

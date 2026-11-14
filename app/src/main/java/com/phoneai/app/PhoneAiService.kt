@@ -1033,8 +1033,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     /**
      * Explicit live-call or specialist-agent handoff into the shared, guarded tool executor.
-     * This is not a permission bypass: Agent dispatch still checks tool modes, packs, Android
-     * grants, and action-specific confirmation before each tool runs.
+     * This is not a permission bypass: Agent dispatch still checks registered tool contracts, Android
+     * grants, and the shared confirmation guard for destructive deletion/wipe actions.
      */
     fun executeSharedToolRequest(text: String, source: String = "alternate surface", completion: ((String) -> Unit)? = null) {
         val command = text.trim()
@@ -2128,7 +2128,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     /**
      * Run at most one due autonomy goal, only in AUTOPILOT and never while a user task runs.
-     * The goal goes through the normal agent loop, so every gate and approval still applies.
+     * The goal goes through the normal agent loop; only destructive deletion/wipe actions require owner confirmation, while Android OS permissions remain authoritative.
      */
     private fun runDueAutonomyGoal() {
         if (!OrionAutonomyRunPolicy.canRun(

@@ -10,7 +10,7 @@ internal object ToolPermissionPolicy {
     val alwaysAllowed = setOf("ask_user", "wait", "time")
     val levels = listOf("autonomous")
     fun levelLabel(level: String) =
-        "Autonomous: every registered tool is available. Android OS permissions and operation-specific owner confirmations still apply."
+        "Autonomous: every registered tool is available. Android OS permissions apply; owner confirmation is reserved for destructive deletion and wipe actions."
     fun preset(level: String, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> = emptyMap()
     fun modeOf(map: Map<String, ToolMode>, tool: String): ToolMode = ToolMode.ALLOW
     fun applyPreset(level: String, overrides: Map<String, ToolMode>, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> = emptyMap()

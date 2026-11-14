@@ -7,7 +7,7 @@ import org.json.JSONObject
 /**
  * Owns Dev Agent and Macro Protocol tool execution.
  * All calls route through OrionDevAgent and OrionMacroExecutor, which use
- * operation-specific execution approval, the shared Linux development workspace,
+ * autonomous execution with the shared delete/wipe confirmation guard, the shared Linux development workspace,
  * read-only-by-default project inspection, and honest build/test/install reporting.
  */
 internal class OrionDevCapabilityExecutor(
