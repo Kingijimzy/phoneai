@@ -2132,7 +2132,10 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     }
 
     override fun onMessage(kind: String, text: String) {
-        runOnUiThread { addMessage(kind, text) }
+        runOnUiThread {
+            if (composeChatActive) chatCoordinator.onMessage(kind, text)
+            else addMessage(kind, text)
+        }
     }
 
     override fun onAssistantDelta(text: String) {
@@ -2187,7 +2190,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         runOnUiThread {
             val changed = lastMode != mode
             lastMode = mode
-            composeOrbMode.value = mode
             if (mode != OrbView.Mode.SPEAKING) composeOrbSpeechAmplitude.value = 0f
             if (mode != OrbView.Mode.LISTENING) composeOrbMicLevel.value = 0f
             val state: Triple<String, Int, Pair<Int, Int>> = when (mode) {
