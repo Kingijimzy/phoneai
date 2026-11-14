@@ -587,12 +587,7 @@ internal fun OrionComposeChatScreen(
     var sheetTick by remember { mutableStateOf(0) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val effectiveOrbMode = orionModeForStatus(displayStatus, orbMode)
-    // Runtime mode is authoritative. Never infer whether a request is active from
-    // human-readable status copy (which can change or contain incidental keywords).
-    val busy = effectiveOrbMode == OrbView.Mode.THINKING ||
-        effectiveOrbMode == OrbView.Mode.SPEAKING ||
-        effectiveOrbMode == OrbView.Mode.ACTING ||
-        effectiveOrbMode == OrbView.Mode.WAITING_APPROVAL
+    val busy = isOrionChatBusy(effectiveOrbMode)
     val shownProvider = remember(sheetTick, providerLabel) { if (sheetTick == 0) providerLabel else Prefs.provider(ctx, false).label }
     if (showModelSheet) OrionModelSheet(onDismiss = { showModelSheet = false }, onNeedKey = onProviderClick, onChanged = { sheetTick++ })
     var inlineBrowserUrl by rememberSaveable { mutableStateOf<String?>(null) }
