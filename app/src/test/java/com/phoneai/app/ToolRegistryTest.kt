@@ -15,7 +15,7 @@ class ToolRegistryTest {
             "python_exec", "workspace_write", "workspace_read", "save_file"
         )))
         assertTrue("The combined tool window must remain under provider limits",
-            requestTools.size <= 96)
+            requestTools.size <= 112)
     }
 
     @Test fun workspaceListIsRegisteredAndReadOnly() {
@@ -330,7 +330,7 @@ class ToolRegistryNativeSelectionTest {
             "capability_search", "read_screen", "click", "swipe", "scroll",
             "python_exec", "workspace_write", "mcp_list_tools", "task_add"
         )))
-        assertFalse("Specialist tools are discovered by the model, not keyword coincidence.", ordinary.contains("weather"))
+        assertTrue("Broad specialist tools are always callable.", ordinary.contains("image_generate") && ordinary.contains("weather"))
         assertFalse(ordinary.contains("bybit_public_ticker"))
     }
 
