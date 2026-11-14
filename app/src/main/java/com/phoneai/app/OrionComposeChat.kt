@@ -682,6 +682,23 @@ internal fun OrionComposeChatScreen(
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Rounded.ArrowBack, null, tint = ChatCopy, modifier = Modifier.size(18.dp)) }
 
+            // Keep Orion's original living orb present in the conversation header as well
+            // as on the welcome and live-voice surfaces.
+            AndroidView(
+                factory = { context -> OrionLivingOrbView(context) },
+                modifier = Modifier.size(34.dp).semantics {
+                    contentDescription = "Orion living orb. Tap to start voice chat."
+                    role = Role.Button
+                },
+                update = { view ->
+                    view.mode = effectiveOrbMode
+                    view.micLevel = orbMicLevel
+                    view.speechAmplitude = orbSpeechAmplitude
+                    view.wordPulse = orbWordPulse
+                    view.setOnClickListener { onVoice() }
+                }
+            )
+
             Row(
                 Modifier.weight(1f).heightIn(min = 42.dp).clip(RoundedCornerShape(24.dp))
                     .background(OrionUiPalette.panel)
