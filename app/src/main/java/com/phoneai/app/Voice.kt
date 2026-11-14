@@ -21,8 +21,10 @@ import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.Executors
 
 /** Android speech recognition with optional sentence-streamed on-device neural TTS and Android TTS fallback. */
@@ -75,6 +77,60 @@ class Voice(private val ctx: Context) {
     @Volatile private var legacyAudioFocusListener: AudioManager.OnAudioFocusChangeListener? = null
     private var neuralTrackSampleRate = 0
     private var neuralFramesWritten = 0L
+
+    /**
+     * Decouples Sherpa's native PCM callback from blocking AudioTrack writes.
+     * The bounded queue caps buffering; enqueue applies back-pressure only when
+     * the consumer genuinely falls behind. A single consumer preserves PCM order.
+     */
+    private inner class NeuralPcmWriter(
+        private val output: AudioTrack,
+        private val token: Int
+    ) {
+        private val queue = ArrayBlockingQueue<FloatArray?>(24)
+        private val failure = AtomicReference<Throwable?>(null)
+        private val closed = AtomicInteger(0)
+        private val worker = Thread({
+            try {
+                while (token == playbackGeneration.get()) {
+                    val block = queue.take() ?: break
+                    if (block.isNotEmpty() && !writeNeuralSamples(output, block, token)) break
+                }
+            } catch (interrupted: InterruptedException) {
+                Thread.currentThread().interrupt()
+            } catch (error: Throwable) {
+                failure.compareAndSet(null, error)
+            }
+        }, "Orion-Neural-PCM").apply { isDaemon = true; start() }
+
+        fun enqueue(samples: FloatArray): Boolean {
+            if (samples.isEmpty()) return token == playbackGeneration.get()
+            // Sherpa may reuse callback storage after return; own the PCM before returning.
+            val owned = samples.copyOf()
+            while (token == playbackGeneration.get() && failure.get() == null) {
+                if (queue.offer(owned, 100, java.util.concurrent.TimeUnit.MILLISECONDS)) return true
+            }
+            return false
+        }
+
+        fun finish() {
+            if (closed.compareAndSet(0, 1)) {
+                while (token == playbackGeneration.get() && failure.get() == null) {
+                    if (queue.offer(null, 100, java.util.concurrent.TimeUnit.MILLISECONDS)) break
+                }
+            }
+            worker.join()
+            failure.get()?.let { throw IllegalStateException("Neural PCM playback failed.", it) }
+            check(token == playbackGeneration.get()) { "Neural PCM playback was cancelled." }
+        }
+
+        fun cancel() {
+            closed.set(1)
+            queue.clear()
+            worker.interrupt()
+        }
+    }
+
     // Accessed only by neuralWorker so native inference and release are serialized.
     private var neuralEngine: OfflineTts? = null
     private var neuralEnginePath: String? = null
@@ -314,6 +370,7 @@ class Voice(private val ctx: Context) {
             var completedBeforeFallback = 0
             var peakSampleAmplitude = 0f
             var kokoroMetricsRecorded = false
+            var pcmWriter: NeuralPcmWriter? = null
             try {
                 if (token != playbackGeneration.get()) return@execute
                 val model = NeuralVoiceInstaller.modelFile(ctx)
@@ -323,6 +380,7 @@ class Voice(private val ctx: Context) {
                 requestNeuralAudioFocus()
                 val engine = obtainNeuralEngine(model)
                 track = obtainNeuralTrack(engine.sampleRate())
+                pcmWriter = NeuralPcmWriter(track!!, token)
                 val generationStartedAtMs = SystemClock.elapsedRealtime()
                 var generatedPcmFrames = 0L
                 var audioTrackWriteMs = 0L
@@ -334,7 +392,7 @@ class Voice(private val ctx: Context) {
                         sid = Prefs.kokoroSpeakerId(ctx),
                         speed = (speeds?.getOrNull(index) ?: Prefs.rate(ctx)).coerceIn(0.85f, 1.15f)
                     )
-                    var callbackFrames = 0
+                    val callbackFrames = AtomicInteger(0)
                     val generatedAudio = engine.generateWithConfigAndCallback(
                         text = chunks[index],
                         config = generation,
@@ -342,16 +400,13 @@ class Voice(private val ctx: Context) {
                             if (token != playbackGeneration.get()) {
                                 0
                             } else {
-                                val activeTrack = track
-                                val writeStartedAtMs = SystemClock.elapsedRealtime()
-                                val writeSucceeded = activeTrack != null && writeNeuralSamples(activeTrack, samples, token)
-                                audioTrackWriteMs += (SystemClock.elapsedRealtime() - writeStartedAtMs).coerceAtLeast(0L)
+                                val writeSucceeded = pcmWriter?.enqueue(samples) == true
                                 if (!writeSucceeded) 0
                                 else {
                                     if (samples.isNotEmpty() && firstPcmCallbackLatencyMs == null) {
                                         firstPcmCallbackLatencyMs = (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(0L)
                                     }
-                                    callbackFrames += samples.size
+                                    callbackFrames.addAndGet(samples.size)
                                     if (samples.isNotEmpty()) {
                                         for (sample in samples) peakSampleAmplitude = maxOf(peakSampleAmplitude, kotlin.math.abs(sample))
                                         var sumSquares = 0.0
@@ -378,14 +433,9 @@ class Voice(private val ctx: Context) {
                         "Kokoro returned audio at an unexpected sample rate."
                     }
                     generatedPcmFrames += generatedAudio.samples.size.toLong()
-                    val missingPcm = pcmNotDeliveredByCallback(generatedAudio.samples, callbackFrames)
+                    val missingPcm = pcmNotDeliveredByCallback(generatedAudio.samples, callbackFrames.get())
                     if (missingPcm.isNotEmpty()) {
-                        val activeTrack = track
-                            ?: throw IllegalStateException("Neural audio output was not initialized.")
-                        val recoveryWriteStartedAtMs = SystemClock.elapsedRealtime()
-                        val recoveryWriteSucceeded = writeNeuralSamples(activeTrack, missingPcm, token)
-                        audioTrackWriteMs += (SystemClock.elapsedRealtime() - recoveryWriteStartedAtMs).coerceAtLeast(0L)
-                        check(recoveryWriteSucceeded) {
+                        check(pcmWriter?.enqueue(missingPcm) == true) {
                             "Kokoro PCM recovery was interrupted."
                         }
                         for (sample in missingPcm) peakSampleAmplitude = maxOf(peakSampleAmplitude, kotlin.math.abs(sample))
@@ -405,9 +455,9 @@ class Voice(private val ctx: Context) {
                         val gapTrack = track
                         if (gapMs > 0 && gapTrack != null) {
                             // A breath between sentences: silence the orb can relax into.
-                            val pauseWriteStartedAtMs = SystemClock.elapsedRealtime()
-                            writeNeuralSamples(gapTrack, FloatArray(engine.sampleRate() * gapMs / 1000), token)
-                            audioTrackWriteMs += (SystemClock.elapsedRealtime() - pauseWriteStartedAtMs).coerceAtLeast(0L)
+                            check(pcmWriter?.enqueue(FloatArray(engine.sampleRate() * gapMs / 1000)) == true) {
+                                "Kokoro sentence pause was interrupted."
+                            }
                             main.post { if (token == playbackGeneration.get()) onAudioAmplitude?.invoke(0f) }
                         }
                         finished(ids[index])
@@ -415,6 +465,9 @@ class Voice(private val ctx: Context) {
                     }
                 }
 
+                // Drain all queued PCM before measuring completion or waiting for audible playback.
+                pcmWriter?.finish()
+                pcmWriter = null
                 val generationWallMs = (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(1L)
                 // AudioTrack.write() is blocking and callback writes may overlap in wall
                 // time across native callback threads. Never subtract their accumulated
@@ -452,6 +505,8 @@ class Voice(private val ctx: Context) {
                 if (token != playbackGeneration.get()) return@execute
                 finished(ids.last())
             } catch (error: Throwable) {
+                pcmWriter?.cancel()
+                pcmWriter = null
                 // Never fail silently: say why the neural voice did not speak.
                 main.post { onProblem?.invoke("Neural voice failed (" + error.javaClass.simpleName + (error.message?.let { ": " + it.take(120) } ?: "") + "). Try Reinstall / repair neural voice in Settings.") }
                 if (!kokoroMetricsRecorded) {
@@ -476,6 +531,7 @@ class Voice(private val ctx: Context) {
                     for (index in completedBeforeFallback until chunks.size) finished(ids[index])
                 }
             } finally {
+                pcmWriter?.cancel()
                 abandonNeuralAudioFocus()
             }
         }
