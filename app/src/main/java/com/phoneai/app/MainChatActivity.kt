@@ -84,8 +84,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private val composeAttachments = mutableStateOf<List<OrionChatAttachmentStore.Attachment>>(emptyList())
     private val composeSelectedImages get() = chatUiState.selectedImages
     private var composeChatActive = false
-    private var streamingMessageId: Long? = null
-    private val streamingBuffer = StringBuilder()
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun label(s: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
@@ -2057,14 +2055,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     private fun addMessage(kind: String, text: String) {
         if (composeChatActive) {
-            val draftId = streamingMessageId
-            if (kind == "ai" && draftId != null) {
-                val index = composeLines.indexOfFirst { it.id == draftId }
-                if (index >= 0) composeLines[index] = OrionChatLine(draftId, "ai", text)
-                else composeLines.add(OrionChatLine(System.nanoTime(), kind, text))
-                streamingMessageId = null
-                streamingBuffer.setLength(0)
-            } else composeLines.add(OrionChatLine(System.nanoTime(), kind, text))
+            if (kind == "ai") chatUiState.completeAssistantStream(text)
+            else composeLines.add(OrionChatLine(System.nanoTime(), kind, text))
             return
         }
         if (kind == "me") {
@@ -2149,17 +2141,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 // The full-screen Compose timeline is the canonical chat surface.
                 return@runOnUiThread
             }
-            streamingBuffer.append(text)
-            val id = streamingMessageId
-            if (id == null) {
-                val freshId = System.nanoTime()
-                streamingMessageId = freshId
-                composeLines.add(OrionChatLine(freshId, "ai", streamingBuffer.toString()))
-            } else {
-                val index = composeLines.indexOfFirst { it.id == id }
-                if (index >= 0) composeLines[index] = OrionChatLine(id, "ai", streamingBuffer.toString())
-                else composeLines.add(OrionChatLine(id, "ai", streamingBuffer.toString()))
-            }
+            chatUiState.appendAssistantDelta(text)
         }
     }
 
@@ -2246,10 +2228,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
             }
             val busy = mode != OrbView.Mode.IDLE || PhoneAiService.instance?.isTaskRunning() == true
-            if (!busy && streamingMessageId != null) {
-                // Preserve any partial text after Stop, but let the next request create a fresh message.
-                streamingMessageId = null
-                streamingBuffer.setLength(0)
+            if (!busy && chatUiState.hasAssistantStream()) {
+                // Preserve partial text after Stop, but let the next request create a fresh row.
+                chatUiState.resetAssistantStream()
             }
             stop.visibility = if (busy) View.VISIBLE else View.GONE
             stop.isEnabled = busy
