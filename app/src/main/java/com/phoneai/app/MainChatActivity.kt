@@ -68,6 +68,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private var livePulse: android.animation.AnimatorSet? = null
     // Keep UI state separate from Activity lifecycle and Android/service orchestration.
     private val chatUiState = OrionChatUiState()
+    private val chatCoordinator = OrionChatCoordinator(chatUiState)
     private val composeLines get() = chatUiState.lines
     private val composeProviderLabel get() = chatUiState.providerLabel
     private val composeModelLabel get() = chatUiState.modelLabel
@@ -76,11 +77,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private val composeChatTitle get() = chatUiState.chatTitle
     private val composeCommandMode get() = chatUiState.commandMode
     private val composeCompanionLook = mutableStateOf(0)
-    private val composeOrbMode = mutableStateOf(OrbView.Mode.IDLE)
+    private val composeOrbMode get() = chatUiState.orbMode
     private val composeOrbMicLevel = mutableStateOf(0f)
     private val composeOrbSpeechAmplitude = mutableStateOf(0f)
     private val composeOrbWordPulse = mutableStateOf(0f)
-    private val composeActivityEvents = mutableStateOf<List<OrionActivityEvent>>(emptyList())
+    private val composeActivityEvents get() = chatUiState.activityEvents
     private val composeAttachments = mutableStateOf<List<OrionChatAttachmentStore.Attachment>>(emptyList())
     private val composeSelectedImages get() = chatUiState.selectedImages
     private var composeChatActive = false
@@ -2141,7 +2142,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 // The full-screen Compose timeline is the canonical chat surface.
                 return@runOnUiThread
             }
-            chatUiState.appendAssistantDelta(text)
+            chatCoordinator.onAssistantDelta(text)
         }
     }
 
@@ -2149,32 +2150,21 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         runOnUiThread {
             // Rebuild the entire visible timeline on session switches: never leave activity
             // cards from the previous session attached to the newly restored transcript.
-            composeLines.clear()
             composeAttachments.value = emptyList()
             val structured = runCatching { ChatHistoryStore.loadStructured(this@MainChatActivity) }.getOrDefault(emptyList())
-            if (structured.isNotEmpty()) {
-                composeLines.addAll(structured)
-            } else {
-                messages.forEachIndexed { index, pair ->
-                    val (kind, text) = pair
-                    composeLines.add(OrionChatLine(System.nanoTime() + index, kind, text))
-                }
-            }
-            // Lifecycle events are stored separately from transcript messages. Reload them
-            // after the active-session pointer changes so restored chats show only their own events.
+            // Lifecycle events are stored separately from transcript messages. Restore both
+            // projections together so a session switch cannot show stale events from another chat.
             val activeEvents = runCatching {
                 OrionConversationRepository.get(this@MainChatActivity).eventsForActive(this@MainChatActivity)
             }.getOrDefault(emptyList())
-            onChatEvents(activeEvents)
+            chatCoordinator.restoreTranscript(structured, messages, activeEvents)
             refreshChatAttachments()
         }
     }
 
     override fun onChatEvents(events: List<OrionConversationRepository.ChatEvent>) {
         runOnUiThread {
-            val projection = OrionActivityTimeline(maxEvents = 300)
-            projection.replay(OrionActivityTimeline.fromPersisted(events))
-            composeActivityEvents.value = projection.compactForChat()
+            chatCoordinator.onActivityEvents(events)
             refreshChatAttachments()
             // Activity events have their own compact timeline cards. Do not mirror them
             // into transcript notes: that rendered every tool twice.
@@ -2214,7 +2204,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             val fill = state.third.first
             val border = state.third.second
             status.text = short.lowercase().replaceFirstChar { it.uppercase() }
-            composeStatus.value = short
+            chatCoordinator.onRuntimeStatus(short, mode)
             status.setTextColor(if (mode == OrbView.Mode.IDLE) Theme.MUTED else accent)
             status.background = null
             status.setPadding(0, dp(3), 0, dp(1))
