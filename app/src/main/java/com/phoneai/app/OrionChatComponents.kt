@@ -458,7 +458,7 @@ internal fun ChatBubble(
                                     val formattedBlock = formatOrionMarkdown(block.markdown)
                                     ClickableText(
                                         text = formattedBlock,
-                                        style = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 22.sp),
+                                        style = TextStyle(color = ChatCopy, fontSize = 15.sp, lineHeight = 25.sp),
                                         onClick = { offset ->
                                             val url = formattedBlock.getStringAnnotations("URL", offset,
                                                 (offset + 1).coerceAtMost(formattedBlock.length)).firstOrNull()?.item
@@ -487,7 +487,7 @@ internal fun ChatBubble(
                             ClickableText(
                                 maxLines = if (collapsible && !openBlock) 3 else Int.MAX_VALUE,
                                 text = formatted,
-                                style = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 22.sp),
+                                style = TextStyle(color = ChatCopy, fontSize = 15.sp, lineHeight = 25.sp),
                                 onClick = { offset ->
                                     val url = formatted.getStringAnnotations("URL", offset, (offset + 1).coerceAtMost(formatted.length)).firstOrNull()?.item
                                     if (url != null && (url.startsWith("https://") || url.startsWith("http://"))) {
@@ -513,6 +513,7 @@ internal fun ChatBubble(
                     Spacer(Modifier.height(9.dp))
                     ImageThumbnail(item.imageUri, Modifier.fillMaxWidth().height(190.dp))
                 }
+                if (!mine && !note) OrionSourcesRow(item.text, onOpenBrowser)
                 AnimatedVisibility(visible = actionsVisible && !note, enter = fadeIn(tween(140)) + slideInVertically(tween(140)) { it / 3 }) {
                     Row(
                         Modifier.padding(top = 8.dp),

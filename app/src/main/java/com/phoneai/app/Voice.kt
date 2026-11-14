@@ -404,13 +404,11 @@ class Voice(private val ctx: Context) {
                 val generatedFrames = (neuralFramesWritten - framesBeforeGeneration).coerceAtLeast(0L)
                 val generatedAudioSeconds = generatedFrames.toDouble() / engine.sampleRate().coerceAtLeast(1)
                 if (generatedFrames > 0L) {
-                    val realTimeFactor = generatedAudioSeconds / (generationElapsedMs / 1000.0)
                     setKokoroPerformance(String.format(
                         Locale.US,
-                        "Kokoro synthesis: %.2f seconds of audio in %d ms; real-time factor %.2fx; %d characters across %d chunk(s).",
+                        "Kokoro synthesis: %.2f seconds of audio, %.1f seconds wall time including playback (synthesis stays ahead of playback when this is close to the audio length); %d characters across %d chunk(s).",
                         generatedAudioSeconds,
-                        generationElapsedMs,
-                        realTimeFactor,
+                        generationElapsedMs / 1000.0,
                         chunks.sumOf { it.length },
                         chunks.size
                     ))

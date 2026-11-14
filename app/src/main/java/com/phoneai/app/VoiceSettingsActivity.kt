@@ -459,11 +459,11 @@ class VoiceSettingsActivity : Activity() {
                     !metrics.contains("failed (")
                 ) "Kokoro playback test completed" else if (kokoroInstalled) "Kokoro test needs attention" else "Android voice test completed"
                 val detail = buildString {
-                    append(if (kokoroInstalled) "Engine requested: Kokoro / Sherpa-ONNX\\n" else "Engine requested: Android Text-to-Speech\\n")
-                    append("Model installed: ").append(if (kokoroInstalled) "yes" else "no").append("\\n")
+                    append(if (kokoroInstalled) "Engine requested: Kokoro / Sherpa-ONNX\n" else "Engine requested: Android Text-to-Speech\n")
+                    append("Model installed: ").append(if (kokoroInstalled) "yes" else "no").append("\n")
                     append(metrics)
-                    if (problem != null) append("\\nPlayback warning: ").append(problem)
-                    if (kokoroInstalled) append("\\n\\nListen for the spoken sample. A completed callback confirms the playback queue drained; it does not replace a physical listening check.")
+                    if (problem != null) append("\nPlayback warning: ").append(problem)
+                    if (kokoroInstalled) append("\n\nListen for the spoken sample. A completed callback confirms the playback queue drained; it does not replace a physical listening check.")
                 }
                 AlertDialog.Builder(this)
                     .setTitle(title)

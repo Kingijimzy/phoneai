@@ -1341,7 +1341,9 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 verification = if (content.isNotBlank()) "PASS" else "NOT_VERIFIED"
             )
             // Activity timeline integration: surface the model decision in the activity timeline
-            try {
+            // Empty replies are internal retries: they stay in the decision store but never
+            // surface as an unverified card over the conversation.
+            if (content.isNotBlank()) try {
                 OrionConversationRepository.get(ctx).recordEvent(
                     context = ctx,
                     messageId = null,

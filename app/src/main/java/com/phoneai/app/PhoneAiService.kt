@@ -2205,6 +2205,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     /** Starts the continuous, user-initiated live conversation used by the full-screen voice UI. */
+    fun isVoiceActive(): Boolean = listening || handsActive || voice.isSpeaking()
+
     fun startLiveConversation() {
         main.post { startLive() }
     }
