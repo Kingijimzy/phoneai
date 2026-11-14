@@ -338,8 +338,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
                 }
             }
             if (fromModel) {
-                visual.mode = OrbView.Mode.SPEAKING
-                // Native Gemini audio is played by GeminiLiveSession. This transcript is captions/history only.
+                // Native Gemini audio drives the speaking state; this is captions/history only.
             } else if (microphoneEnabled) {
                 // The user's completed turn has arrived; show the real response-planning phase.
                 visual.mode = OrbView.Mode.THINKING
