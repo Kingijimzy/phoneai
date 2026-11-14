@@ -1,8 +1,10 @@
 package com.phoneai.app
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioRecord
+import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.util.Base64
@@ -19,6 +21,7 @@ import java.net.URL
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.time.Instant
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.Executors
@@ -68,6 +71,11 @@ internal class GeminiLiveSession(
     @Volatile private var microphoneEnabled = true
     @Volatile private var echoCanceler: AcousticEchoCanceler? = null
     private var recordingThread: Thread? = null
+    private val outputQueue = ArrayBlockingQueue<ShortArray>(GeminiLivePolicy.PLAYBACK_QUEUE_CAPACITY)
+    @Volatile private var outputTrack: AudioTrack? = null
+    @Volatile private var outputSampleRate = 0
+    @Volatile private var outputThread: Thread? = null
+    private val outputLock = Any()
 
     fun start() {
         if (stopped.get()) return
@@ -149,6 +157,17 @@ internal class GeminiLiveSession(
             try {
                 socket?.send(JSONObject().put("realtimeInput", JSONObject().put("audioStreamEnd", true)).toString())
             } catch (_: Exception) { }
+        }
+        outputQueue.clear()
+        outputThread?.interrupt()
+        outputThread = null
+        synchronized(outputLock) {
+            try { outputTrack?.pause() } catch (_: Exception) { }
+            try { outputTrack?.flush() } catch (_: Exception) { }
+            try { outputTrack?.stop() } catch (_: Exception) { }
+            try { outputTrack?.release() } catch (_: Exception) { }
+            outputTrack = null
+            outputSampleRate = 0
         }
         val activeSocket = socket
         try { activeSocket?.close(1000, "User ended Gemini Live session") } catch (_: Exception) { }
@@ -324,7 +343,7 @@ internal class GeminiLiveSession(
         }
         val serverContent = message.optJSONObject("serverContent") ?: return
         if (serverContent.optBoolean("interrupted", false)) {
-            localSpeechActive = false
+            stopNativeOutput()
             transcriptFlush?.cancel(false)
             modelTextBuffer.clear()
             listener.onOutputInterrupted()
@@ -334,22 +353,26 @@ internal class GeminiLiveSession(
         serverContent.optJSONObject("interimInputTranscription")?.optString("text").orEmpty()
             .takeIf { it.isNotBlank() }?.let { listener.onInterimTranscript(it) }
 
-        // Gemini 3.8 Live returns native audio. The configured output transcription is the
-        // authoritative text stream that is handed to Orion's shared local Kokoro voice.
+        // Play native Gemini PCM as it arrives; transcription is only for captions/history.
+        val modelParts = serverContent.optJSONObject("modelTurn")?.optJSONArray("parts")
+        if (modelParts != null) for (i in 0 until modelParts.length()) {
+            val part = modelParts.optJSONObject(i) ?: continue
+            val inline = part.optJSONObject("inlineData") ?: part.optJSONObject("inline_data") ?: continue
+            val mime = inline.optString("mimeType", inline.optString("mime_type", ""))
+            if (mime.startsWith("audio/pcm", true)) enqueueNativeAudio(inline.optString("data"), mime)
+        }
         val outputTranscript = serverContent.optJSONObject("outputTranscription")?.optString("text").orEmpty()
         if (outputTranscript.isNotBlank()) {
             appendModelTranscript(outputTranscript)
         } else {
             // Keep compatibility with Live models that emit text parts directly.
-            val parts = serverContent.optJSONObject("modelTurn")?.optJSONArray("parts")
-            if (parts != null) {
-                for (i in 0 until parts.length()) {
-                    val part = parts.optJSONObject(i) ?: continue
-                    appendModelTranscript(part.optString("text"))
-                }
+            if (modelParts != null) for (i in 0 until modelParts.length()) {
+                val part = modelParts.optJSONObject(i) ?: continue
+                appendModelTranscript(part.optString("text"))
             }
         }
         if (serverContent.optBoolean("turnComplete", false)) {
+            outputQueue.offer(ShortArray(0))
             modelTextBuffer.markTurnComplete()
             scheduleTranscriptFlushIfReady()
             listener.onStatus("Gemini Live ready · speak naturally")
@@ -357,6 +380,64 @@ internal class GeminiLiveSession(
         if (message.has("goAway")) {
             listener.onStatus("Google is preparing to close this Live connection. End the call and start a new session if needed.")
         }
+    }
+
+
+    private fun enqueueNativeAudio(encoded: String, mimeType: String) {
+        if (encoded.isBlank() || stopped.get()) return
+        val bytes = try { Base64.decode(encoded, Base64.DEFAULT) } catch (_: Exception) { fail("Invalid Gemini Live audio."); return }
+        val rate = Regex("rate=(\\d+)", RegexOption.IGNORE_CASE).find(mimeType)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            ?: GeminiLivePolicy.OUTPUT_SAMPLE_RATE
+        val pcm = ShortArray(bytes.size / 2)
+        val input = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+        for (i in pcm.indices) pcm[i] = input.short
+        try {
+            synchronized(outputLock) {
+                if (outputTrack == null) {
+                    val min = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                    if (min <= 0) throw IOException("Unsupported Gemini Live audio format.")
+                    val track = AudioTrack.Builder()
+                        .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                        .setAudioFormat(AudioFormat.Builder().setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
+                        .setBufferSizeInBytes(maxOf(min, rate / 2)).setTransferMode(AudioTrack.MODE_STREAM).build()
+                    if (track.state != AudioTrack.STATE_INITIALIZED) { track.release(); throw IOException("Could not open Gemini Live audio output.") }
+                    outputTrack = track
+                    outputSampleRate = rate
+                    outputThread = Thread({ nativeOutputLoop(track) }, "OrionGeminiLiveOutput").apply { isDaemon = true; start() }
+                } else if (outputSampleRate != rate) throw IOException("Gemini Live audio sample rate changed.")
+                outputTrack?.let { if (it.playState != AudioTrack.PLAYSTATE_PLAYING) it.play() }
+            }
+            if (!outputQueue.offer(pcm, 100, TimeUnit.MILLISECONDS)) throw IOException("Gemini Live playback queue is full.")
+            localSpeechActive = true
+        } catch (e: Exception) { fail("Gemini Live audio playback failed: " + (e.message ?: e.javaClass.simpleName)) }
+    }
+
+    private fun nativeOutputLoop(track: AudioTrack) {
+        try {
+            while (!stopped.get() && outputTrack === track) {
+                val pcm = outputQueue.take()
+                if (pcm.isEmpty()) { localSpeechActive = false; listener.onOutputLevel(0f); continue }
+                var offset = 0
+                while (offset < pcm.size && !stopped.get() && outputTrack === track) {
+                    val count = track.write(pcm, offset, pcm.size - offset, AudioTrack.WRITE_BLOCKING)
+                    if (count <= 0) throw IOException("AudioTrack write failed ($count).")
+                    offset += count
+                }
+                var power = 0.0
+                for (sample in pcm) { val x = sample.toDouble() / Short.MAX_VALUE; power += x * x }
+                listener.onOutputLevel(sqrt(power / pcm.size).toFloat().coerceIn(0f, 1f))
+            }
+        } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+        catch (e: Exception) { if (!stopped.get() && outputTrack === track) fail(e.message ?: "Gemini Live output failed.") }
+    }
+
+    private fun stopNativeOutput() {
+        outputQueue.clear()
+        localSpeechActive = false
+        synchronized(outputLock) {
+            outputTrack?.let { try { it.pause() } catch (_: Exception) {}; try { it.flush() } catch (_: Exception) {} }
+        }
+        listener.onOutputLevel(0f)
     }
 
     private fun appendModelTranscript(text: String) {
