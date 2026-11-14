@@ -44,36 +44,36 @@ internal fun OrionModelSheet(onDismiss: () -> Unit, onNeedKey: () -> Unit, onCha
     var tick by remember { mutableIntStateOf(0) }
     val current = remember(tick) { Prefs.provider(c, false).id }
     val smart = remember(tick) { Prefs.modelRouting(c) }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color(0xFF1C1C1E)) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = OrionUiPalette.panel) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
-            Text("Chat Model", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-            Text("Pick a model to chat with", color = Color(0xFF9AA0AD), fontSize = 12.sp)
+            Text("Chat Model", color = OrionUiPalette.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text("Pick a model to chat with", color = OrionUiPalette.muted, fontSize = 12.sp)
             Spacer(Modifier.height(14.dp))
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
-                    .background(Color(0xFF303034))
+                    .background(OrionUiPalette.raised)
                     .clickable { c.startActivity(Intent(c, AccountConnectionsActivity::class.java)) }
                     .padding(horizontal = 14.dp, vertical = 13.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text("Account connections", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text("CHATGPT / GOOGLE", color = Color(0xFFB9BBC4), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("CHATGPT / GOOGLE", color = OrionUiPalette.secondaryText, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(10.dp))
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(32.dp))
-                    .background(Brush.horizontalGradient(listOf(Color(0xFF3A3A3F), Color(0xFF2C2C30))))
+                    .background(Brush.horizontalGradient(listOf(OrionUiPalette.raised, OrionUiPalette.panel)))
                     .clickable { Prefs.setModelRouting(c, !smart); tick++; onChanged() }.padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Box(Modifier.size(46.dp).clip(CircleShape).background(Color(0x33FFFFFF)), contentAlignment = Alignment.Center) { Text("✦", color = Color.White, fontSize = 20.sp) }
+                Box(Modifier.size(46.dp).clip(CircleShape).background(OrionUiPalette.borderStrong.copy(alpha = .35f)), contentAlignment = Alignment.Center) { Text("✦", color = Color.White, fontSize = 20.sp) }
                 Column(Modifier.weight(1f)) {
                     Text("Smart Mode", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                     Text("Dynamically picks the best model for speed and quality.", color = Color(0xE6FFFFFF), fontSize = 11.sp)
                 }
                 Box(Modifier.size(22.dp).clip(CircleShape).background(if (smart) Color.White else Color(0x33FFFFFF)), contentAlignment = Alignment.Center) {
-                    if (smart) Text("✓", color = Color(0xFFFFFFFF), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    if (smart) Text("✓", color = OrionUiPalette.background, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             }
             Spacer(Modifier.height(10.dp))
@@ -82,8 +82,8 @@ internal fun OrionModelSheet(onDismiss: () -> Unit, onNeedKey: () -> Unit, onCha
                     val ready = p.noKey || Prefs.hasKey(c, p.id)
                     val selected = p.id == current
                     Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(30.dp)).background(Color(0xFF2C2C2E))
-                            .border(1.dp, if (selected) Color(0xFFBBBBBB) else Color.Transparent, RoundedCornerShape(30.dp))
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(30.dp)).background(OrionUiPalette.raised)
+                            .border(1.dp, if (selected) OrionUiPalette.accent else Color.Transparent, RoundedCornerShape(30.dp))
                             .clickable {
                                 if (ready) { Prefs.setProvider(c, false, p.id); tick++; onChanged(); onDismiss() }
                                 else if (p.id == "codex" || p.id == "antigravity") {
@@ -93,14 +93,14 @@ internal fun OrionModelSheet(onDismiss: () -> Unit, onNeedKey: () -> Unit, onCha
                             }.padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Box(Modifier.size(38.dp).clip(CircleShape).background(Color.Black), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(38.dp).clip(CircleShape).background(OrionUiPalette.background), contentAlignment = Alignment.Center) {
                             Text(p.label.take(1).uppercase(), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         }
                         Text(p.label, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         Text(if (selected) "IN USE" else if (ready) "READY" else if (p.id == "codex" || p.id == "antigravity") "CONNECT" else "ADD KEY", fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                            color = if (ready) Color.White else Color(0xFFE2A16F),
+                            color = if (ready) Color.White else OrionUiPalette.warning,
                             modifier = Modifier.clip(RoundedCornerShape(12.dp))
-                                .background(if (ready) Brush.horizontalGradient(listOf(Color(0xFF4A4A50), Color(0xFF4A4A50))) else Brush.horizontalGradient(listOf(Color(0xFF3A3A3C), Color(0xFF3A3A3C))))
+                                .background(if (ready) Brush.horizontalGradient(listOf(OrionUiPalette.panel, Color(0xFF4A4A50))) else Brush.horizontalGradient(listOf(OrionUiPalette.panel, Color(0xFF3A3A3C))))
                                 .padding(horizontal = 12.dp, vertical = 5.dp))
                     }
                 }
