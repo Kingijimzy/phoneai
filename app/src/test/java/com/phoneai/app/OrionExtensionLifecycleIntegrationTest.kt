@@ -199,7 +199,7 @@ class OrionExtensionLifecycleIntegrationTest {
     }
 
     @Test
-    fun fullCpythonRequiresApprovalToTestAndSeparateApprovalToActivate() {
+    fun fullCpythonRunsAndAutoActivatesAfterPassingExactSourceTestsWithoutOrionApproval() {
         ExtensionAutonomySettings.setAutoActivationEnabled(context, true)
         val fullRuntimeSandbox = object : ExtensionSandbox {
             override fun test(extension: GeneratedExtension, testCases: List<JSONObject>) =
@@ -209,7 +209,7 @@ class OrionExtensionLifecycleIntegrationTest {
         }
         val guarded = OrionPythonCapabilityExecutor(context, null, extensionSandbox = fullRuntimeSandbox)
         val id = "full_python_tool"
-        val source = "import math\nRESULT = math.sqrt(16)"
+        val source = "import math\\nRESULT = math.sqrt(16)"
         val created = guarded.execute("extension_create", JSONObject()
             .put("id", id).put("name", "Full Python tool").put("runtime", "python_full")
             .put("source", source).put("description", "Requires full CPython"), confirm, stopped)
@@ -217,16 +217,16 @@ class OrionExtensionLifecycleIntegrationTest {
         val approvalRequests = mutableListOf<String>()
         val tested = guarded.execute("extension_test", JSONObject().put("id", id).put("tests", JSONArray().put(
             JSONObject().put("input", JSONObject()).put("expect", 4)
-        )), { question -> approvalRequests += question; true }, stopped)
-        assertEquals(1, approvalRequests.size)
-        assertTrue(approvalRequests.single().contains("PRoot guest under the Android app UID"))
+        )), { question -> approvalRequests += question; false }, stopped)
         assertTrue(tested.orEmpty().contains("FULL CPYTHON TEST PASSED"))
-        assertFalse(tested.orEmpty().contains("AUTO-ACTIVATED"))
-        assertNull(SelfExtendingExtensionStore(context).enabled(id))
-
-        val enabled = guarded.execute("extension_enable", JSONObject().put("id", id), confirm, stopped)
-        assertTrue(enabled.orEmpty().contains("enabled"))
+        assertTrue(tested.orEmpty().contains("AUTO-ACTIVATED"))
+        assertTrue("Ordinary full CPython test/activation must not request owner approval", approvalRequests.isEmpty())
         assertNotNull(SelfExtendingExtensionStore(context).enabled(id))
+
+        val executed = guarded.execute("extension_run", JSONObject().put("id", id), { question -> approvalRequests += question; false }, stopped)
+        assertTrue(executed.orEmpty().contains("EXTENSION RESULT"))
+        assertTrue(executed.orEmpty().contains("executed"))
+        assertTrue("Ordinary full CPython execution must not request owner approval", approvalRequests.isEmpty())
     }
 
     @Test
