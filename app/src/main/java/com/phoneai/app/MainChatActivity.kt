@@ -76,13 +76,13 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private val composeStatus get() = chatUiState.status
     private val composeChatTitle get() = chatUiState.chatTitle
     private val composeCommandMode get() = chatUiState.commandMode
-    private val composeCompanionLook = mutableStateOf(0)
+    private val composeCompanionLook get() = chatUiState.companionLook
     private val composeOrbMode get() = chatUiState.orbMode
-    private val composeOrbMicLevel = mutableStateOf(0f)
-    private val composeOrbSpeechAmplitude = mutableStateOf(0f)
-    private val composeOrbWordPulse = mutableStateOf(0f)
+    private val composeOrbMicLevel get() = chatUiState.orbMicLevel
+    private val composeOrbSpeechAmplitude get() = chatUiState.orbSpeechAmplitude
+    private val composeOrbWordPulse get() = chatUiState.orbWordPulse
     private val composeActivityEvents get() = chatUiState.activityEvents
-    private val composeAttachments = mutableStateOf<List<OrionChatAttachmentStore.Attachment>>(emptyList())
+    private val composeAttachments get() = chatUiState.attachments
     private val composeSelectedImages get() = chatUiState.selectedImages
     private var composeChatActive = false
 
