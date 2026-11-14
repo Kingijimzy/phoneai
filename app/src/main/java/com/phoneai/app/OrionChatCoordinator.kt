@@ -39,6 +39,10 @@ internal class OrionChatCoordinator(private val state: OrionChatUiState) {
         events: List<OrionConversationRepository.ChatEvent>
     ) {
         state.clearTranscript()
+        // Session changes must not inherit a previous task's spinner or approval state.
+        state.taskRunning.value = false
+        state.orbMode.value = OrbView.Mode.IDLE
+        state.setStatus("READY")
         if (structured.isNotEmpty()) {
             state.lines.addAll(structured)
         } else {
@@ -52,5 +56,8 @@ internal class OrionChatCoordinator(private val state: OrionChatUiState) {
     fun clearSessionProjection() {
         state.clearTranscript()
         state.activityEvents.value = emptyList()
+        state.taskRunning.value = false
+        state.orbMode.value = OrbView.Mode.IDLE
+        state.setStatus("READY")
     }
 }
