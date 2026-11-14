@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioFocusRequest
 import android.media.AudioTrack
 import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
@@ -68,6 +70,9 @@ class Voice(private val ctx: Context) {
         Thread(task, "Orion-Neural-TTS").apply { isDaemon = true }
     }
     @Volatile private var neuralTrack: AudioTrack? = null
+    @Volatile private var neuralAudioFocusRequest: AudioFocusRequest? = null
+    @Volatile private var neuralAudioFocusListener: AudioManager.OnAudioFocusChangeListener? = null
+    @Volatile private var legacyAudioFocusListener: AudioManager.OnAudioFocusChangeListener? = null
     private var neuralTrackSampleRate = 0
     private var neuralFramesWritten = 0L
     // Accessed only by neuralWorker so native inference and release are serialized.
@@ -314,6 +319,7 @@ class Voice(private val ctx: Context) {
                 if (!NeuralVoiceInstaller.isInstalled(ctx)) {
                     throw IllegalStateException("Neural voice files are incomplete.")
                 }
+                requestNeuralAudioFocus()
                 val engine = obtainNeuralEngine(model)
                 track = obtainNeuralTrack(engine.sampleRate())
                 val generationStartedAtMs = SystemClock.elapsedRealtime()
@@ -449,8 +455,67 @@ class Voice(private val ctx: Context) {
                     // This covers a playback-drain failure after every sentence was generated.
                     for (index in completedBeforeFallback until chunks.size) finished(ids[index])
                 }
+            } finally {
+                abandonNeuralAudioFocus()
             }
         }
+    }
+
+    /** Acquire transient speech focus before opening AudioTrack; stop on a competing exclusive focus owner. */
+    private fun requestNeuralAudioFocus() {
+        val manager = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val listener = AudioManager.OnAudioFocusChangeListener { change ->
+            if (change == AudioManager.AUDIOFOCUS_LOSS ||
+                change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+                stopSpeaking()
+            } else if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) {
+                neuralTrack?.setVolume(0.25f)
+            } else if (change == AudioManager.AUDIOFOCUS_GAIN) {
+                neuralTrack?.setVolume(1.0f)
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                .setOnAudioFocusChangeListener(listener)
+                .setWillPauseWhenDucked(false)
+                .build()
+            val result = manager.requestAudioFocus(request)
+            if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                throw IllegalStateException("Android audio focus is unavailable for neural voice playback.")
+            }
+            neuralAudioFocusRequest = request
+        } else {
+            @Suppress("DEPRECATION")
+            val result = manager.requestAudioFocus(listener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                throw IllegalStateException("Android audio focus is unavailable for neural voice playback.")
+            }
+            legacyAudioFocusListener = listener
+        }
+        neuralAudioFocusListener = listener
+    }
+
+    private fun abandonNeuralAudioFocus() {
+        val manager = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            neuralAudioFocusRequest?.let { request ->
+                runCatching { manager.abandonAudioFocusRequest(request) }
+            }
+            neuralAudioFocusRequest = null
+        } else {
+            legacyAudioFocusListener?.let { listener ->
+                @Suppress("DEPRECATION")
+                runCatching { manager.abandonAudioFocus(listener) }
+            }
+            legacyAudioFocusListener = null
+        }
+        neuralAudioFocusListener = null
     }
 
     private fun obtainNeuralEngine(model: java.io.File): OfflineTts {

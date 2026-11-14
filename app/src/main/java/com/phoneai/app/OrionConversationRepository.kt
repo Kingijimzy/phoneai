@@ -14,7 +14,7 @@ import java.util.UUID
  * Message bodies stay on-device; tool payloads and secrets are deliberately not stored here.
  */
 class OrionConversationRepository private constructor(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 6) {
+    SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 7) {
 
     data class ChatEvent(
         val id: String, val sessionId: String, val messageId: String?, val type: String,
@@ -27,7 +27,8 @@ class OrionConversationRepository private constructor(context: Context) :
         val id: String,
         val timestamp: Long,
         val title: String,
-        val messages: List<Pair<String, String>>
+        val messages: List<Pair<String, String>>,
+        val structuredMessages: List<OrionChatLine> = emptyList()
     )
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -51,6 +52,7 @@ class OrionConversationRepository private constructor(context: Context) :
                 session_id TEXT NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
+                content_json TEXT,
                 created_at INTEGER NOT NULL,
                 sort_order INTEGER NOT NULL,
                 FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
@@ -71,6 +73,7 @@ class OrionConversationRepository private constructor(context: Context) :
         ensureColumn(db, "chat_events", "trace_id", "TEXT")
         ensureColumn(db, "chat_events", "correlation_id", "TEXT")
         ensureColumn(db, "chat_events", "evidence_json", "TEXT")
+        if (tableExists(db, "messages")) ensureColumn(db, "messages", "content_json", "TEXT")
     }
 
     /**
@@ -82,6 +85,9 @@ class OrionConversationRepository private constructor(context: Context) :
     override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         // Intentionally preserve the superset schema; never drop user data on app downgrade.
     }
+
+    private fun tableExists(db: SQLiteDatabase, table: String): Boolean =
+        db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", arrayOf(table)).use { it.moveToFirst() }
 
     private fun ensureColumn(db: SQLiteDatabase, table: String, column: String, definition: String) {
         val exists = db.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
@@ -369,6 +375,25 @@ class OrionConversationRepository private constructor(context: Context) :
         return result
     }
 
+    /** Restore durable activity receipts for an active or archived conversation by stable ID. */
+    @Synchronized
+    fun eventsForSession(context: Context, sessionId: String): List<ChatEvent> {
+        val id = sessionId.trim().take(128)
+        if (id.isBlank()) return emptyList()
+        migrateLegacy(context)
+        val result = ArrayList<ChatEvent>()
+        readableDatabase.rawQuery(
+            "SELECT id,session_id,message_id,event_type,status,summary,created_at,trace_id,correlation_id,evidence_json FROM chat_events WHERE session_id=? ORDER BY created_at ASC",
+            arrayOf(id)
+        ).use { c ->
+            while (c.moveToNext()) result.add(
+                ChatEvent(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
+                    c.getString(4), c.getString(5), c.getLong(6), c.getString(7), c.getString(8), c.getString(9))
+            )
+        }
+        return result
+    }
+
     private fun clean(turns: List<Pair<String, String>>) =
         turns.filter { (kind, text) -> (kind == "me" || kind == "ai") && text.isNotBlank() }
             .takeLast(MAX_TURNS).map { it.first to it.second.take(6000) }
@@ -425,6 +450,16 @@ class OrionConversationRepository private constructor(context: Context) :
     }
 
     @Synchronized
+    fun loadActiveStructured(context: Context): List<OrionChatLine> {
+        migrateLegacy(context)
+        val db = readableDatabase
+        val id = db.rawQuery("SELECT id FROM sessions WHERE is_active=1 ORDER BY updated_at DESC LIMIT 1", null).use {
+            if (it.moveToFirst()) it.getString(0) else null
+        } ?: return emptyList()
+        return readStructuredMessages(db, id)
+    }
+
+    @Synchronized
     fun saveActive(context: Context, transcript: List<Pair<String, String>>) {
         migrateLegacy(context)
         val turns = clean(transcript)
@@ -460,6 +495,22 @@ class OrionConversationRepository private constructor(context: Context) :
         } finally {
             db.endTransaction()
         }
+    }
+
+    @Synchronized
+    fun saveActiveStructured(context: Context, lines: List<OrionChatLine>) {
+        val persisted = lines.filter { (it.kind == "me" || it.kind == "ai") && it.text.isNotBlank() }
+            .takeLast(MAX_TURNS).map { it.copy(text = it.text.take(6000)) }
+        val previous = loadActiveStructured(context)
+        val merged = persisted.mapIndexed { index, line ->
+            val old = previous.getOrNull(index)
+            if (old != null && old.kind == line.kind && old.text == line.text &&
+                line.content.blocks.all { it is OrionMessageBlock.Text } &&
+                old.content.blocks.any { it !is OrionMessageBlock.Text }) line.copy(content = old.content)
+            else line
+        }
+        saveActive(context, merged.map { it.kind to it.text })
+        activeSessionId(context)?.let { persistStructuredMessages(it, merged) }
     }
 
     @Synchronized
@@ -501,6 +552,30 @@ class OrionConversationRepository private constructor(context: Context) :
     }
 
     @Synchronized
+    fun archiveAndClearStructured(context: Context, lines: List<OrionChatLine>) {
+        val sessionId = activeSessionId(context)
+        val persisted = lines.filter { (it.kind == "me" || it.kind == "ai") && it.text.isNotBlank() }
+            .takeLast(MAX_TURNS).map { it.copy(text = it.text.take(6000)) }
+        val previous = loadActiveStructured(context)
+        val merged = persisted.mapIndexed { index, line ->
+            val old = previous.getOrNull(index)
+            if (old != null && old.kind == line.kind && old.text == line.text &&
+                line.content.blocks.all { it is OrionMessageBlock.Text } &&
+                old.content.blocks.any { it !is OrionMessageBlock.Text }) line.copy(content = old.content)
+            else line
+        }
+        archiveAndClear(context, merged.map { it.kind to it.text })
+        if (sessionId != null) persistStructuredMessages(sessionId, merged)
+    }
+
+    @Synchronized
+    fun structuredMessagesForSession(context: Context, sessionId: String): List<OrionChatLine> {
+        if (sessionId.isBlank()) return emptyList()
+        migrateLegacy(context)
+        return readStructuredMessages(readableDatabase, sessionId)
+    }
+
+    @Synchronized
     fun archived(context: Context): List<Session> {
         migrateLegacy(context)
         val db = readableDatabase
@@ -508,7 +583,7 @@ class OrionConversationRepository private constructor(context: Context) :
         db.rawQuery("SELECT id,title,updated_at FROM sessions WHERE is_active=0 ORDER BY updated_at DESC LIMIT $MAX_CHATS", null).use { c ->
             while (c.moveToNext()) {
                 val id = c.getString(0)
-                result.add(Session(id, c.getLong(2), c.getString(1), readMessages(db, id)))
+                result.add(Session(id, c.getLong(2), c.getString(1), readMessages(db, id), readStructuredMessages(db, id)))
             }
         }
         return result
@@ -657,6 +732,39 @@ class OrionConversationRepository private constructor(context: Context) :
             put("id", messageId); put("session_id", sessionId); put("role", role)
             put("content", content.take(6000)); put("created_at", createdAt); put("sort_order", order)
         })
+    }
+
+    private fun persistStructuredMessages(sessionId: String, lines: List<OrionChatLine>) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            lines.forEachIndexed { index, line ->
+                val json = runCatching { line.content.toJson() }.getOrNull()?.takeIf { it.length <= 32_000 }
+                val values = ContentValues().apply {
+                    if (json == null) putNull("content_json") else put("content_json", json)
+                }
+                db.update("messages", values, "session_id=? AND sort_order=?", arrayOf(sessionId, index.toString()))
+            }
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+    }
+
+    private fun readStructuredMessages(db: SQLiteDatabase, id: String): List<OrionChatLine> {
+        val result = ArrayList<OrionChatLine>()
+        db.rawQuery(
+            "SELECT role,content,content_json,created_at FROM messages WHERE session_id=? ORDER BY sort_order ASC",
+            arrayOf(id)
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                val role = cursor.getString(0)
+                val text = cursor.getString(1)
+                val json = cursor.getString(2)
+                val content = json?.let { runCatching { OrionMessageContent.fromJson(it) }.getOrNull() }
+                    ?: OrionMessageContent.fromLegacy(role, text)
+                result += OrionChatLine(cursor.getLong(3), role, text, content = content)
+            }
+        }
+        return result
     }
 
     private fun readMessages(db: SQLiteDatabase, id: String): List<Pair<String, String>> {

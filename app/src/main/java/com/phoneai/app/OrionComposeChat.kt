@@ -7,6 +7,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -357,7 +358,7 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
 }
 
 @Composable
-private fun OrionComposeActivityCard(event: OrionActivityEvent) {
+internal fun OrionComposeActivityCard(event: OrionActivityEvent) {
     var expanded by rememberSaveable(event.eventId) { mutableStateOf(false) }
     val active = event.status == OrionActivityStatus.ACTIVE
     val accent = when (event.status) {
@@ -372,12 +373,10 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
     val safeEvidence = OrionActivityPresentation.evidence(event.evidence)
     val terminalOutput = safeEvidence.lastOrNull { it.contains("Python terminal", true) || it.contains("TASK:OUTPUT", true) }
         ?: displaySummary
-    val pulse = rememberInfiniteTransition(label = "task-stream-pulse")
-    val alpha by pulse.animateFloat(
-        initialValue = if (active) 0.35f else 1f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(850), repeatMode = RepeatMode.Reverse),
-        label = "task-stream-alpha"
+    val alpha by animateFloatAsState(
+        targetValue = if (active) 0.65f else 1f,
+        animationSpec = tween(180),
+        label = "task-status-alpha"
     )
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp))
@@ -415,20 +414,12 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
             Text(if (expanded) "LESS" else "DETAILS", color = OrionUiPalette.muted, fontSize = 8.sp,
                 fontWeight = FontWeight.SemiBold)
         }
-        // Progress bar: sweeps while the task runs, fills when it finishes.
-        val sweep by pulse.animateFloat(
-            initialValue = 0f, targetValue = 0.7f,
-            animationSpec = infiniteRepeatable(tween(1100), repeatMode = RepeatMode.Reverse), label = "task-progress-sweep"
+        // Status accent only. This is deliberately not a percentage-complete bar.
+        Box(
+            Modifier.fillMaxWidth().padding(top = 6.dp, start = 13.dp)
+                .height(2.dp).clip(RoundedCornerShape(2.dp))
+                .background(accent.copy(alpha = if (active) 0.55f else 1f))
         )
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp, start = 13.dp).height(3.dp).clip(RoundedCornerShape(2.dp)).background(OrionUiPalette.raised)) {
-            if (active || event.status == OrionActivityStatus.WAITING) {
-                Spacer(Modifier.weight(sweep.coerceAtLeast(0.001f)))
-                Box(Modifier.weight(0.3f).fillMaxHeight().background(accent))
-                Spacer(Modifier.weight((0.7f - sweep).coerceAtLeast(0.001f)))
-            } else {
-                Box(Modifier.weight(1f).fillMaxHeight().background(accent))
-            }
-        }
         val steps = OrionActivityTimeline.progressSteps(safeEvidence)
         if (steps.isNotEmpty()) {
             val shown = if (expanded) steps.takeLast(14) else steps.takeLast(4)
@@ -540,13 +531,18 @@ data class OrionChatLine(
     val id: Long,
     val kind: String,
     val text: String,
-    val imageUri: Uri? = null
+    val imageUri: Uri? = null,
+    /** Typed at the message boundary; legacy rows are adapted once when restored. */
+    val content: OrionMessageContent = OrionMessageContent.fromLegacy(kind, text)
 )
 
 @Composable
 internal fun OrionComposeChatScreen(
     lines: List<OrionChatLine>,
     activityEvents: List<OrionActivityEvent> = emptyList(),
+    attachments: List<OrionChatAttachmentStore.Attachment> = emptyList(),
+    onOpenAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
+    onShareAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
     status: String,
     orbMode: OrbView.Mode = OrbView.Mode.IDLE,
     orbMicLevel: Float = 0f,
@@ -612,12 +608,16 @@ internal fun OrionComposeChatScreen(
         draft = ""
         editingOriginal = null
     }
+    val effectiveOrbMode = orionModeForStatus(displayStatus, orbMode)
     val statusDotColor by animateColorAsState(
-        targetValue = when {
-            displayStatus.contains("listen", true) || displayStatus.contains("speak", true) -> ChatMint
-            displayStatus.contains("warning", true) || displayStatus.contains("error", true) -> OrionUiPalette.warning
-            listOf("think", "work", "act", "brows", "build", "draw", "run", "delegat").any { displayStatus.contains(it, true) } -> OrionUiPalette.secondaryText
-            else -> OrionUiPalette.muted
+        targetValue = when (effectiveOrbMode) {
+            OrbView.Mode.IDLE -> OrionUiPalette.muted
+            OrbView.Mode.LISTENING -> Color(0xFF62CBE8)
+            OrbView.Mode.THINKING -> Color(0xFF9B91F2)
+            OrbView.Mode.SPEAKING -> Color(0xFF62D6C5)
+            OrbView.Mode.ACTING -> Color(0xFFFFB86B)
+            OrbView.Mode.WAITING_APPROVAL -> Color(0xFFFFC857)
+            OrbView.Mode.ERROR -> Color(0xFFFF7777)
         },
         animationSpec = tween(durationMillis = 260),
         label = "chat-status-dot"
@@ -688,7 +688,7 @@ internal fun OrionComposeChatScreen(
                     role = Role.Button
                 },
                 update = { view ->
-                    view.mode = orbMode
+                    view.mode = effectiveOrbMode
                     view.micLevel = orbMicLevel
                     view.speechAmplitude = orbSpeechAmplitude
                     view.wordPulse = orbWordPulse
@@ -711,7 +711,7 @@ internal fun OrionComposeChatScreen(
                                 .semantics { contentDescription = "Orion state: $displayStatus" }
                         )
                     }
-                    Text(displayStatus.replaceFirstChar { it.uppercase() }.take(24), color = ChatMuted, fontSize = 11.sp,
+                    Text(orionStatusLabel(displayStatus, effectiveOrbMode, busy), color = ChatMuted, fontSize = 11.sp,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -778,7 +778,7 @@ internal fun OrionComposeChatScreen(
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(ChatHairline.copy(alpha = .55f)))
 
-        if (lines.isEmpty()) {
+        if (lines.isEmpty() && attachments.isEmpty() && activityEvents.isEmpty()) {
             OrionHome(
                 commandMode = commandMode,
                 onSend = onSend,
@@ -804,6 +804,9 @@ internal fun OrionComposeChatScreen(
                     androidx.compose.foundation.layout.Box(Modifier.orionEnter()) { ChatBubble(
                         item = item,
                         onOpenBrowser = { url -> inlineBrowserUrl = url ?: "https://duckduckgo.com/" },
+                        attachments = attachments,
+                        onOpenAttachment = onOpenAttachment,
+                        onShareAttachment = onShareAttachment,
                         onRetry = previousUserMessage?.takeIf { it.isNotBlank() }?.let { prompt ->
                             { onRetry(prompt) }
                         },
@@ -815,6 +818,15 @@ internal fun OrionComposeChatScreen(
                         } else null
                     ) }
                 }
+                if (attachments.isNotEmpty()) {
+                    item(key = "orion-chat-attachments-heading") {
+                        Text("ATTACHMENTS", color = OrionUiPalette.muted, fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold, letterSpacing = .9.sp)
+                    }
+                    itemsIndexed(attachments, key = { _, item -> "chat-attachment-${item.id}" }) { _, item ->
+                        OrionChatAttachmentCard(item, onOpenAttachment, onShareAttachment)
+                    }
+                }
                 item(key = "orion-tool-pills") { OrionToolPills(lines) }
                 // Keep the conversation primary: show one live task card for the latest
                 // task only. Full event history remains available from the Tasks surface.
@@ -825,7 +837,7 @@ internal fun OrionComposeChatScreen(
                     it.kind == "ai" && it.text.isNotBlank()
                 } == true
                 if (busy && !assistantAlreadyStreaming) {
-                    item(key = "orion-thinking-indicator") { ThinkingIndicator() }
+                    item(key = "orion-thinking-indicator") { ThinkingIndicator(displayStatus, effectiveOrbMode) }
                 }
             }
         }
@@ -1074,6 +1086,236 @@ private fun ChatInlineBrowserDialog(
             )
             DisposableEffect(Unit) {
                 onDispose { /* Keep the WebView alive only for this dialog; do not retain a hidden browsing surface. */ webView?.stopLoading(); webView?.destroy(); webView = null }
+            }
+        }
+    }
+}
+
+
+/** Archived transcripts reuse the live chat message renderer to preserve rich formatting. */
+@Composable
+internal fun OrionArchivedConversationScreen(
+    title: String,
+    date: String,
+    messages: List<Pair<String, String>>,
+    structuredMessages: List<OrionChatLine> = emptyList(),
+    activityEvents: List<OrionConversationRepository.ChatEvent> = emptyList(),
+    attachments: List<OrionChatAttachmentStore.Attachment> = emptyList(),
+    onOpenAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
+    onShareAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
+    onBack: () -> Unit,
+    onCopy: () -> Unit,
+    onContinue: () -> Unit,
+    onOpenBrowser: (String?) -> Unit
+) {
+    val renderedMessages = if (structuredMessages.isNotEmpty()) structuredMessages else
+        messages.mapIndexed { index, pair -> OrionChatLine(index.toLong(), pair.first, pair.second) }
+    val activityCards = remember(activityEvents) {
+        val projection = OrionActivityTimeline(maxEvents = 300)
+        projection.replay(OrionActivityTimeline.fromPersisted(activityEvents))
+        projection.compactForChat()
+    }
+    Column(Modifier.fillMaxSize().background(OrionUiPalette.background)) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                "‹ History",
+                color = OrionUiPalette.secondaryText,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.clip(RoundedCornerShape(10.dp))
+                    .clickable(onClick = onBack)
+                    .padding(horizontal = 10.dp, vertical = 12.dp)
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title.ifBlank { "Conversation" }, color = OrionUiPalette.text,
+                    fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis)
+                Text(date, color = OrionUiPalette.muted, fontSize = 11.sp)
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(OrionUiPalette.border))
+        LazyColumn(
+            Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 22.dp, bottom = 22.dp)
+        ) {
+            if (renderedMessages.isEmpty() && activityEvents.isEmpty()) {
+                item(key = "archive-empty") {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 28.dp), contentAlignment = Alignment.Center) {
+                        Text("This conversation has no saved messages or activity.", color = OrionUiPalette.muted, fontSize = 13.sp)
+                    }
+                }
+            }
+            itemsIndexed(renderedMessages, key = { index, item -> "archive-" + index + "-" + item.id }) { _, item ->
+                ChatBubble(
+                    item = item,
+                    onOpenBrowser = onOpenBrowser,
+                    attachments = attachments,
+                    onOpenAttachment = onOpenAttachment,
+                    onShareAttachment = onShareAttachment
+                )
+            }
+            if (attachments.isNotEmpty()) {
+                item(key = "archive-attachments-heading") {
+                    Text("ATTACHMENTS", color = OrionUiPalette.muted, fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold, letterSpacing = .9.sp)
+                }
+                itemsIndexed(attachments, key = { _, item -> "archive-attachment-${item.id}" }) { _, item ->
+                    OrionChatAttachmentCard(item, onOpenAttachment, onShareAttachment)
+                }
+            }
+            if (activityEvents.isNotEmpty()) {
+                item(key = "archive-activity-heading") {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("ACTIVITY HISTORY", color = OrionUiPalette.secondaryText,
+                            fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
+                        Text("Persisted execution receipts for this conversation",
+                            color = OrionUiPalette.muted, fontSize = 11.sp)
+                    }
+                }
+                itemsIndexed(activityCards, key = { _, event -> "archive-task-${event.eventId}" }) { _, event ->
+                    OrionComposeActivityCard(event)
+                }
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(OrionUiPalette.border))
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                    .background(OrionUiPalette.raised)
+                    .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(12.dp))
+                    .clickable(onClick = onCopy).padding(vertical = 13.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Copy transcript", color = OrionUiPalette.text, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            }
+            Box(
+                Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                    .background(OrionUiPalette.text)
+                    .clickable(onClick = onContinue).padding(vertical = 13.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Continue chat", color = OrionUiPalette.background, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+
+/** Compose-native archive list; live and archived chat surfaces share the same visual tokens. */
+@Composable
+internal fun OrionChatHistoryScreen(
+    chats: List<OrionSavedChat>,
+    onClose: () -> Unit,
+    onClearAll: () -> Unit,
+    onOpen: (OrionSavedChat) -> Unit,
+    onRename: (OrionSavedChat) -> Unit,
+    onDelete: (OrionSavedChat) -> Unit
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val filtered = remember(chats, query) {
+        val needle = query.trim().lowercase()
+        if (needle.isBlank()) chats else chats.filter { chat ->
+            chat.title.lowercase().contains(needle) ||
+                chat.messages.any { it.second.lowercase().contains(needle) }
+        }
+    }
+    val dateFormat = remember { java.text.SimpleDateFormat("d MMM yyyy · h:mm a", java.util.Locale.getDefault()) }
+    Column(Modifier.fillMaxSize().background(OrionUiPalette.background)) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 18.dp, end = 14.dp, top = 16.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("CHAT HISTORY", color = OrionUiPalette.muted, fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Text("Your conversations", color = OrionUiPalette.text, fontSize = 23.sp,
+                    fontWeight = FontWeight.SemiBold)
+                Text(chats.size.toString() + " saved conversations · stored on this device",
+                    color = OrionUiPalette.muted, fontSize = 11.sp)
+            }
+            Text("Clear all", color = OrionUiPalette.secondaryText, fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.clickable(enabled = chats.isNotEmpty(), onClick = onClearAll)
+                    .padding(horizontal = 8.dp, vertical = 12.dp))
+            Text("Close", color = OrionUiPalette.text, fontSize = 12.sp,
+                modifier = Modifier.clickable(onClick = onClose).padding(horizontal = 8.dp, vertical = 12.dp))
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(OrionUiPalette.border))
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+                .clip(RoundedCornerShape(12.dp)).background(OrionUiPalette.panel)
+                .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(12.dp))
+                .padding(horizontal = 13.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("⌕", color = OrionUiPalette.muted, fontSize = 20.sp)
+            Spacer(Modifier.width(9.dp))
+            Box(Modifier.weight(1f)) {
+                if (query.isBlank()) Text("Search conversations", color = OrionUiPalette.muted, fontSize = 13.sp)
+                BasicTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    textStyle = TextStyle(color = OrionUiPalette.text, fontSize = 13.sp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (query.isNotBlank()) {
+                Text("Clear", color = OrionUiPalette.secondaryText, fontSize = 11.sp,
+                    modifier = Modifier.clickable { query = "" }.padding(start = 8.dp))
+            }
+        }
+        if (filtered.isEmpty()) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (chats.isEmpty()) "No saved conversations yet" else "No matching conversations",
+                        color = OrionUiPalette.text, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    Text(if (chats.isEmpty()) "Start a conversation and Orion will keep it here."
+                        else "Try another title or phrase from the conversation.",
+                        color = OrionUiPalette.muted, fontSize = 12.sp)
+                }
+            }
+        } else {
+            LazyColumn(
+                Modifier.weight(1f).fillMaxWidth().padding(horizontal = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 22.dp)
+            ) {
+                itemsIndexed(filtered, key = { _, chat -> chat.sessionId }) { _, chat ->
+                    val preview = chat.messages.lastOrNull()?.second.orEmpty().replace('\n', ' ').trim()
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
+                            .background(OrionUiPalette.panel)
+                            .border(1.dp, OrionUiPalette.border, RoundedCornerShape(13.dp))
+                            .clickable { onOpen(chat) }
+                            .padding(horizontal = 14.dp, vertical = 13.dp),
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(chat.title.ifBlank { "Untitled conversation" }, color = OrionUiPalette.text,
+                                fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f))
+                            Text("Rename", color = OrionUiPalette.secondaryText, fontSize = 10.sp,
+                                modifier = Modifier.clickable { onRename(chat) }.padding(horizontal = 7.dp, vertical = 7.dp))
+                            Text("Delete", color = OrionUiPalette.muted, fontSize = 10.sp,
+                                modifier = Modifier.clickable { onDelete(chat) }.padding(start = 5.dp, end = 2.dp, top = 7.dp, bottom = 7.dp))
+                        }
+                        Text(dateFormat.format(java.util.Date(chat.timestamp)) + "  ·  " +
+                            chat.messages.size + " messages", color = OrionUiPalette.muted, fontSize = 10.sp)
+                        Text(preview.ifBlank { "Open conversation to view messages" },
+                            color = OrionUiPalette.secondaryText, fontSize = 12.sp, lineHeight = 17.sp,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
         }
     }

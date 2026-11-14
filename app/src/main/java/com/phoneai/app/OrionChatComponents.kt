@@ -169,30 +169,189 @@ private enum class OrionReplyType { NORMAL, RESEARCH, CODE, TASK, MCP, DIAGRAM }
 
 private fun classifyOrionReply(item: OrionChatLine): OrionReplyType {
     if (item.kind == "note") return OrionReplyType.TASK
-    val text = item.text
-    val lower = text.lowercase()
-    if (parseOrionDiagram(text) != null) return OrionReplyType.DIAGRAM
-    if (lower.contains("mcp tool result") || lower.contains("mcp discovery result") || lower.contains("mcp discovery failed")) {
-        return OrionReplyType.MCP
-    }
-    if (Regex("(?s)```(?:kotlin|java|python|py|javascript|js|typescript|ts|bash|sh|json|xml|html|css|sql|rust|go)?\\s*\\n").containsMatchIn(text) ||
-        (text.count { it == '\u0060' } >= 2 && (lower.contains("fun main") || lower.contains("def ") || lower.contains("import ") || lower.contains("class ")))) {
-        return OrionReplyType.CODE
-    }
-    if (lower.contains("research summary") || lower.contains("sources:") || lower.contains("source list") ||
-        (Regex("https?://").findAll(text).count() >= 2) ||
-        (lower.contains("findings") && lower.contains("source"))) return OrionReplyType.RESEARCH
-    if (Regex("(?m)^\\s*\\|?\\s*[-:]{3,}\\s*\\|\\s*[-:]{3,}.*$").containsMatchIn(text)) return OrionReplyType.RESEARCH
-    if (lower.contains("task status") || lower.contains("execution result:") ||
-        lower.contains("steps completed") || lower.contains("verification:")) return OrionReplyType.TASK
+    // New messages carry explicit block types. Legacy text is adapted at restoration time;
+    // ordinary prose is never promoted to a tool/task card because it contains a keyword.
+    val blocks = item.content.blocks
+    if (blocks.any { it is OrionMessageBlock.Code }) return OrionReplyType.CODE
+    if (blocks.any { it is OrionMessageBlock.Terminal || it is OrionMessageBlock.Approval ||
+            it is OrionMessageBlock.TaskReceipt || it is OrionMessageBlock.GeneratedFile }) return OrionReplyType.TASK
+    if (blocks.any { it is OrionMessageBlock.ToolResult }) return OrionReplyType.MCP
+    if (blocks.any { it is OrionMessageBlock.Research }) return OrionReplyType.RESEARCH
+    if (parseOrionDiagram(item.text) != null) return OrionReplyType.DIAGRAM
     return OrionReplyType.NORMAL
 }
 
 @Composable
-internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, onRetry: (() -> Unit)? = null, onEdit: ((String) -> Unit)? = null) {
+private fun OrionStructuredBlockCard(
+    block: OrionMessageBlock,
+    onOpenBrowser: (String?) -> Unit,
+    attachment: OrionChatAttachmentStore.Attachment?,
+    onOpenAttachment: (OrionChatAttachmentStore.Attachment) -> Unit,
+    onShareAttachment: (OrionChatAttachmentStore.Attachment) -> Unit
+) {
+    val mono = androidx.compose.ui.text.font.FontFamily.Monospace
+    val clipboard = LocalClipboardManager.current
+    when (block) {
+        is OrionMessageBlock.Text -> Text(block.markdown, color = ChatCopy, fontSize = 13.sp, lineHeight = 20.sp)
+        is OrionMessageBlock.Code -> Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                .background(OrionUiPalette.background)
+                .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp))
+                .padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(block.filename ?: block.language.uppercase(), color = OrionUiPalette.secondaryText,
+                    fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .7.sp)
+                Spacer(Modifier.weight(1f))
+                Text("COPY", color = ChatMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { clipboard.setText(AnnotatedString(block.source)) }.padding(4.dp))
+            }
+            block.source.lines().forEachIndexed { index, line ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text((index + 1).toString(), color = OrionUiPalette.muted, fontSize = 11.sp, fontFamily = mono)
+                    Text(highlightCode(line), color = ChatCopy, fontSize = 11.sp, fontFamily = mono, lineHeight = 16.sp)
+                }
+            }
+        }
+        is OrionMessageBlock.Terminal -> {
+            val failed = block.state.equals("failed", true) || (block.exitCode != null && block.exitCode != 0)
+            val active = block.state.equals("running", true)
+            val accent = if (failed) OrionUiPalette.danger else if (active) OrionUiPalette.warning else OrionUiPalette.success
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(OrionUiPalette.background)
+                    .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp)).padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("TERMINAL", color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.weight(1f))
+                    Text(block.state.uppercase(), color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                }
+                if (block.command.isNotBlank()) Text("$ " + block.command, color = ChatCopy, fontSize = 11.sp, fontFamily = mono)
+                if (block.source.isNotBlank()) Text(block.source, color = ChatMuted, fontSize = 10.sp, fontFamily = mono, lineHeight = 15.sp)
+                if (block.stdout.isNotBlank()) Text(block.stdout.takeLast(5000), color = ChatCopy, fontSize = 11.sp, fontFamily = mono, lineHeight = 15.sp)
+                if (block.stderr.isNotBlank()) Text(block.stderr.takeLast(3000), color = OrionUiPalette.danger, fontSize = 11.sp, fontFamily = mono, lineHeight = 15.sp)
+                if (block.exitCode != null) Text("Exit code " + block.exitCode, color = accent, fontSize = 9.sp)
+            }
+        }
+        is OrionMessageBlock.GeneratedFile -> {
+            val stored = resolveGeneratedFileAttachment(block, attachment)
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(OrionUiPalette.panel)
+                    .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp)).padding(11.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text("GENERATED FILE", color = OrionUiPalette.success, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
+                Text(block.fileName, color = ChatCopy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(block.mimeType + " · " + block.sizeBytes + " bytes", color = ChatMuted, fontSize = 10.sp)
+                Text("Artifact " + block.artifactId.take(12) + " · " + block.state, color = ChatMuted, fontSize = 9.sp)
+                if (stored != null) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(18.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("OPEN", color = OrionUiPalette.secondaryText, fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onOpenAttachment(stored) }.padding(vertical = 8.dp))
+                        Text("SHARE", color = OrionUiPalette.secondaryText, fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onShareAttachment(stored) }.padding(vertical = 8.dp))
+                    }
+                } else {
+                    Text("The saved artifact is unavailable in this conversation. No file action is available.",
+                        color = ChatMuted, fontSize = 9.sp, lineHeight = 13.sp)
+                }
+            }
+        }
+        is OrionMessageBlock.Approval -> {
+            val accent = if (block.state.equals("pending", true)) OrionUiPalette.warning else OrionUiPalette.secondaryText
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(OrionUiPalette.panel)
+                    .border(1.dp, accent, RoundedCornerShape(10.dp)).padding(11.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("APPROVAL", color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.weight(1f))
+                    Text(block.state.uppercase(), color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(block.title, color = ChatCopy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(block.details, color = OrionUiPalette.secondaryText, fontSize = 11.sp, lineHeight = 16.sp)
+                Text("Risk: " + block.risk, color = accent, fontSize = 10.sp)
+            }
+        }
+        is OrionMessageBlock.TaskReceipt -> {
+            val receiptAccent = when (block.status.lowercase()) {
+                "failed", "error" -> OrionUiPalette.danger
+                "cancelled", "canceled", "interrupted" -> OrionUiPalette.warning
+                "waiting", "pending", "approval_required" -> OrionUiPalette.warning
+                "completed", "success", "succeeded", "verified" -> OrionUiPalette.success
+                else -> OrionUiPalette.secondaryText
+            }
+            Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(OrionUiPalette.panel)
+                .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp)).padding(11.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("TASK RECEIPT", color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.weight(1f))
+                Text(block.status.uppercase(), color = receiptAccent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            }
+            Text(block.objective, color = ChatCopy, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            block.steps.forEachIndexed { index, step ->
+                Text((index + 1).toString() + ". " + step, color = ChatMuted, fontSize = 10.sp)
+            }
+            if (block.evidence.isNotBlank()) Text(block.evidence.take(1600), color = ChatMuted, fontSize = 9.sp, lineHeight = 13.sp)
+            }
+        }
+        is OrionMessageBlock.Thinking -> Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(OrionUiPalette.panel).padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(Modifier.size(7.dp).clip(CircleShape).background(OrionUiPalette.secondaryText))
+            Text(orionWorkingPhrase(block.phase), color = OrionUiPalette.secondaryText, fontSize = 11.sp)
+        }
+        is OrionMessageBlock.ToolResult -> Text(block.summary, color = ChatCopy, fontSize = 12.sp, lineHeight = 18.sp)
+        is OrionMessageBlock.Research -> Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(block.summary, color = ChatCopy, fontSize = 12.sp, lineHeight = 18.sp)
+            block.sources.forEach { source ->
+                Text(source, color = OrionUiPalette.secondaryText, fontSize = 10.sp,
+                    modifier = Modifier.clickable { onOpenBrowser(source) })
+            }
+        }
+        is OrionMessageBlock.Image -> ImageResultCard(block.legacyPayload)
+    }
+}
+
+internal fun resolveGeneratedFileAttachment(
+    block: OrionMessageBlock.GeneratedFile,
+    attachment: OrionChatAttachmentStore.Attachment?
+): OrionChatAttachmentStore.Attachment? {
+    if (block.artifactId.isBlank() || block.sha256.isBlank()) return null
+    return attachment?.takeIf {
+        it.id == block.artifactId &&
+            it.name == block.fileName &&
+            it.mimeType == block.mimeType &&
+            it.sizeBytes == block.sizeBytes &&
+            it.sha256.equals(block.sha256, ignoreCase = true)
+    }
+}
+
+@Composable
+internal fun ChatBubble(
+    item: OrionChatLine,
+    onOpenBrowser: (String?) -> Unit,
+    attachments: List<OrionChatAttachmentStore.Attachment> = emptyList(),
+    onOpenAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
+    onShareAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
+    onRetry: (() -> Unit)? = null,
+    onEdit: ((String) -> Unit)? = null
+) {
     val mine = item.kind == "me"
     val note = item.kind == "note"
     val replyType = if (mine) OrionReplyType.NORMAL else classifyOrionReply(item)
+    val primaryBlock = item.content.blocks.firstOrNull()
     val clipboard = LocalClipboardManager.current
     var actionsVisible by remember(item.id) { mutableStateOf(false) }
     var openBlock by remember(item.id) { mutableStateOf(false) }
@@ -256,21 +415,30 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                 if (note || replyType != OrionReplyType.NORMAL) {
                     Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable(enabled = collapsible) { openBlock = !openBlock }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         Text(
-                            when (replyType) {
-                                OrionReplyType.RESEARCH -> "RESEARCH"
-                                OrionReplyType.CODE -> "CODE OUTPUT"
-                                OrionReplyType.TASK -> "TASK UPDATE"
-                                OrionReplyType.MCP -> "MCP TOOL RESULT"
-                                OrionReplyType.DIAGRAM -> "VISUAL EXPLANATION"
-                                OrionReplyType.NORMAL -> "ACTIVITY"
+                            when (primaryBlock) {
+                                is OrionMessageBlock.Approval -> "APPROVAL REQUIRED"
+                                is OrionMessageBlock.Terminal -> "TERMINAL EXECUTION"
+                                is OrionMessageBlock.TaskReceipt -> "TASK RECEIPT"
+                                is OrionMessageBlock.GeneratedFile -> "GENERATED FILE"
+                                is OrionMessageBlock.ToolResult -> "TOOL RESULT"
+                                is OrionMessageBlock.Research -> "RESEARCH"
+                                is OrionMessageBlock.Thinking -> "WORK STATUS"
+                                is OrionMessageBlock.Image -> "IMAGE RESULT"
+                                is OrionMessageBlock.Code -> "CODE OUTPUT"
+                                else -> when (replyType) {
+                                    OrionReplyType.RESEARCH -> "RESEARCH"
+                                    OrionReplyType.CODE -> "CODE OUTPUT"
+                                    OrionReplyType.TASK -> "TASK UPDATE"
+                                    OrionReplyType.MCP -> "MCP TOOL RESULT"
+                                    OrionReplyType.DIAGRAM -> "VISUAL EXPLANATION"
+                                    OrionReplyType.NORMAL -> "ACTIVITY"
+                                }
                             },
-                            color = when (replyType) {
-                                OrionReplyType.RESEARCH -> OrionUiPalette.secondaryText
-                                OrionReplyType.CODE -> OrionUiPalette.secondaryText
-                                OrionReplyType.TASK -> OrionUiPalette.secondaryText
-                                OrionReplyType.MCP -> OrionUiPalette.secondaryText
-                                OrionReplyType.DIAGRAM -> OrionUiPalette.secondaryText
-                                OrionReplyType.NORMAL -> ChatMint
+                            color = when (primaryBlock) {
+                                is OrionMessageBlock.Approval -> OrionUiPalette.warning
+                                is OrionMessageBlock.GeneratedFile -> OrionUiPalette.success
+                                is OrionMessageBlock.Terminal -> OrionUiPalette.secondaryText
+                                else -> if (replyType == OrionReplyType.NORMAL) ChatMint else OrionUiPalette.secondaryText
                             },
                             fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp
                         )
@@ -281,12 +449,37 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                     Spacer(Modifier.height(7.dp))
                 }
                 when {
-                    note && item.text.startsWith("[SHELL:") -> ShellActivityCard(item.text)
-                    note && item.text.startsWith("[IMAGE]") -> ImageResultCard(item.text)
+                    item.content.blocks.any { it !is OrionMessageBlock.Text } -> Column(
+                        verticalArrangement = Arrangement.spacedBy(9.dp)
+                    ) {
+                        item.content.blocks.forEach { block ->
+                            when (block) {
+                                is OrionMessageBlock.Text -> {
+                                    val formattedBlock = formatOrionMarkdown(block.markdown)
+                                    ClickableText(
+                                        text = formattedBlock,
+                                        style = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 22.sp),
+                                        onClick = { offset ->
+                                            val url = formattedBlock.getStringAnnotations("URL", offset,
+                                                (offset + 1).coerceAtMost(formattedBlock.length)).firstOrNull()?.item
+                                            if (url != null && (url.startsWith("https://") || url.startsWith("http://"))) onOpenBrowser(url)
+                                            else actionsVisible = !actionsVisible
+                                        }
+                                    )
+                                }
+                                else -> OrionStructuredBlockCard(
+                                    block = block,
+                                    onOpenBrowser = onOpenBrowser,
+                                    attachment = (block as? OrionMessageBlock.GeneratedFile)?.let { generated ->
+                                        attachments.firstOrNull { resolveGeneratedFileAttachment(generated, it) != null }
+                                    },
+                                    onOpenAttachment = onOpenAttachment,
+                                    onShareAttachment = onShareAttachment
+                                )
+                            }
+                        }
+                    }
                     note && item.text.startsWith("[BROWSER:") -> BrowserActivityCard(item.text) { url -> onOpenBrowser(url) }
-                    note && item.text.startsWith("[TASK:") -> TaskActivityCard(item.text)
-                    note && (item.text.startsWith("[TOOL:") || item.text.startsWith("[TOOL_RESULT:") ||
-                        item.text.startsWith("[APPROVAL:") || item.text.startsWith("[EVENT:")) -> ToolActivityCard(item.text)
                     !mine && !note && replyType == OrionReplyType.DIAGRAM -> DiagramCard(item.text)
                     else -> {
                         if (!mine && !note) {
@@ -418,70 +611,104 @@ private fun DiagramNodeChip(label: String, first: Boolean) {
 
 @Composable
 private fun ShellActivityCard(raw: String) {
-    val failed = raw.startsWith("[SHELL:FAILED]")
-    val body = raw.substringAfter("\n", "")
-    val command = body.substringBefore("\n").removePrefix("$ ")
-    val rest = body.substringAfter("\n", "")
-    val hasMarkers = rest.contains("\u2063OUT\n")
-    val code = if (hasMarkers && rest.startsWith("\u2063CODE\n")) rest.substringAfter("\u2063CODE\n").substringBefore("\u2063OUT\n").trimEnd() else ""
-    val output = (if (hasMarkers) rest.substringAfter("\u2063OUT\n") else rest).trim()
+    val transcript = remember(raw) { OrionShellTranscriptParser.parse(raw) }
+    val failed = transcript.failed
+    val running = transcript.running
+    val command = transcript.command
+    val code = transcript.code
+    val output = transcript.output
     val title = when {
-        command.startsWith("python") -> "ORION PYTHON"
-        command.startsWith("write ") -> "ORION CODE"
-        command.startsWith("cat ") -> "ORION FILE"
+        command.startsWith("python", true) -> "ORION PYTHON"
+        command.startsWith("write ", true) -> "ORION CODE"
+        command.startsWith("cat ", true) -> "ORION FILE"
         else -> "ORION TERMINAL"
+    }
+    val stateColor = when {
+        failed -> OrionUiPalette.danger
+        running -> OrionUiPalette.warning
+        transcript.phase in setOf("COMPLETE", "DONE", "SUCCESS") -> OrionUiPalette.success
+        else -> OrionUiPalette.secondaryText
+    }
+    val stateLabel = when {
+        failed -> "FAILED"
+        running -> "RUNNING"
+        transcript.phase in setOf("COMPLETE", "DONE", "SUCCESS") -> "DONE"
+        else -> transcript.phase
     }
     val clipboard = LocalClipboardManager.current
     var expanded by remember(raw) { mutableStateOf(false) }
-    var open by remember(raw) { mutableStateOf(failed) }
+    var open by remember(raw) { mutableStateOf(failed || running) }
     val mono = androidx.compose.ui.text.font.FontFamily.Monospace
-    val green = OrionUiPalette.success
+    val outputPreview = if (expanded) output.takeLast(8000) else output.takeLast(900)
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).animateContentSize(animationSpec = tween(220))
-            .background(OrionUiPalette.panel).border(1.dp, if (failed) OrionUiPalette.danger else Color(0x40545458), RoundedCornerShape(12.dp))
+            .background(OrionUiPalette.panel)
+            .border(1.dp, if (failed) OrionUiPalette.danger else OrionUiPalette.borderStrong, RoundedCornerShape(12.dp))
             .padding(11.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(Modifier.fillMaxWidth().clickable { open = !open }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(if (failed) OrionUiPalette.danger else green))
+            Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(stateColor))
             Text(title, color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
             Spacer(Modifier.weight(1f))
-            Text(if (failed) "FAILED" else "DONE", color = if (failed) OrionUiPalette.danger else green, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Text(stateLabel, color = stateColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null, tint = ChatMuted, modifier = Modifier.size(16.dp))
         }
-        if (!open) Text(command.take(80), color = ChatMuted, fontSize = 11.sp, fontFamily = mono, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (!open) Text(command.take(100), color = ChatMuted, fontSize = 11.sp, fontFamily = mono, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (open) {
-        Text(buildAnnotatedString {
-            withStyle(SpanStyle(color = green)) { append("$ ") }
-            append(command)
-        }, color = OrionUiPalette.text, fontSize = 12.sp, fontFamily = mono)
-        if (code.isNotBlank()) {
-            val lines = code.lines()
-            val shown = if (expanded) lines else lines.take(10)
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(OrionUiPalette.panel).padding(8.dp)
-            ) {
-                shown.forEachIndexed { n, line ->
-                    Row {
-                        Text("${n + 1}".padStart(3), color = OrionUiPalette.muted, fontSize = 10.sp, fontFamily = mono)
-                        Spacer(Modifier.width(8.dp))
-                        Text(highlightCode(line.take(160)), color = OrionUiPalette.secondaryText, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = mono)
-                    }
+            Text(buildAnnotatedString {
+                withStyle(SpanStyle(color = stateColor)) { append("\$ ") }
+                append(command)
+            }, color = OrionUiPalette.text, fontSize = 12.sp, fontFamily = mono)
+            if (code.isNotBlank()) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("SOURCE", color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .7.sp)
+                    Spacer(Modifier.weight(1f))
+                    Text("${code.lineSequence().count()} LINES", color = OrionUiPalette.muted, fontSize = 8.sp)
                 }
-                if (lines.size > 10) Text(if (expanded) "SHOW LESS" else "+${lines.size - 10} more lines", color = OrionUiPalette.secondaryText, fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold, modifier = Modifier.clickable { expanded = !expanded }.padding(top = 6.dp))
+                val lines = code.lines()
+                val shown = if (expanded) lines.take(240) else lines.take(10)
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                        .background(OrionUiPalette.background).padding(8.dp)
+                ) {
+                    shown.forEachIndexed { n, line ->
+                        Row(Modifier.fillMaxWidth()) {
+                            Text("${n + 1}".padStart(3), color = OrionUiPalette.muted, fontSize = 10.sp, fontFamily = mono)
+                            Spacer(Modifier.width(8.dp))
+                            Text(highlightCode(line.take(240)), color = OrionUiPalette.secondaryText,
+                                fontSize = 11.sp, lineHeight = 15.sp, fontFamily = mono)
+                        }
+                    }
+                    if (lines.size > 10) Text(
+                        if (expanded) "SHOW LESS" else "+${lines.size - 10} more lines",
+                        color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { expanded = !expanded }.padding(top = 6.dp)
+                    )
+                }
             }
-        }
-        if (output.isNotBlank()) {
-            Text("OUTPUT", color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
-            Text(output.take(2400), color = if (failed) OrionUiPalette.danger else OrionUiPalette.secondaryText, fontSize = 11.sp, lineHeight = 16.sp, fontFamily = mono)
-        }
-        Text("COPY", color = ChatMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.clickable { clipboard.setText(AnnotatedString((if (code.isNotBlank()) code + "\n\n" else "") + output)) }.padding(vertical = 2.dp))
+            if (output.isNotBlank()) {
+                Text("OUTPUT", color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
+                Text(outputPreview, color = if (failed) OrionUiPalette.danger else OrionUiPalette.secondaryText,
+                    fontSize = 11.sp, lineHeight = 16.sp, fontFamily = mono)
+                if (output.length > 900) {
+                    Text(if (expanded) "SHOW LESS OUTPUT" else "SHOW FULL OUTPUT",
+                        color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { expanded = !expanded }.padding(vertical = 2.dp))
+                }
+            }
+            Text("COPY TRANSCRIPT", color = ChatMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable {
+                    val complete = buildString {
+                        if (command.isNotBlank()) append("\$ ").append(command).append("\n")
+                        if (code.isNotBlank()) append("\n").append(code).append("\n")
+                        if (output.isNotBlank()) append("\n").append(output)
+                    }
+                    clipboard.setText(AnnotatedString(complete))
+                }.padding(vertical = 2.dp))
         }
     }
 }
-
 @Composable
 private fun BrowserActivityCard(raw: String, onOpenBrowser: (String?) -> Unit) {
     val failed = raw.startsWith("[BROWSER:FAILED]")
@@ -675,8 +902,51 @@ private fun TaskActivityCard(raw: String) {
     }
 }
 
+internal fun orionWorkingPhrase(status: String): String {
+    val value = status.lowercase()
+    return when {
+        listOf("recover", "retry", "fallback", "rerout").any { it in value } -> "Recovering and choosing another route"
+        listOf("approval", "permission", "awaiting owner", "waiting for you").any { it in value } -> "Waiting for your approval"
+        listOf("error", "failed", "blocked", "paused").any { it in value } -> "Investigating what went wrong"
+        listOf("fix", "repair", "patch", "correct").any { it in value } -> "Fixing the issue"
+        listOf("verif", "validat", "test", "check").any { it in value } -> "Verifying that the result works"
+        listOf("debug", "diagnos", "inspect", "trace").any { it in value } -> "Investigating the problem"
+        listOf("terminal", "command", "execut", "running", " run", "tool").any { it in value } -> "Executing the next step"
+        listOf("search", "research", "browser", "look up", "find").any { it in value } -> "Finding the information needed"
+        listOf("code", "build", "develop", "implement", "write").any { it in value } -> "Building the solution"
+        listOf("plan", "think", "reason", "analyz", "decid", "route").any { it in value } -> "Thinking through the best approach"
+        listOf("solv", "tackl", "work", "act", "objective", "task").any { it in value } -> "Working through the objective"
+        else -> "Working through the next step"
+    }
+}
+
+internal fun orionModeForStatus(status: String, current: OrbView.Mode): OrbView.Mode {
+    if (current != OrbView.Mode.IDLE) return current
+    val value = status.lowercase()
+    return when {
+        listOf("approval", "permission", "awaiting owner", "waiting for you").any { it in value } -> OrbView.Mode.WAITING_APPROVAL
+        listOf("error", "failed", "blocked").any { it in value } -> OrbView.Mode.ERROR
+        "listen" in value -> OrbView.Mode.LISTENING
+        "speak" in value -> OrbView.Mode.SPEAKING
+        listOf("execut", "running", "tool", "build", "fix", "repair", "browser", "delegat", "act").any { it in value } -> OrbView.Mode.ACTING
+        listOf("think", "plan", "analyz", "research", "search", "work", "solve", "tackl").any { it in value } -> OrbView.Mode.THINKING
+        else -> OrbView.Mode.IDLE
+    }
+}
+
+internal fun orionStatusLabel(status: String, mode: OrbView.Mode, busy: Boolean): String = when (mode) {
+    OrbView.Mode.LISTENING -> "Listening"
+    OrbView.Mode.SPEAKING -> "Speaking"
+    OrbView.Mode.THINKING -> orionWorkingPhrase(status)
+    OrbView.Mode.ACTING -> orionWorkingPhrase(status)
+    OrbView.Mode.WAITING_APPROVAL -> "Waiting for approval"
+    OrbView.Mode.ERROR -> "Needs attention"
+    OrbView.Mode.IDLE -> if (busy) orionWorkingPhrase(status) else "Ready"
+}
+
 @Composable
-internal fun ThinkingIndicator() {
+fun ThinkingIndicator(status: String = "Thinking", mode: OrbView.Mode = OrbView.Mode.THINKING) {
+    val phrase = remember(status) { orionWorkingPhrase(status) }
     val transition = rememberInfiniteTransition(label = "thinking-dots")
     val phase by transition.animateFloat(
         initialValue = 0f,
@@ -689,8 +959,8 @@ internal fun ThinkingIndicator() {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        OrionOrb(Modifier.size(44.dp), busy = true)
-        Text("Orion is thinking", color = ChatMuted, fontSize = 12.sp)
+        OrionOrb(Modifier.size(44.dp), busy = true, mode = mode)
+        Text(phrase, color = ChatMuted, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
             repeat(3) { index ->
                 val distance = kotlin.math.abs(((phase * 3f + index) % 3f) - 1.5f) / 1.5f
@@ -774,5 +1044,125 @@ internal fun ImageResultCard(raw: String) {
             Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) { Text(if (java.io.File(path).exists()) "Loading image…" else "Image file not found: ${path.substringAfterLast('/')}", color = ChatMuted, fontSize = 12.sp) }
         }
         if (caption.isNotBlank()) Text(caption, color = ChatMuted, fontSize = 11.sp, modifier = Modifier.padding(10.dp))
+    }
+}
+
+
+/** Renders a durable SQLite activity receipt without inferring its state from free-form text. */
+@Composable
+internal fun OrionPersistedActivityCard(event: OrionConversationRepository.ChatEvent) {
+    val clipboard = LocalClipboardManager.current
+    val failed = event.status.equals("failed", true) ||
+        event.status.equals("error", true) || event.status.equals("denied", true)
+    val waiting = event.status.equals("waiting", true) ||
+        event.status.equals("pending", true) || event.status.equals("approval", true)
+    val accent = when {
+        failed -> OrionUiPalette.danger
+        waiting -> OrionUiPalette.warning
+        event.status.equals("completed", true) || event.status.equals("success", true) ->
+            OrionUiPalette.success
+        else -> OrionUiPalette.secondaryText
+    }
+    var expanded by remember(event.id) { mutableStateOf(false) }
+    val evidence = event.evidenceJson.orEmpty()
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(OrionUiPalette.panel)
+            .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(12.dp))
+            .padding(horizontal = 13.dp, vertical = 11.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.size(7.dp).clip(CircleShape).background(accent))
+            Text(event.type.replace('_', ' ').uppercase(), color = OrionUiPalette.text,
+                fontSize = 10.sp, fontWeight = FontWeight.SemiBold, letterSpacing = .5.sp)
+            Spacer(Modifier.weight(1f))
+            Text(event.status.replace('_', ' ').uppercase(), color = accent,
+                fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        }
+        Text(event.summary, color = OrionUiPalette.secondaryText, fontSize = 12.sp, lineHeight = 17.sp)
+        if (evidence.isNotBlank()) {
+            Text(
+                if (expanded) "HIDE STORED EVIDENCE" else "VIEW STORED EVIDENCE",
+                color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable { expanded = !expanded }.padding(vertical = 3.dp)
+            )
+            if (expanded) {
+                Text(evidence, color = OrionUiPalette.secondaryText,
+                    fontSize = 10.sp, lineHeight = 14.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Receipt " + event.id.take(8), color = OrionUiPalette.muted, fontSize = 9.sp)
+            Spacer(Modifier.weight(1f))
+            Text("COPY", color = OrionUiPalette.muted, fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable {
+                    clipboard.setText(AnnotatedString(event.summary + if (evidence.isNotBlank()) "\n" + evidence else ""))
+                }.padding(5.dp))
+        }
+    }
+}
+
+
+
+@Composable
+internal fun OrionChatAttachmentCard(
+    attachment: OrionChatAttachmentStore.Attachment,
+    onOpen: (OrionChatAttachmentStore.Attachment) -> Unit,
+    onShare: (OrionChatAttachmentStore.Attachment) -> Unit
+) {
+    val extension = attachment.name.substringAfterLast('.', "").uppercase().ifBlank { "FILE" }
+    val sizeLabel = when {
+        attachment.sizeBytes >= 1024L * 1024L -> String.format(java.util.Locale.ROOT, "%.1f MB", attachment.sizeBytes / (1024f * 1024f))
+        attachment.sizeBytes >= 1024L -> String.format(java.util.Locale.ROOT, "%.0f KB", attachment.sizeBytes / 1024f)
+        else -> attachment.sizeBytes.toString() + " B"
+    }
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
+            .background(OrionUiPalette.panel)
+            .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(13.dp))
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            Modifier.size(42.dp).clip(RoundedCornerShape(10.dp))
+                .background(OrionUiPalette.raised)
+                .border(1.dp, OrionUiPalette.border, RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                when (extension) {
+                    "PDF" -> "PDF"
+                    "DOCX", "DOC" -> "DOC"
+                    "XLSX", "XLS", "CSV" -> "XLS"
+                    "PPTX", "PPT" -> "PPT"
+                    "PNG", "JPG", "JPEG", "WEBP" -> "IMG"
+                    else -> "FILE"
+                },
+                color = OrionUiPalette.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold
+            )
+        }
+        Column(
+            Modifier.weight(1f).heightIn(min = 44.dp)
+                .clickable(role = Role.Button) { onOpen(attachment) }
+                .semantics { contentDescription = "Open ${attachment.name}"; role = Role.Button },
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(attachment.name, color = OrionUiPalette.text, fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(extension + " · " + sizeLabel, color = OrionUiPalette.muted, fontSize = 10.sp)
+        }
+        Text("OPEN", color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.heightIn(min = 44.dp).clickable(role = Role.Button) { onOpen(attachment) }
+                .semantics { contentDescription = "Open ${attachment.name}"; role = Role.Button }
+                .padding(horizontal = 5.dp, vertical = 12.dp))
+        Text("SHARE", color = OrionUiPalette.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.heightIn(min = 44.dp).clickable(role = Role.Button) { onShare(attachment) }
+                .semantics { contentDescription = "Share ${attachment.name}"; role = Role.Button }
+                .padding(horizontal = 5.dp, vertical = 12.dp))
     }
 }

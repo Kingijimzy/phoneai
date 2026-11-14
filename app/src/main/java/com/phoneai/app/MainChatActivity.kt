@@ -81,6 +81,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private val composeOrbSpeechAmplitude = mutableStateOf(0f)
     private val composeOrbWordPulse = mutableStateOf(0f)
     private val composeActivityEvents = mutableStateOf<List<OrionActivityEvent>>(emptyList())
+    private val composeAttachments = mutableStateOf<List<OrionChatAttachmentStore.Attachment>>(emptyList())
     private val composeSelectedImages get() = chatUiState.selectedImages
     private var composeChatActive = false
     private var streamingMessageId: Long? = null
@@ -479,8 +480,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         when (action) {
             "new_chat" -> {
                 PhoneAiService.instance?.startNewChat() ?: run {
-                    ChatHistoryStore.archiveAndClear(this, composeLines.map { it.kind to it.text })
+                    ChatHistoryStore.archiveAndClearStructured(this, composeLines.toList())
                     composeLines.clear()
+                    composeAttachments.value = emptyList()
                 }
                 composeChatTitle.value = "Orion"
                 getSharedPreferences("orion_chat_history", MODE_PRIVATE).edit().remove("active_title").apply()
@@ -493,8 +495,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 .setNegativeButton("CANCEL", null)
                 .setPositiveButton("CLEAR CHAT") { _, _ ->
                     PhoneAiService.instance?.startNewChat() ?: run {
-                        ChatHistoryStore.archiveAndClear(this, composeLines.map { it.kind to it.text })
+                        ChatHistoryStore.archiveAndClearStructured(this, composeLines.toList())
                         composeLines.clear()
+                        composeAttachments.value = emptyList()
                     }
                     composeChatTitle.value = "Orion"
                     getSharedPreferences("orion_chat_history", MODE_PRIVATE).edit().remove("active_title").apply()
@@ -516,7 +519,10 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     addCategory(Intent.CATEGORY_OPENABLE)
                     putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
                         "text/plain", "text/markdown", "text/csv", "text/tab-separated-values",
-                        "application/json", "application/xml", "text/xml", "text/html"
+                        "application/json", "application/xml", "text/xml", "text/html",
+                        "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
                     ))
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 }
@@ -660,143 +666,75 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private fun showChatHistory() {
         val chats = ChatHistoryStore.archived(this)
         val dialog = android.app.Dialog(this)
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(18), dp(18), dp(12))
-            setBackgroundColor(0xFF090909.toInt())
-        }
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val heading = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
-        heading.addView(label("CHAT ARCHIVE", 11f, 0xFF999999.toInt(), true))
-        heading.addView(label("Your conversations", 25f, 0xFFF4F4F4.toInt(), true).apply { setPadding(0, dp(4), 0, dp(3)) })
-        heading.addView(label("${chats.size} saved chats · stored on this device", 12f, 0xFF8B8B8B.toInt()))
-        header.addView(heading)
-        val clearAll = historyActionButton("Clear all") {
-            AlertDialog.Builder(this@MainChatActivity)
-                .setTitle("Delete all chat history?")
-                .setMessage("This permanently deletes the active transcript and every archived conversation on this device. Saved Orion memory notes are not affected.")
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Delete all") { _, _ ->
-                    val service = PhoneAiService.instance
-                    if (service != null) {
-                        service.deleteAllChatHistory { deleted, message ->
-                            if (deleted) {
-                                composeLines.clear()
-                                dialog.dismiss()
-                                Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    } else {
-                        val deleted = ChatHistoryStore.clearAll(this@MainChatActivity)
-                        if (deleted) {
-                            composeLines.clear()
-                            dialog.dismiss()
-                        }
-                        Toast.makeText(this@MainChatActivity, if (deleted) "Chat history deleted" else "Could not delete chat history", Toast.LENGTH_SHORT).show()
+        val content = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+            setContent {
+                OrionChatHistoryScreen(
+                    chats = chats,
+                    onClose = { dialog.dismiss() },
+                    onClearAll = {
+                        AlertDialog.Builder(this@MainChatActivity)
+                            .setTitle("Delete all chat history?")
+                            .setMessage("This permanently deletes the active transcript and every archived conversation on this device. Saved Orion memory notes are not affected.")
+                            .setNegativeButton("Cancel", null)
+                            .setPositiveButton("Delete all") { _, _ ->
+                                val service = PhoneAiService.instance
+                                if (service != null) {
+                                    service.deleteAllChatHistory { deleted, message ->
+                                        if (deleted) {
+                                            composeLines.clear()
+                                            composeAttachments.value = emptyList()
+                                            dialog.dismiss()
+                                            Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                } else {
+                                    val deleted = ChatHistoryStore.clearAll(this@MainChatActivity)
+                                    if (deleted) {
+                                        composeLines.clear()
+                                        composeAttachments.value = emptyList()
+                                        dialog.dismiss()
+                                    }
+                                    Toast.makeText(this@MainChatActivity,
+                                        if (deleted) "Chat history deleted" else "Could not delete chat history",
+                                        Toast.LENGTH_SHORT).show()
+                                }
+                            }.show()
+                    },
+                    onOpen = { chat ->
+                        val date = java.text.SimpleDateFormat("d MMM yyyy · h:mm a", java.util.Locale.getDefault())
+                            .format(java.util.Date(chat.timestamp))
+                        showArchivedConversation(chat.sessionId, chat.title, chat.messages, date)
+                    },
+                    onRename = { chat ->
+                        showRenameArchivedChatDialog(chat.sessionId, chat.title, dialog)
+                    },
+                    onDelete = { chat ->
+                        AlertDialog.Builder(this@MainChatActivity)
+                            .setTitle("Delete this conversation?")
+                            .setMessage("This permanently removes this archived transcript and its associated activity history from this device.")
+                            .setNegativeButton("Cancel", null)
+                            .setPositiveButton("Delete") { _, _ ->
+                                val deleted = ChatHistoryStore.deleteArchivedById(this@MainChatActivity, chat.sessionId)
+                                Toast.makeText(this@MainChatActivity,
+                                    if (deleted) "Conversation deleted" else "Could not delete conversation",
+                                    Toast.LENGTH_SHORT).show()
+                                if (deleted) {
+                                    dialog.dismiss()
+                                    showChatHistory()
+                                }
+                            }.show()
                     }
-                }.show()
-        }
-        header.addView(clearAll)
-        val close = historyActionButton("Close") { dialog.dismiss() }
-        header.addView(close)
-        root.addView(header)
-        val divider = View(this).apply { setBackgroundColor(0xFF292929.toInt()) }
-        root.addView(divider, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(16); bottomMargin = dp(12) })
-        val search = EditText(this@MainChatActivity).apply {
-            hint = "Search conversations"
-            setSingleLine(true)
-            textSize = 14f
-            setTextColor(0xFFF1F1F1.toInt())
-            setHintTextColor(0xFF858585.toInt())
-            setPadding(dp(14), dp(10), dp(14), dp(10))
-            background = rounded(0xFF151515.toInt(), 13, 0xFF303030.toInt())
-            contentDescription = "Search saved conversations"
-        }
-        root.addView(search, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
-        val list = ScrollView(this).apply { isFillViewport = true; clipToPadding = false }
-        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        if (chats.isEmpty()) {
-            val empty = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dp(22), dp(36), dp(22), dp(36))
-                background = rounded(0xFF151515.toInt(), 20, 0xFF303030.toInt())
-            }
-            empty.tag = "no saved conversations yet"
-            empty.addView(OrionIconView(this@MainChatActivity).apply {
-                icon = "history"
-                tint = Theme.SILVER
-                contentDescription = "Chat history"
-            }, LinearLayout.LayoutParams(dp(36), dp(36)).apply { gravity = Gravity.CENTER })
-            empty.addView(label("No saved conversations yet", 18f, 0xFFF1F1F1.toInt(), true).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(7)) })
-            empty.addView(label("When you start a new chat, Orion keeps the previous conversation here.", 13f, 0xFF9B9B9B.toInt()).apply { gravity = Gravity.CENTER; textAlignment = View.TEXT_ALIGNMENT_CENTER })
-            rows.addView(empty, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
-        } else {
-            val dates = java.text.SimpleDateFormat("d MMM yyyy · h:mm a", java.util.Locale.getDefault())
-            chats.forEachIndexed { index, chat ->
-                val preview = chat.messages.lastOrNull()?.second.orEmpty().replace("\\n", " ").trim()
-                val card = LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(dp(16), dp(14), dp(16), dp(14))
-                    background = rounded(0xFF171717.toInt(), 18, 0xFF303030.toInt())
-                    isClickable = true
-                    isFocusable = true
-                }
-                val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-                top.addView(label(chat.title.ifBlank { "Untitled conversation" }, 16f, 0xFFF0F0F0.toInt(), true), LinearLayout.LayoutParams(0, -2, 1f))
-                top.addView(historyActionButton("Rename") {
-                    showRenameArchivedChatDialog(chat.sessionId, chat.title, dialog)
-                }, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(5) })
-                top.addView(historyActionButton("Delete") {
-                    AlertDialog.Builder(this@MainChatActivity)
-                        .setTitle("Delete this conversation?")
-                        .setMessage("This permanently removes this archived transcript from this device.")
-                        .setNegativeButton("Cancel", null)
-                        .setPositiveButton("Delete") { _, _ ->
-                            val deleted = ChatHistoryStore.deleteArchivedById(this@MainChatActivity, chat.sessionId)
-                            Toast.makeText(this@MainChatActivity, if (deleted) "Conversation deleted" else "Could not delete conversation", Toast.LENGTH_SHORT).show()
-                            if (deleted) {
-                                dialog.dismiss()
-                                showChatHistory()
-                            }
-                        }.show()
-                })
-                top.addView(label("›", 25f, 0xFFBDBDBD.toInt(), true))
-                card.tag = (chat.title + " " + preview + " " + chat.messages.joinToString(" ") { it.second }).lowercase(java.util.Locale.ROOT)
-                card.addView(top)
-                card.addView(label(dates.format(java.util.Date(chat.timestamp)) + "  ·  " + chat.messages.size + " messages", 11f, 0xFF8E8E8E.toInt()).apply { setPadding(0, dp(7), 0, dp(8)) })
-                card.addView(label(preview.ifBlank { "Open conversation to view messages" }, 13f, 0xFFB6B6B6.toInt()).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END })
-                card.setOnClickListener { showArchivedConversation(chat.sessionId, chat.title, chat.messages, dates.format(java.util.Date(chat.timestamp))) }
-                rows.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
-                animateIn(card, (index.coerceAtMost(6) * 35L))
+                )
             }
         }
-        search.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                val query = s?.toString()?.trim()?.lowercase(java.util.Locale.ROOT).orEmpty()
-                for (index in 0 until rows.childCount) {
-                    val child = rows.getChildAt(index)
-                    val searchable = child.tag as? String
-                    child.visibility = if (query.isEmpty() || searchable?.contains(query) == true) View.VISIBLE else View.GONE
-                }
-            }
-            override fun afterTextChanged(s: android.text.Editable?) = Unit
-        })
-        list.addView(rows)
-        root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
-        dialog.setContentView(root)
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.window?.setLayout(-1, -1)
+        dialog.setContentView(content)
         dialog.show()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setBackgroundDrawable(rounded(0xFF090909.toInt(), 0))
         dialog.window?.setLayout(-1, -1)
-        animateIn(root)
     }
 
     private fun showRenameArchivedChatDialog(sessionId: String, currentTitle: String, historyDialog: android.app.Dialog) {
@@ -844,59 +782,53 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     }
 
     private fun showArchivedConversation(sessionId: String, title: String, messages: List<Pair<String, String>>, date: String) {
+        val persistedEvents = runCatching {
+            OrionConversationRepository.get(this).eventsForSession(this, sessionId)
+        }.getOrDefault(emptyList())
+        val structuredMessages = runCatching {
+            ChatHistoryStore.structuredMessagesForSession(this, sessionId)
+        }.getOrDefault(emptyList())
         val dialog = android.app.Dialog(this)
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(16), dp(16), dp(12))
-            setBackgroundColor(0xFF090909.toInt())
-        }
-        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val back = historyActionButton("‹ History") { dialog.dismiss(); showChatHistory() }
-        header.addView(back)
-        val titleBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(10), 0, dp(8), 0) }
-        titleBox.addView(label(title.ifBlank { "Conversation" }, 16f, 0xFFF4F4F4.toInt(), true).apply { maxLines = 2 })
-        titleBox.addView(label(date, 11f, 0xFF929292.toInt()))
-        header.addView(titleBox, LinearLayout.LayoutParams(0, -2, 1f))
-        root.addView(header)
-        root.addView(View(this).apply { setBackgroundColor(0xFF292929.toInt()) }, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(12); bottomMargin = dp(10) })
-        val scrollView = ScrollView(this).apply { isFillViewport = true; clipToPadding = false }
-        val transcript = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(2), dp(4), dp(2), dp(14)) }
-        messages.forEachIndexed { index, item ->
-            val mine = item.first == "me"
-            val bubble = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(13), dp(10), dp(13), dp(10))
-                background = rounded(if (mine) 0xFF292929.toInt() else 0xFF151515.toInt(), 16, if (mine) 0xFF454545.toInt() else 0xFF2B2B2B.toInt())
+        val content = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+            setContent {
+                OrionArchivedConversationScreen(
+                    title = title,
+                    date = date,
+                    messages = messages,
+                    structuredMessages = structuredMessages,
+                    activityEvents = persistedEvents,
+                    attachments = OrionChatAttachmentStore.forSession(this@MainChatActivity, sessionId),
+                    onOpenAttachment = { openChatAttachment(it) },
+                    onShareAttachment = { shareChatAttachment(it) },
+                    onBack = {
+                        dialog.dismiss()
+                        showChatHistory()
+                    },
+                    onCopy = {
+                        val body = messages.joinToString("\n\n") { (kind, text) ->
+                            (if (kind == "me") "YOU" else "ORION") + "\n" + text
+                        }
+                        val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Orion chat history", body))
+                        Toast.makeText(this@MainChatActivity, "Transcript copied", Toast.LENGTH_SHORT).show()
+                    },
+                    onContinue = {
+                        PhoneAiService.instance?.restoreArchivedChat(sessionId)
+                            ?: Toast.makeText(this@MainChatActivity, "Open Orion assistant service first, then try again.", Toast.LENGTH_LONG).show()
+                        dialog.dismiss()
+                    },
+                    onOpenBrowser = { url ->
+                        showChatBrowserPopup(url ?: "https://duckduckgo.com/")
+                    }
+                )
             }
-            bubble.addView(label(if (mine) "YOU" else "ORION", 10f, if (mine) 0xFFBDBDBD.toInt() else 0xFFE4E4E4.toInt(), true))
-            bubble.addView(label(item.second, 14f, 0xFFF0F0F0.toInt()).apply { setPadding(0, dp(5), 0, 0) })
-            val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = if (mine) Gravity.END else Gravity.START }
-            line.addView(bubble, LinearLayout.LayoutParams((resources.displayMetrics.widthPixels - dp(68)).coerceAtLeast(dp(180)), -2))
-            transcript.addView(line, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
-            animateIn(line, (index.coerceAtMost(5) * 25L))
         }
-        scrollView.addView(transcript)
-        root.addView(scrollView, LinearLayout.LayoutParams(-1, 0, 1f))
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        actions.addView(historyActionButton("Copy transcript") {
-            val body = messages.joinToString("\\n\\n") { (kind, text) -> (if (kind == "me") "YOU" else "ORION") + "\\n" + text }
-            val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-            clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Orion chat history", body))
-            Toast.makeText(this@MainChatActivity, "Transcript copied", Toast.LENGTH_SHORT).show()
-        }, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(8) })
-        actions.addView(historyActionButton("Continue chat") {
-            PhoneAiService.instance?.restoreArchivedChat(sessionId)
-                ?: Toast.makeText(this@MainChatActivity, "Open Orion assistant service first, then try again.", Toast.LENGTH_LONG).show()
-            dialog.dismiss()
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        root.addView(actions)
-        dialog.setContentView(root)
+        dialog.setContentView(content)
         dialog.show()
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.window?.setLayout(-1, -1)
         dialog.window?.setBackgroundDrawable(rounded(0xFF090909.toInt(), 0))
         dialog.window?.setLayout(-1, -1)
-        animateIn(root)
     }
 
         private fun showPersonalityPicker() {
@@ -1392,7 +1324,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             setOnClickListener {
                 AlertDialog.Builder(this@MainChatActivity)
                     .setTitle("Attach to chat")
-                    .setItems(arrayOf("Image or photos", "Text document (TXT, MD, CSV, JSON, XML, HTML, LOG)")) { _, which ->
+                    .setItems(arrayOf("Image or photos", "Document or PDF (TXT, MD, CSV, DOCX, XLSX, PPTX, PDF)")) { _, which ->
                         val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                             addCategory(Intent.CATEGORY_OPENABLE)
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
@@ -1403,7 +1335,10 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                                 type = "*/*"
                                 putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
                                     "text/plain", "text/markdown", "text/csv", "text/tab-separated-values",
-                                    "application/json", "application/xml", "text/xml", "text/html"
+                                    "application/json", "application/xml", "text/xml", "text/html",
+                                    "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
                                 ))
                             }
                         }
@@ -1508,6 +1443,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 OrionComposeChatScreen(
                     lines = composeLines,
                     activityEvents = composeActivityEvents.value,
+                    attachments = composeAttachments.value,
+                    onOpenAttachment = { openChatAttachment(it) },
+                    onShareAttachment = { shareChatAttachment(it) },
                     status = composeStatus.value,
                     orbMode = composeOrbMode.value,
                     orbMicLevel = composeOrbMicLevel.value,
@@ -1533,8 +1471,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                         val service = PhoneAiService.instance
                         if (service != null) service.startNewChat()
                         else {
-                            ChatHistoryStore.archiveAndClear(this@MainChatActivity, composeLines.map { it.kind to it.text })
+                            ChatHistoryStore.archiveAndClearStructured(this@MainChatActivity, composeLines.toList())
                             composeLines.clear()
+                            composeAttachments.value = emptyList()
                             Toast.makeText(this@MainChatActivity, "New chat ready", Toast.LENGTH_SHORT).show()
                         }
                     },
@@ -1746,6 +1685,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         super.onResume()
         runCatching {
             onChatEvents(OrionConversationRepository.get(this).eventsForActive(this))
+            refreshChatAttachments()
         }
         refreshProviderModelChip()
         if (livePulse?.isStarted != true) livePulse?.start()
@@ -1794,21 +1734,33 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 Toast.makeText(this, "Choose one text document at a time.", Toast.LENGTH_LONG).show()
                 return
             }
+            val sessionId = try { currentChatSessionId() } catch (error: Exception) {
+                Toast.makeText(this, error.message ?: "Could not create a chat session.", Toast.LENGTH_LONG).show()
+                return
+            }
             Thread {
                 try {
-                    val extracted = SafeDocumentExtractor.extract(contentResolver, uri)
+                    val attachment = OrionChatAttachmentStore.saveFromUri(this, sessionId, uri)
+                    val extracted = if (attachment.name.substringAfterLast('.', "").equals("pdf", true)) {
+                        SafeDocumentExtractor.Extracted(
+                            attachment.name, attachment.mimeType,
+                            "[PDF attached and saved. Its text has not been extracted, so do not claim to have read or summarized its contents.]",
+                            attachment.sizeBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                        )
+                    } else SafeDocumentExtractor.extract(contentResolver, uri)
                     runOnUiThread {
                         selectedDocumentName = extracted.name
                         selectedDocumentText = extracted.text
+                        composeAttachments.value = OrionChatAttachmentStore.forSession(this, sessionId)
                         selectedImageUris.clear()
                         composeSelectedImages.value = emptyList()
                         refreshImagePreview(null)
                         refreshDocumentPreview(extracted.name)
-                        Toast.makeText(this, "Attached ${extracted.name} · ${extracted.text.length} characters", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Saved ${extracted.name} · ${extracted.text.length} characters", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     runOnUiThread {
-                        Toast.makeText(this, e.message ?: "Could not read this document.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, e.message ?: "Could not read or save this document.", Toast.LENGTH_LONG).show()
                     }
                 }
             }.start()
@@ -1823,34 +1775,37 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 Thread {
                     val notes = ArrayList<String>()
                     var name0: String? = null
+                    val sessionId = currentChatSessionId()
                     files.take(4).forEach { uri ->
                         try {
-                            val name = (contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
-                                ?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: "upload_${System.currentTimeMillis()}")
-                                .replace(Regex("[^A-Za-z0-9._-]"), "_").take(100)
+                            val savedAttachment = OrionChatAttachmentStore.saveFromUri(this, sessionId, uri)
+                            val name = savedAttachment.name
                             val dir = java.io.File(filesDir, "orion-python/workspace/uploads").apply { mkdirs() }
                             val dest = java.io.File(dir, name)
                             contentResolver.openInputStream(uri)?.use { input -> dest.outputStream().use { out -> input.copyTo(out, 8192) } }
                             val text = OrionMediaTools.readDocument(this, "uploads/$name")
                             name0 = name0 ?: name
-                            notes.add("[Uploaded file: uploads/$name, ${dest.length()} bytes. It is in your workspace; use document_extract, python_exec or show_file on it.]\n" +
+                            val fileNote = if (name.endsWith(".pdf", true)) {
+                                "[PDF saved at uploads/$name, ${dest.length()} bytes. PDF text extraction is not available in this flow; do not claim to have read its contents.]"
+                            } else {
+                                "[Uploaded file: uploads/$name, ${dest.length()} bytes. It is in the workspace; inspect it with a supported file tool before describing its contents.]"
+                            }
+                            notes.add(fileNote + "\n" +
                                 (if (text.startsWith("error")) "" else text.take(12000)))
                         } catch (e: Exception) { notes.add("[Could not copy a file: ${e.message}]") }
                     }
                     runOnUiThread {
+                        composeAttachments.value = OrionChatAttachmentStore.forSession(this, sessionId)
                         selectedDocumentName = name0 ?: "file"
                         selectedDocumentText = notes.joinToString("\n\n")
                         refreshDocumentPreview(selectedDocumentName)
-                        Toast.makeText(this, "Attached ${files.size} file(s). Orion can read them.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Saved ${files.size} file(s) to this conversation.", Toast.LENGTH_SHORT).show()
                     }
                 }.start()
             }
             if (picked.size == files.size) return
-            val chosen = ArrayList<Uri>()
-            data?.clipData?.let { clip ->
-                for (index in 0 until minOf(clip.itemCount, 4)) chosen.add(clip.getItemAt(index).uri)
-            }
-            data?.data?.let { if (chosen.isEmpty()) chosen.add(it) }
+            val chosen = picked.filter { contentResolver.getType(it)?.startsWith("image/") == true }
+                .distinct().take(4)
             val flags = data?.flags ?: 0
             chosen.distinct().take(4).forEach { uri ->
                 try {
@@ -1863,6 +1818,15 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 selectedImageUris.addAll(chosen.distinct().take(4))
                 composeSelectedImages.value = selectedImageUris.toList()
                 refreshImagePreview(selectedImageUris.firstOrNull())
+                val sessionId = runCatching { currentChatSessionId() }.getOrNull()
+                if (sessionId != null) Thread {
+                    chosen.distinct().take(4).forEach { uri ->
+                        runCatching { OrionChatAttachmentStore.saveFromUri(this, sessionId, uri) }
+                    }
+                    runOnUiThread {
+                        composeAttachments.value = OrionChatAttachmentStore.forSession(this, sessionId)
+                    }
+                }.start()
             }
         }
     }
@@ -1972,6 +1936,52 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         image.animate().alpha(1f).setDuration(180).start()
         scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
     }
+
+
+    private fun currentChatSessionId(): String {
+        ChatHistoryStore.activeSessionId(this)?.let { return it }
+        ChatHistoryStore.saveStructured(this, composeLines.toList())
+        return ChatHistoryStore.activeSessionId(this)
+            ?: throw IllegalStateException("Could not create a conversation session for this attachment.")
+    }
+
+    private fun refreshChatAttachments() {
+        val sessionId = ChatHistoryStore.activeSessionId(this)
+        composeAttachments.value = if (sessionId.isNullOrBlank()) emptyList()
+            else runCatching { OrionChatAttachmentStore.forSession(this, sessionId) }.getOrDefault(emptyList())
+    }
+
+    private fun openChatAttachment(attachment: OrionChatAttachmentStore.Attachment) {
+        try {
+            val file = OrionChatAttachmentStore.file(this, attachment)
+            if (!file.isFile) throw IllegalStateException("This attachment is no longer available.")
+            val uri = androidx.core.content.FileProvider.getUriForFile(this, "${packageName}.files", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, attachment.mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(intent, "Open ${attachment.name}"))
+        } catch (error: Exception) {
+            Toast.makeText(this, error.message ?: "No compatible app could open this attachment.", Toast.LENGTH_LONG).show()
+        }
+    }
+    private fun shareChatAttachment(attachment: OrionChatAttachmentStore.Attachment) {
+        try {
+            val file = OrionChatAttachmentStore.file(this, attachment)
+            if (!file.isFile) throw IllegalStateException("This attachment is no longer available.")
+            val uri = androidx.core.content.FileProvider.getUriForFile(this, "${packageName}.files", file)
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = attachment.mimeType
+                putExtra(Intent.EXTRA_STREAM, uri)
+                clipData = android.content.ClipData.newUri(contentResolver, attachment.name, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(intent, "Share ${attachment.name}"))
+        } catch (error: Exception) {
+            Toast.makeText(this, error.message ?: "Could not share this attachment.", Toast.LENGTH_LONG).show()
+        }
+    }
+
 
     private fun sendMessage() {
         val value = input.text.toString().trim()
@@ -2158,9 +2168,15 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             // Rebuild the entire visible timeline on session switches: never leave activity
             // cards from the previous session attached to the newly restored transcript.
             composeLines.clear()
-            messages.forEachIndexed { index, pair ->
-                val (kind, text) = pair
-                composeLines.add(OrionChatLine(System.nanoTime() + index, kind, text))
+            composeAttachments.value = emptyList()
+            val structured = runCatching { ChatHistoryStore.loadStructured(this@MainChatActivity) }.getOrDefault(emptyList())
+            if (structured.isNotEmpty()) {
+                composeLines.addAll(structured)
+            } else {
+                messages.forEachIndexed { index, pair ->
+                    val (kind, text) = pair
+                    composeLines.add(OrionChatLine(System.nanoTime() + index, kind, text))
+                }
             }
             // Lifecycle events are stored separately from transcript messages. Reload them
             // after the active-session pointer changes so restored chats show only their own events.
@@ -2168,48 +2184,16 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 OrionConversationRepository.get(this@MainChatActivity).eventsForActive(this@MainChatActivity)
             }.getOrDefault(emptyList())
             onChatEvents(activeEvents)
+            refreshChatAttachments()
         }
     }
 
     override fun onChatEvents(events: List<OrionConversationRepository.ChatEvent>) {
         runOnUiThread {
             val projection = OrionActivityTimeline(maxEvents = 300)
-            projection.replay(events.mapNotNull { event ->
-                val type = event.type.lowercase()
-                val status = event.status.lowercase()
-                val kind = when {
-                    type.contains("approval") -> OrionActivityKind.APPROVAL
-                    type.contains("tool") || type.contains("terminal") || type.contains("python") -> OrionActivityKind.TOOL
-                    type.contains("browser") || type.contains("research") -> OrionActivityKind.RESEARCH
-                    type.contains("agent") || type.contains("specialist") || type.contains("delegate") -> OrionActivityKind.DELEGATION
-                    type.contains("error") || status in setOf("failed", "error") -> OrionActivityKind.ERROR
-                    type.contains("cancel") -> OrionActivityKind.CANCELLED
-                    type.contains("interrupt") -> OrionActivityKind.INTERRUPTED
-                    type.contains("complete") || status in setOf("completed", "success", "succeeded", "result") -> OrionActivityKind.COMPLETION
-                    else -> OrionActivityKind.THINKING
-                }
-                val eventStatus = when {
-                    status in setOf("pending", "waiting", "needs_approval", "approval_required") -> OrionActivityStatus.WAITING
-                    status in setOf("failed", "error") -> OrionActivityStatus.FAILED
-                    status in setOf("cancelled", "canceled") -> OrionActivityStatus.CANCELLED
-                    status in setOf("interrupted") -> OrionActivityStatus.INTERRUPTED
-                    status in setOf("completed", "success", "succeeded", "result") -> OrionActivityStatus.SUCCEEDED
-                    else -> OrionActivityStatus.ACTIVE
-                }
-                val evidence = OrionActivityEvidence.fromJson(event.evidenceJson)
-                OrionActivityEvent(
-                    eventId = event.id,
-                    taskId = event.traceId ?: "session-" + event.sessionId,
-                    kind = kind,
-                    status = eventStatus,
-                    title = event.summary.lineSequence().firstOrNull()?.take(120)?.ifBlank { event.type } ?: event.type,
-                    summary = event.summary.take(500),
-                    timestampMs = event.createdAt.coerceAtLeast(0L),
-                    typedEvidence = listOfNotNull(evidence),
-                    correlationId = event.correlationId
-                )
-            })
+            projection.replay(OrionActivityTimeline.fromPersisted(events))
             composeActivityEvents.value = projection.compactForChat()
+            refreshChatAttachments()
             // Activity events have their own compact timeline cards. Do not mirror them
             // into transcript notes: that rendered every tool twice.
         }

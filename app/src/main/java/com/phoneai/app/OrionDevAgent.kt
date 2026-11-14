@@ -150,16 +150,24 @@ internal class OrionDevAgent(
      */
     fun runShellCommand(
         command: String,
+        verification: String = "other",
         confirm: (String) -> Boolean = { false },
         stopped: () -> Boolean = { false }
     ): DevResult {
+        val kind = verification.trim().lowercase()
+        if (kind !in setOf("other", "build", "test", "install")) {
+            return DevResult(action = "run_shell_command", blocker = "verification must be one of: other, build, test, install.", summary = "No shell command was executed.")
+        }
+        if (kind != "other" && !isVerificationCommand(command, kind)) {
+            return DevResult(action = "run_shell_command", blocker = "command does not match the requested $kind verification type; no result will be classified as a build, test, or install.", summary = "No shell command was executed.")
+        }
         if (stopped()) {
             return DevResult(action = "run_shell_command", blocker = "shell command cancelled before launch.", summary = "No shell command was executed.")
         }
         if (command.isBlank()) {
             return DevResult(action = "run_shell_command", blocker = "shell command is required.", summary = "No shell command was executed.")
         }
-        val approval = "Orion is about to execute this command in the Alpine/PRoot development workspace under the Android app UID. The guest is not an OS security boundary. Command: ${command.take(700)}. Allow this execution?"
+        val approval = "Orion is about to execute this $kind development command in the Alpine/PRoot workspace under the Android app UID. The guest is not an OS security boundary. Command: ${command.take(700)}. Allow this execution?"
         if (!confirm(approval)) {
             return DevResult(action = "run_shell_command", blocker = "owner approval was not granted; the Linux command was not executed.", summary = "No shell command was executed.")
         }
@@ -179,16 +187,45 @@ internal class OrionDevAgent(
             }
             return DevResult(
                 action = "run_shell_command",
+                compilationAttempted = kind == "build",
+                compilationPassed = false,
+                testsAttempted = kind == "test",
+                testsPassed = false,
+                installAttempted = kind == "install",
+                installSucceeded = false,
                 blocker = reason,
                 evidence = result.take(8_000),
-                summary = "Linux development command did not pass execution verification."
+                summary = "Linux $kind development command did not pass execution verification."
             )
         }
         return DevResult(
             action = "run_shell_command",
+            compilationAttempted = kind == "build",
+            compilationPassed = kind == "build",
+            testsAttempted = kind == "test",
+            testsPassed = kind == "test",
+            installAttempted = kind == "install",
+            installSucceeded = kind == "install",
             evidence = (warning ?: "") + result.take(8_000),
-            summary = "Linux development command exited with status 0. This verifies process success only; it does not prove compilation, tests, or installation unless those were explicitly run."
+            summary = when (kind) {
+                "build" -> "Build command exited with status 0; compilation/build process passed. Inspect the generated artifact separately."
+                "test" -> "Test command exited with status 0; the invoked test suite passed."
+                "install" -> "Install command exited with status 0; the install command succeeded. Verify the installed package separately."
+                else -> "Linux development command exited with status 0. This verifies process success only; it does not prove compilation, tests, or installation."
+            }
         )
+    }
+
+    private fun isVerificationCommand(command: String, kind: String): Boolean {
+        val value = command.lowercase()
+        return when (kind) {
+            "build" -> (value.contains("gradle") && Regex("\\b(assemble\\w*|build|compile\\w*)\\b").containsMatchIn(value)) ||
+                Regex("\\b(cargo\\s+build|go\\s+build|npm\\s+run\\s+build)\\b").containsMatchIn(value)
+            "test" -> (value.contains("gradle") && Regex("\\b(test\\w*|check|connected\\w*test)\\b").containsMatchIn(value)) ||
+                Regex("\\b(pytest|python\\s+-m\\s+unittest|npm\\s+test|cargo\\s+test|go\\s+test)\\b").containsMatchIn(value)
+            "install" -> Regex("\\b(adb\\s+install|pm\\s+install|installDebug|installRelease)\\b").containsMatchIn(value)
+            else -> true
+        }
     }
 
     /**

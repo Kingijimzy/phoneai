@@ -23,4 +23,20 @@ class LiveWebSearchTest {
     @Test fun searchQueryRemainsBounded() {
         assertTrue(LiveWebSearch.queryFrom("x".repeat(300)).length <= 160)
     }
+    @Test fun extractsOnlyDistinctPublicHttpsResultUrls() {
+        val urls = LiveWebSearch.extractResultUrls(
+            "1. Source one\nhttps://example.com/one\n" +
+                "2. Source two\nhttps://example.org/two\n" +
+                "3. Duplicate\nhttps://example.com/one\n" +
+                "4. Search redirect\nhttps://duckduckgo.com/l/?uddg=bad\n" +
+                "5. Unsafe scheme\nhttp://example.net"
+        )
+        assertEquals(listOf("https://example.com/one", "https://example.org/two"), urls)
+    }
+
+    @Test fun extractsAtMostFiveUrls() {
+        val body = (1..8).joinToString("\n") { "https://example$it.com/page" }
+        assertEquals(5, LiveWebSearch.extractResultUrls(body).size)
+    }
+
 }
