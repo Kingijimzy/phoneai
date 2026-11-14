@@ -40,6 +40,9 @@ class ProviderFallbackPolicyTest {
         assertTrue(ProviderFallbackPolicy.shouldTryBackup(
             AiException("HTTP 400 tool calling is not supported", 400)
         ))
+        assertTrue(ProviderFallbackPolicy.isToolProtocolUnsupported(
+            RuntimeException("provider retry exhausted", AiException("HTTP 400 unknown parameter: tools", 400))
+        ))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 400 invalid arguments", 400)))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 400 unknown parameter: tools", 400), false))
     }
