@@ -195,11 +195,10 @@ private fun OrionStructuredBlockCard(
         is OrionMessageBlock.Text -> Text(block.markdown, color = ChatCopy, fontSize = 13.sp, lineHeight = 20.sp)
         is OrionMessageBlock.Code -> {
             val codeLines = block.source.lines()
-            val isDiff = block.language.equals("diff", true) || block.language.equals("patch", true) ||
-                codeLines.any { it.startsWith("@@ ") } ||
-                (codeLines.any { it.startsWith("+") } && codeLines.any { it.startsWith("-") })
-            val additions = codeLines.count { it.startsWith("+") && !it.startsWith("+++") }
-            val removals = codeLines.count { it.startsWith("-") && !it.startsWith("---") }
+            val diffStats = OrionCodeDiffPresentation.inspect(block.language, block.source)
+            val isDiff = diffStats.isDiff
+            val additions = diffStats.additions
+            val removals = diffStats.removals
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
                     .background(OrionUiPalette.background)
