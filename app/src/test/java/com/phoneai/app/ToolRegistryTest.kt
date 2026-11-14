@@ -486,6 +486,35 @@ class ToolRegistryNativeSelectionTest {
         rows.forEach { assertFalse("Generated source must never be exposed by discovery", it.has("source")) }
     }
 
+    @Test fun generatedExtensionInventoryHasIndependentPagination() {
+        val source = """def run(INPUT):
+    RESULT = {"ok": True}
+"""
+        val hash = SelfExtendingExtensionPolicy.sha256(source)
+        val extensions = (0 until 17).map { index ->
+            GeneratedExtension(
+                id = "saved_tool_$index", displayName = "Saved tool $index", runtime = "python",
+                source = source, sourceSha256 = hash, description = "Reusable saved capability $index",
+                createdAtMillis = index.toLong(), enabled = true, verified = true
+            )
+        }
+        val first = JSONObject(ToolRegistry.searchCapabilities("", 5, 0, extensions))
+        assertEquals(5, first.getJSONArray("generated_extensions").length())
+        assertEquals(17, first.getInt("generated_extension_count"))
+        assertEquals(5, first.getInt("generated_extension_next_offset"))
+        assertTrue(first.getBoolean("generated_extensions_has_more"))
+
+        val second = JSONObject(ToolRegistry.searchCapabilities("", 5, 5, extensions))
+        assertEquals(5, second.getJSONArray("generated_extensions").length())
+        assertEquals(10, second.getInt("generated_extension_next_offset"))
+        assertTrue(second.getBoolean("generated_extensions_has_more"))
+
+        val finalPage = JSONObject(ToolRegistry.searchCapabilities("", 5, 15, extensions))
+        assertEquals(2, finalPage.getJSONArray("generated_extensions").length())
+        assertTrue(finalPage.isNull("generated_extension_next_offset"))
+        assertFalse(finalPage.getBoolean("generated_extensions_has_more"))
+    }
+
     @Test fun capabilitySearchReturnsSimpleCandidatesAndLoadReturnsTheExactSchema() {
         val result = JSONObject(ToolRegistry.searchCapabilities("inspect MCP resources", 8))
         val rows = result.getJSONArray("results")
