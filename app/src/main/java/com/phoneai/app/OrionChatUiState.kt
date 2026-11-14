@@ -21,6 +21,9 @@ internal class OrionChatUiState {
     val commandMode = mutableStateOf(false)
     val selectedImages = mutableStateOf<List<Uri>>(emptyList())
 
+    private var streamingMessageId: Long? = null
+    private val streamingBuffer = StringBuilder()
+
     fun setProvider(label: String, ready: Boolean) {
         providerLabel.value = label
         providerReady.value = ready
@@ -50,7 +53,39 @@ internal class OrionChatUiState {
         lines.add(line)
     }
 
+    /**
+     * Owns the identity and accumulated text of the current assistant stream.
+     * Deltas update one stable row instead of creating a new message per callback.
+     */
+    fun appendAssistantDelta(delta: String): OrionChatLine? {
+        if (delta.isEmpty()) return null
+        streamingBuffer.append(delta)
+        val id = streamingMessageId ?: System.nanoTime().also { streamingMessageId = it }
+        val line = OrionChatLine(id, "ai", streamingBuffer.toString())
+        val index = lines.indexOfFirst { it.id == id }
+        if (index >= 0) lines[index] = line else lines.add(line)
+        return line
+    }
+
+    /** Reconcile the final service transcript with the streamed row, then release stream state. */
+    fun completeAssistantStream(finalText: String): OrionChatLine {
+        val id = streamingMessageId ?: System.nanoTime()
+        val line = OrionChatLine(id, "ai", finalText)
+        val index = lines.indexOfFirst { it.id == id }
+        if (index >= 0) lines[index] = line else lines.add(line)
+        resetAssistantStream()
+        return line
+    }
+
+    fun hasAssistantStream(): Boolean = streamingMessageId != null
+
+    fun resetAssistantStream() {
+        streamingMessageId = null
+        streamingBuffer.setLength(0)
+    }
+
     fun clearTranscript() {
         lines.clear()
+        resetAssistantStream()
     }
 }
