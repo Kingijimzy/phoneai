@@ -27,6 +27,25 @@ internal class OrionChatCoordinator(private val state: OrionChatUiState) {
         state.taskRunning.value = taskRunning
     }
 
+    fun onAudioLevel(level: Float) {
+        state.orbMicLevel.value = level.coerceIn(0f, 1f)
+    }
+
+    fun onAudioAmplitude(amplitude: Float) {
+        state.orbSpeechAmplitude.value = amplitude.coerceIn(0f, 1f)
+    }
+
+    fun onSpeechWord() {
+        state.orbWordPulse.value = 1f
+    }
+
+    fun setAttachments(attachments: List<OrionChatAttachmentStore.Attachment>) {
+        state.attachments.value = attachments
+    }
+
+    fun setCompanionLook(look: Int) {
+        state.companionLook.value = look.coerceIn(0, 2)
+    }
     fun onActivityEvents(events: List<OrionConversationRepository.ChatEvent>) {
         val projection = OrionActivityTimeline(maxEvents = 300)
         projection.replay(OrionActivityTimeline.fromPersisted(events))
