@@ -51,7 +51,7 @@ internal class OrionPythonCapabilityExecutor(
             "extension_update" -> updateDraft(args)
             "extension_test" -> testDraft(args, confirm, stopped)
             "extension_enable" -> enable(args)
-            "extension_run" -> runExtension(args, stopped)
+            "extension_run" -> runExtension(args, confirm, stopped)
             "extension_disable" -> disable(args)
             else -> null
         }
@@ -60,7 +60,7 @@ internal class OrionPythonCapabilityExecutor(
     private fun extensionPolicy(): String =
         "Generated-extension auto-activation is " +
             (if (ExtensionAutonomySettings.autoActivationEnabled(context)) "ON" else "OFF") +
-            ". Restricted python receives no Android, filesystem, network, or shell capabilities. Full CPython runs with the Android app UID and may access resources available to the app; it requires separate owner approval to test and activate. Every activation requires a passing receipt for the exact source hash."
+            ". Restricted python receives no Android, filesystem, network, or shell capabilities. Full CPython runs with the Android app UID and remains subject to Android permissions. Every activation requires a passing receipt for the exact source hash; the configured auto-activation preference applies to both runtimes."
 
     private fun setExtensionAutoActivation(args: JSONObject): String {
         val rawEnabled = args.opt("enabled")
@@ -156,10 +156,11 @@ internal class OrionPythonCapabilityExecutor(
         val cases = if (array == null) emptyList() else
             (0 until array.length()).mapNotNull { array.optJSONObject(it) }
         if (stopped()) return "error: task stopped before extension tests began."
-        if (extension.runtime == "python_full" && !confirm(
-                "Full CPython will execute this generated extension in Orion's PRoot guest under the Android app UID. PRoot is not an OS security boundary. Allow this exact source to run its tests?"
-            )) {
-            return "error: owner approval was not granted; full CPython extension tests were not executed."
+        val destructiveSource = IrreversibleActionConfirmationPolicy.destructiveAction(
+            "python_exec", JSONObject().put("code", extension.source)
+        )
+        if (destructiveSource != null && !confirm(destructiveSource)) {
+            return "error: destructive extension test was not approved; no tests were executed."
         }
         val report = extensionSandbox.test(extension, cases)
         if (stopped()) return "error: task stopped during extension tests; no promotion was attempted."
@@ -175,26 +176,24 @@ internal class OrionPythonCapabilityExecutor(
         val ownerAutoActivation = ExtensionAutonomySettings.autoActivationEnabled(context)
         // Orion and Kingi share the platform: an exact-source tested extension auto-promotes in either
         // runtime when the owner's auto-activation setting is on (default on).
-        // Only the capability-free restricted interpreter may auto-promote. Full CPython
-        // can access the app UID's permitted files and network from the PRoot guest, so it
-        // requires a separate owner-approved extension_enable operation.
-        val safeRuntimeAutoActivation = ownerAutoActivation && extension.runtime == "python"
+        // Both runtimes may auto-promote after the exact source passes its persisted tests.
+        // Full CPython remains subject to the app UID and Android OS permissions; destructive
+        // source is intercepted by the shared delete/wipe confirmation policy at test/run time.
+        val safeRuntimeAutoActivation = ownerAutoActivation
         val autoActivated = safeRuntimeAutoActivation &&
             activateVerifiedVersion(extension, report, approved = false)
         AgentPolicy.log(
             context, "extension:$id", "auto-activate", autoActivated,
-            if (autoActivated) "owner pre-approval promoted exact-hash sandbox-tested extension"
-            else if (extension.runtime == "python_full") "full CPython requires a separate owner-approved extension_enable request"
-            else "owner auto-activation is off; awaiting an explicit extension_enable tool request"
+            if (autoActivated) "exact-hash runtime-tested extension auto-activated by the configured autonomy policy"
+            else "automatic activation is off; awaiting an explicit extension_enable tool call"
         )
         if (autoActivated) runCatching { OrionLessons.learn(context, "Built and activated tool '$id' (${extension.displayName}): ${extension.description.take(100)}. Reuse it via extension_run before building anything similar.") }
         return if (autoActivated) {
             "$testLabel PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
         } else {
             "$testLabel PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} " +
-                if (extension.runtime == "python_full") "Full CPython is never auto-activated; next: extension_enable (requires separate owner approval)."
-                else if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use explicit extension_enable approval."
-                else "Next: extension_enable (requires an explicit extension_enable tool request)."
+                if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use extension_enable to activate the exact tested source."
+                else "Next: call extension_enable to activate the exact tested source."
         }
     }
 
@@ -244,11 +243,17 @@ internal class OrionPythonCapabilityExecutor(
         } else "error: rollback activation failed; current version remains unchanged"
     }
 
-    private fun runExtension(args: JSONObject, stopped: () -> Boolean): String {
+    private fun runExtension(args: JSONObject, confirm: (String) -> Boolean, stopped: () -> Boolean): String {
         val id = args.optString("id").trim()
         val extension = try { extensionStore.enabled(id) } catch (_: Exception) { null }
             ?: return "error: extension is not enabled, verified, and hash-matching"
         if (stopped()) return "error: task was stopped before extension execution."
+        val destructiveSource = IrreversibleActionConfirmationPolicy.destructiveAction(
+            "python_exec", JSONObject().put("code", extension.source)
+        )
+        if (destructiveSource != null && !confirm(destructiveSource)) {
+            return "error: destructive extension execution was not approved; no code was run."
+        }
         val reply = extensionSandbox.execute(extension, args.optJSONObject("input") ?: JSONObject(), emptySet())
         if (stopped()) return "error: task was stopped during extension execution; inspect state before retrying."
         return if (reply.optBoolean("ok", false)) {
