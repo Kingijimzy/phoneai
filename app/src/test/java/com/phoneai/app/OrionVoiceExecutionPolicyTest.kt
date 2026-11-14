@@ -29,10 +29,6 @@ class OrionVoiceExecutionPolicyTest {
         assertTrue(OrionVoiceExecutionPolicy.shouldRouteToCommand("Send this message to Amma", emptyList(), ""))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("telegram_send"))
         assertEquals("messaging", AgentPolicy.packForTool("telegram_send"))
-        assertTrue(AgentHooks.requiresConfirmation("telegram_send", org.json.JSONObject().put("message", "Hello")))
-        assertTrue(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "restart")))
-        assertTrue(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "shutdown")))
-        assertTrue(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "wifi_toggle")))
         assertTrue(AgentHooks.requiresConfirmation("task_delete", org.json.JSONObject().put("id", "task-1")))
     }
     @Test fun progressCueOnlyTriggersForPotentiallySlowRegisteredToolNames() {

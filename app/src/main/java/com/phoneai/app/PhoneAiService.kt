@@ -1793,7 +1793,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     // ---------------------------------------------------------------- status strip and confirm
 
-    private fun showStrip(text: String) {
+    private fun showStrip(rawText: String) {
+        val text = OrionStripText.clean(rawText)
         val existing = stripText
         if (strip != null && existing != null) {
             existing.text = text
