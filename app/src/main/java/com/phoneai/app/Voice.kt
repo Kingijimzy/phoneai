@@ -88,14 +88,16 @@ class Voice(private val ctx: Context) {
         private val output: AudioTrack,
         private val token: Int
     ) {
-        private val queue = ArrayBlockingQueue<FloatArray?>(24)
+        private val queue = ArrayBlockingQueue<FloatArray>(24)
+        private val endOfStream = FloatArray(0)
         private val failure = AtomicReference<Throwable?>(null)
         private val writeNanos = AtomicLong(0L)
         private val closed = AtomicInteger(0)
         private val worker = Thread({
             try {
                 while (token == playbackGeneration.get()) {
-                    val block = queue.take() ?: break
+                    val block = queue.take()
+                    if (block === endOfStream) break
                     if (block.isNotEmpty()) {
                         val started = SystemClock.elapsedRealtimeNanos()
                         val succeeded = writeNeuralSamples(output, block, token)
@@ -125,7 +127,7 @@ class Voice(private val ctx: Context) {
         fun finish() {
             if (closed.compareAndSet(0, 1)) {
                 while (token == playbackGeneration.get() && failure.get() == null) {
-                    if (queue.offer(null, 100, java.util.concurrent.TimeUnit.MILLISECONDS)) break
+                    if (queue.offer(endOfStream, 100, java.util.concurrent.TimeUnit.MILLISECONDS)) break
                 }
             }
             worker.join()
@@ -359,10 +361,9 @@ class Voice(private val ctx: Context) {
     }
 
     /**
-     * Each sentence is inferred separately. Sherpa's callback currently writes PCM
-     * synchronously to AudioTrack, so playback back-pressure is included in generation
-     * wall time. Metrics report that end-to-end time rather than subtracting summed write
-     * durations, which may overlap and would under-report elapsed time.
+     * Each sentence is inferred separately. Sherpa's callback copies PCM into a bounded
+     * queue; a dedicated consumer performs blocking AudioTrack writes. This lets inference
+     * run ahead of playback while preserving order and applying bounded back-pressure.
      */
     private fun speakNeural(chunks: List<String>, onDone: (() -> Unit)?, speeds: List<Float>? = null, pausesMs: List<Int>? = null) {
         val token = playbackGeneration.get()
@@ -483,10 +484,8 @@ class Voice(private val ctx: Context) {
                 audioTrackWriteMs = completedPcmWriter?.audioWriteMs() ?: 0L
                 pcmWriter = null
                 val generationWallMs = (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(1L)
-                // AudioTrack.write() is blocking and callback writes may overlap in wall
-                // time across native callback threads. Never subtract their accumulated
-                // duration from wall time: doing so can manufacture an invalid RTF.
-                // This RTF is explicitly end-to-end and includes playback back-pressure.
+                // End-to-end RTF includes inference, queueing and any bounded-queue
+                // back-pressure. AudioTrack write time is reported separately for diagnosis.
                 val generatedAudioSeconds = generatedPcmFrames.toDouble() / engine.sampleRate().coerceAtLeast(1)
                 if (generatedPcmFrames > 0L) {
                     val realTimeFactor = generatedAudioSeconds / (generationWallMs / 1000.0)
@@ -526,8 +525,9 @@ class Voice(private val ctx: Context) {
                 if (!kokoroMetricsRecorded) {
                     setKokoroPerformance("Kokoro synthesis: failed (${error.javaClass.simpleName}); Android TTS fallback may be used. No successful Kokoro speed measurement was recorded.")
                 }
-                // Drain any already-written sentence before switching engines so the
-                // fallback doesn't overlap neural playback. A stopped turn never falls back.
+                // Cancel queued neural PCM, then drain the frames already accepted by
+                // AudioTrack before switching engines so fallback audio cannot overlap.
+                // A stopped turn never falls back.
                 if (token != playbackGeneration.get()) return@execute
                 try {
                     val activeTrack = track
