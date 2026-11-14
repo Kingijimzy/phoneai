@@ -300,7 +300,8 @@ class Voice(private val ctx: Context) {
             return false
         }
         val aec = try { AcousticEchoCanceler.create(recorder.audioSessionId)?.apply { enabled = true } } catch (_: Exception) { null }
-        if (aec == null) {
+        if (aec == null || !aec.enabled) {
+            try { aec?.release() } catch (_: Exception) { }
             recorder.release()
             return false
         }
@@ -323,7 +324,10 @@ class Voice(private val ctx: Context) {
                 while (token == bargeInGeneration.get()) {
                     val count = recorder.read(samples, 0, samples.size, AudioRecord.READ_BLOCKING)
                     if (count <= 0) {
-                        if (token != bargeInGeneration.get()) break
+                        if (token != bargeInGeneration.get() ||
+                            count == AudioRecord.ERROR_DEAD_OBJECT ||
+                            count == AudioRecord.ERROR_INVALID_OPERATION
+                        ) break
                         continue
                     }
                     var power = 0.0
