@@ -23,6 +23,9 @@ class IrreversibleActionConfirmationPolicyTest {
                     IrreversibleActionConfirmationPolicy.destructiveAction(tool, JSONObject().put("action", "restart")))
             }
         assertFalse(IrreversibleActionConfirmationPolicy.requiresConfirmation("Restart computer or change Wi-Fi"))
+        assertTrue(IrreversibleActionConfirmationPolicy.requiresConfirmation("Orion is about to delete a saved file"))
+        assertTrue(IrreversibleActionConfirmationPolicy.requiresConfirmation("Orion is about to run a destructive shell command: rm -rf /workspace/cache"))
+        assertFalse(IrreversibleActionConfirmationPolicy.requiresConfirmation("Orion is about to write a source file"))
     }
 
     @Test fun onlyDestructiveActionsNeedOwnerApproval() {
