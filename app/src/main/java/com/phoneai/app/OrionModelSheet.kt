@@ -100,6 +100,7 @@ internal fun OrionModelSheet(onDismiss: () -> Unit, onNeedKey: () -> Unit, onCha
                         Text(
                             if (selected) "IN USE"
                             else if (p.id == "codex" || p.id == "antigravity") "CONNECT"
+                            else if (p.noKey) "BUILT-IN"
                             else if (ready) "KEY SET" else "ADD KEY",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
