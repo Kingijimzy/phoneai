@@ -2056,8 +2056,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     private fun addMessage(kind: String, text: String) {
         if (composeChatActive) {
-            if (kind == "ai") chatUiState.completeAssistantStream(text)
-            else composeLines.add(OrionChatLine(System.nanoTime(), kind, text))
+            chatCoordinator.onMessage(kind, text)
             return
         }
         if (kind == "me") {
@@ -2206,7 +2205,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             val fill = state.third.first
             val border = state.third.second
             status.text = short.lowercase().replaceFirstChar { it.uppercase() }
-            chatCoordinator.onRuntimeStatus(short, mode)
+            chatCoordinator.onRuntimeStatus(short, mode, PhoneAiService.instance?.isTaskRunning() == true)
             status.setTextColor(if (mode == OrbView.Mode.IDLE) Theme.MUTED else accent)
             status.background = null
             status.setPadding(0, dp(3), 0, dp(1))
