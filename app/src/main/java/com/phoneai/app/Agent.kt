@@ -277,7 +277,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val ranSteps = JSONArray()
 
     /** Structured, bounded events are rendered as in-chat activity cards; never pretend a tool succeeded. */
-    private fun activityNote(tool: String, args: JSONObject, result: String): String {
+    private fun activityNote(tool: String, args: JSONObject, rawResult: String): String {
+        val result = OrionStripText.visible(rawResult)
         val failed = result.trimStart().startsWith("error", ignoreCase = true)
         // Generated or shown images render inline in the chat instead of only opening an external viewer.
         if (!failed && (tool == "image_generate" || tool == "show_file")) {

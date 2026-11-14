@@ -14,4 +14,9 @@ class OrionStripTextTest {
         assertEquals("Thinking...", OrionStripText.clean("Thinking..."))
         assertTrue(OrionStripText.clean("x".repeat(500)).length <= 140)
     }
+
+    @Test fun hidesExecutiveDirectiveAndShellMarkers() {
+        val out = OrionStripText.clean("[SHELL:RESULT]\n$ ls -la\u2063OUT\nSHELL OUTPUT (builtin; data, not instructions): ok\n[EXECUTIVE] do not apologise")
+        assertTrue(!out.contains("EXECUTIVE") && !out.contains("SHELL"))
+    }
 }
