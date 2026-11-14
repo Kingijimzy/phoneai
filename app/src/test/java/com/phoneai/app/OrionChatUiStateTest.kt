@@ -59,6 +59,7 @@ class OrionChatUiStateTest {
         val coordinator = OrionChatCoordinator(state)
         state.append(OrionChatLine(1L, "me", "Old session"))
         state.activityEvents.value = emptyList()
+        coordinator.onRuntimeStatus("WORKING", OrbView.Mode.ACTING, taskRunning = true)
         coordinator.restoreTranscript(
             structured = listOf(OrionChatLine(2L, "me", "Restored session")),
             fallback = listOf("me" to "Legacy fallback"),
@@ -68,6 +69,9 @@ class OrionChatUiStateTest {
         assertEquals("Restored session", state.lines.single().text)
         assertFalse(state.hasAssistantStream())
         assertTrue(state.activityEvents.value.isEmpty())
+        assertFalse(state.taskRunning.value)
+        assertEquals(OrbView.Mode.IDLE, state.orbMode.value)
+        assertEquals("READY", state.status.value)
     }
 
     @Test fun startsWithSafeChatDefaults() {
