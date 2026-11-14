@@ -49,4 +49,10 @@ class OrionIdentityTest {
     @Test fun missingChangelogIsStatedNotInvented() {
         assertTrue(OrionIdentity.formatChanges("", "1.2").contains("no changelog is bundled"))
     }
+
+    @Test fun catchesAssistantOpenersAndOffers() {
+        assertTrue(OrionIdentity.reflexesIn("Certainly! Here is the answer.").isNotEmpty())
+        assertTrue(OrionIdentity.reflexesIn("Great question. Let me know if you need more.").isNotEmpty())
+        assertTrue(OrionIdentity.reflexesIn("Rechecking the live price now.").isEmpty())
+    }
 }
