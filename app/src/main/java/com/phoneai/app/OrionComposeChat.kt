@@ -593,7 +593,7 @@ internal fun OrionComposeChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val listState = rememberLazyListState()
     fun submitDraft() {
-        if (listOf("think", "work", "act", "brows", "build", "draw", "run", "delegat").any { displayStatus.contains(it, true) }) {
+        if (busy) {
             onStop()
             return
         }
@@ -665,8 +665,12 @@ internal fun OrionComposeChatScreen(
             }
         }
     }
-    val busy = listOf("think", "work", "act", "brows", "build", "draw", "run", "delegat")
-        .any { displayStatus.contains(it, true) }
+    // Runtime mode is authoritative. Never infer whether a request is active from
+    // human-readable status copy (which can change or contain incidental keywords).
+    val busy = effectiveOrbMode == OrbView.Mode.THINKING ||
+        effectiveOrbMode == OrbView.Mode.SPEAKING ||
+        effectiveOrbMode == OrbView.Mode.ACTING ||
+        effectiveOrbMode == OrbView.Mode.WAITING_APPROVAL
     Column(Modifier.fillMaxSize().background(OrionUiPalette.background).imePadding()) {
         // Editorial header: quiet branding, no oversized pill around every element.
         Row(
