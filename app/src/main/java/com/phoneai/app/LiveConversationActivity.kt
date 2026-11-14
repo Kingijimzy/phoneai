@@ -78,7 +78,13 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             contentDescription = "Orion live conversation status"
             letterSpacing = .16f
         }
-        root.addView(status, LinearLayout.LayoutParams(-1, dp(28)))
+        status.background = round(Theme.PANEL, Theme.LINE_STRONG, 18)
+        status.setPadding(dp(16), dp(7), dp(16), dp(7))
+        root.addView(status, LinearLayout.LayoutParams(-2, -2).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            topMargin = dp(6)
+            bottomMargin = dp(4)
+        })
 
         visual = LiveCallVisualView(this).apply {
             style = LiveCallVisualView.Style.fromPref(Prefs.liveCallStyle(this@LiveConversationActivity))
@@ -101,48 +107,62 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             bottomMargin = dp(8)
         })
 
-        caption = label("Ready when you are.", 25f, Theme.TEXT, true).apply {
-            gravity = Gravity.CENTER
-            textAlignment = View.TEXT_ALIGNMENT_CENTER
-            maxLines = 2
+        caption = label("Ready when you are.", 27f, Theme.TEXT, true).apply {
+            gravity = Gravity.START or Gravity.TOP
+            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+            maxLines = 6
             ellipsize = android.text.TextUtils.TruncateAt.END
             setLineSpacing(dp(3).toFloat(), 1f)
             alpha = .88f
             setPadding(dp(4), dp(8), dp(4), dp(9))
             contentDescription = "Live conversation captions"
         }
-        root.addView(caption, LinearLayout.LayoutParams(-1, dp(100)))
+        root.addView(caption, LinearLayout.LayoutParams(-1, dp(190)))
 
         val controls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(0, dp(8), 0, dp(2))
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(8), 0, dp(4))
         }
-        val endItem = control("phone-off", "END", Theme.PANEL2, Theme.LINE_STRONG) {
-            PhoneAiService.instance?.endLiveConversation()
-            listeningRequested = false
-            finish()
-        }
-        controls.addView(endItem, LinearLayout.LayoutParams(0, -2, 1f))
-
-        val micItem = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-        }
-        micButton = LinearLayout(this).apply {
+        fun roundButton(iconName: String, description: String, action: () -> Unit) = LinearLayout(this).apply {
             gravity = Gravity.CENTER
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(Theme.SILVER)
-                setStroke(dp(1), Theme.TEXT)
+                setColor(Theme.PANEL2)
+                setStroke(dp(1), Theme.LINE_STRONG)
             }
-            elevation = dp(5).toFloat()
+            isClickable = true
+            isFocusable = true
+            contentDescription = description
+            addView(OrionIconView(this@LiveConversationActivity).apply {
+                icon = iconName
+                tint = Theme.TEXT
+                contentDescription = null
+            }, LinearLayout.LayoutParams(dp(24), dp(24)))
+            setOnClickListener { action() }
+        }
+        controls.addView(roundButton("plus", "Open chat to attach a file or image") {
+            PhoneAiService.instance?.endLiveConversation()
+            listeningRequested = false
+            startActivity(Intent(this@LiveConversationActivity, MainChatActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+            finish()
+        }, LinearLayout.LayoutParams(dp(56), dp(56)))
+
+        micButton = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                setColor(Theme.SILVER)
+                cornerRadius = dp(30).toFloat()
+            }
+            elevation = dp(4).toFloat()
             isClickable = true
             isFocusable = true
             contentDescription = "Start voice input"
             setOnTouchListener { view, event ->
                 when (event.actionMasked) {
-                    android.view.MotionEvent.ACTION_DOWN -> view.animate().scaleX(.96f).scaleY(.96f).setDuration(Theme.MOTION_PRESS_MS.toLong()).start()
+                    android.view.MotionEvent.ACTION_DOWN -> view.animate().scaleX(.97f).scaleY(.97f).setDuration(Theme.MOTION_PRESS_MS.toLong()).start()
                     android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1f).scaleY(1f).setDuration(Theme.MOTION_PRESS_MS.toLong()).start()
                 }
                 false
@@ -152,26 +172,24 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 tint = Theme.PANEL
                 contentDescription = null
             }
-            addView(micIcon, LinearLayout.LayoutParams(dp(28), dp(28)))
+            addView(micIcon, LinearLayout.LayoutParams(dp(26), dp(26)))
+            micCaption = label("MIC", 12f, Theme.PANEL, true).apply {
+                letterSpacing = .08f
+                setPadding(dp(8), 0, 0, 0)
+            }
+            addView(micCaption)
             setOnClickListener { handleMicTap() }
         }
-        micItem.addView(micButton, LinearLayout.LayoutParams(dp(66), dp(66)))
-        micCaption = label("MIC", 10f, Theme.TEXT, true).apply {
-            gravity = Gravity.CENTER
-            letterSpacing = .08f
-            setPadding(0, dp(6), 0, 0)
-        }
-        micItem.addView(micCaption)
-        controls.addView(micItem, LinearLayout.LayoutParams(0, -2, 1.15f))
+        controls.addView(micButton, LinearLayout.LayoutParams(0, dp(60), 1f).apply {
+            marginStart = dp(12)
+            marginEnd = dp(12)
+        })
 
-        val chatItem = control("chat", "CHAT", Theme.PANEL, Theme.LINE_STRONG) {
+        controls.addView(roundButton("close", "End live conversation") {
             PhoneAiService.instance?.endLiveConversation()
             listeningRequested = false
-            startActivity(Intent(this@LiveConversationActivity, MainChatActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
             finish()
-        }
-        controls.addView(chatItem, LinearLayout.LayoutParams(0, -2, 1f))
+        }, LinearLayout.LayoutParams(dp(56), dp(56)))
         root.addView(controls, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
     }
