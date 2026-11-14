@@ -27,6 +27,9 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 
 /** Full-screen conversation. The floating orb keeps its separate, compact command panel. */
 class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
@@ -679,10 +682,23 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         dialog.show()
     }
 
+    /**
+     * Dialog windows do not inherit ComponentActivity's decor view-tree owners.
+     * ComposeView needs these owners before attachment so its recomposer can bind
+     * to the Activity lifecycle instead of crashing with ViewTreeLifecycleOwner missing.
+     * Dialog compositions still dispose on detach when the dialog is dismissed.
+     */
+    private fun ComposeView.bindActivityViewTreeOwners() {
+        setViewTreeLifecycleOwner(this@MainChatActivity)
+        setViewTreeViewModelStoreOwner(this@MainChatActivity)
+        setViewTreeSavedStateRegistryOwner(this@MainChatActivity)
+    }
+
     private fun showChatHistory() {
         val chats = ChatHistoryStore.archived(this)
         val dialog = android.app.Dialog(this)
         val content = ComposeView(this).apply {
+            bindActivityViewTreeOwners()
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setContent {
                 OrionChatHistoryScreen(
@@ -806,6 +822,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }.getOrDefault(emptyList())
         val dialog = android.app.Dialog(this)
         val content = ComposeView(this).apply {
+            bindActivityViewTreeOwners()
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setContent {
                 OrionArchivedConversationScreen(
