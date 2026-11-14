@@ -20,6 +20,17 @@ internal class OrionChatUiState {
     val chatTitle = mutableStateOf("Orion")
     val commandMode = mutableStateOf(false)
     val selectedImages = mutableStateOf<List<Uri>>(emptyList())
+    val orbMode = mutableStateOf(OrbView.Mode.IDLE)
+    val taskRunning = mutableStateOf(false)
+    val activityEvents = mutableStateOf<List<OrionActivityEvent>>(emptyList())
+    val attachments = mutableStateOf<List<OrionChatAttachmentStore.Attachment>>(emptyList())
+    val companionLook = mutableStateOf(0)
+    val orbMicLevel = mutableStateOf(0f)
+    val orbSpeechAmplitude = mutableStateOf(0f)
+    val orbWordPulse = mutableStateOf(0f)
+
+    private var streamingMessageId: Long? = null
+    private val streamingBuffer = StringBuilder()
 
     fun setProvider(label: String, ready: Boolean) {
         providerLabel.value = label
@@ -50,7 +61,46 @@ internal class OrionChatUiState {
         lines.add(line)
     }
 
+    /**
+     * Owns the identity and accumulated text of the current assistant stream.
+     * Deltas update one stable row instead of creating a new message per callback.
+     */
+    fun appendAssistantDelta(delta: String): OrionChatLine? {
+        if (delta.isEmpty()) return null
+        streamingBuffer.append(delta)
+        val id = streamingMessageId ?: System.nanoTime().also { streamingMessageId = it }
+        val line = OrionChatLine(id, "ai", streamingBuffer.toString())
+        val index = lines.indexOfFirst { it.id == id }
+        if (index >= 0) lines[index] = line else lines.add(line)
+        return line
+    }
+
+    /** Reconcile the final service transcript with the streamed row, then release stream state. */
+    fun completeAssistantStream(finalText: String): OrionChatLine {
+        val id = streamingMessageId ?: System.nanoTime()
+        val line = OrionChatLine(id, "ai", finalText)
+        val index = lines.indexOfFirst { it.id == id }
+        if (index >= 0) lines[index] = line else lines.add(line)
+        resetAssistantStream()
+        return line
+    }
+
+    fun hasAssistantStream(): Boolean = streamingMessageId != null
+
+    fun resetAssistantStream() {
+        streamingMessageId = null
+        streamingBuffer.setLength(0)
+    }
+
     fun clearTranscript() {
         lines.clear()
+        resetAssistantStream()
     }
 }
+
+/** Runtime state, not mutable status copy, determines whether the response control is Stop. */
+internal fun isOrionChatBusy(mode: OrbView.Mode, taskRunning: Boolean = false): Boolean =
+    taskRunning || when (mode) {
+        OrbView.Mode.THINKING, OrbView.Mode.SPEAKING, OrbView.Mode.ACTING, OrbView.Mode.WAITING_APPROVAL -> true
+        OrbView.Mode.IDLE, OrbView.Mode.LISTENING, OrbView.Mode.ERROR -> false
+    }

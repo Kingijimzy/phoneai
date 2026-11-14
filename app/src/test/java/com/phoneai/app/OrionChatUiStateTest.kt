@@ -24,6 +24,76 @@ class OrionChatUiStateTest {
         assertEquals(OrbView.Mode.SPEAKING, orionModeForStatus("Approval pending", OrbView.Mode.SPEAKING))
     }
 
+    @Test fun busyControlsFollowRuntimeModeNotStatusText() {
+        assertTrue(isOrionChatBusy(OrbView.Mode.THINKING))
+        assertTrue(isOrionChatBusy(OrbView.Mode.SPEAKING))
+        assertTrue(isOrionChatBusy(OrbView.Mode.ACTING))
+        assertTrue(isOrionChatBusy(OrbView.Mode.WAITING_APPROVAL))
+        assertFalse(isOrionChatBusy(OrbView.Mode.IDLE))
+        assertFalse(isOrionChatBusy(OrbView.Mode.LISTENING))
+        assertFalse(isOrionChatBusy(OrbView.Mode.ERROR))
+        assertTrue(isOrionChatBusy(OrbView.Mode.IDLE, taskRunning = true))
+    }
+
+    @Test fun coordinatorOwnsMessageAndRuntimeProjection() {
+        val state = OrionChatUiState()
+        val coordinator = OrionChatCoordinator(state)
+        coordinator.onMessage("me", "Hi Orion")
+        coordinator.onAssistantDelta("Hello")
+        val streamedId = state.lines.last().id
+        coordinator.onAssistantDelta(" there")
+        coordinator.onMessage("ai", "Hello there!")
+        assertEquals(2, state.lines.size)
+        assertEquals(streamedId, state.lines.last().id)
+        assertEquals("Hello there!", state.lines.last().text)
+        assertFalse(state.hasAssistantStream())
+
+        coordinator.onRuntimeStatus("ACTING", OrbView.Mode.ACTING, taskRunning = true)
+        assertEquals("ACTING", state.status.value)
+        assertEquals(OrbView.Mode.ACTING, state.orbMode.value)
+        assertTrue(state.taskRunning.value)
+    }
+
+    @Test fun coordinatorReleasesStreamOnIdleWithoutDiscardingPartialText() {
+        val state = OrionChatUiState()
+        val coordinator = OrionChatCoordinator(state)
+        coordinator.onAssistantDelta("Partial answer")
+        coordinator.onRuntimeStatus("READY", OrbView.Mode.IDLE, taskRunning = false)
+        assertFalse(state.hasAssistantStream())
+        assertEquals("Partial answer", state.lines.single().text)
+    }
+    @Test fun coordinatorOwnsLivePresenceAndCompanionProjection() {
+        val state = OrionChatUiState()
+        val coordinator = OrionChatCoordinator(state)
+        coordinator.onAudioLevel(1.5f)
+        coordinator.onAudioAmplitude(-0.2f)
+        coordinator.onSpeechWord()
+        coordinator.setCompanionLook(9)
+        assertEquals(1f, state.orbMicLevel.value, 0.001f)
+        assertEquals(0f, state.orbSpeechAmplitude.value, 0.001f)
+        assertEquals(1f, state.orbWordPulse.value, 0.001f)
+        assertEquals(2, state.companionLook.value)
+    }
+    @Test fun coordinatorRestoresTranscriptAndClearsStaleSessionProjection() {
+        val state = OrionChatUiState()
+        val coordinator = OrionChatCoordinator(state)
+        state.append(OrionChatLine(1L, "me", "Old session"))
+        state.activityEvents.value = emptyList()
+        coordinator.onRuntimeStatus("WORKING", OrbView.Mode.ACTING, taskRunning = true)
+        coordinator.restoreTranscript(
+            structured = listOf(OrionChatLine(2L, "me", "Restored session")),
+            fallback = listOf("me" to "Legacy fallback"),
+            events = emptyList()
+        )
+        assertEquals(1, state.lines.size)
+        assertEquals("Restored session", state.lines.single().text)
+        assertFalse(state.hasAssistantStream())
+        assertTrue(state.activityEvents.value.isEmpty())
+        assertFalse(state.taskRunning.value)
+        assertEquals(OrbView.Mode.IDLE, state.orbMode.value)
+        assertEquals("READY", state.status.value)
+    }
+
     @Test fun startsWithSafeChatDefaults() {
         val state = OrionChatUiState()
         assertTrue(state.lines.isEmpty())
@@ -34,6 +104,34 @@ class OrionChatUiStateTest {
         assertEquals("Orion", state.chatTitle.value)
         assertFalse(state.commandMode.value)
         assertTrue(state.selectedImages.value.isEmpty())
+    }
+
+    @Test fun assistantDeltasUpdateOneStableMessageAndFinalTextReconcilesIt() {
+        val state = OrionChatUiState()
+        val first = state.appendAssistantDelta("Hello ")
+        val second = state.appendAssistantDelta("there")
+        assertEquals(first?.id, second?.id)
+        assertEquals(1, state.lines.size)
+        assertEquals("Hello there", state.lines.single().text)
+        assertTrue(state.hasAssistantStream())
+
+        val final = state.completeAssistantStream("Hello there!")
+        assertEquals(first?.id, final.id)
+        assertEquals(1, state.lines.size)
+        assertEquals("Hello there!", state.lines.single().text)
+        assertFalse(state.hasAssistantStream())
+    }
+
+    @Test fun stoppingAStreamPreservesPartialTextButStartsNextTurnFresh() {
+        val state = OrionChatUiState()
+        val partial = state.appendAssistantDelta("Partial answer")
+        state.resetAssistantStream()
+        assertFalse(state.hasAssistantStream())
+        assertEquals("Partial answer", state.lines.single().text)
+
+        val next = state.appendAssistantDelta("Next answer")
+        assertTrue(partial!!.id != next!!.id)
+        assertEquals(2, state.lines.size)
     }
 
     @Test fun providerAndModelUpdatesStayInUiState() {
