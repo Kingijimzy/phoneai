@@ -115,7 +115,7 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
             val ordered = taskEvents.sortedWith(compareBy<OrionActivityEvent> { it.timestampMs }.thenBy { it.eventId })
             val first = ordered.firstOrNull() ?: return@mapNotNull null
             val latest = ordered.last()
-            val history = ordered.map { event ->
+            val history = ordered.flatMap { event ->
                 val state = when (event.status) {
                     OrionActivityStatus.ACTIVE -> "RUNNING"
                     OrionActivityStatus.WAITING -> "WAITING"
@@ -124,7 +124,8 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
                     OrionActivityStatus.CANCELLED -> "CANCELLED"
                     OrionActivityStatus.INTERRUPTED -> "INTERRUPTED"
                 }
-                "$state · ${event.title}: ${event.summary}".take(360)
+                listOf("$state · ${event.title}: ${event.summary}".take(360)) +
+                    event.evidence.map { it.take(360) }
             }.distinct().takeLast(40)
             latest.copy(
                 eventId = "task-stream-${latest.taskId}",
@@ -138,6 +139,62 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
         }.sortedBy { it.timestampMs }
 
     companion object {
+        /** Convert persisted lifecycle records into the exact event model used by live chat. */
+        fun fromPersisted(events: List<OrionConversationRepository.ChatEvent>): List<OrionActivityEvent> =
+            events.map { event ->
+                val type = event.type.lowercase()
+                val status = event.status.lowercase()
+                val kind = when {
+                    type.contains("approval") -> OrionActivityKind.APPROVAL
+                    type.contains("objective") && status == "verified" -> OrionActivityKind.COMPLETION
+                    type.contains("cancel") || status in setOf("cancelled", "canceled") -> OrionActivityKind.CANCELLED
+                    type.contains("interrupt") || status == "interrupted" -> OrionActivityKind.INTERRUPTED
+                    type.contains("error") || status in setOf("failed", "error", "denied", "rejected") -> OrionActivityKind.ERROR
+                    type.contains("tool") || type.contains("terminal") || type.contains("python") || type.contains("file") -> OrionActivityKind.TOOL
+                    type.contains("browser") || type.contains("research") -> OrionActivityKind.RESEARCH
+                    type.contains("agent") || type.contains("specialist") || type.contains("delegate") -> OrionActivityKind.DELEGATION
+                    type.contains("complete") || status in setOf("completed", "success", "succeeded", "result", "approved", "accepted") -> OrionActivityKind.COMPLETION
+                    else -> OrionActivityKind.THINKING
+                }
+                val eventStatus = when {
+                    type.contains("objective") && status == "verified" -> OrionActivityStatus.SUCCEEDED
+                    type in setOf("interaction", "runtime") && status in setOf("completed", "success", "succeeded", "result") -> OrionActivityStatus.WAITING
+                    status in setOf("pending", "waiting", "needs_approval", "approval_required", "needs_review", "returned") -> OrionActivityStatus.WAITING
+                    status in setOf("failed", "error", "denied", "rejected") -> OrionActivityStatus.FAILED
+                    status in setOf("cancelled", "canceled") -> OrionActivityStatus.CANCELLED
+                    status == "interrupted" -> OrionActivityStatus.INTERRUPTED
+                    status in setOf("completed", "success", "succeeded", "result", "approved", "accepted") -> OrionActivityStatus.SUCCEEDED
+                    else -> OrionActivityStatus.ACTIVE
+                }
+                OrionActivityEvent(
+                    eventId = event.id,
+                    taskId = taskKey(event.traceId, event.messageId, event.sessionId),
+                    kind = kind,
+                    status = eventStatus,
+                    title = event.summary.lineSequence().firstOrNull()?.take(120)?.ifBlank { event.type } ?: event.type,
+                    summary = if (type in setOf("interaction", "runtime") && status in setOf("completed", "success", "succeeded", "result")) "Execution processing finished; objective completion has not been verified." else event.summary.take(500),
+                    timestampMs = event.createdAt.coerceAtLeast(0L),
+                    evidence = listOf(
+                        (when (eventStatus) {
+                            OrionActivityStatus.ACTIVE -> "RUNNING"
+                            OrionActivityStatus.WAITING -> "WAITING"
+                            OrionActivityStatus.SUCCEEDED -> "DONE"
+                            OrionActivityStatus.FAILED -> "FAILED"
+                            OrionActivityStatus.CANCELLED -> "CANCELLED"
+                            OrionActivityStatus.INTERRUPTED -> "INTERRUPTED"
+                        }) + " · " + (if (type in setOf("interaction", "runtime") && status in setOf("completed", "success", "succeeded", "result")) "Objective completion has not been verified." else event.summary.take(500))
+                    ),
+                    typedEvidence = listOfNotNull(OrionActivityEvidence.fromJson(event.evidenceJson)),
+                    correlationId = event.correlationId
+                )
+            }.sortedWith(compareBy<OrionActivityEvent> { it.timestampMs }.thenBy { it.eventId })
+
+        /** Keep objective identity distinct from per-tool correlation IDs and conversation IDs. */
+        fun taskKey(traceId: String?, messageId: String?, sessionId: String): String =
+            traceId?.takeIf { it.isNotBlank() }?.let { "trace-$it" }
+                ?: messageId?.takeIf { it.isNotBlank() }?.let { "message-$it" }
+                ?: "session-$sessionId"
+
         data class ProgressStep(val state: String, val title: String, val detail: String = "")
 
         /** Keep useful action details visible and distinguish a raw result from verified completion. */

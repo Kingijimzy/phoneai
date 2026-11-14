@@ -15,7 +15,7 @@ class ToolRegistryTest {
             "python_exec", "workspace_write", "workspace_read", "save_file"
         )))
         assertTrue("The combined tool window must remain under provider limits",
-            requestTools.size <= 64)
+            requestTools.size <= 96)
     }
 
     @Test fun workspaceListIsRegisteredAndReadOnly() {
@@ -191,6 +191,8 @@ class ToolRegistryTest {
         assertTrue(prompt.contains("LIVE RESEARCH RULE"))
         assertTrue(prompt.contains("DOWNLOAD SIZE RULE"))
         assertTrue(prompt.contains("GOAL COMPLETION RULE"))
+        assertTrue(prompt.contains("ROUTE SELECTION AND CAPABILITY CREATION RULE"))
+        assertTrue(prompt.contains("Do not pretend a Python extension can add Android framework"))
     }
 
     @Test fun toolAccessMetadataIsAvailableToTheScopeGuard() {
@@ -258,6 +260,17 @@ class ToolRegistryPromptAvailabilityTest {
         assertTrue("Core image generation contract is always available", launch.contains("image_generate"))
     }
 
+
+    @Test fun extensionLifecycleContractsAreAlwaysDetailedForModelLedForgingAndReuse() {
+        val detailed = ToolRegistry.detailedToolNames("an unrelated conversation")
+        assertTrue(detailed.containsAll(setOf(
+            "extension_list", "extension_create", "extension_update", "extension_test",
+            "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback"
+        )))
+        assertTrue("The developer route must remain available beside extension forging",
+            ToolRegistry.nativeToolsFor("an unrelated conversation").any { it.name == "dev_shell" })
+    }
+
     @Test fun exactRegisteredToolNameCanRequestItsFullContract() {
         val selected = ToolRegistry.detailedToolNames("Please call open_app now")
         assertTrue(selected.contains("open_app"))
@@ -307,6 +320,18 @@ class ToolRegistryNativeSelectionTest {
         val selected = ToolRegistry.nativeToolsFor("Open WhatsApp and inspect the screen", stale).map { it.name }.toSet()
         assertTrue(selected.contains("open_app"))
         assertTrue(selected.contains("read_screen"))
+    }
+
+    @Test fun nativeCallableFoundationDoesNotChangeWithUserKeywords() {
+        val ordinary = ToolRegistry.nativeToolsFor("hello").map { it.name }.toSet()
+        val unrelated = ToolRegistry.nativeToolsFor("weather forex whatsapp github python").map { it.name }.toSet()
+        assertEquals("User vocabulary must not alter native tool routing.", ordinary, unrelated)
+        assertTrue(ordinary.containsAll(setOf(
+            "capability_search", "read_screen", "click", "swipe", "scroll",
+            "python_exec", "workspace_write", "mcp_list_tools", "task_add"
+        )))
+        assertFalse("Specialist tools are discovered by the model, not keyword coincidence.", ordinary.contains("weather"))
+        assertFalse(ordinary.contains("bybit_public_ticker"))
     }
 
     @Test fun recentToolContextUsesOnlyTheLatestAssistantCallGroup() {
@@ -418,4 +443,125 @@ class ToolRegistryNativeSelectionTest {
         assertTrue(!required.contains("count"))
         assertEquals(false, schema.getBoolean("additionalProperties"))
     }
+    @Test fun capabilitySearchIsAlwaysCallableAndReadOnly() {
+        val definition = ToolRegistry.find("capability_search") ?: error("capability_search must be registered")
+        assertEquals(ToolAccess.READ, definition.access)
+        assertEquals("orion_core", AgentPolicy.packForTool("capability_search"))
+        assertEquals(OrionCapabilityAdapters.Backend.RUNTIME_STATE, OrionCapabilityAdapters.route("capability_search")?.backend)
+        assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.RUNTIME_STATE, "capability_search"))
+        val foundation = ToolRegistry.nativeToolsFor("hello")
+        assertTrue(foundation.any { it.name == "capability_search" })
+        assertTrue(foundation.any { it.name == "capability_load" })
+        assertEquals(ToolAccess.READ, ToolRegistry.find("capability_load")?.access)
+    }
+
+    @Test fun capabilitySearchReturnsSimpleCandidatesAndLoadReturnsTheExactSchema() {
+        val result = JSONObject(ToolRegistry.searchCapabilities("inspect MCP resources", 8))
+        val rows = result.getJSONArray("results")
+        assertTrue(rows.length() > 0)
+        val names = (0 until rows.length()).map { rows.getJSONObject(it).getString("name") }
+        assertTrue(names.contains("mcp_list_resources"))
+        for (index in 0 until rows.length()) {
+            val row = rows.getJSONObject(index)
+            val name = row.getString("name")
+            val definition = ToolRegistry.find(name) ?: error("discovery returned unregistered tool $name")
+            assertEquals(definition.access.name.lowercase(), row.getString("access"))
+            assertFalse("Search should not flood the model with unused schemas", row.has("schema"))
+            val route = OrionCapabilityAdapters.route(name) ?: error("discovery returned unrouted tool $name")
+            assertTrue(OrionRuntimeCapabilityExecutor.supports(route.backend, name))
+        }
+    }
+
+    @Test fun capabilitySearchPaginationKeepsZeroMatchToolsReachable() {
+        val first = JSONObject(ToolRegistry.searchCapabilities("zzqvortexquux", 5, 0))
+        assertEquals(5, first.getInt("count"))
+        assertTrue(first.getBoolean("has_more"))
+        assertEquals(0, first.getInt("offset"))
+        val total = first.getInt("total")
+        assertTrue(total > 5)
+        val seen = mutableListOf<String>()
+        val firstRows = first.getJSONArray("results")
+        for (i in 0 until firstRows.length()) {
+            assertFalse("Search results should stay compact", firstRows.getJSONObject(i).has("schema"))
+            seen += firstRows.getJSONObject(i).getString("name")
+        }
+        var offset = first.getInt("next_offset")
+        while (offset < total) {
+            val page = JSONObject(ToolRegistry.searchCapabilities("zzqvortexquux", 5, offset))
+            assertEquals(offset, page.getInt("offset"))
+            val rows = page.getJSONArray("results")
+            for (i in 0 until rows.length()) {
+                val name = rows.getJSONObject(i).getString("name")
+                assertFalse("Duplicate capability across pages: $name", seen.contains(name))
+                seen += name
+            }
+            offset += rows.length()
+        }
+        assertEquals(total, seen.size)
+        assertEquals(total, seen.toSet().size)
+        val end = JSONObject(ToolRegistry.searchCapabilities("zzqvortexquux", 5, total))
+        assertEquals(0, end.getInt("count"))
+        assertFalse(end.getBoolean("has_more"))
+    }
+
+    @Test fun capabilitySearchPaginationIsDeterministicAndClampsBounds() {
+        val query = "zzqvortexquux"
+        val a = JSONObject(ToolRegistry.searchCapabilities(query, 4, 0))
+        val b = JSONObject(ToolRegistry.searchCapabilities(query, 4, 0))
+        assertEquals(a.getJSONArray("results").toString(), b.getJSONArray("results").toString())
+        val clamped = JSONObject(ToolRegistry.searchCapabilities(query, 999, -20))
+        assertEquals(12, clamped.getInt("limit"))
+        assertEquals(0, clamped.getInt("offset"))
+        assertEquals(minOf(12, clamped.getInt("total")), clamped.getInt("count"))
+        val end = JSONObject(ToolRegistry.searchCapabilities(query, 5, clamped.getInt("total") + 100))
+        assertEquals(clamped.getInt("total"), end.getInt("offset"))
+        assertEquals(0, end.getInt("count"))
+        assertFalse(end.getBoolean("has_more"))
+    }
+
+    @Test fun capabilityLoadExposesOnlyTheExactSelectedRegisteredTool() {
+        val exposed = ToolRegistry.nativeToolsFor("hello").toMutableList()
+        assertFalse(exposed.any { it.name == "trade_history_summary" })
+        val before = exposed.size
+        val search = JSONObject(ToolRegistry.searchCapabilities("trade_history_summary", 8))
+        assertTrue(search.getJSONArray("results").length() > 0)
+        assertEquals(before, exposed.size)
+        val loaded = JSONObject(ToolRegistry.loadCapability(exposed, "trade_history_summary"))
+        assertTrue(loaded.getBoolean("loaded"))
+        assertEquals("object", loaded.getJSONObject("schema").getString("type"))
+        assertFalse(loaded.getBoolean("already_callable"))
+        assertEquals("trade_history_summary", loaded.getString("tool_name"))
+        assertTrue(exposed.any { it.name == "trade_history_summary" })
+        assertEquals(before + 1, exposed.size)
+        val duplicate = JSONObject(ToolRegistry.loadCapability(exposed, "trade_history_summary"))
+        assertTrue(duplicate.getBoolean("loaded"))
+        assertTrue(duplicate.getBoolean("already_callable"))
+        assertEquals(before + 1, exposed.size)
+    }
+
+    @Test fun capabilityLoadRejectsUnknownAndUnimplementedTools() {
+        val exposed = ToolRegistry.nativeToolsFor("hello").toMutableList()
+        val unknown = JSONObject(ToolRegistry.loadCapability(exposed, "invented_tool"))
+        assertFalse(unknown.getBoolean("loaded"))
+        assertEquals("unknown_registered_tool", unknown.getString("error"))
+        val internal = JSONObject(ToolRegistry.loadCapability(exposed, "capability_search"))
+        assertFalse(internal.getBoolean("loaded"))
+        assertEquals("capability_not_implemented", internal.getString("error"))
+    }
+
+    @Test fun capabilityLoadRespectsProviderDeclarationLimit() {
+        val exposed = ToolRegistry.nativeToolsFor("hello").toMutableList()
+        val existingNames = exposed.map { it.name }.toSet()
+        val candidate = ToolRegistry.all.firstOrNull { tool ->
+            val route = OrionCapabilityAdapters.route(tool.name)
+            tool.name !in existingNames && route != null && OrionRuntimeCapabilityExecutor.supports(route.backend, tool.name)
+        } ?: error("expected at least one implemented capability outside the initial callable set")
+        val fillers = ToolRegistry.all.filter { it.name != candidate.name && it.name !in existingNames }
+        exposed.addAll(fillers.take(128 - exposed.size))
+        assertEquals(128, exposed.size)
+        val result = JSONObject(ToolRegistry.loadCapability(exposed, candidate.name))
+        assertFalse(result.getBoolean("loaded"))
+        assertEquals("provider_tool_declaration_limit", result.getString("error"))
+    }
+
 }

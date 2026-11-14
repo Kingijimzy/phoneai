@@ -40,6 +40,20 @@ object ChatHistoryStore {
     fun save(context: Context, transcript: List<Pair<String, String>>) = repo(context).saveActive(context, transcript)
 
     @Synchronized
+    fun loadStructured(context: Context): List<OrionChatLine> = repo(context).loadActiveStructured(context)
+
+    @Synchronized
+    fun saveStructured(context: Context, lines: List<OrionChatLine>) = repo(context).saveActiveStructured(context, lines)
+
+    @Synchronized
+    fun structuredMessagesForSession(context: Context, sessionId: String): List<OrionChatLine> =
+        repo(context).structuredMessagesForSession(context, sessionId)
+
+    @Synchronized
+    fun archiveAndClearStructured(context: Context, lines: List<OrionChatLine>) =
+        repo(context).archiveAndClearStructured(context, lines)
+
+    @Synchronized
     fun archiveAndClear(context: Context, transcript: List<Pair<String, String>>) =
         repo(context).archiveAndClear(context, transcript)
 
@@ -54,7 +68,10 @@ object ChatHistoryStore {
     @Synchronized
     fun deleteArchivedById(context: Context, sessionId: String): Boolean {
         val deleted = repo(context).deleteArchivedById(context, sessionId)
-        if (deleted) OrionMultimodalEvidenceStore.deleteSession(context, sessionId)
+        if (deleted) {
+            OrionMultimodalEvidenceStore.deleteSession(context, sessionId)
+            OrionChatAttachmentStore.deleteSession(context, sessionId)
+        }
         return deleted
     }
 
@@ -66,7 +83,10 @@ object ChatHistoryStore {
     fun deleteArchived(context: Context, timestamp: Long, title: String): Boolean {
         val session = archived(context).firstOrNull { it.timestamp == timestamp && it.title == title }?.sessionId
         val deleted = repo(context).deleteArchived(context, timestamp, title)
-        if (deleted && session != null) OrionMultimodalEvidenceStore.deleteSession(context, session)
+        if (deleted && session != null) {
+            OrionMultimodalEvidenceStore.deleteSession(context, session)
+            OrionChatAttachmentStore.deleteSession(context, session)
+        }
         return deleted
     }
 
@@ -74,7 +94,10 @@ object ChatHistoryStore {
     fun deleteArchived(context: Context, timestamp: Long): Boolean {
         val session = archived(context).firstOrNull { it.timestamp == timestamp }?.sessionId
         val deleted = repo(context).deleteArchived(context, timestamp)
-        if (deleted && session != null) OrionMultimodalEvidenceStore.deleteSession(context, session)
+        if (deleted && session != null) {
+            OrionMultimodalEvidenceStore.deleteSession(context, session)
+            OrionChatAttachmentStore.deleteSession(context, session)
+        }
         return deleted
     }
 
@@ -82,7 +105,10 @@ object ChatHistoryStore {
     fun clearArchived(context: Context): Boolean {
         val sessions = archived(context).map { it.sessionId }
         val deleted = repo(context).clearArchived(context)
-        if (deleted) sessions.forEach { OrionMultimodalEvidenceStore.deleteSession(context, it) }
+        if (deleted) sessions.forEach {
+            OrionMultimodalEvidenceStore.deleteSession(context, it)
+            OrionChatAttachmentStore.deleteSession(context, it)
+        }
         return deleted
     }
 
@@ -99,7 +125,10 @@ object ChatHistoryStore {
         val active = activeSessionId(context)
         val sessions = archived(context).map { it.sessionId } + listOfNotNull(active)
         val deleted = repo(context).clearAll(context)
-        if (deleted) sessions.distinct().forEach { OrionMultimodalEvidenceStore.deleteSession(context, it) }
+        if (deleted) sessions.distinct().forEach {
+            OrionMultimodalEvidenceStore.deleteSession(context, it)
+            OrionChatAttachmentStore.deleteSession(context, it)
+        }
         return deleted
     }
 
@@ -107,7 +136,10 @@ object ChatHistoryStore {
     fun clear(context: Context) {
         val active = activeSessionId(context)
         repo(context).clear(context)
-        active?.let { OrionMultimodalEvidenceStore.deleteSession(context, it) }
+        active?.let {
+            OrionMultimodalEvidenceStore.deleteSession(context, it)
+            OrionChatAttachmentStore.deleteSession(context, it)
+        }
     }
 
     /** Kept for regression tests that exercise legacy JSON migration/filtering. */

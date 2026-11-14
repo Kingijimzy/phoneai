@@ -35,7 +35,7 @@ internal object OrionRuntimeCapabilityExecutor {
             "browser_navigate", "browser_back", "browser_handoff", "browser_wait",
             "browser_tabs", "browser_upload", "browser_close"
         )
-        OrionCapabilityAdapters.Backend.RUNTIME_STATE -> tool in setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state")
+        OrionCapabilityAdapters.Backend.RUNTIME_STATE -> tool in setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state", "capability_search", "capability_load")
         OrionCapabilityAdapters.Backend.DEV -> tool in setOf("dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan", "dev_summary", "macro_save", "macro_run", "macro_list", "macro_delete")
     }
 
@@ -58,7 +58,8 @@ internal object OrionRuntimeCapabilityExecutor {
         researchCancelled: java.util.concurrent.atomic.AtomicBoolean = java.util.concurrent.atomic.AtomicBoolean(false),
         askUser: (String, List<String>, String) -> String = { _, _, _ -> "" },
         pythonExecutor: OrionPythonCapabilityExecutor? = null,
-        routineReplay: (String, String) -> String = { _, _ -> "error: saved routine replay callback unavailable" }
+        routineReplay: (String, String) -> String = { _, _ -> "error: saved routine replay callback unavailable" },
+        capabilityLoad: (String) -> String = { "error: capability loader callback unavailable" }
     ): String? = when (backend) {
         OrionCapabilityAdapters.Backend.DEVICE -> OrionDeviceCapabilityExecutor.execute(
             tool, args, service, tools, stopped, confirm, validateAction, verifyAction, verifySend, look, play, readScreen, routineReplay
@@ -85,6 +86,9 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.PYTHON -> pythonExecutor?.execute(tool, args, confirm, stopped)
         // RUNTIME_STATE tools (model_status, model_offline_mode, model_decision_*, soul_state) are implemented in this block.
         OrionCapabilityAdapters.Backend.FILES, OrionCapabilityAdapters.Backend.RUNTIME_STATE -> when (tool) {
+            "capability_search" -> ToolRegistry.searchCapabilities(args.optString("query"), args.optInt("limit", 8), args.optInt("offset", 0))
+            "capability_load" -> capabilityLoad(args.optString("tool_name"))
+
             "find_files" -> tools.findFiles(args.optString("query"))
             "open_file" -> tools.openFile(args.optString("id"))
             "save_file" -> tools.saveFile(args.optString("filename"), args.optString("content"), args.optString("folder", "Orion"))

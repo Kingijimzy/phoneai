@@ -38,10 +38,22 @@ class OrionToolContractCodecTest {
         val arguments = OrionToolContractCodec.parameters(mcp)
             .getJSONObject("properties").getJSONObject("arguments")
         assertEquals("object", arguments.getString("type"))
-        assertFalse(arguments.has("additionalProperties"))
+        assertTrue(arguments.getBoolean("additionalProperties"))
         val extension = ToolRegistry.find("extension_run") ?: error("extension_run must be registered")
-        assertEquals("object", OrionToolContractCodec.parameters(extension)
-            .getJSONObject("properties").getJSONObject("input").getString("type"))
+        val extensionInput = OrionToolContractCodec.parameters(extension)
+            .getJSONObject("properties").getJSONObject("input")
+        assertEquals("object", extensionInput.getString("type"))
+        assertTrue(extensionInput.getBoolean("additionalProperties"))
+
+        // MCP arguments are supplied by each remote tool's own schema, not by Orion's
+        // generic mcp_call wrapper. They must pass through without rejecting valid fields.
+        val call = org.json.JSONObject()
+            .put("name", "mcp_list_tools")
+            .put("arguments", org.json.JSONObject()
+                .put("server_id", "roamies")
+                .put("limit", 10)
+                .put("filters", org.json.JSONObject().put("enabled", true)))
+        assertNull(OrionToolContractCodec.validateArguments(mcp, call))
     }
 
     @Test fun infersArrayAndDefaultedLiteralContracts() {
@@ -84,10 +96,14 @@ class OrionToolContractCodecTest {
 
     @Test fun selectsRelevantNativeToolsWithinProviderLimit() {
         val selected = ToolRegistry.nativeToolsFor("inspect MCP servers and list remote tools")
-        assertTrue(selected.size <= 48)
+        assertTrue(selected.size <= 96)
         assertTrue(selected.any { it.name == "mcp_status" })
         assertTrue(selected.any { it.name == "mcp_list_tools" })
         assertTrue(selected.any { it.name == "mcp_call" })
+        assertTrue(selected.any { it.name == "open_app" })
+        assertTrue(selected.any { it.name == "read_screen" })
+        assertTrue(selected.any { it.name == "python_exec" })
+        assertTrue(selected.any { it.name == "workspace_write" })
         assertTrue(selected.any { it.name == "mcp_list_resources" })
         assertTrue(selected.any { it.name == "mcp_get_prompt" })
         assertTrue(selected.all { ToolRegistry.find(it.name) != null })
@@ -96,6 +112,19 @@ class OrionToolContractCodecTest {
         assertTrue(phone.any { it.name == "open_app" })
         val resumed = ToolRegistry.nativeToolsFor("continue", setOf("browser_click_verify"))
         assertTrue(resumed.any { it.name == "browser_click_verify" })
+    }
+
+
+    @Test fun everyRegisteredAccessibilityOperationIsCallableInTheDefaultModelTurn() {
+        val exposed = ToolRegistry.nativeToolsFor("hello").map { it.name }.toSet()
+        val missing = ToolRegistry.names()
+            .filter { ToolRegistry.requiresAccessibility(it) && it !in exposed }
+        assertTrue("Accessibility capabilities hidden from the model: $missing", missing.isEmpty())
+        assertTrue(exposed.containsAll(setOf(
+            "read_screen", "click", "click_text", "tap", "long_press", "swipe",
+            "swipe_path", "scroll", "type", "key", "look", "play",
+            "routine_run", "routine_resume", "open_app"
+        )))
     }
 
     @Test fun parsesActualRegistryContractsWithoutLosingNames() {
@@ -107,4 +136,11 @@ class OrionToolContractCodecTest {
         }
         assertEquals(ToolRegistry.names(), names.toSet())
     }
+    @Test fun exposesMcpDiscoveryForOrdinaryLanguageRequests() {
+        val selected = ToolRegistry.nativeToolsFor("Find the latest information about my business records")
+        assertTrue(selected.any { it.name == "mcp_status" })
+        assertTrue(selected.any { it.name == "mcp_list_tools" })
+        assertTrue(selected.any { it.name == "mcp_call" })
+    }
+
 }

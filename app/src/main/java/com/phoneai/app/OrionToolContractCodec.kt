@@ -208,7 +208,7 @@ internal object OrionToolContractCodec {
         val literal = value.ifBlank { hint.trim() }
         val lower = hint.lowercase()
         val schema = when {
-            lower.startsWith("json") -> JSONObject().put("type", "object")
+            lower.startsWith("json") -> JSONObject().put("type", "object").put("additionalProperties", true)
             hint.startsWith("<") && hint.endsWith(">") -> JSONObject()
             lower.startsWith("boolean") || value in setOf("true", "false") ->
                 JSONObject().put("type", "boolean")

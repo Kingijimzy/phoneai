@@ -3,6 +3,8 @@ package com.phoneai.app
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 
 /**
  * Routes account-backed providers through their official native clients; all API-key
@@ -63,23 +65,28 @@ internal class AccountAwareModelProvider(
         // Antigravity's CLI rejects prompts above 100k characters; unknown account models
         // deliberately receive the conservative 16k-token policy rather than an assumed
         // large context window. This keeps the newest user turn and complete tool exchanges.
-        val contextCapabilities = OrionProviderContextPolicy.capabilities(
-            provider.id, model.orEmpty(), transport = "chat"
-        )
-        val budgetedMessages = OrionProviderContextPolicy.fitMessages(
-            messages, contextCapabilities, maxTokens
-        )
-        val prompt = transcript(budgetedMessages)
-        require(prompt.isNotBlank()) { "No text content was supplied to the account model." }
-        require(prompt.length <= 100_000) {
-            "The conversation is still too large after context compaction (" + prompt.length + " characters). " +
-                "Start a new chat or reduce attached content; Orion preserved the latest user request."
-        }
         val answer = synchronized(lock) {
             check(!cancelled) { "Account model request was cancelled." }
             when (provider.id) {
-                "codex" -> runCodex(prompt, model, tools, onDelta, onToolCall)
-                "antigravity" -> runAntigravity(prompt, model, tools, onDelta, onToolCall)
+                // Codex owns durable conversation history. Sending Orion's entire transcript
+                // on every request creates a new, oversized, stateless Codex session.
+                "codex" -> runCodex(messages, model, tools, onDelta, onToolCall)
+                // Antigravity's headless CLI is prompt-oriented, so it still receives a
+                // bounded transcript rather than Codex's native thread lifecycle.
+                "antigravity" -> {
+                    val contextCapabilities = OrionProviderContextPolicy.capabilities(
+                        provider.id, model.orEmpty(), transport = "chat"
+                    )
+                    val budgetedMessages = OrionProviderContextPolicy.fitMessages(
+                        messages, contextCapabilities, maxTokens
+                    )
+                    // The CLI has no durable native thread API. Keep the latest complete
+                    // messages and discard older history deterministically instead of failing
+                    // the entire request after the provider-specific budgeter has run.
+                    val prompt = boundedRecentTranscript(budgetedMessages, 60_000)
+                    require(prompt.isNotBlank()) { "No text content was supplied to Antigravity." }
+                    runAntigravity(prompt, model, tools, onDelta, onToolCall)
+                }
                 else -> error("Unsupported account provider: " + provider.id)
             }
         }
@@ -90,7 +97,7 @@ internal class AccountAwareModelProvider(
     }
 
     private fun runCodex(
-        prompt: String,
+        messages: JSONArray,
         requestedModel: String?,
         tools: List<ToolDefinition>,
         onDelta: ((String) -> Unit)?,
@@ -99,6 +106,7 @@ internal class AccountAwareModelProvider(
         val installer = CodexRuntimeInstaller(app)
         val client = installer.openAppServer(app.filesDir.absolutePath)
         activeCodex = client
+        val preferences = app.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
         try {
             check(client.initialize()) { "Codex app-server initialization failed." }
             val account = client.readAccount()
@@ -113,8 +121,59 @@ internal class AccountAwareModelProvider(
                 )
                 else -> catalogue.firstOrNull()
             }
-            val thread = client.startThread(model, tools)
-            val answer = client.runTurnAndAwait(thread, prompt, model, onDelta = onDelta, onToolCall = onToolCall)
+
+            // Bind the durable Codex thread to its model and exact dynamic-tool contract.
+            // If either changes, create a fresh native thread rather than resuming a thread
+            // whose provider/model or callable schema no longer matches Orion's current turn.
+            val canonicalToolContract = tools.sortedBy { it.name }.joinToString("|") {
+                it.name + ":" + it.inputSchema.toString()
+            }
+            val toolFingerprint = MessageDigest.getInstance("SHA-256")
+                .digest(canonicalToolContract.toByteArray(StandardCharsets.UTF_8))
+                .joinToString("") { byte -> "%02x".format(byte) }
+            val storedThread = preferences.getString("codex_native_thread_id", null)
+            val storedModel = preferences.getString("codex_native_thread_model", null)
+            val storedTools = preferences.getString("codex_native_thread_tools", null)
+            val canResume = !storedThread.isNullOrBlank() &&
+                storedModel == model.orEmpty() && storedTools == toolFingerprint
+
+            val thread = if (canResume) {
+                try {
+                    client.resumeThread(storedThread!!)
+                } catch (failure: Exception) {
+                    val detail = failure.message.orEmpty().lowercase()
+                    val staleThread = detail.contains("not found") ||
+                        detail.contains("unknown thread") ||
+                        detail.contains("no such thread") ||
+                        detail.contains("does not exist")
+                    if (!staleThread) throw failure
+                    client.startThread(model, tools)
+                }
+            } else {
+                client.startThread(model, tools)
+            }
+
+            preferences.edit()
+                .putString("codex_native_thread_id", thread)
+                .putString("codex_native_thread_model", model.orEmpty())
+                .putString("codex_native_thread_tools", toolFingerprint)
+                .apply()
+
+            // A resumed thread already contains its own prior user/assistant/tool history.
+            // Send only the newest user turn. Seed a newly-created thread with a bounded
+            // recent transcript once, so existing Orion context is not discarded.
+            val input = if (canResume && thread == storedThread) {
+                latestUserText(messages)
+            } else {
+                boundedRecentTranscript(messages, 60_000)
+            }
+            require(input.isNotBlank()) { "No current user text was supplied to Codex." }
+            val answer = client.runTurnAndAwait(
+                thread, input, model,
+                timeoutMs = 600_000L,
+                onDelta = onDelta,
+                onToolCall = onToolCall
+            )
             check(answer.isNotBlank()) { "Codex returned an empty model response." }
             Prefs.setAccountConnected(app, "codex", true)
             accountRequests++
@@ -131,6 +190,59 @@ internal class AccountAwareModelProvider(
         }
     }
 
+    private fun latestUserText(messages: JSONArray): String {
+        for (index in messages.length() - 1 downTo 0) {
+            val message = messages.optJSONObject(index) ?: continue
+            if (!message.optString("role").equals("user", ignoreCase = true)) continue
+            val text = contentText(message.opt("content")).trim()
+            if (text.isNotBlank()) return text
+        }
+        return ""
+    }
+
+
+    /** Keep whole recent messages when seeding a new native thread; never cut through a message. */
+    private fun boundedRecentTranscript(messages: JSONArray, maxChars: Int): String {
+        val selected = ArrayList<String>()
+        var used = 0
+        var omittedOlderMessages = false
+        for (index in messages.length() - 1 downTo 0) {
+            val message = messages.optJSONObject(index) ?: continue
+            val body = contentText(message.opt("content")).trim()
+            if (body.isBlank()) continue
+            val role = message.optString("role").ifBlank { "user" }.uppercase()
+            val chunk = "$role: $body"
+            if (selected.isNotEmpty() && used + chunk.length + 2 > maxChars) {
+                omittedOlderMessages = true
+                break
+            }
+            selected.add(if (chunk.length > maxChars) chunk.takeLast(maxChars) else chunk)
+            used += chunk.length + 2
+            if (used >= maxChars) {
+                omittedOlderMessages = index > 0
+                break
+            }
+        }
+        val recent = selected.asReversed().joinToString("\n\n")
+        return if (omittedOlderMessages) {
+            "[Orion compacted older chat history to fit the provider's prompt limit. Continue from the recent messages below.]\n\n$recent"
+        } else recent
+    }
+
+    private fun contentText(content: Any?): String = when (content) {
+        is String -> content
+        is JSONArray -> buildString {
+            for (i in 0 until content.length()) {
+                val part = content.optJSONObject(i) ?: continue
+                if (part.optString("type") in setOf("text", "input_text", "output_text")) {
+                    append(part.optString("text")).append('\n')
+                }
+            }
+        }
+        is JSONObject -> content.optString("text")
+        else -> ""
+    }
+
     private fun runAntigravity(
         prompt: String,
         requestedModel: String?,
@@ -141,16 +253,33 @@ internal class AccountAwareModelProvider(
         val installer = AntigravityRuntimeInstaller(app)
         installer.install().getOrThrow()
         val model = requestedModel?.takeIf { it.isNotBlank() }
+        val compactPrompt = AntigravityCliProtocol.compactPrompt(prompt)
+        val toolDispatches = java.util.concurrent.atomic.AtomicInteger(0)
+        val trackedToolCall: ((String, JSONObject) -> String)? = onToolCall?.let { callback ->
+            { name, args ->
+                toolDispatches.incrementAndGet()
+                callback(name, args)
+            }
+        }
+        fun invoke(value: String): String = installer.runPrompt(
+            app.filesDir.absolutePath,
+            value,
+            model,
+            tools = tools,
+            onToolCall = trackedToolCall,
+            onDelta = onDelta,
+            onSession = { session -> activeAntigravity = session }
+        )
         try {
-            val answer = installer.runPrompt(
-                app.filesDir.absolutePath,
-                prompt,
-                model,
-                tools = tools,
-                onToolCall = onToolCall,
-                onDelta = onDelta,
-                onSession = { session -> activeAntigravity = session }
-            )
+            val answer = try {
+                invoke(compactPrompt)
+            } catch (failure: Exception) {
+                // Only retry a provider-declared context overflow before any Orion tool was
+                // dispatched. Never replay a turn after a possible side effect.
+                if (toolDispatches.get() == 0 && AntigravityCliProtocol.isContextOverflow(failure.message.orEmpty())) {
+                    invoke(AntigravityCliProtocol.compactPrompt(prompt, 12_000))
+                } else throw failure
+            }
             check(answer.isNotBlank()) { "Antigravity returned an empty model response." }
             Prefs.setAccountConnected(app, "antigravity", true)
             accountRequests++
