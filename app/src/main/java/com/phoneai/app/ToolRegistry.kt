@@ -373,7 +373,7 @@ internal object ToolRegistry {
      * only tools with a concrete adapter and runtime implementation; execution still passes
      * through the normal permission and preflight gateway.
      */
-    internal fun searchCapabilities(query: String, requestedLimit: Int = 8, requestedOffset: Int = 0): String {
+    internal fun searchCapabilities(query: String, requestedLimit: Int = 8, requestedOffset: Int = 0, generatedExtensions: Collection<GeneratedExtension> = emptyList()): String {
         val stopWords: Set<String> = setOf("the", "and", "for", "you", "please", "what", "when", "where", "how", "can", "could", "with", "from", "that", "this")
         val tokens: Set<String> = Regex("[a-zA-Z0-9_]{3,}").findAll(query.lowercase()).map { it.value }.filterNot { it in stopWords }.toSet()
         // Relevance is an ordering hint only. Every implemented, routed tool remains reachable by pagination.
@@ -408,11 +408,43 @@ internal object ToolRegistry {
                 .put("access", tool.access.name.lowercase()))
         }
         val nextOffset = offset + page.size
+        // Generated extensions live in a separate durable store, not ToolRegistry.all.
+        // Surface them beside native tools so model-led search can discover and reuse prior work.
+        // Never expose source: execution remains through extension_run and existing lifecycle checks.
+        val extensionResults = org.json.JSONArray()
+        val extensionMatches = generatedExtensions.distinctBy { it.id }.map { extension ->
+            val hashMatches = extension.sourceSha256 == SelfExtendingExtensionPolicy.sha256(extension.source)
+            val usable = extension.enabled && extension.verified && hashMatches
+            val state = when {
+                !hashMatches -> "blocked-source-hash-mismatch"
+                usable -> "verified-enabled"
+                extension.verified && !extension.enabled -> "tested-disabled"
+                else -> "draft-or-unverified"
+            }
+            Triple(extension, usable, state)
+        }.filter { (extension, _, _) ->
+            tokens.isEmpty() || (extension.id + " " + extension.displayName + " " + extension.description)
+                .lowercase().let { searchable -> tokens.any { it in searchable } }
+        }.sortedWith(compareByDescending<Triple<GeneratedExtension, Boolean, String>> { it.second }
+            .thenBy { it.first.displayName.lowercase() })
+        extensionMatches.take(40).forEach { (extension, usable, state) ->
+            extensionResults.put(org.json.JSONObject()
+                .put("id", extension.id)
+                .put("name", extension.displayName)
+                .put("purpose", extension.description.take(240))
+                .put("runtime", extension.runtime)
+                .put("state", state)
+                .put("callable", usable)
+                .put("invoke_with", if (usable) "extension_run" else org.json.JSONObject.NULL)
+                .put("usage", if (usable) "Call extension_run with this exact id and the required input." else "Not callable. Test and activate under the existing extension lifecycle and owner-approval policy."))
+        }
         return org.json.JSONObject().put("query", query.take(240)).put("results", results)
+            .put("generated_extensions", extensionResults)
+            .put("generated_extension_count", extensionMatches.size)
             .put("count", results.length()).put("total", candidates.size).put("offset", offset).put("limit", limit)
             .put("next_offset", if (nextOffset < candidates.size) nextOffset else org.json.JSONObject.NULL)
             .put("has_more", nextOffset < candidates.size)
-            .put("note", "Implemented tools only. Choose by purpose, then call capability_load with the exact name to get its callable schema. Query relevance only changes order; pagination exposes every result.")
+            .put("note", "Native tools: query ranks results only; paginate until has_more=false, then capability_load the exact name. Generated extensions are listed separately with truthful lifecycle state; invoke only callable entries through extension_run. Neither inventory bypasses runtime permissions or execution checks.")
             .toString()
     }
 
