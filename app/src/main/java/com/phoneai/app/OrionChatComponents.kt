@@ -349,10 +349,10 @@ private fun OrionStructuredBlockCard(
         is OrionMessageBlock.ToolResult -> Text(block.summary, color = ChatCopy, fontSize = 12.sp, lineHeight = 18.sp)
         is OrionMessageBlock.Research -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ClickableText(
-                text = formatOrionMarkdown(block.summary),
+                text = formatOrionResearchSummary(block.summary, block.sources),
                 style = TextStyle(color = ChatCopy, fontSize = 13.sp, lineHeight = 20.sp),
                 onClick = { offset ->
-                    val annotated = formatOrionMarkdown(block.summary)
+                    val annotated = formatOrionResearchSummary(block.summary, block.sources)
                     val url = annotated.getStringAnnotations("URL", offset, (offset + 1).coerceAtMost(annotated.length))
                         .firstOrNull()?.item
                     if (url != null) onOpenBrowser(url)
@@ -399,6 +399,23 @@ private fun OrionStructuredBlockCard(
         }
         is OrionMessageBlock.Image -> ImageResultCard(block.legacyPayload)
     }
+}
+
+private fun formatOrionResearchSummary(summary: String, sources: List<String>): AnnotatedString {
+    val formatted = formatOrionMarkdown(summary)
+    val builder = AnnotatedString.Builder(formatted)
+    Regex("""\\[(\\d{1,2})]""").findAll(formatted.text).forEach { match ->
+        val index = match.groupValues[1].toIntOrNull()?.minus(1) ?: return@forEach
+        val source = sources.getOrNull(index) ?: return@forEach
+        val url = Regex("https?://[^\\\\s)]+").find(source)?.value ?: return@forEach
+        builder.addStringAnnotation("URL", url, match.range.first, match.range.last + 1)
+        builder.addStyle(
+            SpanStyle(color = OrionUiPalette.accent, fontWeight = FontWeight.SemiBold,
+                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline),
+            match.range.first, match.range.last + 1
+        )
+    }
+    return builder.toAnnotatedString()
 }
 
 internal fun resolveGeneratedFileAttachment(
