@@ -7,6 +7,9 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioFocusRequest
 import android.media.AudioTrack
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
 import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.getOfflineTtsConfig
@@ -63,6 +66,9 @@ class Voice(private val ctx: Context) {
     @Volatile private var ttsInitFinished = false
     private val queuedSpeech = java.util.concurrent.ConcurrentLinkedQueue<Pair<List<String>, (() -> Unit)?>>()
     private var rec: SpeechRecognizer? = null
+    @Volatile private var bargeInRecorder: AudioRecord? = null
+    @Volatile private var bargeInThread: Thread? = null
+    private val bargeInGeneration = AtomicInteger(0)
     @Volatile private var listeningOnDevice = false
     private val callbacks = ConcurrentHashMap<String, () -> Unit>()
     private val pending = AtomicInteger(0)
@@ -259,6 +265,89 @@ class Voice(private val ctx: Context) {
     /** Keep split logic isolated so queue boundaries can be tested without a TTS engine. */
     private fun splitForSpeech(text: String, limit: Int = 420): List<String> =
         SpeechChunker.split(text, limit)
+
+    /**
+     * Full-duplex interruption monitor for live calls. It uses VOICE_COMMUNICATION capture
+     * with hardware AEC so Orion's own speaker output is less likely to trigger a false barge-in.
+     * If AEC is unavailable, this deliberately stays disabled; the visible interrupt control remains.
+     */
+    fun startBargeInMonitor(onUserSpeech: () -> Unit): Boolean {
+        stopBargeInMonitor()
+        if (ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) return false
+        if (!AcousticEchoCanceler.isAvailable()) return false
+        val sampleRate = 16_000
+        val minimum = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        if (minimum <= 0) return false
+        val recorder = try {
+            AudioRecord.Builder()
+                .setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+                .setAudioFormat(
+                    AudioFormat.Builder().setSampleRate(sampleRate)
+                        .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build()
+                )
+                .setBufferSizeInBytes(maxOf(minimum * 2, sampleRate / 2))
+                .build()
+        } catch (_: Exception) { return false }
+        if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+            recorder.release()
+            return false
+        }
+        val aec = try { AcousticEchoCanceler.create(recorder.audioSessionId)?.apply { enabled = true } } catch (_: Exception) { null }
+        if (aec == null) {
+            recorder.release()
+            return false
+        }
+        val token = bargeInGeneration.incrementAndGet()
+        bargeInRecorder = recorder
+        bargeInThread = Thread({
+            val samples = ShortArray(320)
+            var speechFrames = 0
+            try {
+                recorder.startRecording()
+                while (token == bargeInGeneration.get()) {
+                    val count = recorder.read(samples, 0, samples.size, AudioRecord.READ_BLOCKING)
+                    if (count <= 0) {
+                        if (token != bargeInGeneration.get()) break
+                        continue
+                    }
+                    var power = 0.0
+                    for (i in 0 until count) {
+                        val value = samples[i].toDouble() / Short.MAX_VALUE
+                        power += value * value
+                    }
+                    val rms = kotlin.math.sqrt(power / count).toFloat()
+                    speechFrames = if (rms >= 0.055f) speechFrames + 1 else (speechFrames - 1).coerceAtLeast(0)
+                    if (speechFrames >= 4 && token == bargeInGeneration.get()) {
+                        main.post {
+                            if (token == bargeInGeneration.get()) onUserSpeech()
+                        }
+                        break
+                    }
+                }
+            } catch (_: Exception) {
+            } finally {
+                try { recorder.stop() } catch (_: Exception) { }
+                try { recorder.release() } catch (_: Exception) { }
+                try { aec.release() } catch (_: Exception) { }
+                if (bargeInRecorder === recorder) bargeInRecorder = null
+                if (token == bargeInGeneration.get()) bargeInThread = null
+            }
+        }, "Orion-BargeIn-AEC").apply { isDaemon = true; start() }
+        return true
+    }
+
+    fun stopBargeInMonitor() {
+        bargeInGeneration.incrementAndGet()
+        val recorder = bargeInRecorder
+        bargeInRecorder = null
+        if (recorder != null) {
+            try { recorder.stop() } catch (_: Exception) { }
+            try { recorder.release() } catch (_: Exception) { }
+        }
+        bargeInThread?.interrupt()
+        bargeInThread = null
+    }
 
     fun isSpeaking(): Boolean = pending.get() > 0 || tts?.isSpeaking == true
 
@@ -742,6 +831,7 @@ class Voice(private val ctx: Context) {
         // opening the recognizer so Orion does not transcribe its own voice.
         // SpeechRecognizer owns the recording pipeline, so app-level AcousticEchoCanceler
         // cannot be attached here; stopping playback is the reliable platform-safe guard.
+        stopBargeInMonitor()
         stopSpeaking()
         stopListening()
         if (ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -889,6 +979,7 @@ class Voice(private val ctx: Context) {
     }
 
     fun shutdown() {
+        stopBargeInMonitor()
         stopListening()
         stopSpeaking()
         tts?.shutdown()
