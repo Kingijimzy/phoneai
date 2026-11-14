@@ -668,115 +668,85 @@ internal fun OrionComposeChatScreen(
         }
     }
     Column(Modifier.fillMaxSize().background(OrionUiPalette.background).imePadding()) {
-        // Editorial header: quiet branding, no oversized pill around every element.
+        // Reference-inspired compact header: navigation, model mode, and conversation actions.
         Row(
-            Modifier.fillMaxWidth().padding(start = 10.dp, end = 9.dp, top = 8.dp, bottom = 9.dp),
-            verticalAlignment = Alignment.CenterVertically
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(9.dp)
         ) {
             Box(
-                Modifier.size(36.dp).clip(CircleShape).background(OrionUiPalette.panel)
+                Modifier.size(38.dp).clip(CircleShape).background(OrionUiPalette.panel)
                     .border(1.dp, ChatHairline, CircleShape)
                     .semantics { contentDescription = "Back to chat list"; role = Role.Button }
                     .clickable(role = Role.Button, onClick = onBack),
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Rounded.ArrowBack, null, tint = ChatCopy, modifier = Modifier.size(18.dp)) }
-            Spacer(Modifier.width(10.dp))
-            AndroidView(
-                factory = { context -> OrionLivingOrbView(context) },
-                modifier = Modifier.size(40.dp).semantics {
-                    contentDescription = "Orion living orb. Tap to start voice chat."
-                    role = Role.Button
-                },
-                update = { view ->
-                    view.mode = effectiveOrbMode
-                    view.micLevel = orbMicLevel
-                    view.speechAmplitude = orbSpeechAmplitude
-                    view.wordPulse = orbWordPulse
-                    view.setOnClickListener { onVoice() }
-                }
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(chatTitle, color = ChatCopy, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.size(12.dp), contentAlignment = Alignment.Center) {
-                        if (presenceActive) {
-                            Box(
-                                Modifier.size(12.dp).scale(presenceScale).clip(CircleShape)
-                                    .background(statusDotColor.copy(alpha = presenceAlpha))
-                            )
-                        }
-                        Box(
-                            Modifier.size(5.dp).clip(CircleShape).background(statusDotColor)
-                                .semantics { contentDescription = "Orion state: $displayStatus" }
-                        )
-                    }
-                    Text(orionStatusLabel(displayStatus, effectiveOrbMode, busy), color = ChatMuted, fontSize = 11.sp,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+
+            Row(
+                Modifier.weight(1f).heightIn(min = 42.dp).clip(RoundedCornerShape(24.dp))
+                    .background(OrionUiPalette.panel)
+                    .border(1.dp, ChatHairline, RoundedCornerShape(24.dp))
+                    .semantics { contentDescription = "Choose Smart Mode, provider and model"; role = Role.Button }
+                    .clickable { showModelSheet = true }
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(if (Prefs.modelRouting(ctx)) "Smart Mode" else modelLabel,
+                    color = ChatCopy, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.width(7.dp))
+                Icon(Icons.Rounded.ChevronRight, null, tint = OrionUiPalette.accent, modifier = Modifier.size(15.dp))
             }
+
             Box(
-                Modifier.size(32.dp).clip(RoundedCornerShape(10.dp))
+                Modifier.heightIn(min = 38.dp).clip(RoundedCornerShape(18.dp))
+                    .background(modeChipFill).border(1.dp, ChatHairline, RoundedCornerShape(18.dp))
+                    .semantics { contentDescription = if (commandMode) "Switch to Talk mode" else "Switch to Command mode"; role = Role.Button }
+                    .clickable(role = Role.Button) { onModeChange(!commandMode) }
+                    .padding(horizontal = 9.dp, vertical = 9.dp)
+            ) {
+                Text(if (commandMode) "Command" else "Talk", color = modeChipAccent,
+                    fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            }
+
+            Box(
+                Modifier.size(36.dp).clip(CircleShape)
                     .semantics { contentDescription = "Start a new chat"; role = Role.Button }
                     .clickable(onClick = onNewChat),
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Rounded.Add, "New chat", tint = ChatCopy, modifier = Modifier.size(19.dp)) }
-            Box(
-                Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
-                    .semantics { contentDescription = "Open chat history"; role = Role.Button }
-                    .clickable(onClick = onHistory),
-                contentAlignment = Alignment.Center
-            ) { Icon(Icons.Rounded.History, "Chat history", tint = ChatMuted, modifier = Modifier.size(18.dp)) }
+            ) { Icon(Icons.Rounded.Add, "New chat", tint = ChatCopy, modifier = Modifier.size(20.dp)) }
+
             Box {
                 Box(
-                    Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
+                    Modifier.size(34.dp).clip(CircleShape)
                         .semantics { contentDescription = "More chat options"; role = Role.Button }
                         .clickable { menuExpanded = true },
                     contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Rounded.MoreVert, "More options", tint = ChatCopy, modifier = Modifier.size(19.dp))
-                }
+                ) { Icon(Icons.Rounded.MoreVert, "More options", tint = ChatMuted, modifier = Modifier.size(19.dp)) }
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
                     modifier = Modifier.background(OrionUiPalette.panel)
                 ) {
-                    fun choose(action: String) {
-                        menuExpanded = false
-                        onMenuAction(action)
-                    }
-                    DropdownMenuItem(text = { Text("New Chat", color = ChatCopy) }, onClick = { choose("new_chat") })
+                    fun choose(action: String) { menuExpanded = false; onMenuAction(action) }
+                    DropdownMenuItem(text = { Text("Chat history", color = ChatCopy) }, onClick = { menuExpanded = false; onHistory() })
                     DropdownMenuItem(text = { Text("Rename chat", color = ChatCopy) }, onClick = { choose("rename_chat") })
-                    DropdownMenuItem(text = { Text("Model", color = ChatCopy) }, onClick = { choose("model") })
+                    DropdownMenuItem(text = { Text("Choose model", color = ChatCopy) }, onClick = { menuExpanded = false; onModelClick() })
                     DropdownMenuItem(text = { Text("Clear Chat", color = OrionUiPalette.danger) }, onClick = { choose("clear_chat") })
                     DropdownMenuItem(text = { Text("Open Terminal", color = ChatCopy) }, onClick = { choose("terminal") })
                     DropdownMenuItem(text = { Text("Open Browser", color = ChatCopy) }, onClick = { choose("browser") })
                     DropdownMenuItem(text = { Text("Browse Chat Files", color = ChatCopy) }, onClick = { choose("chat_files") })
                     DropdownMenuItem(text = { Text("Skills in Session", color = ChatCopy) }, onClick = { choose("skills") })
                     DropdownMenuItem(text = { Text("Capabilities & Tools", color = ChatCopy) }, onClick = { choose("capabilities") })
-                    DropdownMenuItem(text = { Text("Send Feedback", color = ChatCopy) }, onClick = { choose("feedback") })
-                    DropdownMenuItem(text = { Text("Notification Access", color = ChatCopy) }, onClick = { choose("notifications") })
                     DropdownMenuItem(text = { Text("Alerts & Briefings", color = ChatCopy) }, onClick = { choose("alerts") })
                     DropdownMenuItem(text = { Text("MCPs in Session", color = ChatCopy) }, onClick = { choose("mcps") })
                     DropdownMenuItem(text = { Text("Memories in Session", color = ChatCopy) }, onClick = { choose("memories") })
                     DropdownMenuItem(text = { Text("Token Usage", color = ChatCopy) }, onClick = { choose("token_usage") })
                 }
             }
-            Box(
-                Modifier.heightIn(min = 36.dp).clip(RoundedCornerShape(9.dp)).background(modeChipFill)
-                    .border(1.dp, ChatHairline, RoundedCornerShape(9.dp))
-                    .semantics { contentDescription = if (commandMode) "Switch to Talk mode" else "Switch to Command mode"; role = Role.Button }
-                    .clickable(role = Role.Button) { onModeChange(!commandMode) }
-                    .padding(horizontal = 7.dp, vertical = 7.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(if (commandMode) Icons.Rounded.Tune else Icons.Rounded.Waves, null,
-                        tint = modeChipAccent, modifier = Modifier.size(15.dp))
-                    Text(if (commandMode) "Command" else "Talk", color = modeChipAccent, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                }
-            }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(ChatHairline.copy(alpha = .55f)))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(ChatHairline.copy(alpha = .45f)))
 
         if (lines.isEmpty() && attachments.isEmpty() && activityEvents.isEmpty()) {
             OrionHome(
@@ -875,126 +845,87 @@ internal fun OrionComposeChatScreen(
             }
         }
 
-        // Composer is the primary surface; provider and model switching stay beside the input.
-        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
+        // One compact, multimodal composer. Model/provider selection lives in the header sheet.
+        Column(
+            Modifier.fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, OrionUiPalette.panel.copy(alpha = .78f), OrionUiPalette.background)))
+                .padding(horizontal = 13.dp, vertical = 8.dp)
+        ) {
             AnimatedVisibility(
                 visible = editingOriginal != null,
                 enter = fadeIn(animationSpec = tween(150)) + slideInVertically(animationSpec = tween(150)) { it / 3 },
                 exit = androidx.compose.animation.fadeOut(animationSpec = tween(120))
             ) {
                 Row(
-                    Modifier.fillMaxWidth().padding(bottom = 7.dp).clip(RoundedCornerShape(9.dp))
-                        .background(OrionUiPalette.panel).border(1.dp, OrionUiPalette.border, RoundedCornerShape(9.dp))
-                        .padding(start = 11.dp, end = 5.dp, top = 5.dp, bottom = 5.dp),
+                    Modifier.fillMaxWidth().padding(bottom = 7.dp).clip(RoundedCornerShape(12.dp))
+                        .background(OrionUiPalette.panel).border(1.dp, OrionUiPalette.border, RoundedCornerShape(12.dp))
+                        .padding(start = 12.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Column(Modifier.weight(1f)) {
                         Text("EDITING MESSAGE", color = OrionUiPalette.accent, fontSize = 9.sp,
                             fontWeight = FontWeight.Bold, letterSpacing = .7.sp)
-                        Text("Your revised message will replace the previous one", color = ChatMuted,
+                        Text("Your revision replaces the previous message", color = ChatMuted,
                             fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Text("CANCEL", color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(7.dp))
-                            .clickable(role = Role.Button) { editingOriginal = null; draft = "" }
-                            .semantics { contentDescription = "Cancel message editing"; role = Role.Button }
-                            .padding(horizontal = 10.dp, vertical = 12.dp))
+                        modifier = Modifier.heightIn(min = 40.dp).clickable(role = Role.Button) {
+                            editingOriginal = null; draft = ""
+                        }.padding(horizontal = 10.dp, vertical = 12.dp))
                 }
             }
             Row(
-                Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, bottom = 7.dp),
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(10.dp))
-                        .background(OrionUiPalette.panel)
-                        .border(1.dp, if (providerReady) OrionUiPalette.border.copy(alpha = 0.6f) else OrionUiPalette.warning, RoundedCornerShape(10.dp))
-                        .clickable(role = Role.Button) { showModelSheet = true }
-                        .semantics { contentDescription = "Choose provider; $shownProvider"; role = Role.Button }
-                        .padding(horizontal = 10.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(if (providerReady) OrionUiPalette.accent else OrionUiPalette.warning))
-                    Column(Modifier.weight(1f)) {
-                        Text("PROVIDER", color = ChatMuted, fontSize = 8.sp, letterSpacing = .8.sp, fontWeight = FontWeight.SemiBold)
-                        Text(shownProvider, color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    Icon(Icons.Rounded.ChevronRight, null, tint = ChatMuted, modifier = Modifier.size(14.dp))
-                }
-                Row(
-                    Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(10.dp))
-                        .background(OrionUiPalette.panel)
-                        .border(1.dp, OrionUiPalette.border.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
-                        .clickable(role = Role.Button, onClick = onModelClick)
-                        .semantics { contentDescription = "Choose model; $modelLabel"; role = Role.Button }
-                        .padding(horizontal = 10.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(Icons.Rounded.Tune, null, tint = ChatMuted, modifier = Modifier.size(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("MODEL", color = ChatMuted, fontSize = 8.sp, letterSpacing = .8.sp, fontWeight = FontWeight.SemiBold)
-                        Text(modelLabel, color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    Icon(Icons.Rounded.ChevronRight, null, tint = ChatMuted, modifier = Modifier.size(14.dp))
-                }
-            }
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(30.dp))
                     .background(OrionUiPalette.raised)
-                    .border(1.dp, OrionUiPalette.border.copy(alpha = 0.6f), RoundedCornerShape(28.dp))
-                    .padding(start = 16.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
-                verticalAlignment = Alignment.Bottom
+                    .border(1.dp, OrionUiPalette.borderStrong.copy(alpha = .72f), RoundedCornerShape(30.dp))
+                    .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
-                Box(Modifier.weight(1f).padding(vertical = 11.dp)) {
-                    if (draft.isEmpty()) Text(if (commandMode) "Describe the task…" else "Message Orion…", color = ChatMuted, fontSize = 14.sp)
+                ComposerButton(Icons.Rounded.Add, "Attach image or file", onPickImage, secondary = true)
+                Box(Modifier.weight(1f).padding(horizontal = 5.dp, vertical = 9.dp)) {
+                    if (draft.isEmpty()) Text(
+                        if (commandMode) "Describe what Orion should do…" else "Ask Orion anything…",
+                        color = ChatMuted, fontSize = 14.sp
+                    )
                     BasicTextField(
                         value = draft, onValueChange = { draft = it },
-                        modifier = Modifier.fillMaxWidth().focusRequester(composerFocusRequester).semantics { contentDescription = if (commandMode) "Describe a task for Orion" else "Message Orion" },
+                        modifier = Modifier.fillMaxWidth().focusRequester(composerFocusRequester)
+                            .semantics { contentDescription = if (commandMode) "Describe a task for Orion" else "Ask Orion anything" },
                         textStyle = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 21.sp),
                         keyboardOptions = KeyboardOptions(
                             capitalization = if (commandMode) androidx.compose.ui.text.input.KeyboardCapitalization.None else androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
-                            autoCorrect = !commandMode,
-                            // Keep this as a multiline editor: Enter inserts a newline.
-                            // Sending is explicit through the on-screen Send button only.
-                            imeAction = ImeAction.Default
+                            autoCorrect = !commandMode, imeAction = ImeAction.Default
                         ),
                         maxLines = 5
                     )
                 }
-                ComposerButton(Icons.Rounded.AddPhotoAlternate, "Attach file or image", onPickImage, secondary = true)
-                Spacer(Modifier.width(5.dp))
+                ComposerButton(Icons.Rounded.GraphicEq, "Start live voice", onVoice, secondary = true)
                 ComposerButton(
                     if (busy) Icons.Rounded.Stop else Icons.Rounded.Send,
                     if (busy) "Stop response" else "Send message",
-                    { submitDraft() },
-                    secondary = busy
+                    { submitDraft() }, secondary = busy
                 )
             }
             Row(
-                Modifier.fillMaxWidth().padding(top = 9.dp, start = 5.dp, end = 5.dp),
-                horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically
+                Modifier.fillMaxWidth().padding(top = 3.dp, start = 5.dp, end = 5.dp),
+                horizontalArrangement = Arrangement.spacedBy(15.dp), verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Live voice", color = ChatMuted, fontSize = 11.sp,
-                    modifier = Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(8.dp))
-                        .semantics { contentDescription = "Start live voice"; role = Role.Button }
-                        .clickable(role = Role.Button, onClick = onVoice).padding(horizontal = 7.dp, vertical = 10.dp))
-                Text("Browser", color = ChatMuted, fontSize = 11.sp,
-                    modifier = Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(8.dp))
-                        .semantics { contentDescription = "Open browser preview in chat"; role = Role.Button }
-                        .clickable(role = Role.Button) { inlineBrowserUrl = "https://duckduckgo.com/" }.padding(horizontal = 7.dp, vertical = 10.dp))
-                Text("Tasks", color = ChatMuted, fontSize = 11.sp,
-                    modifier = Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(8.dp))
-                        .semantics { contentDescription = "Open tasks"; role = Role.Button }
-                        .clickable(role = Role.Button, onClick = onTasks).padding(horizontal = 7.dp, vertical = 10.dp))
-                Spacer(Modifier.weight(1f))
-                Text(if (busy) "WORKING" else if (commandMode) "COMMAND MODE" else "TALK MODE",
-                    color = ChatMuted, fontSize = 9.sp, letterSpacing = .6.sp, maxLines = 1)
+                Text(if (providerReady) shownProvider else "$shownProvider · not connected",
+                    color = if (providerReady) ChatMuted else OrionUiPalette.warning,
+                    fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).clickable { showModelSheet = true }.padding(vertical = 7.dp))
+                Text("Browser", color = ChatMuted, fontSize = 10.sp,
+                    modifier = Modifier.heightIn(min = 36.dp).clickable {
+                        inlineBrowserUrl = "https://duckduckgo.com/"
+                    }.padding(vertical = 9.dp))
+                Text("Tasks", color = ChatMuted, fontSize = 10.sp,
+                    modifier = Modifier.heightIn(min = 36.dp).clickable(onClick = onTasks).padding(vertical = 9.dp))
+                Text(if (busy) "WORKING" else if (commandMode) "COMMAND" else "TALK",
+                    color = ChatMuted, fontSize = 9.sp, letterSpacing = .5.sp)
             }
         }
-    }
+
     inlineBrowserUrl?.let { url ->
         ChatInlineBrowserDialog(
             initialUrl = url,
