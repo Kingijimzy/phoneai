@@ -71,7 +71,9 @@ internal class GeminiLiveSession(
     @Volatile private var microphoneEnabled = true
     @Volatile private var echoCanceler: AcousticEchoCanceler? = null
     private var recordingThread: Thread? = null
-    private val outputQueue = ArrayBlockingQueue<ShortArray>(GeminiLivePolicy.PLAYBACK_QUEUE_CAPACITY)
+    private data class NativeAudioBlock(val samples: ShortArray, val generation: Int)
+    private val outputQueue = ArrayBlockingQueue<NativeAudioBlock>(GeminiLivePolicy.PLAYBACK_QUEUE_CAPACITY)
+    private val outputGeneration = java.util.concurrent.atomic.AtomicInteger(0)
     @Volatile private var outputTrack: AudioTrack? = null
     @Volatile private var outputSampleRate = 0
     @Volatile private var outputThread: Thread? = null
@@ -372,7 +374,7 @@ internal class GeminiLiveSession(
             }
         }
         if (serverContent.optBoolean("turnComplete", false)) {
-            if (!outputQueue.offer(ShortArray(0))) {
+            if (!outputQueue.offer(NativeAudioBlock(ShortArray(0), outputGeneration.get()))) {
                 fail("Gemini Live output queue could not finish the audio turn.")
                 return
             }
@@ -410,7 +412,8 @@ internal class GeminiLiveSession(
                 } else if (outputSampleRate != rate) throw IOException("Gemini Live audio sample rate changed.")
                 outputTrack?.let { if (it.playState != AudioTrack.PLAYSTATE_PLAYING) it.play() }
             }
-            if (!outputQueue.offer(pcm, 100, TimeUnit.MILLISECONDS)) throw IOException("Gemini Live playback queue is full.")
+            val generation = outputGeneration.get()
+            if (!outputQueue.offer(NativeAudioBlock(pcm, generation), 100, TimeUnit.MILLISECONDS)) throw IOException("Gemini Live playback queue is full.")
             localSpeechActive = true
         } catch (e: Exception) { fail("Gemini Live audio playback failed: " + (e.message ?: e.javaClass.simpleName)) }
     }
@@ -418,23 +421,28 @@ internal class GeminiLiveSession(
     private fun nativeOutputLoop(track: AudioTrack) {
         try {
             while (!stopped.get() && outputTrack === track) {
-                val pcm = outputQueue.take()
+                val block = outputQueue.take()
+                if (block.generation != outputGeneration.get()) continue
+                val pcm = block.samples
                 if (pcm.isEmpty()) { localSpeechActive = false; listener.onOutputLevel(0f); continue }
                 var offset = 0
-                while (offset < pcm.size && !stopped.get() && outputTrack === track) {
+                while (offset < pcm.size && !stopped.get() && outputTrack === track && block.generation == outputGeneration.get()) {
                     val count = track.write(pcm, offset, pcm.size - offset, AudioTrack.WRITE_BLOCKING)
                     if (count <= 0) throw IOException("AudioTrack write failed ($count).")
                     offset += count
                 }
-                var power = 0.0
-                for (sample in pcm) { val x = sample.toDouble() / Short.MAX_VALUE; power += x * x }
-                listener.onOutputLevel(sqrt(power / pcm.size).toFloat().coerceIn(0f, 1f))
+                if (block.generation == outputGeneration.get() && pcm.isNotEmpty()) {
+                    var power = 0.0
+                    for (sample in pcm) { val x = sample.toDouble() / Short.MAX_VALUE; power += x * x }
+                    listener.onOutputLevel(sqrt(power / pcm.size).toFloat().coerceIn(0f, 1f))
+                }
             }
         } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
         catch (e: Exception) { if (!stopped.get() && outputTrack === track) fail(e.message ?: "Gemini Live output failed.") }
     }
 
     private fun stopNativeOutput() {
+        outputGeneration.incrementAndGet()
         outputQueue.clear()
         localSpeechActive = false
         synchronized(outputLock) {
