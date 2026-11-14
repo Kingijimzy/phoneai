@@ -224,13 +224,13 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
                     val outcome = marker.groupValues[2].lowercase()
                     shownState = when (outcome) {
                         "failed", "error" -> "FAILED"
-                        "verified", "pass" -> "DONE"
+                        "verified", "pass", "completed", "success", "succeeded", "ok" -> "DONE"
                         "cancelled", "canceled", "stopped" -> "CANCELLED"
                         else -> "VERIFYING"
                     }
                     detail = when (shownState) {
                         "FAILED" -> "This operation failed. Expand the task or inspect its result for the reported error."
-                        "DONE" -> "The result was explicitly verified."
+                        "DONE" -> "Completed. The tool reported success."
                         "CANCELLED" -> "The operation was cancelled before verification."
                         else -> "The tool returned a result; Orion has not yet verified the requested outcome."
                     }
