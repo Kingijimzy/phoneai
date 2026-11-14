@@ -21,6 +21,7 @@ internal class OrionChatUiState {
     val commandMode = mutableStateOf(false)
     val selectedImages = mutableStateOf<List<Uri>>(emptyList())
     val orbMode = mutableStateOf(OrbView.Mode.IDLE)
+    val taskRunning = mutableStateOf(false)
     val activityEvents = mutableStateOf<List<OrionActivityEvent>>(emptyList())
 
     private var streamingMessageId: Long? = null
