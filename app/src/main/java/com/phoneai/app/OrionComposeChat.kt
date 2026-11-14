@@ -804,6 +804,9 @@ internal fun OrionComposeChatScreen(
                     androidx.compose.foundation.layout.Box(Modifier.orionEnter()) { ChatBubble(
                         item = item,
                         onOpenBrowser = { url -> inlineBrowserUrl = url ?: "https://duckduckgo.com/" },
+                        attachments = attachments,
+                        onOpenAttachment = onOpenAttachment,
+                        onShareAttachment = onShareAttachment,
                         onRetry = previousUserMessage?.takeIf { it.isNotBlank() }?.let { prompt ->
                             { onRetry(prompt) }
                         },
@@ -1148,7 +1151,13 @@ internal fun OrionArchivedConversationScreen(
                 }
             }
             itemsIndexed(renderedMessages, key = { index, item -> "archive-" + index + "-" + item.id }) { _, item ->
-                ChatBubble(item = item, onOpenBrowser = onOpenBrowser)
+                ChatBubble(
+                    item = item,
+                    onOpenBrowser = onOpenBrowser,
+                    attachments = attachments,
+                    onOpenAttachment = onOpenAttachment,
+                    onShareAttachment = onShareAttachment
+                )
             }
             if (attachments.isNotEmpty()) {
                 item(key = "archive-attachments-heading") {

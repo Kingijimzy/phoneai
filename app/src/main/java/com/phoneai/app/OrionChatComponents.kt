@@ -182,7 +182,13 @@ private fun classifyOrionReply(item: OrionChatLine): OrionReplyType {
 }
 
 @Composable
-private fun OrionStructuredBlockCard(block: OrionMessageBlock, onOpenBrowser: (String?) -> Unit) {
+private fun OrionStructuredBlockCard(
+    block: OrionMessageBlock,
+    onOpenBrowser: (String?) -> Unit,
+    attachment: OrionChatAttachmentStore.Attachment?,
+    onOpenAttachment: (OrionChatAttachmentStore.Attachment) -> Unit,
+    onShareAttachment: (OrionChatAttachmentStore.Attachment) -> Unit
+) {
     val mono = androidx.compose.ui.text.font.FontFamily.Monospace
     val clipboard = LocalClipboardManager.current
     when (block) {
@@ -229,17 +235,33 @@ private fun OrionStructuredBlockCard(block: OrionMessageBlock, onOpenBrowser: (S
                 if (block.exitCode != null) Text("Exit code " + block.exitCode, color = accent, fontSize = 9.sp)
             }
         }
-        is OrionMessageBlock.GeneratedFile -> Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(OrionUiPalette.panel)
-                .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp)).padding(11.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text("GENERATED FILE", color = OrionUiPalette.success, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
-            Text(block.fileName, color = ChatCopy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Text(block.mimeType + " · " + block.sizeBytes + " bytes", color = ChatMuted, fontSize = 10.sp)
-            Text("Artifact " + block.artifactId.take(12) + " · " + block.state, color = ChatMuted, fontSize = 9.sp)
-            Text("File reference only; no open action is advertised until a stored file handle is attached.",
-                color = ChatMuted, fontSize = 9.sp, lineHeight = 13.sp)
+        is OrionMessageBlock.GeneratedFile -> {
+            val stored = resolveGeneratedFileAttachment(block, attachment)
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(OrionUiPalette.panel)
+                    .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp)).padding(11.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text("GENERATED FILE", color = OrionUiPalette.success, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
+                Text(block.fileName, color = ChatCopy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(block.mimeType + " · " + block.sizeBytes + " bytes", color = ChatMuted, fontSize = 10.sp)
+                Text("Artifact " + block.artifactId.take(12) + " · " + block.state, color = ChatMuted, fontSize = 9.sp)
+                if (stored != null) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(18.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("OPEN", color = OrionUiPalette.secondaryText, fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onOpenAttachment(stored) }.padding(vertical = 8.dp))
+                        Text("SHARE", color = OrionUiPalette.secondaryText, fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onShareAttachment(stored) }.padding(vertical = 8.dp))
+                    }
+                } else {
+                    Text("The saved artifact is unavailable in this conversation. No file action is available.",
+                        color = ChatMuted, fontSize = 9.sp, lineHeight = 13.sp)
+                }
+            }
         }
         is OrionMessageBlock.Approval -> {
             val accent = if (block.state.equals("pending", true)) OrionUiPalette.warning else OrionUiPalette.secondaryText
@@ -302,8 +324,30 @@ private fun OrionStructuredBlockCard(block: OrionMessageBlock, onOpenBrowser: (S
     }
 }
 
+internal fun resolveGeneratedFileAttachment(
+    block: OrionMessageBlock.GeneratedFile,
+    attachment: OrionChatAttachmentStore.Attachment?
+): OrionChatAttachmentStore.Attachment? {
+    if (block.artifactId.isBlank() || block.sha256.isBlank()) return null
+    return attachment?.takeIf {
+        it.id == block.artifactId &&
+            it.name == block.fileName &&
+            it.mimeType == block.mimeType &&
+            it.sizeBytes == block.sizeBytes &&
+            it.sha256.equals(block.sha256, ignoreCase = true)
+    }
+}
+
 @Composable
-internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, onRetry: (() -> Unit)? = null, onEdit: ((String) -> Unit)? = null) {
+internal fun ChatBubble(
+    item: OrionChatLine,
+    onOpenBrowser: (String?) -> Unit,
+    attachments: List<OrionChatAttachmentStore.Attachment> = emptyList(),
+    onOpenAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
+    onShareAttachment: (OrionChatAttachmentStore.Attachment) -> Unit = {},
+    onRetry: (() -> Unit)? = null,
+    onEdit: ((String) -> Unit)? = null
+) {
     val mine = item.kind == "me"
     val note = item.kind == "note"
     val replyType = if (mine) OrionReplyType.NORMAL else classifyOrionReply(item)
@@ -423,7 +467,15 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                                         }
                                     )
                                 }
-                                else -> OrionStructuredBlockCard(block, onOpenBrowser)
+                                else -> OrionStructuredBlockCard(
+                                    block = block,
+                                    onOpenBrowser = onOpenBrowser,
+                                    attachment = (block as? OrionMessageBlock.GeneratedFile)?.let { generated ->
+                                        attachments.firstOrNull { resolveGeneratedFileAttachment(generated, it) != null }
+                                    },
+                                    onOpenAttachment = onOpenAttachment,
+                                    onShareAttachment = onShareAttachment
+                                )
                             }
                         }
                     }
