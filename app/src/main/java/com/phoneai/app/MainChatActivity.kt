@@ -476,8 +476,24 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         dialog.show()
     }
 
+    /** Talk to Orion inside the chat: same voice loop as the live call, no extra screen. */
+    private fun toggleInChatVoice() {
+        val service = PhoneAiService.instance
+        if (service == null) {
+            Toast.makeText(this, "Enable Orion's screen access to use voice.", Toast.LENGTH_LONG).show()
+            AccessibilityDisclosure.requestSettings(this)
+            return
+        }
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 74)
+            return
+        }
+        if (service.isVoiceActive()) service.endLiveConversation() else service.startLiveConversation()
+    }
+
     private fun handleChatMenuAction(action: String) {
         when (action) {
+            "live_call" -> startActivity(Intent(this, LiveConversationActivity::class.java))
             "new_chat" -> {
                 PhoneAiService.instance?.startNewChat() ?: run {
                     ChatHistoryStore.archiveAndClearStructured(this, composeLines.toList())
@@ -1479,7 +1495,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     },
                     onModeChange = { enabled -> commandMode = enabled; composeCommandMode.value = enabled },
                     onSend = { message -> input.setText(message); sendMessage() },
-                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "*/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) }; startActivityForResult(Intent.createChooser(picker, "Attach images or files"), 44) }, onRemoveImage = { index -> if (index in selectedImageUris.indices) selectedImageUris.removeAt(index); composeSelectedImages.value = selectedImageUris.toList(); refreshImagePreview(selectedImageUris.firstOrNull()) }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> showChatBrowserPopup(url) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() },
+                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "*/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) }; startActivityForResult(Intent.createChooser(picker, "Attach images or files"), 44) }, onRemoveImage = { index -> if (index in selectedImageUris.indices) selectedImageUris.removeAt(index); composeSelectedImages.value = selectedImageUris.toList(); refreshImagePreview(selectedImageUris.firstOrNull()) }, onVoice = { toggleInChatVoice() }, onBrowser = { url -> showChatBrowserPopup(url) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() },
                     onRetry = { prompt -> PhoneAiService.instance?.retryLastResponse(prompt) },
                     onEditSend = { original, edited -> PhoneAiService.instance?.editAndResend(original, edited) }
                 )

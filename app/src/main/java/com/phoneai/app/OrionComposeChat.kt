@@ -732,6 +732,7 @@ internal fun OrionComposeChatScreen(
                         onMenuAction(action)
                     }
                     DropdownMenuItem(text = { Text(if (commandMode) "Switch to Talk mode" else "Switch to Command mode", color = ChatCopy) }, onClick = { menuExpanded = false; onModeChange(!commandMode) })
+                    DropdownMenuItem(text = { Text("Full-screen live call", color = ChatCopy) }, onClick = { choose("live_call") })
                     DropdownMenuItem(text = { Text("Chat history", color = ChatCopy) }, onClick = { menuExpanded = false; onHistory() })
                     DropdownMenuItem(text = { Text("Tasks", color = ChatCopy) }, onClick = { menuExpanded = false; onTasks() })
                     DropdownMenuItem(text = { Text("Browser preview", color = ChatCopy) }, onClick = { menuExpanded = false; inlineBrowserUrl = "https://duckduckgo.com/" })
