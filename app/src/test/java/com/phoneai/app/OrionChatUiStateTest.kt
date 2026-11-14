@@ -54,6 +54,18 @@ class OrionChatUiStateTest {
         assertTrue(state.taskRunning.value)
     }
 
+    @Test fun coordinatorOwnsLivePresenceAndCompanionProjection() {
+        val state = OrionChatUiState()
+        val coordinator = OrionChatCoordinator(state)
+        coordinator.onAudioLevel(1.5f)
+        coordinator.onAudioAmplitude(-0.2f)
+        coordinator.onSpeechWord()
+        coordinator.setCompanionLook(9)
+        assertEquals(1f, state.orbMicLevel.value)
+        assertEquals(0f, state.orbSpeechAmplitude.value)
+        assertEquals(1f, state.orbWordPulse.value)
+        assertEquals(2, state.companionLook.value)
+    }
     @Test fun coordinatorRestoresTranscriptAndClearsStaleSessionProjection() {
         val state = OrionChatUiState()
         val coordinator = OrionChatCoordinator(state)
