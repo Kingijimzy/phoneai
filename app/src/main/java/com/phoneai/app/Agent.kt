@@ -246,7 +246,7 @@ internal object IrreversibleActionConfirmationPolicy {
     /** Nested executor callbacks may request confirmation only for an actual delete/wipe description. */
     fun requiresConfirmation(actionDescription: String): Boolean {
         val lower = actionDescription.lowercase()
-        return Regex("\\b(delete|wipe|erase|shred|format|remove|uninstall|empty)\\b").containsMatchIn(lower) ||
+        return Regex("\\b(delete|wipe|erase|shred|format|remove|uninstall|empty|rm|srm|wipefs|blkdiscard|mkfs|unlink|rmdir|truncate)\\b").containsMatchIn(lower) ||
             destructiveShell.containsMatchIn(lower)
     }
     fun computerSettingAction(tool: String, args: JSONObject): String? = null
