@@ -209,6 +209,19 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         voice = Voice(this)
         voice.onSpeaking = { s ->
             speaking = s
+            if (s && handsActive) {
+                // While Kokoro is speaking, AEC-backed capture watches for the owner's voice.
+                // A detected interruption stops output immediately and hands the mic to STT.
+                voice.startBargeInMonitor {
+                    if (handsActive && speaking && !listening && !running) {
+                        voice.stopBargeInMonitor()
+                        voice.stopSpeaking()
+                        listenNow()
+                    }
+                }
+            } else {
+                voice.stopBargeInMonitor()
+            }
             if (!s) for (o in orbs()) o.speechAmplitude = 0f
             refreshMode()
         }
