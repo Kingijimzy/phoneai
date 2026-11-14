@@ -90,25 +90,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         }
     }
 
-    private fun nativeToolsRejected(failure: Throwable): Boolean {
-        val messages = ArrayList<String>()
-        var current: Throwable? = failure
-        while (current != null) {
-            messages += current.message.orEmpty()
-            current = current.cause
-        }
-        val message = messages.joinToString(" ").lowercase()
-        val explicitUnsupported = listOf(
-            "does not support tools", "doesn't support tools",
-            "does not support tool calling", "doesn't support tool calling",
-            "tool calling is not supported", "tool calls are not supported",
-            "function calling is not supported", "tools are not supported",
-            "tool use is not supported", "tool_choice is not supported",
-            "unsupported tool type", "unknown parameter: tools",
-            "unrecognized request argument: tools", "tools is not supported"
-        )
-        return message.contains("400") && explicitUnsupported.any { message.contains(it) }
-    }
+    private fun nativeToolsRejected(failure: Throwable): Boolean =
+        ProviderFallbackPolicy.isToolProtocolUnsupported(failure)
 
     override fun chatTurn(
         messages: JSONArray,
@@ -1250,8 +1233,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                     queue.addAll(0, backups)
                 }
                 if (queue.isEmpty()) throw AiException(
-                    if (Prefs.autoSwitch(ctx)) "${p.label}: selected model $model returned HTTP ${r.code}; no eligible alternate model was available."
-                    else "${p.label}: selected model $model returned HTTP ${r.code}; Auto-switch is off, so Orion kept the selected model.",
+                    if (Prefs.autoSwitch(ctx)) "${p.label}: selected model $model returned HTTP ${r.code}; no eligible alternate model was available. Provider detail: ${r.body.replace("\n", " ").take(320)}"
+                    else "${p.label}: selected model $model returned HTTP ${r.code}; Auto-switch is off, so Orion kept the selected model. Provider detail: ${r.body.replace("\n", " ").take(320)}",
                     r.code
                 )
                 continue
