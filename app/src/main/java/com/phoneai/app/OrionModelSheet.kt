@@ -97,11 +97,18 @@ internal fun OrionModelSheet(onDismiss: () -> Unit, onNeedKey: () -> Unit, onCha
                             Text(p.label.take(1).uppercase(), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         }
                         Text(p.label, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                        Text(if (selected) "IN USE" else if (ready) "READY" else if (p.id == "codex" || p.id == "antigravity") "CONNECT" else "ADD KEY", fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                            color = if (ready) Color.White else OrionUiPalette.warning,
+                        Text(
+                            if (selected) "IN USE"
+                            else if (p.id == "codex" || p.id == "antigravity") "CONNECT"
+                            else if (ready) "KEY SET" else "ADD KEY",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (selected) OrionUiPalette.accent else if (ready) OrionUiPalette.secondaryText else OrionUiPalette.warning,
                             modifier = Modifier.clip(RoundedCornerShape(12.dp))
-                                .background(if (ready) Brush.horizontalGradient(listOf(OrionUiPalette.panel, Color(0xFF4A4A50))) else Brush.horizontalGradient(listOf(OrionUiPalette.panel, Color(0xFF3A3A3C))))
-                                .padding(horizontal = 12.dp, vertical = 5.dp))
+                                .background(OrionUiPalette.panel)
+                                .border(1.dp, if (selected) OrionUiPalette.accent else OrionUiPalette.border, RoundedCornerShape(12.dp))
+                                .padding(horizontal = 12.dp, vertical = 5.dp)
+                        )
                     }
                 }
             }
