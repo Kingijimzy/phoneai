@@ -427,7 +427,9 @@ internal object ToolRegistry {
                 .lowercase().let { searchable -> tokens.any { it in searchable } }
         }.sortedWith(compareByDescending<Triple<GeneratedExtension, Boolean, String>> { it.second }
             .thenBy { it.first.displayName.lowercase() })
-        extensionMatches.take(40).forEach { (extension, usable, state) ->
+        val extensionOffset = requestedOffset.coerceAtLeast(0).coerceAtMost(extensionMatches.size)
+        val extensionPage = extensionMatches.drop(extensionOffset).take(limit)
+        extensionPage.forEach { (extension, usable, state) ->
             extensionResults.put(org.json.JSONObject()
                 .put("id", extension.id)
                 .put("name", extension.displayName)
@@ -441,10 +443,13 @@ internal object ToolRegistry {
         return org.json.JSONObject().put("query", query.take(240)).put("results", results)
             .put("generated_extensions", extensionResults)
             .put("generated_extension_count", extensionMatches.size)
+            .put("generated_extension_offset", extensionOffset)
+            .put("generated_extension_next_offset", if (extensionOffset + extensionPage.size < extensionMatches.size) extensionOffset + extensionPage.size else org.json.JSONObject.NULL)
+            .put("generated_extensions_has_more", extensionOffset + extensionPage.size < extensionMatches.size)
             .put("count", results.length()).put("total", candidates.size).put("offset", offset).put("limit", limit)
             .put("next_offset", if (nextOffset < candidates.size) nextOffset else org.json.JSONObject.NULL)
             .put("has_more", nextOffset < candidates.size)
-            .put("note", "Native tools: query ranks results only; paginate until has_more=false, then capability_load the exact name. Generated extensions are listed separately with truthful lifecycle state; invoke only callable entries through extension_run. Neither inventory bypasses runtime permissions or execution checks.")
+            .put("note", "Native tools and generated extensions have independent paginated inventories. Continue native pages with next_offset while has_more=true; continue extension pages with generated_extension_next_offset while generated_extensions_has_more=true. Load native tools with capability_load. Reuse only callable extensions through extension_run. Neither inventory bypasses runtime permissions or execution checks.")
             .toString()
     }
 
