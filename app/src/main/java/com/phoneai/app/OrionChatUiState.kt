@@ -89,3 +89,9 @@ internal class OrionChatUiState {
         resetAssistantStream()
     }
 }
+
+/** Runtime state, not mutable status copy, determines whether the response control is Stop. */
+internal fun isOrionChatBusy(mode: OrbView.Mode): Boolean = when (mode) {
+    OrbView.Mode.THINKING, OrbView.Mode.SPEAKING, OrbView.Mode.ACTING, OrbView.Mode.WAITING_APPROVAL -> true
+    OrbView.Mode.IDLE, OrbView.Mode.LISTENING, OrbView.Mode.ERROR -> false
+}
