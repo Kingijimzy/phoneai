@@ -31,9 +31,11 @@ internal object ProviderFallbackPolicy {
 
     /** True only for an explicit HTTP 400 rejection of the native tool protocol. */
     fun isToolProtocolUnsupported(error: Throwable): Boolean {
-        if (error !is AiException || error.httpStatus != 400) return false
-        val messages = generateSequence(error as Throwable?) { it.cause }
-            .joinToString(" ") { it.message.orEmpty() }.lowercase()
+        val chain = generateSequence(error as Throwable?) { it.cause }.toList()
+        val hasBadRequest = chain.any { it is AiException && it.httpStatus == 400 } ||
+            chain.any { it.message.orEmpty().contains("400") }
+        if (!hasBadRequest) return false
+        val messages = chain.joinToString(" ") { it.message.orEmpty() }.lowercase()
         return unsupportedToolMarkers.any(messages::contains)
     }
 
