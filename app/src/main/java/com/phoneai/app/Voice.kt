@@ -383,6 +383,19 @@ class Voice(private val ctx: Context) {
         } catch (_: Exception) { }
     }
 
+    /** Warm the installed Kokoro model while the owner is speaking/listening, not after the reply arrives. */
+    fun prepareNeuralVoice() {
+        if (!Prefs.neuralVoice(ctx) || Locale.getDefault().language != "en" || !NeuralVoiceInstaller.isInstalled(ctx)) return
+        neuralWorker.execute {
+            runCatching { obtainNeuralEngine(NeuralVoiceInstaller.modelFile(ctx)) }
+                .onFailure { error ->
+                    main.post {
+                        onProblem?.invoke("Kokoro could not be prepared (" + (error.message ?: error.javaClass.simpleName) + "). Android TTS remains available as fallback.")
+                    }
+                }
+        }
+    }
+
     fun isSpeaking(): Boolean = pending.get() > 0 || tts?.isSpeaking == true
 
     fun speak(text: String, onDone: (() -> Unit)? = null) {
