@@ -1447,6 +1447,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     onShareAttachment = { shareChatAttachment(it) },
                     status = composeStatus.value,
                     orbMode = composeOrbMode.value,
+                    taskRunning = chatUiState.taskRunning.value,
                     orbMicLevel = composeOrbMicLevel.value,
                     orbSpeechAmplitude = composeOrbSpeechAmplitude.value,
                     orbWordPulse = composeOrbWordPulse.value,
