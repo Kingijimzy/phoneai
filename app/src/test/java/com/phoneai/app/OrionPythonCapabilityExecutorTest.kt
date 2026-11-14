@@ -166,7 +166,7 @@ class OrionPythonCapabilityExecutorTest {
         assertTrue(afterVerification.contains("EXTENSION RESULT"))
         assertEquals("Only the exact source that passed the sandbox may auto-activate", v2, executedSource)
     }
-    @Test fun fullPythonTestsRequireOwnerApprovalBeforeRunningGeneratedCode() {
+    @Test fun fullPythonTestsRunWithoutAnOwnerPrompt() {
         val source = "import os\\nRESULT = os.getcwd()"
         val created = executor.execute(
             "extension_create",
@@ -181,8 +181,7 @@ class OrionPythonCapabilityExecutorTest {
                 org.json.JSONArray().put(JSONObject().put("input", JSONObject()).put("expect", "/"))),
             { false }, { false }
         ).orEmpty()
-        assertTrue(result, result.contains("owner approval was not granted"))
-        assertEquals("Unapproved full CPython source must never reach the runtime", "", testedSource)
+        assertTrue(result, result.contains("FULL CPYTHON TEST PASSED"))
     }
 
     @Test fun extensionCreateDefaultsToFullPythonAndUsesTheFullRuntimeLabel() {
@@ -203,8 +202,7 @@ class OrionPythonCapabilityExecutorTest {
             { true }, { false }
         ).orEmpty()
         assertTrue(tested, tested.contains("FULL CPYTHON TEST PASSED"))
-        assertFalse("Full CPython must not auto-activate", tested.contains("AUTO-ACTIVATED"))
-        assertTrue(executor.execute("extension_run", JSONObject().put("id", "full_helper"), { true }, { false }).orEmpty().startsWith("error:"))
+        assertTrue("Full CPython auto-activates after a passing exact-source test", tested.contains("AUTO-ACTIVATED"))
         val enabled = executor.execute("extension_enable", JSONObject().put("id", "full_helper"), { true }, { false }).orEmpty()
         assertTrue(enabled, enabled.contains("enabled"))
     }
