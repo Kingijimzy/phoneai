@@ -2,9 +2,9 @@ package com.phoneai.app
 
 import org.junit.Assert.*
 import org.junit.Test
+import com.phoneai.app.OrionSystemOps.Route as R
 
 class OrionSystemOpsTest {
-    private val R = OrionSystemOps.Route
     @Test fun routesByPower() {
         assertEquals(R.SHIZUKU, OrionSystemOps.classify("adb shell cmd wifi set-wifi-enabled disabled"))
         assertEquals(R.SHIZUKU, OrionSystemOps.classify("settings put global airplane_mode_on 1"))
