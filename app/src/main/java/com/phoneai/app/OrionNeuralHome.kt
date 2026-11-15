@@ -146,7 +146,8 @@ internal fun OrionNeuralHome(
                 val p = pulses[n.id]
                 val hot = OrionNodes.isHot(p, now)
                 Column(
-                    Modifier.align(Alignment.TopStart).offset { IntOffset((px - nodeR * 1.6f).roundToInt(), (py - nodeR).roundToInt()) }.width(with(density) { (nodeR * 3.2f).toDp() }),
+                    Modifier.align(Alignment.TopStart).offset { IntOffset((px - nodeR * 1.6f).roundToInt(), (py - nodeR).roundToInt()) }.width(with(density) { (nodeR * 3.2f).toDp() })
+                        .clickable { OrionPages.open(context, OrionNodes.pageFor(n.id)) },
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(Modifier.size(42.dp)) {
