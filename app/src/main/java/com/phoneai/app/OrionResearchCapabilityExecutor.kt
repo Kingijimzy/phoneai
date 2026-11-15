@@ -36,7 +36,7 @@ internal object OrionResearchCapabilityExecutor {
                 "\nUNTRUSTED WEBPAGE CONTENT:\n" + page.text.take(3500)
         }
         "weather" -> WeatherService.current(args.optString("location"))
-        "live_sports" -> LiveSports.answer(args.optString("query"))
+        "live_sports" -> LiveSports.answer(args.optString("query")) ?: LiveSports.explainEmpty(args.optString("query"))
             ?: "error: no verified scoreboard data was available for this request."
         "github_search_repositories" -> tools.githubSearchRepository(args.optString("query"))
         "github_public" -> tools.githubPublic(

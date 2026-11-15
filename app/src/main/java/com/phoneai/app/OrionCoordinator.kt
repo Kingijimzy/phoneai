@@ -55,7 +55,16 @@ internal object OrionCoordinator {
 
     /** Run [block] as one admitted request from [surface]; returns null (and does not run it) when the brain is shut down. */
     fun <T> run(c: Context, surface: Surface, text: String, block: () -> T): T? =
-        if (admit(c, surface, text)) block() else null
+        if (admit(c, surface, text)) holdAwake(c, block) else null
+
+    /** Long jobs keep the CPU awake (bounded) so Doze cannot freeze a build, install or research run mid-way. */
+    private fun <T> holdAwake(c: Context, block: () -> T): T {
+        val lock = runCatching {
+            (c.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager)
+                .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "orion:task").also { it.acquire(30 * 60 * 1000L) }
+        }.getOrNull()
+        try { return block() } finally { runCatching { if (lock?.isHeld == true) lock.release() } }
+    }
 
     fun summary(): String {
         val r = recent(20)

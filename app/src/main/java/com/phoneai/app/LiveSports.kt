@@ -14,8 +14,12 @@ object LiveSports {
         "soccer/eng.1" to "Premier League", "soccer/uefa.champions" to "Champions League", "soccer/uefa.europa" to "Europa League",
         "soccer/esp.1" to "La Liga", "soccer/ger.1" to "Bundesliga", "soccer/ita.1" to "Serie A", "soccer/fra.1" to "Ligue 1",
         "soccer/eng.fa" to "FA Cup", "soccer/eng.league_cup" to "League Cup", "soccer/usa.1" to "MLS",
-        "basketball/nba" to "NBA", "football/nfl" to "NFL", "hockey/nhl" to "NHL", "baseball/mlb" to "MLB"
+        "basketball/nba" to "NBA", "football/nfl" to "NFL", "hockey/nhl" to "NHL", "baseball/mlb" to "MLB",
+        "soccer/caf.nations" to "Africa Cup of Nations", "soccer/caf.champions" to "CAF Champions League", "soccer/fifa.world" to "World Cup",
+        "soccer/uefa.nations" to "Nations League", "soccer/ned.1" to "Eredivisie", "soccer/por.1" to "Primeira Liga", "soccer/tur.1" to "Süper Lig",
+        "soccer/sco.1" to "Scottish Premiership", "soccer/eng.2" to "Championship", "soccer/conmebol.libertadores" to "Copa Libertadores"
     )
+    @Volatile private var lastUnreachable = 0
     private val aliases = mapOf("man utd" to "manchester united", "man united" to "manchester united", "man city" to "manchester city",
         "spurs" to "tottenham", "barca" to "barcelona", "real" to "real madrid", "juve" to "juventus", "psg" to "paris saint-germain",
         "bayern" to "bayern munich", "wolves" to "wolverhampton", "the lakers" to "lakers", "the warriors" to "warriors")
@@ -79,6 +83,13 @@ object LiveSports {
         try { if (c.responseCode in 200..299) c.inputStream.bufferedReader().use { it.readText().take(1_500_000) } else null } finally { c.disconnect() }
     } catch (_: Exception) { null }
 
+    /** Honest result when nothing matched, so the model never sees a bare failure. */
+    fun explainEmpty(question: String): String {
+        val team = teamQuery(question)
+        return if (lastUnreachable >= leagues.size - 1) "live_sports: ESPN's scoreboard could not be reached from this phone right now (network or service). Try live_web_search for \"$team score\"."
+        else "live_sports: no fixtures or results found for \"${team.ifBlank { question }}\" in the covered leagues within the window (${leagues.size} leagues, $lastUnreachable unreachable). Try live_web_search for the current score, or name the league."
+    }
+
     fun answer(question: String): String? {
         val team = teamQuery(question)
         val fmt = SimpleDateFormat("yyyyMMdd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
@@ -99,12 +110,23 @@ object LiveSports {
             cal.add(Calendar.DAY_OF_YEAR, -14)
             from = fmt.format(cal.time)
         }
+        // All leagues in parallel: the serial scan took up to two minutes when ESPN was slow and the tool timed out.
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(8)
         val found = ArrayList<String>()
-        for ((path, name) in leagues) {
-            val body = get("https://site.api.espn.com/apis/site/v2/sports/$path/scoreboard?dates=$from-$to&limit=100") ?: continue
-            found.addAll(try { format(body, team, name) } catch (_: Exception) { emptyList() })
-            if (team.isNotBlank() && found.size >= 3) break
-        }
+        var unreachable = 0
+        try {
+            val jobs = leagues.map { (path, name) ->
+                pool.submit<List<String>?> {
+                    val body = get("https://site.api.espn.com/apis/site/v2/sports/$path/scoreboard?dates=$from-$to&limit=100")
+                    if (body == null) null else try { format(body, team, name) } catch (_: Exception) { emptyList() }
+                }
+            }
+            for (j in jobs) {
+                val r = try { j.get(12, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) { null }
+                if (r == null) unreachable++ else found.addAll(r)
+            }
+        } finally { pool.shutdownNow() }
+        lastUnreachable = unreachable
         if (found.isEmpty()) return null
         // The ISO date prefix makes a plain descending sort the newest-first order.
         found.sortDescending()
