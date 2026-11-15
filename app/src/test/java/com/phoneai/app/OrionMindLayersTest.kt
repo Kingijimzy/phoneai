@@ -21,18 +21,18 @@ class OrionMindLayersTest {
     }
     private fun sig(h: Double = 6.0, hour: Int = 14, idle: Double = 60.0, broken: Int = 0, due: Int = 0, added: Int = 0, today: Int = 0, bat: Int = 80) =
         OrionProactiveGate.Signals(h, hour, idle, bat, false, broken, due, due, added, 0, today)
-    @Test fun gateClosedWithNothingToDo() = assertFalse(OrionProactiveGate.decide(sig()).open)
+    @Test fun gateClosedWithNothingToDo() = assertFalse(OrionProactiveGate.decide(sig(h = 1.0)).open)
     @Test fun gateOpensForDueWork() = assertTrue(OrionProactiveGate.decide(sig(due = 1)).open)
     @Test fun gateOpensForBrokenToolsAndNewCapabilities() = assertTrue(OrionProactiveGate.decide(sig(broken = 2)).open)
     @Test fun gateRespectsBusyOwnerBudgetBatteryAndCooldown() {
         assertFalse(OrionProactiveGate.decide(sig(due = 3, idle = 1.0)).open)
-        assertFalse(OrionProactiveGate.decide(sig(due = 3, today = 4)).open)
+        assertFalse(OrionProactiveGate.decide(sig(due = 3, today = OrionProactiveGate.DAILY_BUDGET)).open)
         assertFalse(OrionProactiveGate.decide(sig(due = 3, bat = 10)).open)
         assertFalse(OrionProactiveGate.decide(sig(due = 3, h = 0.5)).open)
     }
     @Test fun gateIsStricterAtNight() {
         assertTrue(OrionProactiveGate.decide(sig(due = 1, hour = 3)).score >= 1.0)
-        assertFalse(OrionProactiveGate.decide(sig(broken = 2, hour = 3)).open)
+        assertFalse(OrionProactiveGate.decide(sig(broken = 2, hour = 3, h = 1.0)).open)
     }
     @Test fun diffNeedsBaselineThenFindsChanges() {
         assertEquals(emptyList<String>() to emptyList<String>(), OrionCapabilityAwareness.diff(null, setOf("a")))

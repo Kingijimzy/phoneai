@@ -37,7 +37,8 @@ object AgentPolicy {
      */
     internal val defaultOnPacks = setOf(
         "orion_core", "connected_services", "workspace_shell", "self_test",
-        "gaming_hobby", "trading_research", "phone_control", "messaging"
+        "gaming_hobby", "trading_research", "phone_control", "messaging",
+        "proactive", "self_evolution"
     )
     internal fun defaultOn(id: String) = id in defaultOnPacks
 

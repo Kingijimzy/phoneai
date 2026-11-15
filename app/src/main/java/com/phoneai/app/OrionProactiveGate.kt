@@ -24,17 +24,19 @@ internal object OrionProactiveGate {
     )
     data class Decision(val open: Boolean, val score: Double, val reason: String)
 
-    const val DAILY_BUDGET = 4
+    const val DAILY_BUDGET = 24
     const val OPEN_AT = 1.0
 
     fun decide(s: Signals): Decision {
-        if (s.hoursSinceLastInitiative < 2.0) return Decision(false, 0.0, "acted ${"%.1f".format(s.hoursSinceLastInitiative)}h ago")
+        if (s.hoursSinceLastInitiative < 0.75) return Decision(false, 0.0, "acted ${"%.1f".format(s.hoursSinceLastInitiative)}h ago")
         if (s.unpromptedToday >= DAILY_BUDGET) return Decision(false, 0.0, "daily unprompted budget used")
         if (s.batteryPct in 0..15 && !s.charging) return Decision(false, 0.0, "battery low")
-        if (s.minutesSinceOwnerActive < 3.0) return Decision(false, 0.0, "Kingi is active right now")
+        if (s.minutesSinceOwnerActive < 2.0) return Decision(false, 0.0, "Kingi is active right now")
         val value = s.dueFollowUps * 1.2 + s.openFollowUps.coerceAtMost(3) * 0.2 +
             s.brokenTools.coerceAtMost(3) * 0.6 + s.newCapabilities.coerceAtMost(3) * 0.5 +
-            s.untestedCapabilities.coerceAtMost(10) * 0.05 + (s.hoursSinceLastInitiative / 24.0).coerceAtMost(0.5)
+            s.untestedCapabilities.coerceAtMost(10) * 0.05 + (s.hoursSinceLastInitiative / 24.0).coerceAtMost(0.5) +
+            // Curiosity: even with nothing queued, Orion studies, practises and builds after a few idle hours.
+            ((s.hoursSinceLastInitiative - 2.0) / 4.0).coerceIn(0.0, 1.0)
         // Quiet hours: only urgent value may start unprompted work.
         val need = OPEN_AT * (if (s.hourOfDay in 0..5) 2.0 else 1.0)
         val ok = value >= need

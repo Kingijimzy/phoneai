@@ -86,10 +86,8 @@ internal object OrionProactiveWork {
                 WorkManager.getInstance(app).cancelUniqueWork(UNIQUE_NAME)
                 return@runCatching
             }
-            if (!AgentPolicy.backgroundEnabled(app, "orion_core") || !AgentPolicy.backgroundEnabled(app, "proactive")) {
-                WorkManager.getInstance(app).cancelUniqueWork(UNIQUE_NAME)
-                return@runCatching
-            }
+            // Pack switches never cancel the heartbeat; doWork() itself honours them, so turning a pack
+            // back on resumes immediately instead of waiting for a re-schedule.
             val interval = OrionProactivePolicy.intervalMinutes(Prefs.watchMinutes(app))
             val flex = minOf(OrionProactivePolicy.FLEX_MINUTES, interval - 1L)
             val request = PeriodicWorkRequestBuilder<OrionProactiveWorker>(

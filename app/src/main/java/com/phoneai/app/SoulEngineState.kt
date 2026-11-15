@@ -294,7 +294,7 @@ internal object SoulEngineState {
         val steps = checkpoint.optJSONArray("steps") ?: JSONArray()
         val tools = ArrayList<String>()
         var verifiedSteps = 0
-        val excluded = setOf("remember", "update_memory", "forget", "recall", "type", "copy", "sms", "telegram_send", "mcp_call")
+        val excluded = setOf("remember", "update_memory", "forget", "recall", "type", "copy", "sms", "telegram_send", "social", "mcp_call")
         for (i in 0 until steps.length()) {
             val step = steps.optJSONObject(i) ?: continue
             val tool = step.optString("tool").trim()

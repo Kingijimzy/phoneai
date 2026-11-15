@@ -15,9 +15,13 @@ class PackDefaultsTest {
         listOf("phone_control", "messaging").forEach {
             assertTrue("$it should be enabled by default", AgentPolicy.defaultOn(it))
         }
-        listOf("termux_bridge", "remote_computer", "proactive", "self_evolution").forEach {
+        listOf("termux_bridge", "remote_computer").forEach {
             assertFalse("$it must remain opt-in", AgentPolicy.defaultOn(it))
         }
+    }
+
+    @Test fun autonomyPacksAreOnByDefault() {
+        listOf("proactive", "self_evolution", "orion_core").forEach { assertTrue(it, AgentPolicy.defaultOn(it)) }
     }
 
     @Test fun everyDefaultOnPackExists() {

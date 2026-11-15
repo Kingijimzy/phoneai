@@ -147,7 +147,7 @@ class ToolRegistryTest {
         assertTrue(AgentPolicy.defaultOn("messaging"))
         assertFalse(AgentPolicy.defaultOn("termux_bridge"))
         assertFalse(AgentPolicy.defaultOn("remote_computer"))
-        assertFalse(AgentPolicy.defaultOn("proactive"))
+        assertTrue(AgentPolicy.defaultOn("proactive"))
     }
 
     @Test fun browserNavigationUsesTheInAppBrowserWithoutExternalBrowserPrerequisites() {
