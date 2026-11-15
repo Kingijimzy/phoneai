@@ -18,7 +18,7 @@ internal object OrionCapabilityAdapters {
     data class Route(val backend: Backend, val tool: String)
 
     private val toolsByBackend: Map<Backend, Set<String>> = mapOf(
-        Backend.SHELL to setOf("shell", "termux_command"),
+        Backend.SHELL to setOf("shell", "termux_command", "execute_system_op", "open_page"),
         Backend.PYTHON to setOf(
             "python_exec", "workspace_list", "extension_list", "extension_policy", "extension_auto_activation", "extension_create", "extension_update", "extension_test",
             "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback"
