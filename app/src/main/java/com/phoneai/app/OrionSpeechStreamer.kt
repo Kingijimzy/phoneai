@@ -29,7 +29,11 @@ internal class OrionSpeechStreamer(private val clock: () -> Long = System::curre
 
     private fun drain(final: Boolean): List<String> {
         val out = ArrayList<String>()
+        val closedFence = Regex("```[\\s\\S]*?```")
         while (true) {
+            // Completed code blocks are dropped outright; they are never read aloud.
+            val done = closedFence.find(buf)
+            if (done != null) { buf.delete(done.range.first, done.range.last + 1); continue }
             // Never speak inside an unclosed code fence.
             val fenceCount = Regex("```").findAll(buf).count()
             val safeEnd = if (fenceCount % 2 == 1) buf.indexOf("```") else buf.length
