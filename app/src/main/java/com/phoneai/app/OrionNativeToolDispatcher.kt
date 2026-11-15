@@ -6,7 +6,7 @@ import org.json.JSONObject
 internal object OrionNativeToolDispatcher {
     const val MAX_CALLS_PER_TURN = 32
     const val MAX_RESULT_CHARS = 96_000
-    const val MAX_ROUNDS_PER_COMMAND = 200
+    const val MAX_ROUNDS_PER_COMMAND = 1000
 
     data class Outcome(val call: OrionModelToolCall, val content: String, val dispatched: Boolean)
 

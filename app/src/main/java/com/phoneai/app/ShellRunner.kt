@@ -88,7 +88,7 @@ object ShellRunner {
             val out = StringBuffer()
             val reader = Thread { try { p.inputStream.bufferedReader().use { r -> val buf = CharArray(512); while (true) { val n = r.read(buf); if (n < 0) break; val chunk = String(buf, 0, n); synchronized(out) { if (out.length < 20000) out.append(chunk.take(20000 - out.length)) }; runCatching { onOutput(chunk) } } } } catch (_: Exception) { } }
             reader.start()
-            if (!p.waitFor(timeoutSec.coerceIn(1, 30), TimeUnit.SECONDS)) { p.destroyForcibly(); reader.join(500); return ShellPolicy.clip(out.toString()) + "\n[timed out after ${timeoutSec}s and was stopped]" }
+            if (!p.waitFor(timeoutSec.coerceIn(1, 600), TimeUnit.SECONDS)) { p.destroyForcibly(); reader.join(500); return ShellPolicy.clip(out.toString()) + "\n[timed out after ${timeoutSec}s and was stopped]" }
             reader.join(1000)
             val text = ShellPolicy.clip(out.toString().trimEnd())
             (if (p.exitValue() == 0) "EXIT 0 · SUCCESS\n" else "exit=${p.exitValue()}\n") + text.ifBlank { "(no output)" }
@@ -104,7 +104,7 @@ object ShellRunner {
         if (normalized.isEmpty()) return "error: command is required"
         if (normalized.length > LinuxRuntimePolicy.MAX_COMMAND) return "error: command exceeds the ${LinuxRuntimePolicy.MAX_COMMAND} character runtime limit"
         val effectiveTimeout = maxOf(timeoutSec, ShellExecutionRouting.commandTimeoutMs(normalized) / 1000L)
-            .coerceIn(1L, 180L)
+            .coerceIn(1L, 1800L)
         val id = ids.incrementAndGet()
         val box = Pending(); pending[id] = box
         return try {
@@ -170,7 +170,7 @@ object ShellRunner {
             ready.forEach { onOutput(AgentPrivacyFilter.safeOutput(it)) }
         }
         val result = when (ShellExecutionRouting.backend(where)) {
-            ShellExecutionRouting.Backend.BUILTIN -> runBuiltin(c, command, onOutput = safeEmitter)
+            ShellExecutionRouting.Backend.BUILTIN -> runBuiltin(c, command, ShellExecutionRouting.commandTimeoutMs(command) / 1000L, onOutput = safeEmitter)
             ShellExecutionRouting.Backend.TERMUX -> runTermux(c, command).also { value -> if (value.isNotBlank()) safeEmitter(value + "\n") }
             ShellExecutionRouting.Backend.LINUX -> {
                 val manifest = LinuxRuntimePolicy.productionManifest

@@ -19,6 +19,6 @@ internal object ShellExecutionRouting {
     fun commandTimeoutMs(command: String): Long {
         val dependencyOrBuild = Regex("""(^|[;&|]\s*)(npm\s+(install|ci)|pip3?\s+install|(?:\./)?gradlew?\s+.*(?:build\w*|test\w*|assemble\w*))""")
             .containsMatchIn(command)
-        return if (isPackageOperation(command) || dependencyOrBuild) 180_000L else 60_000L
+        return if (isPackageOperation(command) || dependencyOrBuild) 600_000L else 120_000L
     }
 }
