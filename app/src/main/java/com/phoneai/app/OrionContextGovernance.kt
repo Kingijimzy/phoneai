@@ -146,8 +146,9 @@ internal object OrionProviderContextPolicy {
             m.contains("gpt-4.1") || m.contains("gpt-4o") -> 4_096
             else -> 2_048
         }
+        val known = OrionModelLimits.resolve(providerId, modelId)
         return OrionModelCapabilities(
-            context, output, vision,
+            known?.context ?: context, known?.output ?: output, vision,
             audioInput = isGeminiLive,
             audioOutput = isGeminiLive,
             videoInput = false
