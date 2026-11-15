@@ -1207,6 +1207,8 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         }
         val toolTranscriptStart = messages.length()
         var toolRounds = 0
+        var reflections = 0
+        var lastRoundResults: List<String> = emptyList()
         fun preserveToolTranscript(note: String) {
             if (messages.length() <= toolTranscriptStart) return
             chatHist.put(msg("user", command))
@@ -1250,6 +1252,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                     isRegistered = { name -> nativeTools.any { it.name == name } && ToolRegistry.find(name) != null },
                     execute = ::dispatchNativeTool
                 )
+                lastRoundResults = outcomes.map { it.content }
                 outcomes.forEach { outcome ->
                     ui.note(activityNote(outcome.call.name, outcome.call.arguments, outcome.content))
                     messages.put(JSONObject()
@@ -1260,6 +1263,16 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 }
                 if (!stopped) {
                     turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
+                    if (turn.toolCalls.isEmpty() && OrionReflexion.shouldReflect(
+                            OrionReflexion.roundFailed(lastRoundResults), reflections, true)) {
+                        // Reflexion: diagnose and retry on a different route instead of stopping at a failure.
+                        reflections++
+                        ui.narrate("That route failed, so I'm diagnosing it and trying a different one.")
+                        messages.put(msg("assistant", turn.text.ifBlank { "The last tool round failed." }))
+                        messages.put(msg("user", OrionReflexion.prompt(reflections, lastRoundResults)))
+                        lastRoundResults = emptyList()
+                        turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
+                    }
                     if (!turn.toolCallingAvailable) {
                         preserveToolTranscript("The provider lost native tool capability after partial execution. Inspect completed tool results before continuing; do not repeat side effects.")
                         ui.say("The selected model stopped supporting Orion tool calls after partial execution. I preserved the completed results; no further actions were dispatched.")
@@ -1272,8 +1285,8 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 return
             }
             if (turn.toolCalls.isNotEmpty()) {
-                preserveToolTranscript("I reached the 200-round task safety ceiling. Review the preserved tool results and continue from the last confirmed state.")
-                ui.say("I reached the 200-round task safety ceiling. Completed results are preserved in conversation history; say continue to resume.")
+                preserveToolTranscript("I reached the 1000-round task safety ceiling. Review the preserved tool results and continue from the last confirmed state.")
+                ui.say("I reached the 1000-round task safety ceiling. Completed results are preserved in conversation history; say continue to resume.")
                 return
             }
             turn.text.trim()
