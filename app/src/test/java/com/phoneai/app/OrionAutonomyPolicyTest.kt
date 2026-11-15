@@ -33,8 +33,8 @@ class OrionAutonomyPolicyTest {
 
         assertTrue(allowed(OrionMode.AUTOPILOT))
         assertFalse(allowed(OrionMode.TALK))
-        assertFalse(allowed(OrionMode.ASSIST))
-        assertFalse(allowed(OrionMode.BUILDER))
+        assertTrue(allowed(OrionMode.ASSIST))
+        assertTrue(allowed(OrionMode.BUILDER))
         assertFalse(allowed(OrionMode.AUTOPILOT, core = false))
         assertFalse(allowed(OrionMode.AUTOPILOT, proactive = false))
         assertFalse(allowed(OrionMode.AUTOPILOT, service = false))

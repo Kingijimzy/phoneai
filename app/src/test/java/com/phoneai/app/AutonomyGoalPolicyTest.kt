@@ -47,7 +47,8 @@ class AutonomyGoalPolicyTest {
         ) = OrionAutonomyRunPolicy.canRun(mode, core, proactive, service, agent, running)
 
         assertTrue(canRun())
-        assertFalse(canRun(mode = OrionMode.ASSIST))
+        assertTrue(canRun(mode = OrionMode.ASSIST))
+        assertFalse(canRun(mode = OrionMode.TALK))
         assertFalse(canRun(core = false))
         assertFalse(canRun(proactive = false))
         assertFalse(canRun(service = false))

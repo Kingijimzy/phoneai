@@ -35,8 +35,18 @@ class OrionProactiveGateTest {
         assertFalse(OrionProactiveGate.decide(signals(battery = 10, due = 3)).open)
     }
 
+    @Test fun curiosityOpensTheGateAfterIdleHoursWithNothingQueued() {
+        assertTrue(OrionProactiveGate.decide(signals(hours = 8.0)).open)
+        assertFalse(OrionProactiveGate.decide(signals(hours = 1.0)).open)
+    }
+
+    @Test fun reportsSkipIdleReplies() {
+        assertFalse(OrionReports.shouldReport("Nothing is needed right now."))
+        assertTrue(OrionReports.shouldReport("I rebuilt the failing Facebook route, tested it in the sandbox and learned that Page tokens are required."))
+    }
+
     @Test fun quietHoursRequireHigherValue() {
-        assertFalse(OrionProactiveGate.decide(signals(hour = 2, due = 1)).open)
-        assertTrue(OrionProactiveGate.decide(signals(hour = 2, due = 2)).open)
+        assertFalse(OrionProactiveGate.decide(signals(hour = 2, hours = 3.0, due = 1)).open)
+        assertTrue(OrionProactiveGate.decide(signals(hour = 2, hours = 3.0, due = 2)).open)
     }
 }

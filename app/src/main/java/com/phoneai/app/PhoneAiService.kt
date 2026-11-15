@@ -2130,8 +2130,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val goal = AutonomyGoalStore.claimNextDue(this, System.currentTimeMillis()) ?: run { runInitiative(); return }
         running = true
         try {
-            OrionCoordinator.run(this, OrionCoordinator.Surface.AUTONOMY, goal.prompt) { agent.run("[ORION AUTONOMY GOAL — set earlier, not typed by Kingi] " + goal.prompt) }
+            OrionCoordinator.run(this, OrionCoordinator.Surface.AUTONOMY, goal.prompt) { agent.run("[ORION AUTONOMY GOAL — set earlier, not typed by Kingi] " + goal.prompt + " Your final reply is sent to Kingi on Telegram automatically: make it a clear report of what you did, found, built and decided.") }
             AutonomyGoalStore.recordResult(this, goal.id, "submitted_to_agent")
+            OrionReports.report(this, "goal", transcript.lastOrNull { it.first == "ai" }?.second.orEmpty())
         } catch (e: Exception) {
             AutonomyGoalStore.recordResult(this, goal.id, "dispatch_error: " + (e.message ?: "failed"))
         } finally {
@@ -2160,6 +2161,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 } finally {
                     val reply = transcript.lastOrNull { it.first == "ai" }?.second.orEmpty()
                     OrionMissions.finish(this, mission.id, reply)
+                    OrionReports.report(this, "mission: " + mission.title, reply)
                 }
                 return
             }
@@ -2168,10 +2170,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 "[ORION INITIATIVE — Kingi did not ask for this; you are acting on your own judgment] " + OrionDrives.initiativeHint(this) + " Review your mood, lessons, " +
                     "memory and recent failures. Decide whether there is something worth doing now for Kingi or for yourself " +
                     "(finish unfinished work, fix a tool that keeps failing, build a missing capability, check something he cares about). " +
-                    "If yes, do it with your tools and report briefly what you did. If not, reply with one short line saying nothing is needed."
+                    "You are autonomous: decide for yourself, then act — do not ask permission and do not wait for Kingi. Good uses of this time: learn something that makes you better at his work " +
+                    "(research it, then store the lesson with remember), practise or test a tool, build or patch an extension or your own source with self_edit and prove it in the sandbox, " +
+                    "check the accounts and feeds he cares about, finish open follow-ups, or prepare something he will want. Pick the most valuable thing, finish it end to end, verify it. " +
+                    "Your final reply is sent to Kingi on Telegram automatically, so make it a clear report: what you did, what you learned or built, what you decided and why, and anything he should know. " +
+                    "If truly nothing is worth doing, reply with one short line saying nothing is needed."
 
             )
             OrionCoordinator.run(this, OrionCoordinator.Surface.INITIATIVE, initiativePrompt) { agent.run(initiativePrompt) }
+            OrionReports.report(this, "initiative", transcript.lastOrNull { it.first == "ai" }?.second.orEmpty())
         } catch (_: Exception) {
         } finally {
             main.post { finishRun() }
