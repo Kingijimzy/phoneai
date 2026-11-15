@@ -432,6 +432,7 @@ object Prefs {
     fun setLiveCallStyle(c: Context, v: String) = sp(c).edit()
         .putString("live_call_style", LiveCallStylePolicy.normalize(v)).apply()
 
+    fun bargeIn(c: Context): Boolean = sp(c).getBoolean("barge_in", true)
     fun voice(c: Context): Boolean = sp(c).getBoolean("voice", true)
     fun setVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("voice", v).apply()
 

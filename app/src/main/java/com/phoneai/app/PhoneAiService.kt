@@ -210,6 +210,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         voice = Voice(this)
         voice.onSpeaking = { s ->
             speaking = s
+            if (s && Prefs.bargeIn(this)) bargeMonitor.start { onBargeIn() } else bargeMonitor.stop()
             if (!s) for (o in orbs()) o.speechAmplitude = 0f
             refreshMode()
         }
@@ -2446,7 +2447,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         main.post { mainChatListener?.onMessage("ai", text) }
         // Keep the full answer in chat; speech is a separate concise channel.
-        if (Prefs.voice(this)) speakComposed(text)
+        if (Prefs.voice(this)) {
+            if (speechStreamer.spokeAny) {
+                speechStreamer.flush().forEach { voice.speak(it) }
+                speechStreamer.reset()
+            } else {
+                speechStreamer.reset()
+                speakComposed(text)
+            }
+        }
     }
 
     private val speakSeq = java.util.concurrent.atomic.AtomicInteger()
@@ -2488,8 +2497,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    private val speechStreamer = OrionSpeechStreamer()
+    private val bargeMonitor by lazy { OrionBargeInMonitor(this) }
+
+    /** The owner started talking over Orion: cut speech and the running turn, then listen. */
+    private fun onBargeIn() {
+        main.post {
+            speechStreamer.mute()
+            voice.stopSpeaking()
+            if (running) stopAll()
+            startLive()
+        }
+    }
+
     override fun stream(text: String) {
         if (text.isEmpty()) return
+        // Speak while the model is still writing: first sentence out in well under a second.
+        if (Prefs.voice(this)) speechStreamer.feed(text).forEach { voice.speak(it) }
         main.post { mainChatListener?.onAssistantDelta(text) }
     }
 

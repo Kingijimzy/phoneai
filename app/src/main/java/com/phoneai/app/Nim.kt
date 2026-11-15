@@ -403,6 +403,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         val nonSseBody = StringBuilder()
         var terminalEventSeen = false
         var streamFinishReason = ""
+        val toolAcc = OrionSseToolAccumulator()
         try {
             conn.requestMethod = "POST"
             conn.connectTimeout = 30000
@@ -467,7 +468,9 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                                 val choice = choices?.optJSONObject(0)
                                 val finish = choice?.optString("finish_reason").orEmpty()
                                 if (finish.isNotBlank() && finish != "null") streamFinishReason = finish
-                                choice?.optJSONObject("delta")?.optString("content", "") ?: ""
+                                val d = choice?.optJSONObject("delta")
+                                toolAcc.feed(d?.optJSONArray("tool_calls"))
+                                d?.optString("content", "")?.takeIf { it != "null" } ?: ""
                             }
                         }
                     } catch (_: Exception) { "" }
@@ -477,7 +480,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                     }
                 }
             }
-            if (!StreamCompletionPolicy.isComplete(answer.isNotEmpty(), terminalEventSeen, cancelled)) {
+            if (!StreamCompletionPolicy.isComplete(answer.isNotEmpty() || toolAcc.hasCalls(), terminalEventSeen, cancelled)) {
                 throw java.io.IOException(
                     if (cancelled) "Stream cancelled by user."
                     else "Stream ended before its completion marker."
@@ -500,7 +503,9 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                     .put("incomplete_details", if (streamFinishReason.equals("max_output_tokens", true) ||
                         streamFinishReason.equals("incomplete", true)) JSONObject().put("reason", "max_output_tokens") else JSONObject.NULL).toString()
                 else -> JSONObject().put("choices", JSONArray().put(JSONObject()
-                    .put("message", JSONObject().put("content", answer.toString()))
+                    .put("message", JSONObject().put("content", answer.toString()).also { m ->
+                        if (toolAcc.hasCalls()) m.put("tool_calls", toolAcc.toJson())
+                    })
                     .put("finish_reason", if (streamFinishReason.isBlank()) JSONObject.NULL else streamFinishReason))).toString()
             }
             return Http(200, synthetic, -1)
@@ -1134,7 +1139,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                     requestBody.put("tools", OrionToolContractCodec.openAi(toolSpecs, toolDescriptionLimit(payloadRecoveryDepth)))
                     requestBody.put("tool_choice", "auto")
                 }
-                if (onDelta != null && !vision && toolSpecs.isEmpty()) requestBody.put("stream", true)
+                if (onDelta != null && !vision) requestBody.put("stream", true)
                 if (p.id == "nvidia" && model.equals("nvidia/nemotron-3.5-super-vl-120b-a12b", ignoreCase = true)) {
                     requestBody.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
                 } else if (p.id == "nvidia" && model.lowercase().contains("deepseek-v4")) {
@@ -1144,7 +1149,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             }
             val r: Http? = try {
                 // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
-                if (onDelta != null && !vision && !p.anthropicStyle && p.id != "opencode-zen" && p.id != "gemini" && activeNativeTools.get().isNullOrEmpty()) {
+                if (onDelta != null && !vision && !p.anthropicStyle && p.id != "opencode-zen" && p.id != "gemini") {
                     requestStream(p, url, payload, key, if (fastResponse) 30000 else 180000, onDelta)
                 } else request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 30000 else 180000)
             } catch (e: java.net.SocketTimeoutException) {
