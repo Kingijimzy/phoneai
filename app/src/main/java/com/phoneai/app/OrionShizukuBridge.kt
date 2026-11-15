@@ -115,7 +115,7 @@ internal object OrionShizukuBridge {
         val op = operation.trim()
         val allowed = setOf(
             "read_brightness", "read_screen_timeout", "read_airplane_mode", "read_battery",
-            "list_user_packages", "set_brightness", "set_screen_timeout"
+            "list_user_packages", "set_brightness", "set_screen_timeout", "exec"
         )
         if (op !in allowed) return "error: operation is not in Orion's Shizuku allowlist"
         val current = state()
@@ -130,7 +130,7 @@ internal object OrionShizukuBridge {
         }
         val target = remote ?: return "error: Shizuku UserService disconnected; retry the operation"
         return try {
-            target.execute(op, argument.take(32))
+            target.execute(op, if (op == "exec") argument.take(8000) else argument.take(32))
         } catch (failure: Throwable) {
             synchronized(this) { remote = null; binding = false }
             "error: Shizuku UserService call failed (" + failure.javaClass.simpleName + "); the next request will rebind"

@@ -491,8 +491,45 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         service.toggleChatVoice()
     }
 
+    /** Raycast-style palette: type to filter every page in the platform and jump straight there. Orion can open the same pages itself (open_page). */
+    private fun showCommandPalette() {
+        val input = android.widget.EditText(this).apply {
+            hint = "Jump to a page or capability…"
+            setSingleLine()
+            setTextColor(android.graphics.Color.WHITE)
+            setHintTextColor(android.graphics.Color.GRAY)
+        }
+        val list = android.widget.ListView(this)
+        var shown = OrionPages.all
+        fun refresh() {
+            shown = OrionPages.search(input.text.toString())
+            list.adapter = android.widget.ArrayAdapter(this, android.R.layout.simple_list_item_2, android.R.id.text1,
+                shown.map { it.title })
+        }
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(32, 16, 32, 8)
+            addView(input)
+            addView(list, android.widget.LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.5).toInt()))
+        }
+        val dialog = AlertDialog.Builder(this).setTitle("Orion").setView(box).setNegativeButton("CLOSE", null).create()
+        list.setOnItemClickListener { _, _, index, _ ->
+            val page = shown.getOrNull(index) ?: return@setOnItemClickListener
+            dialog.dismiss()
+            if (page.id != "chat") startActivity(Intent(this, page.cls))
+        }
+        input.addTextChangedListener(object : android.text.TextWatcher {
+            override fun afterTextChanged(s: android.text.Editable?) = refresh()
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+        })
+        refresh()
+        dialog.show()
+    }
+
     private fun handleChatMenuAction(action: String) {
         when (action) {
+            "palette" -> showCommandPalette()
             "live_call" -> startActivity(Intent(this, LiveConversationActivity::class.java))
             "new_chat" -> {
                 PhoneAiService.instance?.startNewChat() ?: run {

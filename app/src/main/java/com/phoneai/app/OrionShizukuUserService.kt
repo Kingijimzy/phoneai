@@ -33,6 +33,8 @@ internal class OrionShizukuUserService : IOrionDeviceService.Stub() {
                     else "error: screen timeout write was not verified (read-back=$actual)"
                 }
             }
+            // Owner-granted maximum: arbitrary shell as the Shizuku identity (adb shell / root), long timeout, large output.
+            "exec" -> runFixed("sh", "-c", argument, timeoutMs = 60_000L, cap = 64_000)
             else -> "error: unsupported Shizuku operation"
             }
         } catch (failure: Throwable) {
@@ -40,7 +42,7 @@ internal class OrionShizukuUserService : IOrionDeviceService.Stub() {
         }
     }
 
-    private fun runFixed(vararg command: String): String {
+    private fun runFixed(vararg command: String, timeoutMs: Long = 3_000L, cap: Int = 8_000): String {
         val process = try { ProcessBuilder(*command).redirectErrorStream(true).start() }
         catch (failure: Exception) { return "error: command could not start (" + failure.javaClass.simpleName + ")" }
         val output = StringBuilder()
@@ -48,15 +50,15 @@ internal class OrionShizukuUserService : IOrionDeviceService.Stub() {
             runCatching {
                 process.inputStream.bufferedReader().use { input ->
                     val buffer = CharArray(512)
-                    while (output.length < 8_000) {
-                        val count = input.read(buffer, 0, minOf(buffer.size, 8_000 - output.length))
+                    while (output.length < cap) {
+                        val count = input.read(buffer, 0, minOf(buffer.size, cap - output.length))
                         if (count <= 0) break
                         synchronized(output) { output.append(buffer, 0, count) }
                     }
                 }
             }
         }.apply { isDaemon = true; start() }
-        val finished = process.waitFor(3_000L, java.util.concurrent.TimeUnit.MILLISECONDS)
+        val finished = process.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
         if (!finished) {
             process.destroy()
             process.destroyForcibly()
@@ -64,7 +66,7 @@ internal class OrionShizukuUserService : IOrionDeviceService.Stub() {
             return "error: Shizuku command timed out"
         }
         reader.join(250)
-        val text = synchronized(output) { output.toString().trim() }.take(8_000)
+        val text = synchronized(output) { output.toString().trim() }.take(cap)
         return if (process.exitValue() != 0) "error: command exited " + process.exitValue() + ": " + text
         else text.ifBlank { "ok" }
     }

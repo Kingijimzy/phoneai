@@ -43,7 +43,7 @@ internal object OrionEvidenceLedger {
     private fun safeSummary(tool: String, result: String): String {
         val privateTools = setOf("read_screen", "research_web", "fetch_url", "mcp_call",
             "telegram_inbox", "telegram_send", "social", "sms", "type", "copy", "remember",
-            "update_memory", "recall", "look", "play", "python_exec", "shell", "termux_command",
+            "update_memory", "recall", "look", "play", "python_exec", "shell", "execute_system_op", "termux_command",
             "open_file", "find_files", "workspace_read", "workspace_write", "browser_snapshot",
             "browser_extract", "browser_find", "web_search", "live_web_search", "live_news")
         if (tool in privateTools) {
