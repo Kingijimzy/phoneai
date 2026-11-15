@@ -21,7 +21,7 @@ internal object OrionRunLog {
     private val ids = AtomicLong(1)
     private const val KEEP = 40
 
-    @Volatile var steps by mutableStateOf<List<Step>>(emptyList())
+    var steps by mutableStateOf<List<Step>>(emptyList())
         private set
 
     fun begin(tool: String, args: JSONObject?, now: Long = System.currentTimeMillis()): Long {

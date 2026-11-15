@@ -1152,6 +1152,15 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         var handledDiscoveryVersion = 0
         var callbackDiscoveryRounds = 0
         val callbackToolReceipts = JSONArray()
+        fun dispatchNativeToolInner(name: String, args: JSONObject): String = executeWithRecoveryGuard(name, args) { requestedName ->
+            val result = ToolRegistry.loadCapability(nativeTools, requestedName)
+            if (runCatching { JSONObject(result).optBoolean("loaded") }.getOrDefault(false)) {
+                discoveredToolVersion++
+                ui.note("[CAPABILITIES] Loaded the selected registered capability; preparing a provider turn with its exact callable schema.")
+            }
+            result
+        }
+
         fun dispatchNativeTool(name: String, args: JSONObject): String {
             val stepId = OrionRunLog.begin(name, args)
             return try {
@@ -1160,15 +1169,6 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 OrionRunLog.finish(stepId, "error: ${e.message ?: e.javaClass.simpleName}", true)
                 throw e
             }
-        }
-
-        fun dispatchNativeToolInner(name: String, args: JSONObject): String = executeWithRecoveryGuard(name, args) { requestedName ->
-            val result = ToolRegistry.loadCapability(nativeTools, requestedName)
-            if (runCatching { JSONObject(result).optBoolean("loaded") }.getOrDefault(false)) {
-                discoveredToolVersion++
-                ui.note("[CAPABILITIES] Loaded the selected registered capability; preparing a provider turn with its exact callable schema.")
-            }
-            result
         }
 
         fun chatTurnWithNativeTools(): OrionModelTurn {
