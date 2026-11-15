@@ -832,7 +832,9 @@ internal fun OrionComposeChatScreen(
             }
         }
 
+        OrionExecutionHud()
         OrionStepStrip(lines)
+        OrionSlashPalette(draft, onPick = { draft = "" })
 
         AnimatedVisibility(selectedImages.isNotEmpty(), enter = fadeIn(animationSpec = tween(180)) + slideInVertically(animationSpec = tween(180)) { it / 3 }) {
             Row(

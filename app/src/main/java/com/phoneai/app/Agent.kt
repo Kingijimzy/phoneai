@@ -1152,7 +1152,17 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         var handledDiscoveryVersion = 0
         var callbackDiscoveryRounds = 0
         val callbackToolReceipts = JSONArray()
-        fun dispatchNativeTool(name: String, args: JSONObject): String = executeWithRecoveryGuard(name, args) { requestedName ->
+        fun dispatchNativeTool(name: String, args: JSONObject): String {
+            val stepId = OrionRunLog.begin(name, args)
+            return try {
+                dispatchNativeToolInner(name, args).also { OrionRunLog.finish(stepId, it, OrionReflexion.looksFailed(it)) }
+            } catch (e: Throwable) {
+                OrionRunLog.finish(stepId, "error: ${e.message ?: e.javaClass.simpleName}", true)
+                throw e
+            }
+        }
+
+        fun dispatchNativeToolInner(name: String, args: JSONObject): String = executeWithRecoveryGuard(name, args) { requestedName ->
             val result = ToolRegistry.loadCapability(nativeTools, requestedName)
             if (runCatching { JSONObject(result).optBoolean("loaded") }.getOrDefault(false)) {
                 discoveredToolVersion++
@@ -1256,7 +1266,6 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 lastRoundResults = outcomes.map { it.content }
                 OrionLiveMetrics.onTools(outcomes.size, outcomes.count { OrionReflexion.looksFailed(it.content) })
                 outcomes.forEach { outcome ->
-                    runCatching { OrionNodes.record(outcome.call.name, outcome.call.arguments, OrionReflexion.looksFailed(outcome.content)) }
                     ui.note(activityNote(outcome.call.name, outcome.call.arguments, outcome.content))
                     messages.put(JSONObject()
                         .put("role", "tool")

@@ -49,13 +49,22 @@ internal object OrionNodes {
     var pulses by mutableStateOf<Map<String, Pulse>>(emptyMap())
         private set
 
-    fun record(tool: String, args: JSONObject?, failed: Boolean, now: Long = System.currentTimeMillis()) {
-        val id = nodeFor(tool, args) ?: return
+    fun record(tool: String, args: JSONObject?, failed: Boolean, now: Long = System.currentTimeMillis()) =
+        recordNode(nodeFor(tool, args), failed, now)
+
+    fun recordNode(id: String?, failed: Boolean, now: Long = System.currentTimeMillis()) {
+        if (id == null) return
         val p = pulses[id] ?: Pulse()
         pulses = pulses + (id to Pulse(p.count + 1, now, failed))
     }
 
     fun reset() { pulses = emptyMap() }
+
+    /** The page a node opens when tapped. */
+    fun pageFor(id: String): String = when (id) {
+        "memory" -> "memory"; "chat" -> "telegram"; "voice" -> "voice"; "web" -> "browser"
+        "files" -> "workspace"; "shell" -> "terminal"; "calendar" -> "tasks"; else -> "accounts"
+    }
 
     /** A node is lit while its last call is recent. */
     fun isHot(p: Pulse?, now: Long, windowMs: Long = 6_000L): Boolean = p != null && p.lastAt > 0 && now - p.lastAt < windowMs
