@@ -16,9 +16,9 @@ import java.security.MessageDigest
  */
 internal object SelfExtendingExtensionPolicy {
     const val MAX_SOURCE_BYTES = 8_000
-    const val MAX_FULL_SOURCE_BYTES = 64_000
-    const val MAX_OUTPUT_CHARS = 8 * 1024
-    const val MAX_TESTS = 12
+    const val MAX_FULL_SOURCE_BYTES = 512_000
+    const val MAX_OUTPUT_CHARS = 64 * 1024
+    const val MAX_TESTS = 50
     private val idPattern = Regex("^[a-z][a-z0-9_]{2,47}$")
     private val forbiddenPython = listOf(
         Regex("(?m)^\\s*(import|from)\\s+(os|sys|subprocess|socket|ctypes|multiprocessing|threading|pathlib|shutil)\\b"),

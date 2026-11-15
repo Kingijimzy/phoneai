@@ -38,6 +38,8 @@ internal class OrionProactiveWorker(
         AgentPolicy.log(applicationContext, "soul_watch", "proactive_gate", null,
             "open=${gate.open}; score=${"%.2f".format(gate.score)}; reason=${gate.reason}")
         if (!OrionMasterControl.isEnabled(applicationContext)) return Result.success()
+        // Hourly memory compaction runs regardless of the proactive gate: it only rewrites Orion's own summary.
+        runCatching { OrionMemoryCompactor.maybeRun(applicationContext) }
         val living = if (gate.open) runCatching { OrionLivingLoop.tick(applicationContext) }.getOrDefault("") else ""
         val inner = if (gate.open) runCatching { OrionInnerLife.tick(applicationContext) }.getOrDefault("") else ""
 

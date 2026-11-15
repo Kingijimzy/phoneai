@@ -15,7 +15,7 @@ class PythonExecutionPolicyTest {
 
     @Test fun fullProfileAllowsLargerScripts() {
         assertNull(PythonExecutionPolicy.rejection("x".repeat(200_000), PythonExecutionPolicy.FULL_MAX_CODE_CHARS))
-        assertNotNull(PythonExecutionPolicy.rejection("x".repeat(257_000), PythonExecutionPolicy.FULL_MAX_CODE_CHARS))
+        assertNotNull(PythonExecutionPolicy.rejection("x".repeat(1_001_000), PythonExecutionPolicy.FULL_MAX_CODE_CHARS))
     }
 
     @Test fun rejectsEmptyOversizedAndNulInput() {

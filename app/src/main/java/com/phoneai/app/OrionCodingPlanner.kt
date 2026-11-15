@@ -27,7 +27,7 @@ internal object OrionCodingPlanner {
     private const val STORE = "orion_coding_plans.json"
     const val MAX_FILES = 32
     const val MAX_REPAIR_ATTEMPTS = 2
-    private const val MAX_OUTPUT_CHARS = 3_000
+    private const val MAX_OUTPUT_CHARS = 24_000
     private val lock = Any()
     private val projectNamePattern = Regex("^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$")
     private val filePathPattern = Regex("^[A-Za-z0-9._/-]{1,160}$")
