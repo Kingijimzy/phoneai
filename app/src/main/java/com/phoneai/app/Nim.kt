@@ -550,6 +550,10 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
             ids.add(o.optString("id").removePrefix("models/"))
+            val lim = OrionModelLimits.parseCatalogEntry(o)
+            if (lim.context != null || lim.output != null) {
+                OrionModelLimits.record(p.id, o.optString("id").ifBlank { o.optString("name") }, lim.context, lim.output, ctx)
+            }
         }
         val result = ids.filter { it.isNotBlank() }.distinct().sorted()
         modelCatalogCache[cacheKey] = Pair(System.currentTimeMillis(), result)
@@ -1022,6 +1026,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         hasBackup: Boolean, fastResponse: Boolean = false, onDelta: ((String) -> Unit)? = null,
         continuationDepth: Int = 0, payloadRecoveryDepth: Int = 0
     ): String {
+        OrionModelLimits.load(ctx)
         val key = Prefs.key(ctx, p.id)
         // Gemini needs room for its internal thinking. NVIDIA Nemotron 3.5 Super VL
         // reasons by default; short probes (e.g. max_tokens=16) can spend the entire
@@ -1030,7 +1035,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         // Keep normal turns responsive: the previous 32k minimum gave every short
         // chat/tool-planning request a huge output budget. Truncated long answers can
         // continue through the existing bounded continuation path.
-        val outputCeiling = if (fastResponse) 2048 else 16384
+        val outputCeiling = if (fastResponse) 2048 else 131_072
         val requestedOutput = maxTokens.coerceIn(512, outputCeiling)
         val tokens = when (p.id) {
             // Provider-specific thinking overhead is included, then clamped to the selected model's real output ceiling.
@@ -1241,6 +1246,13 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 (r.code == 400 && r.body.isNotEmpty())
             if (modelProblem) {
                 lastHttpStatus = r.code
+                if (r.code == 400) {
+                    OrionModelLimits.parseErrorText(r.body)?.let { lim ->
+                        // Learn the real maximum; the next turn (and the retry below) uses it.
+                        OrionModelLimits.record(p.id, model, lim.context, lim.output, ctx)
+                        if (!refilled && attempts < maxAttempts && lim.output != null) queue.add(0, model).also { tried.remove(model) }
+                    }
+                }
                 lastNote = "$model -> ${r.code} ${r.body.replace("\n", " ").take(100)}"
                 // Retired catalog models must never be persisted as the provider's active choice.
                 // Put distinct known fallbacks immediately after the failed model so quota-saver mode
