@@ -1254,6 +1254,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                     execute = ::dispatchNativeTool
                 )
                 lastRoundResults = outcomes.map { it.content }
+                OrionLiveMetrics.onTools(outcomes.size, outcomes.count { OrionReflexion.looksFailed(it.content) })
                 outcomes.forEach { outcome ->
                     ui.note(activityNote(outcome.call.name, outcome.call.arguments, outcome.content))
                     messages.put(JSONObject()
@@ -1496,6 +1497,11 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
     internal fun currentTaskCommand(): String = currentTask
 
     fun run(inputCommand: String) {
+        OrionLiveMetrics.begin()
+        try { runInner(inputCommand) } finally { OrionLiveMetrics.end(Nim.lastChatModel()) }
+    }
+
+    private fun runInner(inputCommand: String) {
         if (!OrionMasterControl.isEnabled(svc)) {
             ui.say("Orion is shut down. Start the brain from the Soul Engine command center before running tasks.")
             return

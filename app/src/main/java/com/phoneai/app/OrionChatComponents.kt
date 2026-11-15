@@ -1176,3 +1176,45 @@ internal fun OrionChatAttachmentCard(
                 .padding(horizontal = 5.dp, vertical = 12.dp))
     }
 }
+
+/** Live, measured run metrics (elapsed, first word, tok/s, tools, model). Appears while Orion works and lingers briefly after. */
+@Composable
+internal fun OrionLiveMetricsBar() {
+    val s = OrionLiveMetrics.state
+    var now by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(s.active) {
+        while (s.active) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(200) }
+        now = System.currentTimeMillis()
+    }
+    val visible = s.startedAt != 0L && (s.active || now - s.endedAt < 15_000L)
+    androidx.compose.animation.AnimatedVisibility(
+        visible = visible,
+        enter = androidx.compose.animation.fadeIn(tween(220)) + androidx.compose.animation.expandVertically(tween(220)),
+        exit = androidx.compose.animation.fadeOut(tween(400)) + androidx.compose.animation.shrinkVertically(tween(400))
+    ) {
+        val pulse = rememberInfiniteTransition(label = "metrics-live")
+        val dot by pulse.animateFloat(0.25f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "metrics-dot")
+        val chips = OrionLiveMetrics.chips(s, now)
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(Modifier.size(7.dp).clip(CircleShape).background((if (s.active) ChatMint else ChatMuted).copy(alpha = if (s.active) dot else .6f)))
+            Text(if (s.active) "LIVE" else "DONE", color = if (s.active) ChatMint else ChatMuted, fontSize = 9.sp,
+                fontWeight = FontWeight.Bold, letterSpacing = .9.sp)
+            chips.forEachIndexed { i, chip ->
+                val failed = chip.endsWith("failed")
+                Text(
+                    chip,
+                    color = if (failed) Color(0xFFFF7777) else if (i == 0) ChatCopy else ChatMuted,
+                    fontSize = 11.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(OrionUiPalette.raised)
+                        .border(1.dp, ChatHairline, RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 3.dp)
+                )
+            }
+        }
+    }
+}

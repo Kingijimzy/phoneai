@@ -756,6 +756,7 @@ internal fun OrionComposeChatScreen(
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(ChatHairline.copy(alpha = .55f)))
+        OrionLiveMetricsBar()
 
         if (lines.isEmpty() && attachments.isEmpty() && activityEvents.isEmpty()) {
             OrionHome(
