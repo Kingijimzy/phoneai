@@ -1256,6 +1256,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 lastRoundResults = outcomes.map { it.content }
                 OrionLiveMetrics.onTools(outcomes.size, outcomes.count { OrionReflexion.looksFailed(it.content) })
                 outcomes.forEach { outcome ->
+                    runCatching { OrionNodes.record(outcome.call.name, outcome.call.arguments, OrionReflexion.looksFailed(outcome.content)) }
                     ui.note(activityNote(outcome.call.name, outcome.call.arguments, outcome.content))
                     messages.put(JSONObject()
                         .put("role", "tool")
