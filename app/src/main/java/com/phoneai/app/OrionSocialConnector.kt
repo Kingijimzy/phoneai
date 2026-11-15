@@ -73,6 +73,7 @@ internal object OrionSocialConnector {
         return when (action) {
             "profile" -> Spec("GET", base + p.profile, null, false)
             "feed", "read" -> Spec("GET", base + p.feed, null, false)
+            "pages" -> if (p.id == "facebook") Spec("GET", base + "/me/accounts?fields=id,name,access_token,tasks&limit=25", null, false) else null
             "post" -> {
                 val text = args.optString("text").ifBlank { args.optString("message") }
                 val path = p.postPath ?: return null
@@ -108,11 +109,32 @@ internal object OrionSocialConnector {
 
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 
+    fun connectedIds(c: Context): List<String> =
+        catalog.filter { ApiKeyVault.read(c, secretName(it.id), legacy(it.id)).isNotBlank() }.map { it.id }
+
+    fun connectedSummary(c: Context): String =
+        runCatching { connectedIds(c) }.getOrDefault(emptyList()).let { if (it.isEmpty()) "no platform has a saved token" else "saved tokens: ${it.joinToString()}" }
+
+    /** Turns a platform error into the real cause, so the model never has to guess. */
+    fun explain(p: Platform, code: Int, body: String): String {
+        val b = body.lowercase()
+        return when {
+            code == 401 || "expired" in b || "invalid oauth" in b || "error validating access token" in b ->
+                "The platform rejected the token itself (expired, revoked or wrong type). Ask for a fresh token."
+            p.id == "facebook" && code == 403 && ("#200" in b || "publish_actions" in b || "pages_manage_posts" in b || "permission" in b) ->
+                "Facebook does not let any app post to a personal profile or to your own feed through the API. Posting works only to a Page you manage: run social {action:pages, platform:facebook} to list Pages, then social {action:post, platform:facebook, page:PAGE_ID or name, text}. The token needs pages_show_list, pages_manage_posts and pages_read_engagement."
+            code == 403 -> "The token is valid but lacks the permission/scope this call needs; the platform text above names it."
+            code == 429 -> "Rate limited by the platform; wait and retry."
+            code in 500..599 -> "The platform had a server error; retry shortly."
+            else -> ""
+        }
+    }
+
     fun status(c: Context): String = buildString {
         append("SOCIAL PLATFORMS (connect = social {action:connect, platform, token}):\n")
         catalog.forEach { p ->
             val on = ApiKeyVault.read(c, secretName(p.id), legacy(p.id)).isNotBlank()
-            append("- ${p.id}: ${p.title} — ${if (on) "CONNECTED" else "not connected"}\n")
+            append("- ${p.id}: ${p.title} — ${if (on) "token saved (run verify to prove it works)" else "not connected"}\n")
         }
     }.trim()
 
@@ -125,12 +147,18 @@ internal object OrionSocialConnector {
             "connect" -> {
                 val token = args.optString("token").trim()
                 if (token.isBlank()) return "${p.title}: ${p.howTo}\nThen call social {action:connect, platform:${p.id}, token:...}."
+                var stored = token
+                if (token.startsWith("1//")) {
+                    val cid = args.optString("client_id").trim(); val cs = args.optString("client_secret").trim()
+                    if (cid.isBlank() || cs.isBlank()) return "That is a Google REFRESH token (starts with 1//), not an access token, so it cannot be sent directly. To use it I also need the client_id and client_secret of the Google OAuth app that issued it: social {action:connect, platform:${p.id}, token:<refresh token>, client_id:..., client_secret:...}. Or paste a short-lived access token starting with ya29."
+                    stored = "gr:$token|$cid|$cs"
+                }
                 if (p.id == "mastodon") {
                     val inst = args.optString("instance").trim()
                     if (inst.isBlank()) return "error: Mastodon needs instance (for example mastodon.social)."
                     c.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit().putString(metaName(p.id), inst).apply()
                 }
-                val ok = ApiKeyVault.write(c, secretName(p.id), legacy(p.id), token)
+                val ok = ApiKeyVault.write(c, secretName(p.id), legacy(p.id), stored)
                 return if (ok) "${p.title} connected. Use social {action:profile, platform:${p.id}} to verify." else "error: could not store the token."
             }
             "disconnect" -> {
@@ -141,12 +169,55 @@ internal object OrionSocialConnector {
         if (token.isBlank()) return "${p.title} is not connected. ${p.howTo}"
         val instance = c.getSharedPreferences("phoneai", Context.MODE_PRIVATE).getString(metaName(p.id), "").orEmpty()
         if (p.id == "mastodon" && instance.isBlank()) return "error: Mastodon instance missing; reconnect with instance."
+        if (token.startsWith("gr:")) token = googleAccessToken(token) ?: return "error: Google refused the refresh token (revoked, or client_id/client_secret do not match the app that issued it). Reconnect with the right client credentials."
         if (p.id == "bluesky") token = blueskySession(token) ?: return "error: Bluesky login failed; reconnect with token handle:app-password."
-        val spec = plan(p, action, args, instance) ?: return "error: action '$action' is not available for ${p.title} (or arguments are missing). Actions: profile, feed, post{text}, request{path,method,body}."
         return try {
-            call(p, spec, token)
+            when (action) {
+                "verify" -> verify(p, token, instance)
+                "post" -> if (p.id == "facebook") facebookPagePost(p, token, args) else send(p, action, args, instance, token)
+                else -> send(p, action, args, instance, token)
+            }
         } catch (e: Exception) { "error: ${p.title} request failed (${(e.message ?: e.javaClass.simpleName).take(120)})" }
     }
+
+    private fun send(p: Platform, action: String, args: JSONObject, instance: String, token: String): String {
+        val spec = plan(p, action, args, instance) ?: return "error: action '$action' is not available for ${p.title} (or arguments are missing). Actions: status, howto, connect, verify, profile, feed, post{text}, pages (facebook), request{path,method,body}."
+        return call(p, spec, token)
+    }
+
+    private fun verify(p: Platform, token: String, instance: String): String {
+        val r = send(p, "profile", JSONObject(), instance, token)
+        return if (r.startsWith("HTTP")) "VERIFIED: ${p.title} token works.\n$r" else "NOT VERIFIED: $r"
+    }
+
+    /** Facebook only allows API posting to Pages: find the page, swap to its page token, publish. */
+    private fun facebookPagePost(p: Platform, token: String, args: JSONObject): String {
+        val text = args.optString("text").ifBlank { args.optString("message") }
+        if (text.isBlank()) return "error: post needs text."
+        val list = call(p, Spec("GET", p.base + "/me/accounts?fields=id,name,access_token&limit=50", null, false), token)
+        if (!list.startsWith("HTTP")) return list
+        val pages = JSONObject(list.substringAfter('\n')).optJSONArray("data") ?: return "error: could not read your Pages."
+        if (pages.length() == 0) return "error: this token manages no Facebook Pages, and Facebook does not allow API posts to a personal profile. Create a Page (or use a token whose user manages one) with pages_show_list + pages_manage_posts."
+        val want = args.optString("page").trim().lowercase()
+        var chosen: JSONObject? = null
+        for (i in 0 until pages.length()) {
+            val o = pages.getJSONObject(i)
+            if (want.isEmpty() && pages.length() == 1 || o.optString("id") == want || (want.isNotEmpty() && o.optString("name").lowercase().contains(want))) { chosen = o; break }
+        }
+        val page = chosen ?: return "error: say which Page: " + (0 until pages.length()).joinToString { pages.getJSONObject(it).let { o -> "${o.optString("name")} (${o.optString("id")})" } }
+        val pageToken = page.optString("access_token").ifBlank { return "error: Facebook returned no page token; the user token needs pages_manage_posts." }
+        val out = call(p, Spec("POST", p.base + "/" + page.optString("id") + "/feed", "message=" + enc(text), false), pageToken)
+        return if (out.startsWith("HTTP")) "Posted to Page ${page.optString("name")}.\n$out" else out
+    }
+
+    private fun googleAccessToken(stored: String): String? = try {
+        val (refresh, cid, cs) = stored.removePrefix("gr:").split("|").let { Triple(it[0], it.getOrElse(1) { "" }, it.getOrElse(2) { "" }) }
+        val conn = URL("https://oauth2.googleapis.com/token").openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"; conn.doOutput = true; conn.connectTimeout = 15000; conn.readTimeout = 20000
+        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+        conn.outputStream.use { it.write("grant_type=refresh_token&refresh_token=${enc(refresh)}&client_id=${enc(cid)}&client_secret=${enc(cs)}".toByteArray()) }
+        if (conn.responseCode !in 200..299) null else JSONObject(conn.inputStream.bufferedReader().readText()).optString("access_token").ifBlank { null }
+    } catch (_: Exception) { null }
 
     private fun blueskySession(handleAndPassword: String): String? = try {
         val (h, pw) = handleAndPassword.split(":", limit = 2).let { it[0] to it.getOrElse(1) { "" } }
@@ -172,6 +243,6 @@ internal object OrionSocialConnector {
         val code = conn.responseCode
         val text = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.readText().orEmpty()
         val clipped = text.take(12_000)
-        return if (code in 200..299) "HTTP $code\n$clipped" else "error: HTTP $code from ${p.title}: ${clipped.take(600)}"
+        return if (code in 200..299) "HTTP $code\n$clipped" else "error: HTTP $code from ${p.title}: ${clipped.take(600)}" + explain(p, code, text).let { if (it.isBlank()) "" else "\nCAUSE: $it" }
     }
 }

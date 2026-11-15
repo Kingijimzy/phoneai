@@ -37,4 +37,17 @@ class OrionReflexionAndSocialTest {
         assertEquals("https://mastodon.social/api/v1/statuses", OrionSocialConnector.plan(m, "post", JSONObject().put("text", "x"), "mastodon.social")!!.url)
         assertNull(OrionSocialConnector.plan(x, "post", JSONObject(), ""))
     }
+
+    @Test fun errorsExplainRealCause() {
+        val fb = OrionSocialConnector.find("facebook")!!
+        val e = OrionSocialConnector.explain(fb, 403, "{\"error\":{\"message\":\"(#200) If posting to a group, requires app being installed\"}}")
+        assertTrue(e.contains("Page"))
+        assertTrue(OrionSocialConnector.explain(fb, 401, "Error validating access token").contains("token"))
+        assertEquals("", OrionSocialConnector.explain(fb, 404, "nope"))
+    }
+    @Test fun pagesPlanOnlyForFacebook() {
+        val fb = OrionSocialConnector.find("facebook")!!
+        assertTrue(OrionSocialConnector.plan(fb, "pages", JSONObject(), "")!!.url.contains("/me/accounts"))
+        assertNull(OrionSocialConnector.plan(OrionSocialConnector.find("x")!!, "pages", JSONObject(), ""))
+    }
 }

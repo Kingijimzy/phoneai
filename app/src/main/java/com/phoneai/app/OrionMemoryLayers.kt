@@ -57,7 +57,7 @@ internal object OrionMemoryLayers {
             left -= body.length + l.label.length + 4
         }
         layers.forEach { l -> keep[l.label]?.let { sb.append("\n[").append(l.label).append("]\n").append(it) } }
-        sb.append("\nARBITRATION: what Kingi says now beats any remembered preference; his own stated facts beat inferred ones; an old episode is a hint for similar tasks, not a rule; if layers conflict, go with the newest, best-evidenced one and say so only if it matters.")
+        sb.append("\nARBITRATION: account/connection/token/service state is never taken from memory — re-check it with the live tool (service_status, social status) before stating it; what Kingi says now beats any remembered preference; his own stated facts beat inferred ones; an old episode is a hint for similar tasks, not a rule; if layers conflict, go with the newest, best-evidenced one and say so only if it matters.")
         return sb.toString()
     }
 }
