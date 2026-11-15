@@ -24,7 +24,7 @@ class TelegramListenerService : Service() {
         private const val KEY_ENABLED = "enabled"
 
         fun isEnabled(context: Context): Boolean =
-            context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ENABLED, true)
+            context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ENABLED, TelegramBridge.isConfigured(context))
 
         /** Telegram is Orion's remote line to the owner: once configured it listens by default. Never flips the saved choice on failure. */
         fun ensureRunning(context: Context) {
