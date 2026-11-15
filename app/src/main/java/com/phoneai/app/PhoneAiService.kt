@@ -205,6 +205,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        TelegramListenerService.ensureRunning(this)
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         voice = Voice(this)
         voice.onSpeaking = { s ->

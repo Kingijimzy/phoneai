@@ -110,7 +110,7 @@ object RouteMemoryStore {
      */
     internal fun verifiedToolsForCheckpoint(checkpoint: JSONObject): List<String> {
         if (checkpoint.optString("status") != "completed") return emptyList()
-        val excluded = setOf("remember", "update_memory", "forget", "recall", "type", "copy", "sms", "telegram_send", "mcp_call")
+        val excluded = setOf("remember", "update_memory", "forget", "recall", "type", "copy", "sms", "telegram_send", "social", "mcp_call")
         val steps = checkpoint.optJSONArray("steps") ?: return emptyList()
         val verified = linkedSetOf<String>()
         for (i in 0 until steps.length()) {
