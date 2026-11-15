@@ -29,6 +29,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         private val providerQuota = ConcurrentHashMap<String, String>()
         /** Last confirmed provider/model per mode; response text is never stored here. */
         private val lastSuccess = ConcurrentHashMap<String, String>()
+        /** Provider / model that most recently answered a chat turn, for live metrics. */
+        fun lastChatModel(): String = lastSuccess["chat"].orEmpty()
         /** Most recent failure per provider, kept only in memory for diagnostics. */
         private val lastFailure = ConcurrentHashMap<String, String>()
         /** Successful model catalogues, cached briefly and keyed by provider + saved-key fingerprint. */

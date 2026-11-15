@@ -2433,7 +2433,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     override fun say(raw: String) {
         // Never show the internal untrusted-data wrapper; keep only the assistant's own words.
-        val text = OrionEvidenceText.strip(raw).ifBlank { raw }
+        val full = OrionEvidenceText.strip(raw).ifBlank { raw }
+        // Code belongs to the workspace: long blocks are saved there and the chat shows a compact card.
+        val text = OrionCodeOffload.offload(this, full)
         appendTranscript("ai", text)
         main.post {
             hideThinkingIndicator()
@@ -2513,6 +2515,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     override fun stream(text: String) {
         if (text.isEmpty()) return
         // Speak while the model is still writing: first sentence out in well under a second.
+        OrionLiveMetrics.onDelta(text.length, Nim.lastChatModel())
         if (Prefs.voice(this)) speechStreamer.feed(text).forEach { voice.speak(it) }
         main.post { mainChatListener?.onAssistantDelta(text) }
     }
