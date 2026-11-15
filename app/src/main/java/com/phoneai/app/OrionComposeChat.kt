@@ -758,19 +758,28 @@ internal fun OrionComposeChatScreen(
         Box(Modifier.fillMaxWidth().height(1.dp).background(ChatHairline.copy(alpha = .55f)))
         OrionLiveMetricsBar()
 
-        if (lines.isEmpty() && attachments.isEmpty() && activityEvents.isEmpty()) {
-            OrionHome(
-                commandMode = commandMode,
-                onSend = onSend,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+        var showTranscript by rememberSaveable { mutableStateOf(false) }
+        if (!showTranscript) {
+            OrionNeuralHome(
+                lines = lines,
+                activityEvents = activityEvents,
+                busy = busy,
+                statusLabel = orionStatusLabel(displayStatus, effectiveOrbMode, busy),
                 orbMode = orbMode,
                 orbMicLevel = orbMicLevel,
                 orbSpeechAmplitude = orbSpeechAmplitude,
                 orbWordPulse = orbWordPulse,
-                onVoice = onVoice
+                onVoice = onVoice,
+                onActivity = { showTranscript = true },
+                onOpenTask = onTasks,
+                modifier = Modifier.weight(1f).fillMaxWidth()
             )
         } else {
             val visibleLines = lines.filterNot(::isCompactExecutionNote)
+            Column(Modifier.weight(1f).fillMaxWidth()) {
+            Text("◂ Neural network", color = ChatMuted, fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp).clip(RoundedCornerShape(50))
+                    .clickable { showTranscript = false }.padding(horizontal = 8.dp, vertical = 4.dp))
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
                 state = listState,
@@ -819,6 +828,7 @@ internal fun OrionComposeChatScreen(
                 if (busy && !assistantAlreadyStreaming) {
                     item(key = "orion-thinking-indicator") { ThinkingIndicator(displayStatus, effectiveOrbMode) }
                 }
+            }
             }
         }
 
