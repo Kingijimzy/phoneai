@@ -14,7 +14,7 @@ import java.io.File
  */
 internal object OrionPythonRuntime {
     private const val SCRIPT_NAME = "orion_main.py"
-    private const val MAX_OUTPUT_CHARS = 96_000
+    private const val MAX_OUTPUT_CHARS = 400_000
     private const val EXECUTION_TIMEOUT_MS = LinuxRuntimePolicy.MAX_PROCESS_TIMEOUT_MS
     private const val FULL_EXECUTION_TIMEOUT_MS = LinuxRuntimePolicy.MAX_PROCESS_TIMEOUT_MS
 

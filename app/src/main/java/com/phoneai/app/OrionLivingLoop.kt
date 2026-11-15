@@ -129,7 +129,7 @@ object OrionLivingLoop {
         if (broken.isEmpty()) return@runCatching ""
         broken.forEach { h ->
             OrionLessons.learn(c, "${h.tool} failed ${h.consecutive} times in a row (${h.lastReason}); try a different route before using it again.", now)
-            OrionFollowUpStore.add(c, "Self-repair: '${h.tool}' keeps failing (${h.lastReason}). Diagnose it, build a fix or replacement with python_exec or extension_create, test it, then tell Kingi what you changed.".take(240), dueAt = now)
+            OrionFollowUpStore.add(c, "Self-repair: '${h.tool}' keeps failing (${h.lastReason}). Diagnose it. If it is a bug in your own code: self_edit read, write the patch, prove the logic in python_exec, open a PR, wait for CI, merge. Otherwise build a replacement with extension_create. Tell Kingi what you changed.".take(400), dueAt = now)
             OrionSelfModel.markFlagged(c, h.tool)
         }
         "Noticed ${broken.size} tool(s) failing repeatedly: " + broken.joinToString { it.tool }

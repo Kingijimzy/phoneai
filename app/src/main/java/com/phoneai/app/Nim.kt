@@ -1030,7 +1030,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         // Keep normal turns responsive: the previous 32k minimum gave every short
         // chat/tool-planning request a huge output budget. Truncated long answers can
         // continue through the existing bounded continuation path.
-        val outputCeiling = if (fastResponse) 2048 else 8192
+        val outputCeiling = if (fastResponse) 2048 else 16384
         val requestedOutput = maxTokens.coerceIn(512, outputCeiling)
         val tokens = when (p.id) {
             // Provider-specific thinking overhead is included, then clamped to the selected model's real output ceiling.
