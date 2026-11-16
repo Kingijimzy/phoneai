@@ -27,7 +27,7 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.TRADING_DESK -> OrionTradingDeskCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.PYTHON -> OrionPythonCapabilityExecutor.supports(tool)
-        OrionCapabilityAdapters.Backend.SHELL -> tool in setOf("shell", "termux_command", "execute_system_op", "open_page", "devspace", "spawn_worker", "worker_list", "worker_result", "worker_cancel", "platform_selftest")
+        OrionCapabilityAdapters.Backend.SHELL -> tool in setOf("shell", "termux_command", "execute_system_op", "open_page", "devspace", "studio", "spawn_worker", "worker_list", "worker_result", "worker_cancel", "platform_selftest")
         OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty", "project_create", "project_list", "project_inspect", "project_plan", "project_verify", "document_extract", "image_read", "image_generate")
         OrionCapabilityAdapters.Backend.BROWSER -> tool in setOf(
             "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
@@ -84,6 +84,7 @@ internal object OrionRuntimeCapabilityExecutor {
             "execute_system_op" -> OrionSystemOps.run(service, tools, pythonExecutor, args, stopped, confirm)
             "open_page" -> OrionPages.open(service, args.optString("page").ifBlank { args.optString("name") })
             "devspace" -> OrionDevspace.run(service, args)
+            "studio" -> OrionStudio.run(service, args)
             "spawn_worker" -> OrionWorkers.spawn(service, args.optString("objective").ifBlank { args.optString("task") }, args.optString("label"))
             "worker_list" -> OrionWorkers.list(service)
             "worker_result" -> OrionWorkers.result(service, args.optString("id"))

@@ -83,3 +83,38 @@ class OrionUbuntuTest {
         assertEquals(600_000L, ShellExecutionRouting.commandTimeoutMs("apt-get update"))
     }
 }
+
+class OrionStudioTest {
+    @Test fun pathsAndRefsAreValidated() {
+        assertTrue(OrionStudio.validPath("proj/src/a.py"))
+        assertFalse(OrionStudio.validPath("../etc/passwd"))
+        assertFalse(OrionStudio.validPath("/abs"))
+        assertFalse(OrionStudio.validRef("--upload-pack=x"))
+        assertNull(OrionStudio.diagnosticsScript("a b"))
+        assertNull(OrionStudio.completeScript("x.py", 0, 0))
+    }
+    @Test fun gitBuildAndDebugScripts() {
+        val o = org.json.JSONObject().put("message", "it's done")
+        val commit = OrionStudio.gitScript("commit", "app", o)!!
+        assertTrue(commit.contains("'it'\\''s done'"))
+        assertNull(OrionStudio.gitScript("commit", "app", org.json.JSONObject()))
+        assertNull(OrionStudio.gitScript("rm", "app", org.json.JSONObject()))
+        assertNull(OrionStudio.gitScript("checkout", "app", org.json.JSONObject().put("ref", "--force")))
+        assertTrue(OrionStudio.buildScript("app", "build", "")!!.contains("BUILD_EXIT"))
+        assertTrue(OrionStudio.debugScript("a.py", listOf(3), emptyList())!!.contains("pdb"))
+        assertNull(OrionStudio.debugScript("a.py", listOf(0), emptyList()))
+        assertNull(OrionStudio.cloneScript("http://x/y", "p"))
+        assertTrue(OrionStudio.cloneScript("https://github.com/a/b", "p")!!.contains("git clone"))
+    }
+    @Test fun registryAndPreview() {
+        assertTrue(OrionStudio.catalog.map { it.id }.toSet().size == OrionStudio.catalog.size)
+        assertTrue(OrionStudio.catalog.any { it.kind == OrionStudio.Kind.MCP })
+        assertNull(OrionStudio.installCommand("x", "plugin", "npm:bad pkg; rm -rf /"))
+        assertTrue(OrionStudio.installCommand("mine", "plugin", "pip:requests")!!.second.contains("pip install"))
+        assertNull(OrionStudio.previewCommand("app", 80, ""))
+        assertTrue(OrionStudio.previewCommand("app", 8080, "")!!.contains("http.server"))
+        assertTrue(OrionStudio.toolchainScript("go", true)!!.contains("golang-go"))
+        assertTrue(OrionStudio.toolchainScript("go", false)!!.contains("apk add"))
+        assertNull(OrionStudio.toolchainScript("cobol", true))
+    }
+}
