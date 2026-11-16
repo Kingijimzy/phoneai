@@ -287,6 +287,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     override fun onDestroy() {
         clearPointOverlay()
+        closeFloatingBrowser()
         super.onDestroy()
     }
 
@@ -2668,16 +2669,139 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             return "opened in the in-chat browser popup: $safe"
         }
 
-        val i = Intent(this, BrowserActivity::class.java)
-            .putExtra(BrowserActivity.EXTRA_URL, safe)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return try {
-            startActivity(i)
+            onMainWait { showFloatingBrowser(safe) }
             BrowserAutomation.awaitWebView(3000L)
-            "opened in Orion's in-app browser: $safe"
+            "opened in Orion's compact floating browser panel: $safe"
         } catch (e: Exception) {
-            "error: could not open in-app browser (" + (e.message ?: "launch failed") + ")"
+            "error: could not open floating browser (" + (e.message ?: "launch failed") + ")"
         }
+    }
+
+    private var browserOverlayRoot: View? = null
+    private var browserOverlayWeb: android.webkit.WebView? = null
+
+    private fun closeFloatingBrowser() {
+        val web = browserOverlayWeb
+        browserOverlayWeb = null
+        if (web != null) {
+            BrowserAutomation.detach(web)
+            runCatching { web.stopLoading() }
+            runCatching { web.destroy() }
+        }
+        browserOverlayRoot?.let { view -> runCatching { wm.removeView(view) } }
+        browserOverlayRoot = null
+    }
+
+    /** A touchable accessibility overlay keeps browser work beside the app being operated. */
+    private fun showFloatingBrowser(rawUrl: String) {
+        val initial = ChatBrowserUrlPolicy.normalize(rawUrl) ?: return
+        closeFloatingBrowser()
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(Theme.PANEL, dp(18).toFloat(), Theme.LINE_STRONG)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            elevation = dp(18).toFloat()
+        }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val address = EditText(this).apply {
+            setSingleLine(true)
+            textSize = 11f
+            setTextColor(Theme.TEXT)
+            setHintTextColor(Theme.MUTED)
+            hint = "Website"
+            setText(initial)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+            background = rounded(Theme.PANEL2, dp(10).toFloat(), Theme.LINE)
+            setPadding(dp(8), dp(4), dp(8), dp(4))
+            imeOptions = EditorInfo.IME_ACTION_GO
+        }
+        fun actionButton(text: String, action: () -> Unit) = TextView(this).apply {
+            this.text = text
+            textSize = 11f
+            gravity = Gravity.CENTER
+            setTextColor(Theme.TEXT)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setOnClickListener { action() }
+        }
+        val web = android.webkit.WebView(this)
+        val go = actionButton("GO") {
+            ChatBrowserUrlPolicy.normalize(address.text?.toString())?.let { target ->
+                address.setText(target)
+                web.loadUrl(target)
+            } ?: Toast.makeText(this, "Enter a valid HTTP or HTTPS URL.", Toast.LENGTH_SHORT).show()
+        }
+        val close = actionButton("×") { closeFloatingBrowser() }
+        header.addView(address, LinearLayout.LayoutParams(0, dp(40), 1f))
+        header.addView(go, LinearLayout.LayoutParams(dp(42), dp(40)))
+        header.addView(close, LinearLayout.LayoutParams(dp(34), dp(40)))
+        root.addView(header)
+
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        controls.addView(actionButton("‹ Back") { if (web.canGoBack()) web.goBack() })
+        controls.addView(actionButton("Reload") { web.reload() })
+        controls.addView(actionButton("Stop") { web.stopLoading() })
+        root.addView(controls, LinearLayout.LayoutParams(MATCH, dp(34)))
+
+        web.settings.javaScriptEnabled = true
+        web.settings.domStorageEnabled = true
+        web.settings.allowFileAccess = false
+        web.settings.allowContentAccess = false
+        web.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        web.webViewClient = object : android.webkit.WebViewClient() {
+            override fun shouldOverrideUrlLoading(
+                view: android.webkit.WebView,
+                request: android.webkit.WebResourceRequest
+            ): Boolean {
+                val safe = ChatBrowserUrlPolicy.normalize(request.url.toString()) ?: return true
+                address.setText(safe)
+                return false
+            }
+
+            @Suppress("DEPRECATION")
+            override fun shouldOverrideUrlLoading(view: android.webkit.WebView, url: String): Boolean {
+                val safe = ChatBrowserUrlPolicy.normalize(url) ?: return true
+                address.setText(safe)
+                return false
+            }
+
+            override fun onPageStarted(view: android.webkit.WebView, url: String, favicon: Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                ChatBrowserUrlPolicy.normalize(url)?.let { address.setText(it) }
+            }
+        }
+        address.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
+                go.performClick()
+                true
+            } else false
+        }
+        BrowserAutomation.attach(web)
+        root.addView(web, LinearLayout.LayoutParams(MATCH, 0, 1f))
+
+        val size = screenSize()
+        val lp = WindowManager.LayoutParams(
+            (size.first * 0.82f).toInt(),
+            (size.second * 0.68f).toInt(),
+            OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            x = dp(8)
+            y = 0
+        }
+        wm.addView(root, lp)
+        browserOverlayRoot = root
+        browserOverlayWeb = web
+        web.loadUrl(initial)
     }
 
     // ---------------------------------------------------------------- tools: reading the screen
