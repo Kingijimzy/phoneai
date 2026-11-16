@@ -10,6 +10,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -225,7 +226,10 @@ internal fun OrionTaskStrip(title: String, run: List<OrionRunLog.Step>, onOpen: 
 @Composable
 internal fun OrionReplyPanel(lines: List<OrionChatLine>, onOpenTranscript: () -> Unit, modifier: Modifier = Modifier) {
     val lastUser = lines.lastOrNull { it.kind == "me" }?.text.orEmpty()
-    val lastReply = OrionPanelText.clean(lines.lastOrNull { it.kind == "ai" }?.text.orEmpty())
+    val rawReply = lines.lastOrNull { it.kind == "ai" }?.text.orEmpty()
+    val lastReply = OrionPanelText.clean(rawReply)
+    val cards = androidx.compose.runtime.remember(rawReply) { OrionArtifactCards.extract(rawReply) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val scroll = rememberScrollState()
     LaunchedEffect(lastReply.length / 40) { scroll.animateScrollTo(scroll.maxValue) }
     Column(modifier.fillMaxWidth().padding(horizontal = 22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -236,6 +240,24 @@ internal fun OrionReplyPanel(lines: List<OrionChatLine>, onOpenTranscript: () ->
                 color = OrionUiPalette.text, fontSize = 15.sp, lineHeight = 22.sp, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().verticalScroll(scroll)
             )
+        }
+        if (cards.isNotEmpty()) Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            cards.forEach { card ->
+                Box(
+                    Modifier.clip(RoundedCornerShape(12.dp)).background(OrionUiPalette.raised)
+                        .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(12.dp))
+                        .clickable { OrionArtifactCards.open(ctx, card) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        (when (card.kind) { OrionArtifactCards.Kind.CODE -> "▣ "; OrionArtifactCards.Kind.FILE -> "▤ "; OrionArtifactCards.Kind.PREVIEW -> "◉ " }) + card.title + "  ↗",
+                        color = OrionUiPalette.text, fontSize = 12.sp, maxLines = 1
+                    )
+                }
+            }
         }
     }
 }
