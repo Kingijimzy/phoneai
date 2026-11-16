@@ -77,6 +77,7 @@ internal object OrionRunLog {
             t == "open_page" -> "Opening a page"
             t.startsWith("voice") -> "Speaking"
             t == "devspace" -> "Working in the coding space"
+            t == "studio" -> "Working in Code Studio"
             t == "spawn_worker" -> "Starting a worker"
             t.startsWith("worker_") -> "Checking workers"
             t == "platform_selftest" -> "Testing the platform"
