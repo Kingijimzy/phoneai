@@ -1507,6 +1507,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
     internal fun currentTaskCommand(): String = currentTask
 
     fun run(inputCommand: String) {
+        OrionRunLog.beginRun()
         OrionLiveMetrics.begin()
         try { runInner(inputCommand) } finally { OrionLiveMetrics.end(Nim.lastChatModel()) }
     }
