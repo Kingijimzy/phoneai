@@ -60,8 +60,11 @@ class MarkdownTest {
         assertEquals("│  quoted text\n────────────────────────", formatOrionMarkdown("> quoted text\n---").text)
     }
 
-    @Test fun fencedCodeShowsItsLanguageLabel() {
-        assertEquals("PYTHON\nprint('hello')", formatOrionMarkdown("```python\nprint('hello')\n```").text)
+    @Test fun fencedCodeCollapsesToACardLine() {
+        val text = formatOrionMarkdown("```python\nprint('hello')\n```").text
+        assertEquals(false, text.contains("print("))
+        assertEquals(true, text.contains("Code · python · 1 line"))
+        assertEquals(true, formatOrionMarkdown("before\n```sh\nls\npwd").text.contains("Code · sh · 2 lines"))
     }
 
     @Test fun strikethroughUsesLineThroughSpan() {

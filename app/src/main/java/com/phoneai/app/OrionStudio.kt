@@ -12,6 +12,8 @@ import org.json.JSONObject
  * and the Studio page shows the same state.
  */
 internal object OrionStudio {
+    /** POSIX `.` of a missing file aborts a non-interactive sh (dash/ash), so activation must be guarded. */
+    const val VENV = "{ [ -f /workspace/.venvs/studio/bin/activate ] && . /workspace/.venvs/studio/bin/activate; } 2>/dev/null"
     private val safePath = Regex("^[A-Za-z0-9._/-]{1,120}$")
     private val safeRef = Regex("^[A-Za-z0-9._/@:+~^-]{1,120}$")
     private fun q(s: String) = "'" + s.replace("'", "'\\''") + "'"
@@ -62,7 +64,7 @@ internal object OrionStudio {
     fun diagnosticsScript(project: String): String? {
         val d = dir(project) ?: return null
         return "cd $d 2>/dev/null || { echo no such project; exit 1; }; found=0; " +
-            "if ls *.py **/*.py >/dev/null 2>&1; then found=1; echo '== python =='; . /workspace/.venvs/studio/bin/activate 2>/dev/null; (ruff check . 2>&1 || python3 -m compileall -q . 2>&1) | head -n 60; (command -v pyright >/dev/null && pyright . 2>&1 | tail -n 25); fi; " +
+            "if ls *.py **/*.py >/dev/null 2>&1; then found=1; echo '== python =='; $VENV; (ruff check . 2>&1 || python3 -m compileall -q . 2>&1) | head -n 60; (command -v pyright >/dev/null && pyright . 2>&1 | tail -n 25); fi; " +
             "if [ -f tsconfig.json ]; then found=1; echo '== typescript =='; npx --no-install tsc --noEmit 2>&1 | head -n 40; elif ls *.js >/dev/null 2>&1; then found=1; echo '== javascript =='; for f in *.js; do node --check \"\$f\" 2>&1; done | head -n 30; fi; " +
             "if [ -f go.mod ]; then found=1; echo '== go =='; go vet ./... 2>&1 | head -n 40; fi; " +
             "if [ -f Cargo.toml ]; then found=1; echo '== rust =='; cargo check 2>&1 | tail -n 40; fi; " +
@@ -72,21 +74,21 @@ internal object OrionStudio {
 
     fun formatScript(project: String): String? {
         val d = dir(project) ?: return null
-        return "cd $d 2>/dev/null || exit 1; . /workspace/.venvs/studio/bin/activate 2>/dev/null; " +
+        return "cd $d 2>/dev/null || exit 1; $VENV; " +
             "(ls *.py >/dev/null 2>&1 && ruff format . 2>&1); (command -v prettier >/dev/null && ls *.js *.ts *.json >/dev/null 2>&1 && prettier --write . 2>&1 | tail -n 10); (test -f go.mod && gofmt -l -w . 2>&1); (test -f Cargo.toml && cargo fmt 2>&1); echo FORMAT_DONE"
     }
 
     /** Python completion via jedi at file:line:col (1-based line, 0-based column). */
     fun completeScript(file: String, line: Int, col: Int): String? {
         if (!validPath(file) || line < 1 || col < 0 || line > 100000 || col > 1000) return null
-        return ". /workspace/.venvs/studio/bin/activate 2>/dev/null; python3 - <<'PY'\nimport jedi\ns=jedi.Script(path='/workspace/$file')\nfor c in s.complete($line,$col)[:40]:\n    print(c.name, '-', c.type, '-', (c.description or '')[:60])\nPY"
+        return "$VENV; python3 - <<'PY'\nimport jedi\ns=jedi.Script(path='/workspace/$file')\nfor c in s.complete($line,$col)[:40]:\n    print(c.name, '-', c.type, '-', (c.description or '')[:60])\nPY"
     }
 
     fun symbolsScript(file: String): String? =
         if (!validPath(file)) null else "f=/workspace/$file; (command -v ctags >/dev/null && ctags -x \$f | head -n 80) || grep -nE '^\\s*(def|class|function|func|fn|interface|struct)\\s' \$f | head -n 80"
 
     fun highlightScript(file: String): String? =
-        if (!validPath(file)) null else ". /workspace/.venvs/studio/bin/activate 2>/dev/null; (command -v pygmentize >/dev/null && pygmentize -g /workspace/$file) || cat -n /workspace/$file"
+        if (!validPath(file)) null else "$VENV; (command -v pygmentize >/dev/null && pygmentize -g /workspace/$file) || cat -n /workspace/$file"
 
     // ---------- debugging ----------
     fun debugScript(file: String, lines: List<Int>, extra: List<String>): String? {
@@ -140,7 +142,7 @@ internal object OrionStudio {
             "elif [ -f Cargo.toml ]; then cargo build 2>&1 | tail -n 40; elif [ -f go.mod ]; then go build ./... 2>&1 | tail -n 40; elif [ -f pom.xml ]; then mvn -q -B package 2>&1 | tail -n 40; " +
             "elif [ -f build.gradle -o -f build.gradle.kts ]; then gradle build --no-daemon 2>&1 | tail -n 40; elif [ -f CMakeLists.txt ]; then cmake -S . -B build && cmake --build build 2>&1 | tail -n 40; " +
             "elif [ -f pyproject.toml -o -f setup.py ]; then pip install -q build 2>&1 | tail -n 2; python3 -m build 2>&1 | tail -n 30; else echo 'no build system detected (Makefile, package.json, Cargo.toml, go.mod, pom.xml, gradle, CMake, pyproject)'; fi"
-        else -> ". /workspace/.venvs/studio/bin/activate 2>/dev/null; if [ -f package.json ]; then npm test --silent 2>&1 | tail -n 50; elif [ -f Cargo.toml ]; then cargo test 2>&1 | tail -n 50; elif [ -f go.mod ]; then go test ./... 2>&1 | tail -n 50; " +
+        else -> "$VENV; if [ -f package.json ]; then npm test --silent 2>&1 | tail -n 50; elif [ -f Cargo.toml ]; then cargo test 2>&1 | tail -n 50; elif [ -f go.mod ]; then go test ./... 2>&1 | tail -n 50; " +
             "elif [ -f pom.xml ]; then mvn -q -B test 2>&1 | tail -n 50; elif ls test*.py tests >/dev/null 2>&1; then (command -v pytest >/dev/null || pip install -q pytest 2>&1 | tail -n 1); python3 -m pytest -q 2>&1 | tail -n 50; elif [ -f Makefile ]; then make test 2>&1 | tail -n 50; else echo 'no tests detected'; fi"
     }
 
@@ -166,7 +168,7 @@ internal object OrionStudio {
         val f = "/workspace/$file"
         val ext = file.substringAfterLast('.', "").lowercase()
         val body = when (ext) {
-            "py" -> ". /workspace/.venvs/studio/bin/activate 2>/dev/null; (ruff check --output-format concise $f 2>&1 || python3 -m py_compile $f 2>&1); (command -v pyright >/dev/null && pyright $f 2>&1 | grep -E '(error|warning)')"
+            "py" -> "$VENV; (ruff check --output-format concise $f 2>&1 || python3 -m py_compile $f 2>&1); (command -v pyright >/dev/null && pyright $f 2>&1 | grep -E '(error|warning)')"
             "js", "mjs", "cjs" -> "node --check $f 2>&1 | head -n 12; (command -v eslint >/dev/null && eslint -f unix $f 2>&1 | head -n 40)"
             "ts", "tsx" -> "cd /workspace && (npx --no-install tsc --noEmit --pretty false $f 2>&1 | head -n 40)"
             "go" -> "cd \$(dirname $f) && go vet ./... 2>&1 | head -n 40"
@@ -183,7 +185,7 @@ internal object OrionStudio {
     /** Hover: signature + docstring + definition location for the symbol at (line, col), via jedi. */
     fun hoverScript(file: String, line: Int, col: Int): String? {
         if (!validPath(file) || !file.endsWith(".py") || line < 1 || col < 0 || line > 100000 || col > 1000) return null
-        return ". /workspace/.venvs/studio/bin/activate 2>/dev/null; python3 - <<'PY'\nimport jedi\ns=jedi.Script(path='/workspace/$file')\nn=s.help($line,$col)\nif not n:\n    print('no information here')\nfor d in n[:2]:\n    print(d.full_name or d.name, '-', d.type)\n    for sig in d.get_signatures()[:2]:\n        print('  ', sig.to_string())\n    print((d.docstring() or '')[:600])\nfor d in s.goto($line,$col,follow_imports=True)[:2]:\n    if d.module_path:\n        print('defined at', d.module_path, 'line', d.line)\nPY"
+        return "$VENV; python3 - <<'PY'\nimport jedi\ns=jedi.Script(path='/workspace/$file')\nn=s.help($line,$col)\nif not n:\n    print('no information here')\nfor d in n[:2]:\n    print(d.full_name or d.name, '-', d.type)\n    for sig in d.get_signatures()[:2]:\n        print('  ', sig.to_string())\n    print((d.docstring() or '')[:600])\nfor d in s.goto($line,$col,follow_imports=True)[:2]:\n    if d.module_path:\n        print('defined at', d.module_path, 'line', d.line)\nPY"
     }
 
     // ---------- real MCP client over stdio (inside the Linux runtime) ----------
@@ -225,7 +227,7 @@ else:
     if res.get('isError'): print('(server reported an error)')
 p.kill()
 """.trimIndent()
-        return "ORION_MCP_CMD=${q(runCommand)} ORION_MCP_METHOD=${q(method)} ORION_MCP_PARAMS=${q(params.toString())} python3 - <<'ORION_PY'\n$py\nORION_PY"
+        return "$VENV; ORION_MCP_CMD=${q(runCommand)} ORION_MCP_METHOD=${q(method)} ORION_MCP_PARAMS=${q(params.toString())} python3 - <<'ORION_PY'\n$py\nORION_PY"
     }
 
     // ---------- live discovery of the public ecosystems (Open VSX, npm, MCP registry) ----------
@@ -357,10 +359,21 @@ p.kill()
         return Entry(eid, k, eid, "custom ${source}", cmd, run) to cmd
     }
 
+    /** Makes sure the package manager and the shared venv exist, then installs and reports the real tail of the log. */
+    fun installScript(cmd: String, ub: Boolean): String {
+        val prelude = when {
+            cmd.startsWith("npm") -> "command -v npm >/dev/null 2>&1 || { ${toolchainScript("node", ub)}; }"
+            cmd.startsWith("pip") -> "command -v python3 >/dev/null 2>&1 || { ${toolchainScript("python", ub)}; }; " +
+                "[ -f /workspace/.venvs/studio/bin/activate ] || { mkdir -p /workspace/.venvs; python3 -m venv /workspace/.venvs/studio 2>&1 | tail -n 3; }"
+            else -> "true"
+        }
+        return "$prelude; $VENV; ($cmd) > /tmp/orion_reg.log 2>&1; rc=\$?; tail -n 14 /tmp/orion_reg.log; echo INSTALL_EXIT=\$rc"
+    }
+
     fun registryInstall(c: Context, a: JSONObject): String {
         val (entry, cmd) = installCommand(a.optString("id").trim(), a.optString("kind"), a.optString("source").trim(), a.optString("run").trim())
             ?: return "error: unknown registry id; give a catalogue id or {kind, source:\"npm:<pkg>\"|\"pip:<pkg>\", id}."
-        val out = ShellRunner.run(c, ". /workspace/.venvs/studio/bin/activate 2>/dev/null; ($cmd) > /tmp/orion_reg.log 2>&1; rc=\$?; tail -n 12 /tmp/orion_reg.log; echo INSTALL_EXIT=\$rc", OrionUbuntu.where(c))
+        val out = ShellRunner.run(c, installScript(cmd, ubuntu(c)), OrionUbuntu.where(c))
         if (!out.contains("INSTALL_EXIT=0")) return "Install did not finish cleanly:\n$out"
         val m = installed(c)
         m[entry.id] = JSONObject().put("id", entry.id).put("kind", entry.kind.name).put("name", entry.name).put("about", entry.about).put("install", entry.install).put("run", entry.run).put("at", System.currentTimeMillis())
@@ -404,7 +417,7 @@ p.kill()
         val j = installed(c)[id] ?: return "error: install $id first."
         val run = j.optString("run")
         if (run.isBlank()) return "$id has nothing to run; it is a tool used from the shell."
-        return OrionDevspace.startService(c, id.take(40), run, port, "")
+        return OrionDevspace.startService(c, id.take(40), "$VENV; $run", port, "")
     }
 
     // ---------- unified runtime overview (what Orion and the owner both see) ----------

@@ -716,6 +716,14 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         dialog.show()
     }
 
+    /** A plain android.app.Dialog has no Compose owners; without them ComposeView crashes with ViewTreeLifecycleOwner not found. */
+    private fun attachTreeOwners(dialog: android.app.Dialog) {
+        val decor = dialog.window?.decorView ?: return
+        androidx.lifecycle.ViewTreeLifecycleOwner.set(decor, this)
+        androidx.lifecycle.ViewTreeViewModelStoreOwner.set(decor, this)
+        androidx.savedstate.ViewTreeSavedStateRegistryOwner.set(decor, this)
+    }
+
     private fun showChatHistory() {
         val chats = ChatHistoryStore.archived(this)
         val dialog = android.app.Dialog(this)
@@ -784,6 +792,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             }
         }
         dialog.setContentView(content)
+        attachTreeOwners(dialog)
         dialog.show()
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setBackgroundDrawable(rounded(0xFF090909.toInt(), 0))
@@ -878,6 +887,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             }
         }
         dialog.setContentView(content)
+        attachTreeOwners(dialog)
         dialog.show()
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setBackgroundDrawable(rounded(0xFF090909.toInt(), 0))
