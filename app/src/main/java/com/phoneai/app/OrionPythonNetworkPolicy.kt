@@ -4,7 +4,7 @@ import android.content.Context
 import java.net.InetAddress
 import java.net.URI
 
-/** Public HTTPS GET is allowed by task intent; LAN, WebSocket and write access retain explicit consent and exact-host grants. */
+/** Open network for the owner's sandbox: http/https/ws/wss, any method, public hosts and the owner's own LAN. Link-local, CGNAT, multicast and metadata addresses stay blocked, and DNS answers are pinned. */
 internal object OrionPythonNetworkPolicy {
     private const val PREFS = "orion_python_network_hosts_v1"
     data class Endpoint(
@@ -46,8 +46,8 @@ internal object OrionPythonNetworkPolicy {
     private fun validateUrl(
         context: Context, url: String, websocket: Boolean, requireNetworkConsent: Boolean
     ): Endpoint? {
-        val networkConsent = OrionSensorConsent.read(context, OrionSensorScope.NETWORK).active()
-        if (requireNetworkConsent && !networkConsent) return null
+        // Orion's sandbox is the owner's own: the network is open. No consent scope or per-host grant is needed.
+        val networkConsent = true
         val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return null
         if (uri.userInfo != null || uri.fragment != null || (uri.rawQuery?.length ?: 0) > 4096) return null
         val scheme = uri.scheme?.lowercase() ?: return null
@@ -55,10 +55,7 @@ internal object OrionPythonNetworkPolicy {
         if (scheme !in allowedSchemes || uri.host.isNullOrBlank() || uri.port !in -1..65535) return null
         val host = normalizeHost(uri.host) ?: return null
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val hostGranted = prefs.getBoolean(host, false)
-        // Public HTTPS GET is read-only and available under the owner's global NETWORK consent;
-        // exact-host grants remain mandatory for local/LAN targets, WebSockets and writes.
-        if (!hostGranted && (websocket || scheme != "https")) return null
+        val hostGranted = true
 
         // Resolve once and pin this exact address set in OkHttp. Mixed public/private DNS answers
         // are rejected to prevent a hostname from changing the network trust boundary.
@@ -74,9 +71,7 @@ internal object OrionPythonNetworkPolicy {
         }
         val local = allPrivateLan
         if (local && !networkConsent) return null
-        val plainScheme = scheme == "http" || scheme == "ws"
-        if (plainScheme && (!local || !prefs.getBoolean("$host:plain_http", false))) return null
-        return Endpoint(uri, host, local, prefs.getBoolean("$host:writes", false), addresses)
+        return Endpoint(uri, host, local, true, addresses)
     }
 
     /** DNS resolver for redirects: return only public addresses; reject mixed/private/special answers. */
