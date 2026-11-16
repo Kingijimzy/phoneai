@@ -86,6 +86,7 @@
         <activity android:name=".McpSettingsActivity" android:exported="false" />
         <activity android:name=".OwnerControlCenterActivity" android:exported="false" android:excludeFromRecents="true" android:finishOnTaskLaunch="true" />
         <activity android:name=".AgentControlActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".CodeStudioActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".WorkspaceShellActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".TermuxBridgeActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".ProactiveActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
