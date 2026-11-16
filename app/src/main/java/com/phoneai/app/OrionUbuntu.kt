@@ -73,7 +73,21 @@ internal object OrionUbuntu {
     }
 
     /** Backend name for coding-space commands: Ubuntu once it is installed, otherwise the Alpine runtime. */
-    fun where(c: Context): String = if (isInstalled(c)) "ubuntu" else "linux"
+    private fun prefs(c: Context) = c.applicationContext.getSharedPreferences("orion_runtime", 0)
+
+    /** "auto" (Ubuntu when installed), "ubuntu" or "linux" (Alpine). Ubuntu is the primary environment. */
+    fun choice(c: Context): String = prefs(c).getString("choice", "auto").orEmpty().ifBlank { "auto" }
+    fun setChoice(c: Context, value: String): Boolean {
+        if (value !in setOf("auto", "ubuntu", "linux")) return false
+        prefs(c).edit().putString("choice", value).apply(); return true
+    }
+
+    fun where(c: Context): String = when (choice(c)) {
+        "linux" -> "linux"
+        else -> if (isInstalled(c)) "ubuntu" else "linux"
+    }
+
+    fun label(c: Context): String = if (where(c) == "ubuntu") "Ubuntu 24.04" else "Alpine"
 
     /** Package profiles mapped to Ubuntu package names. */
     val profiles: Map<String, List<String>> = mapOf(

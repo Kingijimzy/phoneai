@@ -202,3 +202,40 @@ class OrionStudioInstallTest {
         assertFalse(OrionStudio.diagnosticsScript("app")!!.contains(". /workspace/.venvs/studio/bin/activate 2>/dev/null"))
     }
 }
+
+class OrionStudioWorkspaceTest {
+    @Test fun reportsRealResultsFromBuildAndTestOutput() {
+        val py = OrionStudio.report("===== 12 passed, 2 failed in 1.2s =====\nTEST_EXIT=1", "test")
+        assertFalse(py.ok); assertTrue(py.summary.contains("12 passed") && py.summary.contains("2 failed") && py.summary.contains("exit 1"))
+        val good = OrionStudio.report("ok  \texample/pkg\t0.2s\nBUILD_EXIT=0", "build")
+        assertTrue(good.ok); assertTrue(good.summary.contains("succeeded"))
+        assertTrue(OrionStudio.report("cargo\ntest result: ok. 5 passed; 0 failed", "test").summary.contains("no exit status"))
+        assertTrue(OrionStudio.buildScript("app", "test", "")!!.contains("TEST_EXIT="))
+        assertFalse(OrionStudio.buildScript("app", "build", "")!!.contains("| tail -n 40"))
+    }
+    @Test fun packageManagerScriptsAreValidatedAndRuntimeAware() {
+        assertTrue(OrionStudio.packageScript("auto", "install", listOf("git", "curl"), true)!!.contains("apt-get install"))
+        assertTrue(OrionStudio.packageScript("auto", "install", listOf("git"), false)!!.contains("apk add"))
+        assertTrue(OrionStudio.packageScript("apk", "install", listOf("git"), true)!!.contains("exit 1"))
+        assertNull(OrionStudio.packageScript("apt", "install", listOf("bad; rm -rf /"), true))
+        assertNull(OrionStudio.packageScript("apt", "install", emptyList(), true))
+        assertNull(OrionStudio.packageScript("apt", "search", listOf("a", "b"), true))
+        assertTrue(OrionStudio.packageScript("pip", "list", emptyList(), true)!!.contains("pip list"))
+        assertTrue(OrionStudio.packageScript("npm", "update", emptyList(), true)!!.contains("npm update -g"))
+        assertNull(OrionStudio.packageScript("gem", "list", emptyList(), true))
+    }
+    @Test fun recoveryScriptsRejectUnsafeNames() {
+        assertTrue(OrionStudio.snapshotScript("app", "before fix!")!!.contains("before-fix-"))
+        assertNull(OrionStudio.snapshotScript("../x", "a"))
+        assertNull(OrionStudio.restoreScript("../../etc/passwd"))
+        assertNull(OrionStudio.restoreScript("a.zip"))
+        assertTrue(OrionStudio.restoreScript("app-1.tar.gz")!!.contains("pre-restore"))
+        assertTrue(OrionStudio.rollbackScript("app", "HEAD")!!.contains("git stash push"))
+        assertNull(OrionStudio.rollbackScript("app", "--hard"))
+    }
+    @Test fun devAgentPromptCarriesTheFullLoop() {
+        val p = OrionStudio.devPrompt("Build a notes API", "notes", "snap.tar.gz")
+        listOf("INSPECT", "PLAN", "EDIT", "EXECUTE", "DEBUG", "VERIFY", "/workspace/notes", "snap.tar.gz", "Build a notes API").forEach { assertTrue(it, p.contains(it)) }
+        assertTrue(OrionStudio.debugScript("a.py", listOf(3), emptyList())!!.contains("pp locals()"))
+    }
+}

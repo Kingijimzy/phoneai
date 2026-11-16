@@ -94,7 +94,7 @@ internal object OrionStudio {
     fun debugScript(file: String, lines: List<Int>, extra: List<String>): String? {
         if (!validPath(file) || lines.any { it < 1 || it > 1_000_000 } || extra.any { it.length > 80 || it.contains('\'') || it.contains('\n') }) return null
         val f = "/workspace/$file"
-        val cmds = lines.joinToString(" ") { "-c 'b $it'" } + " -c c " + extra.joinToString(" ") { "-c ${q(it)}" } + " -c bt -c 'info' -c q"
+        val cmds = lines.joinToString(" ") { "-c 'b $it'" } + " -c c " + extra.joinToString(" ") { "-c ${q(it)}" } + " -c 'pp locals()' -c bt -c 'info' -c q"
         return when {
             file.endsWith(".py") -> "cd /workspace && python3 -X faulthandler -m pdb ${cmds.replace("-c 'info'", "-c 'args'")} $f 2>&1 | head -n 120"
             file.endsWith(".js") -> "cd /workspace && node --stack-trace-limit=60 $f 2>&1 | head -n 120"
@@ -149,8 +149,8 @@ internal object OrionStudio {
     fun buildScript(project: String, kind: String, target: String): String? {
         val d = dir(project) ?: return null
         if (target.isNotEmpty() && !validRef(target)) return null
-        val inner = if (target.isNotEmpty() && kind == "build") "make $target 2>&1 | tail -n 40" else detect(kind)
-        return "cd $d 2>/dev/null || { echo 'no such project'; exit 1; }; $inner; echo \"${kind.uppercase()}_EXIT=\$?\""
+        val inner = (if (target.isNotEmpty() && kind == "build") "make $target 2>&1" else detect(kind)).replace(Regex(" 2>&1 \\| tail -n \\d+"), " 2>&1")
+        return "cd $d 2>/dev/null || { echo 'no such project'; exit 1; }; ( $inner ) > /tmp/orion_$kind.log 2>&1; rc=\$?; tail -n 80 /tmp/orion_$kind.log; echo \"${kind.uppercase()}_EXIT=\$rc\""
     }
 
     /** Preview: a supervised dev server; the URL is reachable from Orion's browser at 127.0.0.1:<port>. */
@@ -291,6 +291,141 @@ p.kill()
             "echo VSX_INSTALLED $id; ls /workspace/.vsx/$id | head -n 8"
     }
 
+    // ---------- real test/build result reporting ----------
+    data class Report(val ok: Boolean, val summary: String)
+
+    /** Reads actual results out of pytest / jest / go / cargo / make output and the real exit code. */
+    fun report(output: String, kind: String): Report {
+        val exit = Regex("${kind.uppercase()}_EXIT=(\\d+)").find(output)?.groupValues?.get(1)?.toIntOrNull()
+        val parts = ArrayList<String>()
+        Regex("(\\d+) passed").find(output)?.let { parts += "✓ ${it.groupValues[1]} passed" }
+        Regex("(\\d+) failed").find(output)?.let { parts += "✗ ${it.groupValues[1]} failed" }
+        Regex("Tests:\\s+(?:(\\d+) failed, )?(\\d+) passed").find(output)?.let { m ->
+            if (parts.isEmpty()) { parts += "✓ ${m.groupValues[2]} passed"; if (m.groupValues[1].isNotEmpty()) parts += "✗ ${m.groupValues[1]} failed" }
+        }
+        Regex("(?m)^ok\\s+\\S+").findAll(output).count().takeIf { it > 0 && parts.isEmpty() }?.let { parts += "✓ $it package${if (it == 1) "" else "s"} ok" }
+        Regex("(?m)^FAIL\\s+\\S+").findAll(output).count().takeIf { it > 0 }?.let { parts += "✗ $it package${if (it == 1) "" else "s"} failed" }
+        Regex("test result: (ok|FAILED)\\. (\\d+) passed; (\\d+) failed").find(output)?.let { if (parts.isEmpty()) parts += "✓ ${it.groupValues[2]} passed · ✗ ${it.groupValues[3]} failed" }
+        val ok = exit == 0
+        val head = if (exit == null) "no exit status" else if (ok) "succeeded" else "failed (exit $exit)"
+        return Report(ok, (kind.replaceFirstChar { it.uppercase() }) + " " + head + if (parts.isEmpty()) "" else " — " + parts.joinToString(" · "))
+    }
+
+    // ---------- runtime selection ----------
+    fun runtimeStatus(c: Context): String {
+        val ub = OrionUbuntu.isInstalled(c)
+        return "Active: ${OrionUbuntu.label(c)} (choice: ${OrionUbuntu.choice(c)})\n" +
+            "Ubuntu 24.04 (primary): " + (if (ub) "installed" else "not installed — studio {action:\"ubuntu_install\"}") + "\n" +
+            "Alpine (alternative): " + (if (LinuxRuntimeInstaller(c.applicationContext).isReady(LinuxRuntimePolicy.productionManifest)) "installed" else "not installed (installs on first use)")
+    }
+
+    // ---------- package manager (apt, apk, pip, npm) ----------
+    private val pkgName = Regex("^[A-Za-z0-9][A-Za-z0-9._+@/:=~-]{0,79}$")
+    fun packageScript(manager: String, op: String, names: List<String>, ub: Boolean): String? {
+        if (names.size > 20 || names.any { !pkgName.matches(it) }) return null
+        val n = names.joinToString(" ") { q(it) }
+        val mgr = if (manager == "auto" || manager.isBlank()) (if (ub) "apt" else "apk") else manager
+        if ((mgr == "apt" && !ub) || (mgr == "apk" && ub)) return "echo ${q("$mgr is not the package manager of the active runtime (" + (if (ub) "Ubuntu uses apt" else "Alpine uses apk") + ")")}; exit 1"
+        val need = if (op == "install" || op == "remove") names.isNotEmpty() else if (op == "search") names.size == 1 else true
+        if (!need) return null
+        val body = when (mgr to op) {
+            "apt" to "list" -> "dpkg-query -W -f='\${binary:Package} \${Version}\\n' | head -n 300"
+            "apt" to "search" -> "apt-cache search $n | head -n 40"
+            "apt" to "install" -> "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq 2>&1 | tail -n 1; apt-get install -y -qq --no-install-recommends $n 2>&1 | tail -n 25"
+            "apt" to "remove" -> "export DEBIAN_FRONTEND=noninteractive; apt-get remove -y -qq $n 2>&1 | tail -n 15"
+            "apt" to "update" -> "export DEBIAN_FRONTEND=noninteractive; apt-get update 2>&1 | tail -n 4; apt-get upgrade -y -qq 2>&1 | tail -n 15"
+            "apk" to "list" -> "apk info -v | head -n 300"
+            "apk" to "search" -> "apk search $n | head -n 40"
+            "apk" to "install" -> "apk add --no-cache $n 2>&1 | tail -n 20"
+            "apk" to "remove" -> "apk del $n 2>&1 | tail -n 15"
+            "apk" to "update" -> "apk update 2>&1 | tail -n 3; apk upgrade 2>&1 | tail -n 15"
+            "pip" to "list" -> "pip list --format=freeze 2>&1 | head -n 300"
+            "pip" to "search" -> "pip index versions $n 2>&1 | head -n 6"
+            "pip" to "install" -> "pip install -q $n 2>&1 | tail -n 20"
+            "pip" to "remove" -> "pip uninstall -y $n 2>&1 | tail -n 10"
+            "pip" to "update" -> "pip install -q -U ${if (names.isEmpty()) "pip" else n} 2>&1 | tail -n 15"
+            "npm" to "list" -> "npm ls -g --depth=0 2>&1 | head -n 100"
+            "npm" to "search" -> "npm search --parseable $n 2>&1 | head -n 25"
+            "npm" to "install" -> "npm install -g --no-audit --no-fund $n 2>&1 | tail -n 15"
+            "npm" to "remove" -> "npm uninstall -g $n 2>&1 | tail -n 10"
+            "npm" to "update" -> "npm update -g 2>&1 | tail -n 15"
+            else -> return null
+        }
+        val pre = if (mgr == "pip") installScriptPrelude("pip", ub) else if (mgr == "npm") installScriptPrelude("npm", ub) else "true"
+        return "$pre; $VENV; $body"
+    }
+
+    private fun installScriptPrelude(kind: String, ub: Boolean): String =
+        installScript(kind, ub).substringBefore("; $VENV")
+
+    // ---------- recovery: snapshots, rollback, resume ----------
+    private val snapName = Regex("^[A-Za-z0-9._-]{1,100}\\.tar\\.gz$")
+    fun snapshotScript(project: String, label: String): String? {
+        val d = dir(project) ?: return null
+        val safeLabel = label.replace(Regex("[^A-Za-z0-9_-]"), "-").take(30).ifBlank { "manual" }
+        val base = (if (project.isBlank()) "workspace" else project.replace('/', '_')) + "-\$(date +%Y%m%d-%H%M%S)-" + safeLabel
+        return "mkdir -p /workspace/.snapshots && cd /workspace && tar -czf /workspace/.snapshots/$base.tar.gz " +
+            "--exclude=./.snapshots --exclude=./.venvs --exclude=./.vsx --exclude='node_modules' --exclude='__pycache__' " +
+            (if (project.isBlank()) "." else "./${project.trim('/')}") + " 2>&1 | tail -n 3; ls -t /workspace/.snapshots | head -n 1; echo SNAPSHOT_DONE; true; " +
+            "[ -d $d ] || echo 'note: project folder is empty'"
+    }
+    fun snapshotListScript(): String = "ls -lht /workspace/.snapshots 2>/dev/null | awk 'NR>1{print \$9, \$5}' | head -n 40 || true; echo SNAPSHOT_LIST_DONE"
+    fun restoreScript(name: String): String? =
+        if (!snapName.matches(name)) null else "cd /workspace && test -f .snapshots/$name || { echo 'no such snapshot'; exit 1; }; " +
+            "tar -czf .snapshots/pre-restore-\$(date +%s).tar.gz --exclude=./.snapshots --exclude=./.venvs --exclude=./.vsx --exclude=node_modules . 2>/dev/null; " +
+            "tar -xzf .snapshots/$name -C /workspace && echo RESTORED $name"
+    fun rollbackScript(project: String, ref: String): String? {
+        val d = dir(project) ?: return null
+        if (!validRef(ref)) return null
+        return "cd $d 2>/dev/null || exit 1; git stash push -u -m orion-pre-rollback >/dev/null 2>&1; git reset --hard $ref 2>&1 | tail -n 2; echo ROLLED_BACK $ref"
+    }
+
+    // ---------- Orion Dev Agent: autonomous coding through the shared worker system ----------
+    fun devPrompt(objective: String, project: String, snapshot: String): String =
+        "You are Orion Dev Agent working in the Code Studio. Project folder: /workspace/" + project.ifBlank { "(workspace root)" } + ". A recovery snapshot was taken first ($snapshot). " +
+            "Work in this loop and do not skip steps: 1 INSPECT the project (studio git status, files, diagnostics). 2 PLAN the smallest correct change. " +
+            "3 EDIT files in /workspace. 4 EXECUTE it with real commands (studio build/test, run the app). 5 DEBUG from real errors (studio debug, file_diagnostics). " +
+            "6 VERIFY with a passing build/test and say exactly what ran and what it printed. Commit with studio git when it works. " +
+            "Never claim success without a real passing result; if blocked, report the exact error. Keep chat replies short and mention file paths instead of pasting code. Objective: " + objective.trim()
+
+    fun devTask(c: Context, objective: String, project: String): String {
+        if (objective.trim().length < 8) return "error: dev_task needs a concrete coding objective."
+        val svc = PhoneAiService.instance ?: return "error: Orion service is not running; open Orion and retry."
+        val snap = if (project.isNotBlank() && !validPath(project)) return "error: bad project path." else snapshotScript(project, "before-dev-agent")?.let { ShellRunner.run(c, it, OrionUbuntu.where(c)).lineSequence().firstOrNull { l -> l.endsWith(".tar.gz") } ?: "snapshot" } ?: "snapshot"
+        return OrionWorkers.spawn(svc, devPrompt(objective, project, snap), "Dev: " + objective.trim().take(32))
+    }
+
+    fun openPage(c: Context, page: String): String {
+        val valid = setOf("editor", "terminal", "runtime", "packages", "extensions", "debug", "build", "git", "agent", "recovery")
+        val p = page.ifBlank { "editor" }
+        if (p !in valid) return "error: pages are ${valid.joinToString(", ")}."
+        return runCatching {
+            c.startActivity(android.content.Intent(c, StudioActivity::class.java).putExtra("page", p).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            "Opened Code Studio · $p."
+        }.getOrElse { "error: could not open Code Studio (${it.javaClass.simpleName})" }
+    }
+
+    // ---------- registry lifecycle: enable / disable / update ----------
+    fun registrySetEnabled(c: Context, id: String, enabled: Boolean): String {
+        val m = installed(c)
+        val j = m[id] ?: return "error: $id is not installed."
+        j.put("enabled", enabled); saveAll(c, m)
+        return (if (enabled) "Enabled " else "Disabled ") + id + "."
+    }
+    fun isEnabled(c: Context, id: String): Boolean = installed(c)[id]?.optBoolean("enabled", true) ?: false
+    fun isInstalledEntry(c: Context, id: String): Boolean = installed(c).containsKey(id)
+    fun registryUpdate(c: Context, id: String): String {
+        val j = installed(c)[id] ?: return "error: $id is not installed."
+        val cmd = j.optString("install")
+        if (cmd.isBlank()) return "$id has no package to update (VS Code extensions: reinstall with registry_install_vsx)."
+        val upd = cmd.replace("npm install -g ", "npm install -g ").replace("pip install -q ", "pip install -q -U ")
+        return ShellRunner.run(c, installScript(upd, ubuntu(c)), OrionUbuntu.where(c))
+    }
+    fun registryEntry(c: Context, id: String): Entry? =
+        catalog.firstOrNull { it.id == id } ?: installed(c)[id]?.let {
+            Entry(id, runCatching { Kind.valueOf(it.optString("kind")) }.getOrDefault(Kind.PLUGIN), it.optString("name"), it.optString("about"), it.optString("install"), it.optString("run"))
+        }
+
     // ---------- unified registry (plugins, apps, extensions, MCP servers) ----------
     enum class Kind { PLUGIN, APP, EXTENSION, MCP }
     data class Entry(val id: String, val kind: Kind, val name: String, val about: String, val install: String, val run: String = "")
@@ -415,6 +550,7 @@ p.kill()
 
     fun registryRun(c: Context, id: String, port: Int): String {
         val j = installed(c)[id] ?: return "error: install $id first."
+        if (!j.optBoolean("enabled", true)) return "error: $id is disabled; enable it first."
         val run = j.optString("run")
         if (run.isBlank()) return "$id has nothing to run; it is a tool used from the shell."
         return OrionDevspace.startService(c, id.take(40), "$VENV; $run", port, "")
@@ -449,14 +585,14 @@ p.kill()
                 "lsp_install {lang: python|typescript|go|c|bash|rust}, diagnostics {project}, format {project}, complete {file,line,col}, symbols {file}, highlight {file}, " +
                 "debug {file, breakpoints?:[lines], commands?:[pdb cmds]}, git {op: init|status|diff|log|branch|checkout|add|commit|stash|stash_pop|blame|show|remote|pull|push, project, message?, ref?, file?}, git_clone {url,name}, " +
                 "build {project,target?}, test {project}, preview {project,port?,command?}, preview_stop {name}, " +
-                "registry_list {kind?}, registry_search {query}, registry_npm {query}, registry_install {id | kind+source}, registry_remove {id}, registry_run {id,port?}, registry_discover {source: openvsx|npm|mcp, query} (live search of Open VSX, npm and the official MCP registry), registry_install_vsx {id}, mcp_tools {id} and mcp_call {id, tool, arguments} (real MCP client for installed servers), file_diagnostics {file}, hover {file,line,col}. Show code to the owner through cards: write it to /workspace files and mention the path; do not paste long code in chat. Projects live under /workspace."
+                "registry_list {kind?}, registry_search {query}, registry_npm {query}, registry_install {id | kind+source}, registry_remove {id}, registry_run {id,port?}, registry_enable/registry_disable/registry_update {id}, runtime_status, runtime_select {runtime: auto|ubuntu|linux}, terminal {command, project?}, packages {manager: apt|apk|pip|npm, op: list|search|install|remove|update, names[]}, snapshot {project,label?}, snapshots, restore {name}, rollback {project,ref,confirm}, dev_task {objective, project?} (Orion Dev Agent: autonomous inspect-plan-edit-execute-debug-verify worker), open {page: editor|terminal|runtime|packages|extensions|debug|build|git|agent|recovery}, registry_discover {source: openvsx|npm|mcp, query} (live search of Open VSX, npm and the official MCP registry), registry_install_vsx {id}, mcp_tools {id} and mcp_call {id, tool, arguments} (real MCP client for installed servers), file_diagnostics {file}, hover {file,line,col}. Show code to the owner through cards: write it to /workspace files and mention the path; do not paste long code in chat. Projects live under /workspace."
             "status" -> overview(c)
             "ubuntu_install" -> OrionUbuntu.install(c)
             "toolchain_list" -> guest(toolchainListScript(), "")
             "toolchain_install" -> guest(toolchainScript(a.optString("name").lowercase(), ubuntu(c)), "unknown toolchain; use ${toolchains.keys.joinToString(", ")}.")
             "lsp_install" -> guest(lspInstallScript(a.optString("lang").lowercase()), "unknown language; use python, typescript, go, c, bash or rust.")
             "diagnostics" -> guest(diagnosticsScript(project), "bad project path.")
-            "format" -> guest(formatScript(project), "bad project path.")
+            "format" -> { snapshotScript(project, "before-format")?.let { ShellRunner.run(c, it, where) }; guest(formatScript(project), "bad project path.") }
             "complete" -> guest(completeScript(a.optString("file"), a.optInt("line", 1), a.optInt("col", 0)), "complete needs a relative file, line and col.")
             "symbols" -> guest(symbolsScript(a.optString("file")), "bad file path.")
             "highlight" -> guest(highlightScript(a.optString("file")), "bad file path.")
@@ -465,8 +601,11 @@ p.kill()
                 a.optJSONArray("commands")?.let { b -> List(b.length()) { b.optString(it) } } ?: emptyList()), "debug supports .py, .js, .c/.cpp with valid breakpoints.")
             "git" -> guest(gitScript(a.optString("op").lowercase(), project, a), "bad git op or arguments.")
             "git_clone" -> guest(cloneScript(a.optString("url"), a.optString("name")), "clone needs an https url and a safe name.")
-            "build" -> guest(buildScript(project, "build", a.optString("target").trim()), "bad project or target.")
-            "test" -> guest(buildScript(project, "test", ""), "bad project path.")
+            "build", "test" -> {
+                val kind = action
+                val out = guest(buildScript(project, kind, if (kind == "build") a.optString("target").trim() else ""), "bad project or target.")
+                if (out.startsWith("error:")) out else report(out, kind).summary + "\n\n" + out
+            }
             "preview" -> {
                 val port = a.optInt("port", 8080)
                 val cmd = previewCommand(project, port, a.optString("command"))
@@ -485,6 +624,27 @@ p.kill()
             "mcp_call" -> mcpCall(c, a.optString("id"), a.optString("tool"), a.optJSONObject("arguments") ?: JSONObject())
             "file_diagnostics" -> guest(fileDiagnosticsScript(a.optString("file")), "file_diagnostics needs a relative file path with a supported extension.")
             "hover" -> guest(hoverScript(a.optString("file"), a.optInt("line", 1), a.optInt("col", 0)), "hover supports Python files with a valid line/col.")
+            "runtime_status" -> runtimeStatus(c)
+            "runtime_select" -> if (OrionUbuntu.setChoice(c, a.optString("runtime").lowercase())) runtimeStatus(c) else "error: runtime must be auto, ubuntu or linux."
+            "terminal" -> {
+                val cmd = a.optString("command")
+                val d = dir(project)
+                if (cmd.isBlank() || cmd.length > 4000 || d == null) "error: terminal needs a command and a valid project."
+                else ShellRunner.run(c, "cd $d 2>/dev/null || cd /workspace; $VENV; $cmd", where)
+            }
+            "packages" -> guest(packageScript(a.optString("manager").lowercase(), a.optString("op").lowercase().ifBlank { "list" },
+                a.optJSONArray("names")?.let { n -> List(n.length()) { n.optString(it) } } ?: a.optString("name").split(' ', ',').filter { it.isNotBlank() }, ubuntu(c)),
+                "bad package request (managers apt|apk|pip|npm; ops list|search|install|remove|update).")
+            "snapshot" -> guest(snapshotScript(project, a.optString("label")), "bad project path.")
+            "snapshots" -> guest(snapshotListScript(), "")
+            "restore" -> guest(restoreScript(a.optString("name")), "give a snapshot name from studio snapshots.")
+            "rollback" -> if (!a.optBoolean("confirm")) "Rollback discards uncommitted work (it is stashed first). Ask the owner, then call again with confirm:true."
+                else guest(rollbackScript(project, a.optString("ref").ifBlank { "HEAD" }), "bad ref.")
+            "dev_task" -> devTask(c, a.optString("objective"), project)
+            "open" -> openPage(c, a.optString("page"))
+            "registry_enable" -> registrySetEnabled(c, a.optString("id"), true)
+            "registry_disable" -> registrySetEnabled(c, a.optString("id"), false)
+            "registry_update" -> registryUpdate(c, a.optString("id"))
             "registry_remove" -> registryRemove(c, a.optString("id"))
             "registry_run" -> registryRun(c, a.optString("id"), a.optInt("port", 0))
             else -> "error: unknown studio action '$action'. Call studio {action:\"help\"}."
