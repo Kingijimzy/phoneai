@@ -45,7 +45,9 @@ internal object FxData {
         }
     }
 
-    fun candles(pair: String, tf: String): List<Candle> {
+    fun candles(pair: String, tf: String): List<Candle> = FxFeeds.candles(pair, tf, ::yahooCandles)
+
+    private fun yahooCandles(pair: String, tf: String): List<Candle> {
         val (interval, range) = when (tf) { "15m" -> "15m" to "5d"; "1h" -> "60m" to "1mo"; "4h" -> "60m" to "3mo"; else -> "1d" to "1y" }
         val url = "https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol(pair)}?interval=$interval&range=$range"
         val conn = URL(url).openConnection() as HttpURLConnection

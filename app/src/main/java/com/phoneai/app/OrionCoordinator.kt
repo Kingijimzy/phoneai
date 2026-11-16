@@ -47,6 +47,7 @@ internal object OrionCoordinator {
                 c.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
                     .putLong("owner_last_active", System.currentTimeMillis()).apply()
                 OrionDrives.onOwnerActive(c)
+                OrionIntentCompiler.record(c, text)
             }
         }
         runCatching { AgentPolicy.log(c, "coordinator", surface.name.lowercase(), ok, text.take(80)) }
