@@ -284,6 +284,7 @@ class CodeStudioActivity : Activity() {
                 try {
                     if (!fs.read(target).startsWith("error:")) { skipped++; return@forEach }
                     val uri = DocumentsContract.buildDocumentUriUsingTree(tree, child.id)
+                    var exceededImportLimit = false
                     val dataBytes = contentResolver.openInputStream(uri)?.use { stream ->
                         val buffer = java.io.ByteArrayOutputStream()
                         val chunk = ByteArray(8192)
@@ -291,13 +292,17 @@ class CodeStudioActivity : Activity() {
                             val n = stream.read(chunk)
                             if (n < 0) break
                             if (buffer.size().toLong() + n > OrionPythonWorkspace.MAX_FILE_BYTES ||
-                                total + buffer.size().toLong() + n > 268435456L) break
+                                total + buffer.size().toLong() + n > 268435456L) {
+                                exceededImportLimit = true
+                                break
+                            }
                             buffer.write(chunk, 0, n)
                         }
                         buffer.toByteArray()
                     } ?: run { skipped++; return@forEach }
-                    if (dataBytes.isEmpty() || dataBytes.size > OrionPythonWorkspace.MAX_FILE_BYTES ||
-                        total + dataBytes.size > 268435456L || dataBytes.any { it == 0.toByte() }) { skipped++; return@forEach }
+                    if (exceededImportLimit || dataBytes.isEmpty() || dataBytes.any { it == 0.toByte() }) {
+                        skipped++; return@forEach
+                    }
                     if (fs.write(target, dataBytes.toString(Charsets.UTF_8)).startsWith("saved ")) { copied++; total += dataBytes.size } else skipped++
                 } catch (_: Exception) { skipped++ }
             }
