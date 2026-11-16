@@ -1727,10 +1727,28 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             if (chatBrowserAddress === address) chatBrowserAddress = null
         }
         dialog.setOnShowListener {
-            dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.88f).toInt())
+            dialog.window?.let { window ->
+                val metrics = resources.displayMetrics
+                window.setLayout((metrics.widthPixels * 0.78f).toInt(), (metrics.heightPixels * 0.62f).toInt())
+                window.setGravity(Gravity.START or Gravity.CENTER_VERTICAL)
+                window.attributes = window.attributes.apply {
+                    x = dp(10)
+                    dimAmount = 0.32f
+                }
+                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            }
         }
         dialog.show()
-        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.88f).toInt())
+        dialog.window?.let { window ->
+            val metrics = resources.displayMetrics
+            window.setLayout((metrics.widthPixels * 0.78f).toInt(), (metrics.heightPixels * 0.62f).toInt())
+            window.setGravity(Gravity.START or Gravity.CENTER_VERTICAL)
+            window.attributes = window.attributes.apply {
+                x = dp(10)
+                dimAmount = 0.32f
+            }
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        }
         web.loadUrl(initial)
     }
 

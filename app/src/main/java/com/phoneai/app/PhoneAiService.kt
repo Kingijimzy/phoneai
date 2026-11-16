@@ -1797,36 +1797,57 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     // ---------------------------------------------------------------- status strip and confirm
 
     private fun showStrip(rawText: String) {
-        val text = OrionStripText.clean(rawText)
+        val browserHost = Regex("""(?i)\[BROWSER:RESULT]\s*URL:\s*(?:https?://)?([^/\s]+)""").find(rawText)
+        val text = (browserHost?.let { "Browsing · ${it.groupValues[1]}" }
+            ?: OrionStripText.clean(rawText)).ifBlank { "Orion is working" }.take(34)
         val existing = stripText
         if (strip != null && existing != null) {
             existing.text = text
+            strip?.contentDescription = "Orion working: $text. Tap to open task controls."
             return
         }
-        val row = LinearLayout(this)
-        row.orientation = LinearLayout.HORIZONTAL
-        row.gravity = Gravity.CENTER_VERTICAL
-        row.background = rounded(0xF002080A.toInt(), dp(22).toFloat(), Theme.CYAN)
-        row.setPadding(dp(8), dp(6), dp(10), dp(6))
+        // Compact companion capsule; never use the old full-width task banner.
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = rounded(0xF0182028.toInt(), dp(28).toFloat(), 0xFF526779.toInt())
+            setPadding(dp(5), dp(5), dp(12), dp(5))
+            elevation = dp(12).toFloat()
+            contentDescription = "Orion working: $text. Tap to open task controls."
+        }
         val orb = OrbView(this)
-        row.addView(orb, LinearLayout.LayoutParams(dp(52), dp(52)))
-        val t = label(text, 14f, Theme.TEXT)
-        t.maxLines = 3
-        t.setPadding(dp(8), 0, dp(8), 0)
+        row.addView(orb, LinearLayout.LayoutParams(dp(38), dp(38)))
+        val t = label(text, 12f, Theme.TEXT)
+        t.maxLines = 1
+        t.ellipsize = android.text.TextUtils.TruncateAt.END
+        t.setPadding(dp(8), 0, dp(4), 0)
         t.setOnClickListener {
             hideStrip()
             hideBubble()
             openPanel()
         }
-        row.addView(t, LinearLayout.LayoutParams(0, WRAP, 1f))
-        val stop = pill("Stop", Theme.DANGER, 0xFFFFFFFF.toInt()) { stopAll() }
-        row.addView(stop)
-        val size = screenSize()
+        row.addView(t, LinearLayout.LayoutParams(dp(112), dp(38)))
+        val stop = TextView(this).apply {
+            text = "×"
+            textSize = 20f
+            gravity = Gravity.CENTER
+            setTextColor(0xFFFFA7A7.toInt())
+            setBackground(rounded(0x332E151A, dp(18).toFloat(), 0x665C3038))
+            contentDescription = "Stop Orion task"
+            setOnClickListener { stopAll() }
+        }
+        row.addView(stop, LinearLayout.LayoutParams(dp(30), dp(30)))
+        row.setOnClickListener {
+            hideStrip()
+            hideBubble()
+            openPanel()
+        }
         val lp = WindowManager.LayoutParams(
-            size.first - dp(24), WRAP, OVERLAY, NOT_FOCUSABLE or NOT_MODAL, PixelFormat.TRANSLUCENT
+            WRAP, WRAP, OVERLAY, NOT_FOCUSABLE or NOT_MODAL, PixelFormat.TRANSLUCENT
         )
-        lp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-        lp.y = dp(8)
+        lp.gravity = Gravity.TOP or Gravity.END
+        lp.x = dp(10)
+        lp.y = dp(72)
         wm.addView(row, lp)
         strip = row
         stripOrb = orb
