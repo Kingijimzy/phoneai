@@ -839,8 +839,11 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                     callNames[id] = name
                     val args = runCatching { JSONObject(fn.optString("arguments", "{}")) }.getOrDefault(JSONObject())
                     val functionCall = JSONObject().put("name", name).put("args", args).put("id", id)
-                    call.optString("thought_signature").ifBlank { call.optString("thoughtSignature") }.takeIf { it.isNotBlank() }?.let { functionCall.put("thoughtSignature", it) }
-                    parts.put(JSONObject().put("functionCall", functionCall))
+                    // Gemini 3 requires the signature on the PART (sibling of functionCall); when a call was recorded
+                    // without one (older history, other provider), the documented bypass value keeps the turn valid.
+                    val signature = call.optString("thought_signature").ifBlank { call.optString("thoughtSignature") }
+                        .ifBlank { "skip_thought_signature_validator" }
+                    parts.put(JSONObject().put("functionCall", functionCall).put("thoughtSignature", signature))
                 }
                 appendContent("model", parts)
                 continue

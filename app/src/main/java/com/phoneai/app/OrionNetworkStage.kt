@@ -280,3 +280,27 @@ internal fun OrionStatusPill(text: String, live: Boolean, onMic: () -> Unit, onE
         }
     }
 }
+
+
+/** Tappable cards for code, files and local previews found in a reply, so chat itself stays clean. */
+@Composable
+internal fun OrionArtifactCardRow(text: String, modifier: Modifier = Modifier) {
+    val cards = androidx.compose.runtime.remember(text) { OrionArtifactCards.extract(text) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    if (cards.isEmpty()) return
+    Row(modifier.fillMaxWidth().padding(top = 9.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        cards.forEach { card ->
+            Box(
+                Modifier.clip(RoundedCornerShape(12.dp)).background(OrionUiPalette.raised)
+                    .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(12.dp))
+                    .clickable { OrionArtifactCards.open(ctx, card) }
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    (when (card.kind) { OrionArtifactCards.Kind.CODE -> "▣ "; OrionArtifactCards.Kind.FILE -> "▤ "; OrionArtifactCards.Kind.PREVIEW -> "◉ " }) + card.title + "  ↗",
+                    color = OrionUiPalette.text, fontSize = 12.sp, maxLines = 1
+                )
+            }
+        }
+    }
+}

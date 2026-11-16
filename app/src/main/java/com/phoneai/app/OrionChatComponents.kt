@@ -523,6 +523,7 @@ internal fun ChatBubble(
                     ImageThumbnail(item.imageUri, Modifier.fillMaxWidth().height(190.dp))
                 }
                 if (!mine && !note) OrionSourcesRow(item.text, onOpenBrowser)
+                if (!mine && !note) OrionArtifactCardRow(item.text)
                 AnimatedVisibility(visible = actionsVisible && !note, enter = fadeIn(tween(140)) + slideInVertically(tween(140)) { it / 3 }) {
                     Row(
                         Modifier.padding(top = 8.dp),

@@ -169,71 +169,34 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
     val out = AnnotatedString.Builder()
     val lines = normalizeOrionMarkdownTables(source).split('\n')
     var inCode = false
-    var codeFirstLine = false
-    var codeStart = -1
+    var codeLang = ""
+    var codeLines = 0
     var hasRenderedLine = false
+
+    // Code never renders inline: a fenced block collapses to one muted line, and the full text opens from a card.
+    fun appendCodeSummary() {
+        if (hasRenderedLine) out.append("\n")
+        val start = out.length
+        out.append("▣ Code" + (if (codeLang.isNotBlank()) " · $codeLang" else "") + " · $codeLines line${if (codeLines == 1) "" else "s"} — open the card")
+        out.addStyle(androidx.compose.ui.text.SpanStyle(color = OrionUiPalette.muted, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), start, out.length)
+        hasRenderedLine = true
+    }
 
     lines.forEach { raw ->
         if (raw.trimStart().startsWith("```")) {
             if (!inCode) {
-                if (hasRenderedLine) out.append("\n")
                 inCode = true
-                codeFirstLine = true
-                val language = raw.trimStart().removePrefix("```").trim()
-                if (language.isNotBlank()) {
-                    val languageStart = out.length
-                    out.append(language.uppercase())
-                    out.addStyle(
-                        androidx.compose.ui.text.SpanStyle(
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = OrionUiPalette.muted
-                        ),
-                        languageStart, out.length
-                    )
-                    out.append("\n")
-                }
-                codeStart = out.length
-                hasRenderedLine = true
+                codeLang = raw.trimStart().removePrefix("```").trim().lowercase()
+                codeLines = 0
             } else {
-                if (codeStart >= 0 && out.length > codeStart) {
-                    out.addStyle(
-                        androidx.compose.ui.text.SpanStyle(
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                            fontSize = 12.sp,
-                            color = OrionUiPalette.text,
-                            background = OrionUiPalette.raised
-                        ),
-                        codeStart, out.length
-                    )
-                }
+                appendCodeSummary()
                 inCode = false
-                codeFirstLine = false
-                codeStart = -1
             }
             return@forEach
         }
+        if (inCode) { codeLines++; return@forEach }
 
-        if (hasRenderedLine && (!inCode || !codeFirstLine)) out.append("\n")
-        if (inCode) {
-            val lineStart = out.length
-            out.append(raw)
-            if (raw.isNotEmpty()) {
-                out.addStyle(
-                    androidx.compose.ui.text.SpanStyle(
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        fontSize = 12.sp,
-                        color = OrionUiPalette.text,
-                        background = OrionUiPalette.raised
-                    ),
-                    lineStart, out.length
-                )
-            }
-            codeFirstLine = false
-            hasRenderedLine = true
-            return@forEach
-        }
-
+        if (hasRenderedLine) out.append("\n")
         val lineStart = out.length
         val line = raw.trimEnd()
         val heading = ORION_HEADING_PATTERN.find(line)
@@ -296,13 +259,7 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
                 }
                 match.groups[5] != null -> {
                     out.append(match.groupValues[5])
-                    out.addStyle(
-                        androidx.compose.ui.text.SpanStyle(
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                            fontSize = 12.sp,
-                            background = OrionUiPalette.raised
-                        ), start, out.length
-                    )
+                    out.addStyle(androidx.compose.ui.text.SpanStyle(color = OrionUiPalette.secondaryText, fontWeight = FontWeight.Medium), start, out.length)
                 }
                 match.groups[6] != null -> {
                     out.append(match.groupValues[6])
@@ -345,17 +302,7 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
         hasRenderedLine = true
     }
 
-    if (inCode && codeStart >= 0 && out.length > codeStart) {
-        out.addStyle(
-            androidx.compose.ui.text.SpanStyle(
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                fontSize = 12.sp,
-                color = OrionUiPalette.text,
-                background = OrionUiPalette.raised
-            ),
-            codeStart, out.length
-        )
-    }
+    if (inCode) appendCodeSummary()
     return out.toAnnotatedString()
 }
 
@@ -669,7 +616,7 @@ internal fun OrionComposeChatScreen(
     }
     val busy = listOf("think", "work", "act", "brows", "build", "draw", "run", "delegat")
         .any { displayStatus.contains(it, true) }
-    var showTranscript by rememberSaveable { mutableStateOf(false) }
+    var showTranscript by remember { mutableStateOf(false) }
     var showRunSheet by remember { mutableStateOf(false) }
     val socialIds = remember(lines.size) { runCatching { OrionSocialConnector.connectedIds(ctx) }.getOrDefault(emptyList()) }
     val appNodes = remember(lines.size) { OrionWorkspaceApps.connectedNodes(ctx) }
@@ -720,7 +667,6 @@ internal fun OrionComposeChatScreen(
                         menuExpanded = false
                         onMenuAction(action)
                     }
-                    DropdownMenuItem(text = { Text(if (commandMode) "Switch to Talk mode" else "Switch to Command mode", color = ChatCopy) }, onClick = { menuExpanded = false; onModeChange(!commandMode) })
                     DropdownMenuItem(text = { Text("Command palette — all pages", color = ChatCopy) }, onClick = { choose("palette") })
                     DropdownMenuItem(text = { Text("Full-screen live call", color = ChatCopy) }, onClick = { choose("live_call") })
                     DropdownMenuItem(text = { Text("Chat history", color = ChatCopy) }, onClick = { menuExpanded = false; onHistory() })

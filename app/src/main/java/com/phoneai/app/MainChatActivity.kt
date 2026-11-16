@@ -1,5 +1,8 @@
 package com.phoneai.app
 
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.activity.ComponentActivity
 
 import android.Manifest
@@ -716,6 +719,14 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         dialog.show()
     }
 
+    /** A plain android.app.Dialog has no Compose owners; without them ComposeView crashes with ViewTreeLifecycleOwner not found. */
+    private fun attachTreeOwners(dialog: android.app.Dialog) {
+        val decor = dialog.window?.decorView ?: return
+        decor.setViewTreeLifecycleOwner(this)
+        decor.setViewTreeViewModelStoreOwner(this)
+        decor.setViewTreeSavedStateRegistryOwner(this)
+    }
+
     private fun showChatHistory() {
         val chats = ChatHistoryStore.archived(this)
         val dialog = android.app.Dialog(this)
@@ -784,6 +795,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             }
         }
         dialog.setContentView(content)
+        attachTreeOwners(dialog)
         dialog.show()
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setBackgroundDrawable(rounded(0xFF090909.toInt(), 0))
@@ -878,6 +890,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             }
         }
         dialog.setContentView(content)
+        attachTreeOwners(dialog)
         dialog.show()
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setBackgroundDrawable(rounded(0xFF090909.toInt(), 0))

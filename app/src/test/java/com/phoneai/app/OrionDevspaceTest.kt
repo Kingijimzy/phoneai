@@ -190,3 +190,15 @@ class OrionStudioEcosystemTest {
         assertTrue(OrionStudio.installCommand("m", "mcp", "npm:@x/y", "npx -y @x/y")!!.first.run == "npx -y @x/y")
     }
 }
+
+
+class OrionStudioInstallTest {
+    @Test fun installScriptsEnsurePrerequisitesAndNeverSourceUnguarded() {
+        val npm = OrionStudio.installScript("npm install -g x", true)
+        assertTrue(npm.contains("command -v npm") && npm.contains("apt-get install") && npm.contains("INSTALL_EXIT"))
+        val pip = OrionStudio.installScript("pip install -q y", false)
+        assertTrue(pip.contains("python3 -m venv") && pip.contains("apk add"))
+        assertTrue(OrionStudio.VENV.contains("[ -f /workspace/.venvs/studio/bin/activate ] &&"))
+        assertFalse(OrionStudio.diagnosticsScript("app")!!.contains(". /workspace/.venvs/studio/bin/activate 2>/dev/null"))
+    }
+}
