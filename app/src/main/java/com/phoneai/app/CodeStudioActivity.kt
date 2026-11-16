@@ -282,9 +282,22 @@ class CodeStudioActivity : Activity() {
                 if (child.mime == DocumentsContract.Document.MIME_TYPE_DIR) { stack.add(child.id to target); return@forEach }
                 if (child.mime.startsWith("image/") || child.mime.startsWith("video/") || child.mime.startsWith("audio/") || child.mime == "application/octet-stream") { skipped++; return@forEach }
                 try {
+                    if (!fs.read(target).startsWith("error:")) { skipped++; return@forEach }
                     val uri = DocumentsContract.buildDocumentUriUsingTree(tree, child.id)
-                    val dataBytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: run { skipped++; return@forEach }
-                    if (dataBytes.size > OrionPythonWorkspace.MAX_FILE_BYTES || total + dataBytes.size > 268435456L || dataBytes.any { it == 0.toByte() }) { skipped++; return@forEach }
+                    val dataBytes = contentResolver.openInputStream(uri)?.use { stream ->
+                        val buffer = java.io.ByteArrayOutputStream()
+                        val chunk = ByteArray(8192)
+                        while (true) {
+                            val n = stream.read(chunk)
+                            if (n < 0) break
+                            if (buffer.size().toLong() + n > OrionPythonWorkspace.MAX_FILE_BYTES ||
+                                total + buffer.size().toLong() + n > 268435456L) break
+                            buffer.write(chunk, 0, n)
+                        }
+                        buffer.toByteArray()
+                    } ?: run { skipped++; return@forEach }
+                    if (dataBytes.isEmpty() || dataBytes.size > OrionPythonWorkspace.MAX_FILE_BYTES ||
+                        total + dataBytes.size > 268435456L || dataBytes.any { it == 0.toByte() }) { skipped++; return@forEach }
                     if (fs.write(target, dataBytes.toString(Charsets.UTF_8)).startsWith("saved ")) { copied++; total += dataBytes.size } else skipped++
                 } catch (_: Exception) { skipped++ }
             }
