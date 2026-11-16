@@ -160,6 +160,135 @@ internal object OrionStudio {
             "elif [ -f app.py ]; then PORT=$port python3 app.py; elif [ -f main.py ] && grep -q uvicorn main.py; then python3 -m uvicorn main:app --host 127.0.0.1 --port $port; else python3 -m http.server $port --bind 127.0.0.1; fi"
     }
 
+    // ---------- per-file intelligence for the editor ----------
+    fun fileDiagnosticsScript(file: String): String? {
+        if (!validPath(file)) return null
+        val f = "/workspace/$file"
+        val ext = file.substringAfterLast('.', "").lowercase()
+        val body = when (ext) {
+            "py" -> ". /workspace/.venvs/studio/bin/activate 2>/dev/null; (ruff check --output-format concise $f 2>&1 || python3 -m py_compile $f 2>&1); (command -v pyright >/dev/null && pyright $f 2>&1 | grep -E '(error|warning)')"
+            "js", "mjs", "cjs" -> "node --check $f 2>&1 | head -n 12; (command -v eslint >/dev/null && eslint -f unix $f 2>&1 | head -n 40)"
+            "ts", "tsx" -> "cd /workspace && (npx --no-install tsc --noEmit --pretty false $f 2>&1 | head -n 40)"
+            "go" -> "cd \$(dirname $f) && go vet ./... 2>&1 | head -n 40"
+            "rs" -> "cd /workspace && cargo check --message-format short 2>&1 | head -n 40"
+            "c", "h" -> "gcc -fsyntax-only -Wall $f 2>&1 | head -n 40"
+            "cpp", "cc", "hpp" -> "g++ -fsyntax-only -Wall $f 2>&1 | head -n 40"
+            "sh", "bash" -> "(command -v shellcheck >/dev/null && shellcheck -f gcc $f 2>&1 | head -n 40); sh -n $f 2>&1 | head -n 10"
+            "json" -> "python3 -m json.tool $f >/dev/null 2>&1 || python3 -c \"import json,sys;json.load(open('$f'))\" 2>&1 | tail -n 3"
+            else -> return null
+        }
+        return "$body; echo DIAG_DONE"
+    }
+
+    /** Hover: signature + docstring + definition location for the symbol at (line, col), via jedi. */
+    fun hoverScript(file: String, line: Int, col: Int): String? {
+        if (!validPath(file) || !file.endsWith(".py") || line < 1 || col < 0 || line > 100000 || col > 1000) return null
+        return ". /workspace/.venvs/studio/bin/activate 2>/dev/null; python3 - <<'PY'\nimport jedi\ns=jedi.Script(path='/workspace/$file')\nn=s.help($line,$col)\nif not n:\n    print('no information here')\nfor d in n[:2]:\n    print(d.full_name or d.name, '-', d.type)\n    for sig in d.get_signatures()[:2]:\n        print('  ', sig.to_string())\n    print((d.docstring() or '')[:600])\nfor d in s.goto($line,$col,follow_imports=True)[:2]:\n    if d.module_path:\n        print('defined at', d.module_path, 'line', d.line)\nPY"
+    }
+
+    // ---------- real MCP client over stdio (inside the Linux runtime) ----------
+    /** Speaks JSON-RPC MCP to a stdio server: initialize -> method (tools/list | tools/call). Output is the JSON result. */
+    fun mcpScript(runCommand: String, method: String, params: JSONObject): String? {
+        if (runCommand.isBlank() || runCommand.length > 400 || runCommand.contains('\n')) return null
+        if (method != "tools/list" && method != "tools/call") return null
+        val py = """
+import json, os, subprocess, select, time, sys
+p = subprocess.Popen(os.environ['ORION_MCP_CMD'], shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
+def send(o):
+    p.stdin.write(json.dumps(o) + '\n'); p.stdin.flush()
+def recv(i, t=90):
+    end = time.time() + t
+    while time.time() < end:
+        r, _, _ = select.select([p.stdout], [], [], 1)
+        if not r: continue
+        line = p.stdout.readline()
+        if not line: break
+        try: m = json.loads(line)
+        except Exception: continue
+        if m.get('id') == i: return m
+    return {'error': 'timeout waiting for MCP server'}
+send({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2024-11-05', 'capabilities': {}, 'clientInfo': {'name': 'orion', 'version': '1'}}})
+r = recv(1)
+if 'error' in r and 'result' not in r:
+    print('MCP initialize failed:', r['error']); p.kill(); sys.exit(1)
+send({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
+send({'jsonrpc': '2.0', 'id': 2, 'method': os.environ['ORION_MCP_METHOD'], 'params': json.loads(os.environ['ORION_MCP_PARAMS'])})
+r = recv(2)
+res = r.get('result', r)
+if os.environ['ORION_MCP_METHOD'] == 'tools/list':
+    for t in res.get('tools', []):
+        props = list((t.get('inputSchema') or {}).get('properties', {}).keys())
+        print(t.get('name'), '-', (t.get('description') or '')[:120], props)
+else:
+    for c in res.get('content', []):
+        print(c.get('text', json.dumps(c))[:6000])
+    if res.get('isError'): print('(server reported an error)')
+p.kill()
+""".trimIndent()
+        return "ORION_MCP_CMD=${q(runCommand)} ORION_MCP_METHOD=${q(method)} ORION_MCP_PARAMS=${q(params.toString())} python3 - <<'ORION_PY'\n$py\nORION_PY"
+    }
+
+    // ---------- live discovery of the public ecosystems (Open VSX, npm, MCP registry) ----------
+    private fun httpGet(url: String): String {
+        val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+            connectTimeout = 15_000; readTimeout = 20_000; setRequestProperty("Accept", "application/json"); setRequestProperty("User-Agent", "Orion-Studio")
+        }
+        return try {
+            check(conn.responseCode in 200..299) { "HTTP ${conn.responseCode}" }
+            conn.inputStream.bufferedReader().use { it.readText().take(400_000) }
+        } finally { conn.disconnect() }
+    }
+
+    fun discoverUrl(source: String, query: String): String? {
+        val e = java.net.URLEncoder.encode(query.trim(), "UTF-8")
+        if (query.isBlank() || query.length > 80) return null
+        return when (source) {
+            "openvsx", "vscode" -> "https://open-vsx.org/api/-/search?query=$e&size=10"
+            "npm" -> "https://registry.npmjs.org/-/v1/search?text=$e&size=10"
+            "mcp" -> "https://registry.modelcontextprotocol.io/v0/servers?search=$e&limit=10"
+            else -> null
+        }
+    }
+
+    fun parseDiscovery(source: String, body: String): List<String> = runCatching {
+        val j = JSONObject(body)
+        when (source) {
+            "openvsx", "vscode" -> j.optJSONArray("extensions")?.let { a -> List(a.length()) { i -> a.getJSONObject(i).let { x ->
+                "${x.optString("namespace")}.${x.optString("name")} v${x.optString("version")} — ${x.optString("displayName", x.optString("name"))}: ${x.optString("description").take(90)} (${x.optInt("downloadCount")} downloads)" } } }
+            "npm" -> j.optJSONArray("objects")?.let { a -> List(a.length()) { i -> a.getJSONObject(i).getJSONObject("package").let { x ->
+                "npm:${x.optString("name")} v${x.optString("version")} — ${x.optString("description").take(100)}" } } }
+            "mcp" -> j.optJSONArray("servers")?.let { a -> List(a.length()) { i -> a.getJSONObject(i).let { x ->
+                val pk = x.optJSONArray("packages")?.optJSONObject(0)
+                val how = if (pk != null) " [${pk.optString("registry_type", pk.optString("registryType"))}:${pk.optString("identifier", pk.optString("name"))}]" else ""
+                "${x.optString("name")}$how — ${x.optString("description").take(100)}" } } }
+            else -> null
+        } ?: emptyList()
+    }.getOrDefault(emptyList())
+
+    fun discover(source: String, query: String): String {
+        val url = discoverUrl(source.lowercase(), query) ?: return "error: discover needs source openvsx|npm|mcp and a query."
+        return runCatching {
+            val rows = parseDiscovery(source.lowercase(), httpGet(url))
+            if (rows.isEmpty()) "No results for '$query' on ${source.lowercase()}."
+            else rows.joinToString("\n") + when (source.lowercase()) {
+                "openvsx", "vscode" -> "\nInstall with studio {action:\"registry_install_vsx\", id:\"<namespace.name>\"}."
+                "npm" -> "\nInstall with studio {action:\"registry_install\", kind:\"plugin\", source:\"npm:<package>\"}."
+                else -> "\nInstall a package-backed MCP server with studio {action:\"registry_install\", kind:\"mcp\", source:\"npm:<package>\", run:\"npx -y <package>\"}."
+            }
+        }.getOrElse { "error: could not reach ${source.lowercase()} (${it.message}). Check the connection and retry." }
+    }
+
+    private val vsxId = Regex("^[A-Za-z0-9_-]{1,60}\\.[A-Za-z0-9_.-]{1,80}$")
+    fun vsxInstallScript(id: String): String? {
+        if (!vsxId.matches(id) || id.contains("..")) return null
+        val ns = id.substringBefore('.'); val name = id.substringAfter('.')
+        return "set -e; mkdir -p /workspace/.vsx/tmp && cd /workspace/.vsx/tmp && rm -rf x && mkdir x && cd x && " +
+            "curl -fsSL https://open-vsx.org/api/$ns/$name/latest -o meta.json && " +
+            "url=\$(python3 -c \"import json;print(json.load(open('meta.json'))['files']['download'])\") && " +
+            "curl -fsSL \"\$url\" -o ext.vsix && unzip -oq ext.vsix 'extension/*' -d out && rm -rf /workspace/.vsx/$id && mv out/extension /workspace/.vsx/$id && " +
+            "echo VSX_INSTALLED $id; ls /workspace/.vsx/$id | head -n 8"
+    }
+
     // ---------- unified registry (plugins, apps, extensions, MCP servers) ----------
     enum class Kind { PLUGIN, APP, EXTENSION, MCP }
     data class Entry(val id: String, val kind: Kind, val name: String, val about: String, val install: String, val run: String = "")
@@ -217,18 +346,19 @@ internal object OrionStudio {
         if (!Regex("^[A-Za-z0-9 _.@/-]{1,60}$").matches(query)) null else "npm search --json ${q(query)} 2>/dev/null | head -c 3000 || echo 'search unavailable'"
 
     /** Install command for a catalogue id or a validated custom package. */
-    fun installCommand(id: String, kind: String, source: String): Pair<Entry, String>? {
+    fun installCommand(id: String, kind: String, source: String, run: String = ""): Pair<Entry, String>? {
+        if (run.length > 300 || run.contains('\n')) return null
         catalog.firstOrNull { it.id == id }?.let { return it to it.install }
         val k = runCatching { Kind.valueOf(kind.uppercase()) }.getOrNull() ?: return null
         if (!Regex("^(npm|pip):[A-Za-z0-9@/._-]{1,80}$").matches(source) || source.contains("..")) return null
         val cmd = if (source.startsWith("npm:")) "npm install -g ${source.removePrefix("npm:")}" else "pip install -q ${source.removePrefix("pip:")}"
         val eid = id.ifBlank { source.substringAfter(':').replace(Regex("[^A-Za-z0-9._-]"), "-") }
         if (!OrionDevspace.validName(eid)) return null
-        return Entry(eid, k, eid, "custom ${source}", cmd) to cmd
+        return Entry(eid, k, eid, "custom ${source}", cmd, run) to cmd
     }
 
     fun registryInstall(c: Context, a: JSONObject): String {
-        val (entry, cmd) = installCommand(a.optString("id").trim(), a.optString("kind"), a.optString("source").trim())
+        val (entry, cmd) = installCommand(a.optString("id").trim(), a.optString("kind"), a.optString("source").trim(), a.optString("run").trim())
             ?: return "error: unknown registry id; give a catalogue id or {kind, source:\"npm:<pkg>\"|\"pip:<pkg>\", id}."
         val out = ShellRunner.run(c, ". /workspace/.venvs/studio/bin/activate 2>/dev/null; ($cmd) > /tmp/orion_reg.log 2>&1; rc=\$?; tail -n 12 /tmp/orion_reg.log; echo INSTALL_EXIT=\$rc", OrionUbuntu.where(c))
         if (!out.contains("INSTALL_EXIT=0")) return "Install did not finish cleanly:\n$out"
@@ -236,6 +366,31 @@ internal object OrionStudio {
         m[entry.id] = JSONObject().put("id", entry.id).put("kind", entry.kind.name).put("name", entry.name).put("about", entry.about).put("install", entry.install).put("run", entry.run).put("at", System.currentTimeMillis())
         saveAll(c, m)
         return "Installed ${entry.name} (${entry.kind.name.lowercase()})." + if (entry.run.isNotBlank()) " Start it with studio {action:\"registry_run\", id:\"${entry.id}\"}." else ""
+    }
+
+    fun registryInstallVsx(c: Context, id: String): String {
+        val script = vsxInstallScript(id.trim()) ?: return "error: give an Open VSX id like publisher.extension."
+        val out = ShellRunner.run(c, script, OrionUbuntu.where(c))
+        if (!out.contains("VSX_INSTALLED")) return "Install did not finish cleanly:\n$out"
+        val m = installed(c)
+        m[id.trim()] = JSONObject().put("id", id.trim()).put("kind", "EXTENSION").put("name", id.trim()).put("about", "VS Code extension from Open VSX").put("install", "").put("run", "").put("at", System.currentTimeMillis())
+        saveAll(c, m)
+        return "Installed VS Code extension ${id.trim()} into /workspace/.vsx (loaded by code-server: start the code-server extension with registry_run)."
+    }
+
+    private fun mcpRun(c: Context, id: String): String? = installed(c)[id]?.optString("run")?.takeIf { it.isNotBlank() }
+        ?: catalog.firstOrNull { it.id == id && it.kind == Kind.MCP }?.run?.takeIf { it.isNotBlank() && installed(c).containsKey(id) }
+
+    fun mcpTools(c: Context, id: String): String {
+        val run = mcpRun(c, id) ?: return "error: $id is not an installed MCP server with a run command. Install it first with registry_install."
+        return ShellRunner.run(c, mcpScript(run, "tools/list", JSONObject()) ?: return "error: bad MCP command.", OrionUbuntu.where(c))
+    }
+
+    fun mcpCall(c: Context, id: String, tool: String, arguments: JSONObject): String {
+        val run = mcpRun(c, id) ?: return "error: $id is not an installed MCP server with a run command."
+        if (!Regex("^[A-Za-z0-9_.-]{1,80}$").matches(tool)) return "error: bad tool name."
+        val params = JSONObject().put("name", tool).put("arguments", arguments)
+        return ShellRunner.run(c, mcpScript(run, "tools/call", params) ?: return "error: bad MCP command.", OrionUbuntu.where(c))
     }
 
     fun registryRemove(c: Context, id: String): String {
@@ -281,8 +436,9 @@ internal object OrionStudio {
                 "lsp_install {lang: python|typescript|go|c|bash|rust}, diagnostics {project}, format {project}, complete {file,line,col}, symbols {file}, highlight {file}, " +
                 "debug {file, breakpoints?:[lines], commands?:[pdb cmds]}, git {op: init|status|diff|log|branch|checkout|add|commit|stash|stash_pop|blame|show|remote|pull|push, project, message?, ref?, file?}, git_clone {url,name}, " +
                 "build {project,target?}, test {project}, preview {project,port?,command?}, preview_stop {name}, " +
-                "registry_list {kind?}, registry_search {query}, registry_npm {query}, registry_install {id | kind+source}, registry_remove {id}, registry_run {id,port?}. Projects live under /workspace."
+                "registry_list {kind?}, registry_search {query}, registry_npm {query}, registry_install {id | kind+source}, registry_remove {id}, registry_run {id,port?}, registry_discover {source: openvsx|npm|mcp, query} (live search of Open VSX, npm and the official MCP registry), registry_install_vsx {id}, mcp_tools {id} and mcp_call {id, tool, arguments} (real MCP client for installed servers), file_diagnostics {file}, hover {file,line,col}. Show code to the owner through cards: write it to /workspace files and mention the path; do not paste long code in chat. Projects live under /workspace."
             "status" -> overview(c)
+            "ubuntu_install" -> OrionUbuntu.install(c)
             "toolchain_list" -> guest(toolchainListScript(), "")
             "toolchain_install" -> guest(toolchainScript(a.optString("name").lowercase(), ubuntu(c)), "unknown toolchain; use ${toolchains.keys.joinToString(", ")}.")
             "lsp_install" -> guest(lspInstallScript(a.optString("lang").lowercase()), "unknown language; use python, typescript, go, c, bash or rust.")
@@ -310,6 +466,12 @@ internal object OrionStudio {
             "registry_search" -> registrySearch(a.optString("query")) ?: "error: give a query."
             "registry_npm" -> guest(npmSearchScript(a.optString("query")), "bad query.")
             "registry_install" -> registryInstall(c, a)
+            "registry_discover" -> discover(a.optString("source"), a.optString("query"))
+            "registry_install_vsx" -> registryInstallVsx(c, a.optString("id"))
+            "mcp_tools" -> mcpTools(c, a.optString("id"))
+            "mcp_call" -> mcpCall(c, a.optString("id"), a.optString("tool"), a.optJSONObject("arguments") ?: JSONObject())
+            "file_diagnostics" -> guest(fileDiagnosticsScript(a.optString("file")), "file_diagnostics needs a relative file path with a supported extension.")
+            "hover" -> guest(hoverScript(a.optString("file"), a.optInt("line", 1), a.optInt("col", 0)), "hover supports Python files with a valid line/col.")
             "registry_remove" -> registryRemove(c, a.optString("id"))
             "registry_run" -> registryRun(c, a.optString("id"), a.optInt("port", 0))
             else -> "error: unknown studio action '$action'. Call studio {action:\"help\"}."

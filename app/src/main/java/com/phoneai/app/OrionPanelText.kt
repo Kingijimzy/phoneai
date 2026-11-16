@@ -7,7 +7,7 @@ internal object OrionPanelText {
     /** Reply text for the panel: code blocks collapse to a tappable line, markdown marks are dropped. */
     fun clean(text: String): String {
         if (text.isBlank()) return ""
-        var t = fence.replace(text) { "\n▣ Code — see Activity\n" }
+        var t = fence.replace(text) { "\n▣ Code — open the card below\n" }
         t = t.replace("**", "").replace("__", "").replace("`", "")
         t = t.lines().joinToString("\n") { it.trimStart('#', ' ').let { l -> if (l.startsWith("- ") || l.startsWith("* ")) "• " + l.drop(2) else l } }
         return t.replace(Regex("\n{3,}"), "\n\n").trim()

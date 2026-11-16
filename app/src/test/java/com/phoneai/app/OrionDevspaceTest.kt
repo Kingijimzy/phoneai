@@ -118,3 +118,75 @@ class OrionStudioTest {
         assertNull(OrionStudio.toolchainScript("cobol", true))
     }
 }
+
+class OrionStudioEditorTest {
+    @Test fun highlightsKeywordsStringsCommentsNumbers() {
+        val src = "def f(x):\n    return \"hi\" + 42  # note\n"
+        val toks = OrionStudioEditor.highlight("python", src).map { it.tok to src.substring(it.start, it.end) }
+        assertTrue(toks.contains(OrionStudioEditor.Tok.KEYWORD to "def"))
+        assertTrue(toks.contains(OrionStudioEditor.Tok.KEYWORD to "return"))
+        assertTrue(toks.contains(OrionStudioEditor.Tok.STRING to "\"hi\""))
+        assertTrue(toks.contains(OrionStudioEditor.Tok.NUMBER to "42"))
+        assertTrue(toks.any { it.first == OrionStudioEditor.Tok.COMMENT && it.second.startsWith("# note") })
+        assertEquals("go", OrionStudioEditor.langOf("a/b/main.go"))
+        assertTrue(OrionStudioEditor.highlight("text", "if 1").none { it.tok == OrionStudioEditor.Tok.KEYWORD })
+    }
+    @Test fun parsesDiagnosticsFromCommonTools() {
+        val out = "/workspace/app.py:3:8: F401 [*] `os` imported but unused\n" +
+            "  /workspace/app.py:9:5 - error: \"x\" is not defined\n" +
+            "app.ts(4,10): error TS2304: Cannot find name 'y'.\n" +
+            "./main.go:5:2: undefined: z\n" +
+            "noise line\n"
+        val d = OrionStudioEditor.parseDiagnostics(out)
+        assertEquals(4, d.size)
+        assertEquals(3, d[0].line); assertEquals(8, d[0].col); assertTrue(d[0].message.contains("F401"))
+        assertEquals("error", d[1].severity); assertEquals(9, d[1].line)
+        assertEquals(4, d[2].line); assertEquals(10, d[2].col)
+        assertEquals(5, d[3].line)
+    }
+    @Test fun cursorMath() {
+        val t = "ab\ncde\nf"
+        assertEquals(4, OrionStudioEditor.offsetOf(t, 2, 2))
+        assertEquals(2 to 1, OrionStudioEditor.position(t, 4))
+        assertEquals("fo", OrionStudioEditor.wordBefore("x = fo", 6))
+    }
+}
+
+class OrionArtifactCardsTest {
+    @Test fun codeFilesAndPreviewsBecomeCards() {
+        val text = "Done. Here is it:\n```python\nprint(1)\nprint(2)\n```\nSaved to /workspace/app/main.py and serving at http://127.0.0.1:8080/index.html."
+        val cards = OrionArtifactCards.extract(text)
+        assertTrue(cards.any { it.kind == OrionArtifactCards.Kind.CODE && it.title.contains("python") && it.title.contains("2 lines") })
+        assertTrue(cards.any { it.kind == OrionArtifactCards.Kind.FILE && it.target == "app/main.py" })
+        assertTrue(cards.any { it.kind == OrionArtifactCards.Kind.PREVIEW && it.target == "http://127.0.0.1:8080/index.html" })
+        assertTrue(OrionArtifactCards.extract("just words, no artifacts").isEmpty())
+        assertTrue(OrionArtifactCards.extract("see /workspace/../etc/passwd.txt").none { it.target.contains("..") })
+        assertFalse(OrionPanelText.clean(text).contains("print(1)"))
+    }
+}
+
+class OrionStudioEcosystemTest {
+    @Test fun discoveryParsersAndUrls() {
+        val vsx = "{\"extensions\":[{\"namespace\":\"ms-python\",\"name\":\"python\",\"version\":\"1.0\",\"displayName\":\"Python\",\"description\":\"d\",\"downloadCount\":5}]}"
+        assertTrue(OrionStudio.parseDiscovery("openvsx", vsx).first().startsWith("ms-python.python"))
+        val npm = "{\"objects\":[{\"package\":{\"name\":\"left-pad\",\"version\":\"1.3.0\",\"description\":\"pads\"}}]}"
+        assertTrue(OrionStudio.parseDiscovery("npm", npm).first().startsWith("npm:left-pad"))
+        val mcp = "{\"servers\":[{\"name\":\"io.x/y\",\"description\":\"d\",\"packages\":[{\"registry_type\":\"npm\",\"identifier\":\"@x/y\"}]}]}"
+        assertTrue(OrionStudio.parseDiscovery("mcp", mcp).first().contains("npm:@x/y"))
+        assertTrue(OrionStudio.parseDiscovery("npm", "not json").isEmpty())
+        assertNull(OrionStudio.discoverUrl("other", "q"))
+        assertTrue(OrionStudio.discoverUrl("openvsx", "py thon")!!.contains("py+thon"))
+    }
+    @Test fun vsxAndMcpScriptsAreSafe() {
+        assertNull(OrionStudio.vsxInstallScript("bad id; rm"))
+        assertTrue(OrionStudio.vsxInstallScript("ms-python.python")!!.contains("open-vsx.org/api/ms-python/python/latest"))
+        val s = OrionStudio.mcpScript("mcp-server-memory", "tools/list", org.json.JSONObject())!!
+        assertTrue(s.contains("ORION_MCP_CMD='mcp-server-memory'") && s.contains("initialize"))
+        assertNull(OrionStudio.mcpScript("x", "resources/read", org.json.JSONObject()))
+        assertNull(OrionStudio.mcpScript("a\nb", "tools/list", org.json.JSONObject()))
+        assertTrue(OrionStudio.fileDiagnosticsScript("a.py")!!.contains("ruff"))
+        assertNull(OrionStudio.fileDiagnosticsScript("a.unknown"))
+        assertNull(OrionStudio.hoverScript("a.js", 1, 0))
+        assertTrue(OrionStudio.installCommand("m", "mcp", "npm:@x/y", "npx -y @x/y")!!.first.run == "npx -y @x/y")
+    }
+}
