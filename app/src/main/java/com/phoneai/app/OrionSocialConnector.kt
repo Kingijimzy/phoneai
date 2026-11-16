@@ -210,6 +210,8 @@ internal object OrionSocialConnector {
         return if (out.startsWith("HTTP")) "Posted to Page ${page.optString("name")}.\n$out" else out
     }
 
+    internal fun googleToken(stored: String): String? = googleAccessToken(stored)
+
     private fun googleAccessToken(stored: String): String? = try {
         val (refresh, cid, cs) = stored.removePrefix("gr:").split("|").let { Triple(it[0], it.getOrElse(1) { "" }, it.getOrElse(2) { "" }) }
         val conn = URL("https://oauth2.googleapis.com/token").openConnection() as HttpURLConnection

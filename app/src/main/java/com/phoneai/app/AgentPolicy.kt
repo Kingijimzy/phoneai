@@ -129,7 +129,7 @@ object AgentPolicy {
         "document_extract", "image_read", "image_generate", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty",
         "dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan", "dev_summary",
         "macro_save", "macro_run", "macro_list", "macro_delete" -> "workspace_shell"
-        "github_account_read", "gmail_list_messages", "social" -> "connected_services"
+        "github_account_read", "gmail_list_messages", "social", "google", "notion" -> "connected_services"
         "trade_history_summary", "trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan",
         "positions_monitor", "bybit_sync", "habit_report", "crypto_derivatives",
         "memecoin_check", "memecoin_watch", "wallet_check", "wallet_watch", "chain_overview",

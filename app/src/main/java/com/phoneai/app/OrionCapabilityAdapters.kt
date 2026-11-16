@@ -43,7 +43,7 @@ internal object OrionCapabilityAdapters {
         ),
         Backend.SKILLS to setOf("skills_list"),
         Backend.INTEGRATIONS to setOf("integration_status", "service_status", "connect_service",
-            "github_account_read", "gmail_list_messages", "social", "vault_list", "vault_request", "vault_get", "capability_note"),
+            "github_account_read", "gmail_list_messages", "social", "google", "notion", "vault_list", "vault_request", "vault_get", "capability_note"),
         Backend.COMMUNICATION to setOf("telegram_status", "telegram_inbox", "telegram_send", "dial", "sms", "notification_action"),
         Backend.MEMORY to setOf("remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "record_decision", "knowledge_search",
             "graph_link", "graph_query", "self_review", "undo_last", "undo_status"),

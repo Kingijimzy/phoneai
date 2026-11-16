@@ -257,7 +257,7 @@ object AgentCheckpointStore {
     private fun safeResult(tool: String, result: String): String {
         val privatePayloadTools = setOf(
             "read_screen", "research_web", "fetch_url", "mcp_call", "telegram_inbox",
-            "telegram_send", "social", "sms", "type", "copy", "remember", "update_memory", "recall",
+            "telegram_send", "social", "google", "notion", "sms", "type", "copy", "remember", "update_memory", "recall",
             "look", "play"
         )
         if (tool in privatePayloadTools) {

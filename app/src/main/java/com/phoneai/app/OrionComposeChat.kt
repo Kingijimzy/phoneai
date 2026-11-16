@@ -672,7 +672,8 @@ internal fun OrionComposeChatScreen(
     var showTranscript by rememberSaveable { mutableStateOf(false) }
     var showRunSheet by remember { mutableStateOf(false) }
     val socialIds = remember(lines.size) { runCatching { OrionSocialConnector.connectedIds(ctx) }.getOrDefault(emptyList()) }
-    val linked = remember(socialIds) { OrionNodes.linked(socialIds) }
+    val appNodes = remember(lines.size) { OrionWorkspaceApps.connectedNodes(ctx) }
+    val linked = remember(socialIds, appNodes) { OrionNodes.linked(socialIds, appNodes) }
     val runSteps = OrionRunLog.steps
     val currentRun = OrionRunLog.currentRun(runSteps)
     val runningTitle = runSteps.lastOrNull { it.status == OrionRunLog.Status.RUNNING }?.title

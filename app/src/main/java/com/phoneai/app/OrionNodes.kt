@@ -29,6 +29,8 @@ internal object OrionNodes {
         return when {
             t == "social" -> social[(args?.optString("platform").orEmpty().ifBlank { args?.optString("id").orEmpty() }).lowercase()] ?: "web"
             t.startsWith("gmail") -> "gmail"
+            t == "google" -> when { (args?.optString("action").orEmpty()).startsWith("docs") -> "docs"; (args?.optString("action").orEmpty()).startsWith("sheets") -> "sheets"; else -> "drive" }
+            t == "notion" -> "notion"
             t == "calendar_events" || t == "event_create" || t == "alarm" || t == "timer" || t == "time" -> "calendar"
             t.startsWith("drive") -> "drive"
             t.startsWith("doc") && t != "document_extract" -> "docs"

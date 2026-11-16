@@ -381,7 +381,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
         return true
     }
 
-    private val consequentialTools = setOf("telegram_send", "social", "notification_action", "mcp_call", "sms")
+    private val consequentialTools = setOf("telegram_send", "social", "google", "notion", "notification_action", "mcp_call", "sms")
 
     /** Evidence records retain only sanitized tool/outcome metadata, never private arguments or payloads. */
     private fun isNonLoggedAction(tool: String, args: JSONObject): Boolean = false

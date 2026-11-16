@@ -71,6 +71,8 @@ internal object OrionRunLog {
             t in setOf("remember", "update_memory", "fact_add") -> "Remembering"
             t in setOf("recall", "fact_query", "knowledge_search", "discussion_search") -> "Recalling"
             t.startsWith("gmail") -> "Checking mail"
+            t == "google" -> "Working in Google"
+            t == "notion" -> "Working in Notion"
             t.startsWith("telegram") -> "Messaging on Telegram"
             t == "open_page" -> "Opening a page"
             t.startsWith("voice") -> "Speaking"
