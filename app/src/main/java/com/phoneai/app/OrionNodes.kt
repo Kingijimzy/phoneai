@@ -41,7 +41,7 @@ internal object OrionNodes {
             t in setOf("telegram_send", "telegram_inbox", "sms", "dial", "ask_user") || t.startsWith("telegram") -> "chat"
             t.startsWith("browser") || t in setOf("web_search", "live_web_search", "fetch_url", "research_web", "open_url", "live_news", "live_sports", "weather", "web_api", "github_public", "github_search_repositories") -> "web"
             t.startsWith("workspace") || t in setOf("find_files", "open_file", "save_file", "show_file", "document_extract", "backup_list", "backup_restore") -> "files"
-            t in setOf("shell", "python_exec", "execute_system_op", "termux_command", "dev_shell", "dev_python", "platform_selftest") -> "shell"
+            t in setOf("shell", "python_exec", "execute_system_op", "termux_command", "dev_shell", "dev_python", "platform_selftest", "devspace") -> "shell"
             t in setOf("spawn_worker", "worker_list", "worker_result", "worker_cancel") -> "chat"
             else -> null
         }
