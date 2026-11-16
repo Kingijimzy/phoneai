@@ -17,7 +17,7 @@ internal object ProviderFallbackPolicy {
     const val MAX_BACKUP_PROVIDERS = 2
 
     private val recoverableHttpStatuses = setOf(
-        402, 404, 408, 410, 413, 422, 425, 429, 500, 502, 503, 504
+        402, 404, 408, 410, 413, 422, 425, 429, 500, 502, 503, 504, 529
     )
 
     fun shouldTryBackup(error: Throwable, autoSwitchEnabled: Boolean = true): Boolean {
@@ -30,8 +30,6 @@ internal object ProviderFallbackPolicy {
             message.contains("invalid api key") ||
             message.contains("unauthorized") ||
             message.contains("authentication") ||
-            message.contains("cannot connect") ||
-            message.contains("check internet") ||
             message.contains("reached orion's 15-request budget") ||
             message.contains("paid-provider use is off") ||
             message.contains("blocked the request")) return false

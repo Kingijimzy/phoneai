@@ -3,7 +3,6 @@ package com.phoneai.app
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.IOException
 
 class ProviderFallbackPolicyTest {
     @Test fun backupCountRemainsBounded() {
@@ -38,8 +37,17 @@ class ProviderFallbackPolicyTest {
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 429 without a parsed status")))
     }
 
-    @Test fun networkAuthenticationAndCancellationFailuresNeverRotate() {
-        assertFalse(ProviderFallbackPolicy.shouldTryBackup(IOException("network unavailable")))
+    @Test fun transientNetworkFailuresCanUseAnEligibleBackup() {
+        // Nim wraps socket, DNS and other transport IO failures as transient HTTP 503.
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("transient connection failure (SocketException)", 503)))
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("transient connection failure (UnknownHostException)", 503)))
+    }
+
+    @Test fun providerOverload529CanUseAnEligibleBackup() {
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("Coarena overloaded", 529)))
+    }
+
+    @Test fun authenticationAndCancellationFailuresNeverRotate() {
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("API key rejected (401)", 401)))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(IllegalStateException("invalid model")))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(InterruptedException("cancelled")))
