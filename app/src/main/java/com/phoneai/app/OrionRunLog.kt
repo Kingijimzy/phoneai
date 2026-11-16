@@ -74,6 +74,9 @@ internal object OrionRunLog {
             t.startsWith("telegram") -> "Messaging on Telegram"
             t == "open_page" -> "Opening a page"
             t.startsWith("voice") -> "Speaking"
+            t == "spawn_worker" -> "Starting a worker"
+            t.startsWith("worker_") -> "Checking workers"
+            t == "platform_selftest" -> "Testing the platform"
             t == "wait" -> "Waiting"
             else -> tool.replace('_', ' ').replaceFirstChar { it.uppercase() }
         }

@@ -250,7 +250,7 @@ internal object IrreversibleActionConfirmationPolicy {
     fun computerSettingAction(tool: String, args: JSONObject): String? = null
 }
 /** The brain: asks the AI what to do, runs the tool it picks, repeats. */
-class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
+class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private val background: Boolean = false) {
     /** Talk uses the ordinary selected chat provider; command planning may use a separate override. */
     private val sharedRequestBudget = CommandRequestBudget(maxRequests = 100_000, maxRequestsProvider = { OrionAutonomySettings.read(svc).maxAiRequests })
     // Route every production chat and command request through the account-aware adapter.
@@ -1507,6 +1507,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
     internal fun currentTaskCommand(): String = currentTask
 
     fun run(inputCommand: String) {
+        if (background) { runInner(inputCommand); return }
         OrionRunLog.beginRun()
         OrionLiveMetrics.begin()
         try { runInner(inputCommand) } finally { OrionLiveMetrics.end(Nim.lastChatModel()) }
