@@ -115,7 +115,7 @@ class CodeStudioActivity : Activity() {
 
         val cmdRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         command = EditText(this).apply {
-            hint = "Linux command in /workspace"; singleLine = true; textSize = 12f; typeface = Typeface.MONOSPACE
+            hint = "Linux command in /workspace"; setSingleLine(true); textSize = 12f; typeface = Typeface.MONOSPACE
             setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED); background = bg(); setPadding(dp(9), dp(7), dp(9), dp(7))
             imeOptions = EditorInfo.IME_ACTION_SEND
             setOnEditorActionListener { _, id, _ -> if (id == EditorInfo.IME_ACTION_SEND) { runCommand(); true } else false }
