@@ -127,13 +127,30 @@ class CodeStudioActivity : Activity() {
     }
 
     private fun showMenu() {
-        AlertDialog.Builder(this).setTitle("Code Studio").setItems(arrayOf("Refresh files", "Open full terminal", "Workspace information")) { _, n ->
+        AlertDialog.Builder(this).setTitle("Code Studio").setItems(arrayOf("Create project", "Refresh files", "Open full terminal", "Workspace information")) { _, n ->
             when (n) {
-                0 -> refreshFiles()
-                1 -> startActivity(Intent(this, TerminalActivity::class.java))
+                0 -> newProject()
+                1 -> refreshFiles()
+                2 -> startActivity(Intent(this, TerminalActivity::class.java))
                 else -> output.text = "Code Studio edits Orion's shared /workspace. Files are visible to CPython and Alpine. Existing files are backed up before overwrite; deleted files are moved to Orion's recycle area."
             }
         }.show()
+    }
+
+    private fun newProject() {
+        val box = EditText(this).apply { hint = "project_name"; setSingleLine(true); setTextColor(Theme.TEXT) }
+        AlertDialog.Builder(this).setTitle("Create Linux project").setMessage("Project name: letters, numbers, dot, dash or underscore.")
+            .setView(box).setNegativeButton("Cancel", null).setPositiveButton("Next") { _, _ ->
+                val name = box.text.toString().trim()
+                if (!OrionDevspace.validName(name)) { output.text = "Invalid project name."; return@setPositiveButton }
+                AlertDialog.Builder(this).setTitle("Choose project template")
+                    .setItems(arrayOf("Python CLI", "Python API", "Node.js", "Static web")) { _, kind ->
+                        val type = when (kind) { 0 -> "python"; 1 -> "api"; 2 -> "node"; else -> "web" }
+                        val script = OrionDevspace.scaffold(name, type)
+                        if (script == null) { output.text = "Unsupported project template."; return@setItems }
+                        execute(script)
+                    }.show()
+            }.show()
     }
 
     private fun refreshFiles() {
