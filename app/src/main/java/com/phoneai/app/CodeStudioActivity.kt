@@ -62,7 +62,7 @@ class CodeStudioActivity : Activity() {
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(9), 0, dp(7)) }
         val buttons = listOf("＋ File", "＋ Folder", "Import", "Save")
         buttons.forEachIndexed { i, s ->
-            val run = when (i) { 0 -> ({ newFile() }); 1 -> ({ newFolder() }); 2 -> ({ importFolder() }); else -> ({ saveFile() }) }
+            val run: () -> Unit = when (i) { 0 -> ({ newFile() }); 1 -> ({ newFolder() }); 2 -> ({ importFolder() }); else -> ({ saveFile(); Unit }) }
             actions.addView(chip(s, run), LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) leftMargin = dp(5) })
         }
         root.addView(actions)
