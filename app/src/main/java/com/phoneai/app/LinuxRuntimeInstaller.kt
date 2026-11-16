@@ -21,10 +21,16 @@ internal data class LinuxTerminalLaunchConfig(val executable: String, val workin
  */
 internal class LinuxRuntimeInstaller(
     context: Context,
+    private val flavor: Flavor = Flavor.ALPINE,
     private val progress: (String, Long, Long) -> Unit = { _, _, _ -> }
 ) {
+    /** Which distribution this installer manages; each has its own private rootfs directory. */
+    enum class Flavor(val dir: String, val label: String) { ALPINE("orion-linux", "Alpine"), UBUNTU("orion-ubuntu", "Ubuntu") }
+
+    constructor(context: Context, progress: (String, Long, Long) -> Unit) : this(context, Flavor.ALPINE, progress)
+
     private val app = context.applicationContext
-    private val base = File(app.filesDir, "orion-linux")
+    private val base = File(app.filesDir, flavor.dir)
     private val downloads = File(base, "downloads")
     private val prootTmp = File(base, "proot-tmp")
     private val rootfs = File(base, "rootfs")
@@ -68,12 +74,17 @@ internal class LinuxRuntimeInstaller(
         staging.deleteRecursively()
         check(staging.mkdirs()) { "Could not create staging directory." }
         try {
-            progress("Extracting Alpine root filesystem", 0L, 0L)
+            progress("Extracting ${flavor.label} root filesystem", 0L, 0L)
             GZIPInputStream(BufferedInputStream(archive.inputStream())).use { TarExtractor.extract(it, staging) }
-            progress("Validating Alpine root filesystem", 0L, 0L)
+            progress("Validating ${flavor.label} root filesystem", 0L, 0L)
             val guestShell = File(staging, "bin/sh")
             check(guestShell.exists()) { "Verified rootfs has no /bin/sh." }
-            check(File(staging, "etc/alpine-release").isFile) { "Rootfs is not a valid Alpine installation." }
+            if (flavor == Flavor.ALPINE) check(File(staging, "etc/alpine-release").isFile) { "Rootfs is not a valid Alpine installation." }
+            else {
+                val osRelease = File(staging, "etc/os-release")
+                check(osRelease.isFile && osRelease.readText().contains("Ubuntu")) { "Rootfs is not a valid Ubuntu installation." }
+                prepareUbuntu(staging)
+            }
 
             // Verify the symlink target and executable mode before invoking PRoot. A file's
             // existence alone is insufficient: Android's extraction defaults can strip +x.
@@ -89,13 +100,14 @@ internal class LinuxRuntimeInstaller(
             }
 
             // Acceptance test runs against staging before touching the working installation.
-            val smoke = runGuest(staging, "printf 'ORION_PROOT_OK\\n'; uname -m; cat /etc/alpine-release", 10_000L)
+            val smoke = runGuest(staging, "printf 'ORION_PROOT_OK\\n'; uname -m; " +
+                if (flavor == Flavor.ALPINE) "cat /etc/alpine-release" else "grep -m1 '^VERSION_ID' /etc/os-release", 20_000L)
             check(smoke.exitCode == 0 && smoke.output.contains("ORION_PROOT_OK") &&
                 Regex("(?m)^aarch64\\s*$").containsMatchIn(smoke.output) &&
-                smoke.output.contains("3.22.7")) {
+                smoke.output.contains(if (flavor == Flavor.ALPINE) "3.22.7" else "24.04")) {
                 "Guest-shell acceptance test failed; previous runtime was preserved. Output: ${smoke.output.take(500)}"
             }
-            progress("Activating verified Alpine runtime", 0L, 0L)
+            progress("Activating verified ${flavor.label} runtime", 0L, 0L)
             markerTemp.writeText(manifest.version)
             backup.deleteRecursively()
             markerBackup.delete()
@@ -118,7 +130,7 @@ internal class LinuxRuntimeInstaller(
             }
             backup.deleteRecursively()
             markerBackup.delete()
-            progress("Alpine runtime ready", 1L, 1L)
+            progress("${flavor.label} runtime ready", 1L, 1L)
         } finally {
             staging.deleteRecursively()
             markerTemp.delete()
@@ -160,7 +172,7 @@ internal class LinuxRuntimeInstaller(
         // network's resolver list into the private Alpine rootfs before each command.
         val dnsStatus = syncGuestDns()
         if (dnsStatus != null) onOutput("Network DNS setup warning: $dnsStatus\n")
-        val packageMutation = ShellExecutionRouting.isPackageOperation(command)
+        val packageMutation = flavor == Flavor.ALPINE && ShellExecutionRouting.isPackageOperation(command)
         val result = try {
             if (packageMutation) synchronized(PACKAGE_DATABASE_LOCK) {
                 // Serialize package database mutations across all runtime instances.
@@ -236,6 +248,19 @@ internal class LinuxRuntimeInstaller(
         return LinuxTerminalLaunchConfig(argv.first(), rootfs.absolutePath, argv.toTypedArray(), environment)
     }
 
+    /**
+     * apt inside PRoot cannot drop to the _apt user or run init scripts; configure that once at install time
+     * so `apt-get install` works unattended exactly like on a normal Ubuntu box.
+     */
+    private fun prepareUbuntu(root: File) {
+        val conf = File(root, "etc/apt/apt.conf.d").apply { mkdirs() }
+        File(conf, "99orion").writeText(
+            "APT::Sandbox::User \"root\";\nAPT::Install-Recommends \"false\";\nDpkg::Options { \"--force-unsafe-io\"; };\nAcquire::Retries \"3\";\n")
+        File(root, "usr/sbin").mkdirs()
+        File(root, "usr/sbin/policy-rc.d").apply { writeText("#!/bin/sh\nexit 101\n"); setExecutable(true, false) }
+        File(root, "tmp").mkdirs()
+    }
+
     private data class ProcessResult(val exitCode: Int, val output: String, val timedOut: Boolean, val cancelled: Boolean = false)
 
     private fun syncGuestDns(): String? {
@@ -281,6 +306,7 @@ internal class LinuxRuntimeInstaller(
             environment()["TERM"] = "dumb"
             environment()["LANG"] = "C.UTF-8"
             environment()["TMPDIR"] = "/tmp"
+            if (flavor == Flavor.UBUNTU) environment()["DEBIAN_FRONTEND"] = "noninteractive"
             environment()["PROOT_TMP_DIR"] = prootTmp.absolutePath
             // Required on Android 10+ to execute guest ELF binaries despite app-data W^X policy.
             environment()["PROOT_LOADER"] = prootLoader.absolutePath
