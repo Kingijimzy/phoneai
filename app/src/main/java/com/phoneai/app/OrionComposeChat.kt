@@ -302,17 +302,6 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
         hasRenderedLine = true
     }
 
-    if (inCode && codeStart >= 0 && out.length > codeStart) {
-        out.addStyle(
-            androidx.compose.ui.text.SpanStyle(
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                fontSize = 12.sp,
-                color = OrionUiPalette.text,
-                background = OrionUiPalette.raised
-            ),
-            codeStart, out.length
-        )
-    }
     if (inCode) appendCodeSummary()
     return out.toAnnotatedString()
 }

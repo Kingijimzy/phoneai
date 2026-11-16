@@ -1,5 +1,8 @@
 package com.phoneai.app
 
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.activity.ComponentActivity
 
 import android.Manifest
@@ -719,9 +722,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     /** A plain android.app.Dialog has no Compose owners; without them ComposeView crashes with ViewTreeLifecycleOwner not found. */
     private fun attachTreeOwners(dialog: android.app.Dialog) {
         val decor = dialog.window?.decorView ?: return
-        androidx.lifecycle.ViewTreeLifecycleOwner.set(decor, this)
-        androidx.lifecycle.ViewTreeViewModelStoreOwner.set(decor, this)
-        androidx.savedstate.ViewTreeSavedStateRegistryOwner.set(decor, this)
+        decor.setViewTreeLifecycleOwner(this)
+        decor.setViewTreeViewModelStoreOwner(this)
+        decor.setViewTreeSavedStateRegistryOwner(this)
     }
 
     private fun showChatHistory() {
