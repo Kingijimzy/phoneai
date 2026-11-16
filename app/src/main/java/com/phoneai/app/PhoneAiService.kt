@@ -814,13 +814,18 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     // ---------------------------------------------------------------- floating button
 
     private fun showBubble() {
-        if (bubble != null || running || panel != null) return
+        if (bubble != null || panel != null) return
+        // The conversation already renders live status while Orion chat is foreground.
+        // Outside Orion, keep only the compact orb visible; never cover another app with text.
+        val ownAppForeground = try { currentPackageName() == packageName } catch (_: Exception) { false }
+        if (mainChatActive && ownAppForeground) return
         val b = OrbView(this)
         b.backing = true
-        val lp = WindowManager.LayoutParams(dp(64), dp(64), OVERLAY, NOT_FOCUSABLE, PixelFormat.TRANSLUCENT)
+        b.contentDescription = if (running) "Orion is working. Tap to view progress." else "Orion assistant. Tap to open."
+        val lp = WindowManager.LayoutParams(dp(48), dp(48), OVERLAY, NOT_FOCUSABLE, PixelFormat.TRANSLUCENT)
         lp.gravity = Gravity.TOP or Gravity.START
-        lp.x = 0
-        lp.y = dp(220)
+        lp.x = dp(8)
+        lp.y = dp(180)
         makeDraggable(b, lp, { openPanel() }, { quickListen() })
         wm.addView(b, lp)
         bubble = b
@@ -1797,40 +1802,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     // ---------------------------------------------------------------- status strip and confirm
 
     private fun showStrip(rawText: String) {
-        val text = OrionStripText.clean(rawText)
-        val existing = stripText
-        if (strip != null && existing != null) {
-            existing.text = text
+        // Keep detailed progress in Orion chat/activity events. Across other apps the
+        // companion is represented by its small animated orb only, never a text banner.
+        val safeStatus = OrionStripText.clean(rawText).take(160)
+        val ownAppForeground = try { currentPackageName() == packageName } catch (_: Exception) { false }
+        if (mainChatActive && ownAppForeground) {
+            mainChatListener?.onStatus(safeStatus, currentMode())
             return
         }
-        val row = LinearLayout(this)
-        row.orientation = LinearLayout.HORIZONTAL
-        row.gravity = Gravity.CENTER_VERTICAL
-        row.background = rounded(0xF002080A.toInt(), dp(22).toFloat(), Theme.CYAN)
-        row.setPadding(dp(8), dp(6), dp(10), dp(6))
-        val orb = OrbView(this)
-        row.addView(orb, LinearLayout.LayoutParams(dp(52), dp(52)))
-        val t = label(text, 14f, Theme.TEXT)
-        t.maxLines = 3
-        t.setPadding(dp(8), 0, dp(8), 0)
-        t.setOnClickListener {
-            hideStrip()
-            hideBubble()
-            openPanel()
-        }
-        row.addView(t, LinearLayout.LayoutParams(0, WRAP, 1f))
-        val stop = pill("Stop", Theme.DANGER, 0xFFFFFFFF.toInt()) { stopAll() }
-        row.addView(stop)
-        val size = screenSize()
-        val lp = WindowManager.LayoutParams(
-            size.first - dp(24), WRAP, OVERLAY, NOT_FOCUSABLE or NOT_MODAL, PixelFormat.TRANSLUCENT
-        )
-        lp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-        lp.y = dp(8)
-        wm.addView(row, lp)
-        strip = row
-        stripOrb = orb
-        stripText = t
+        showBubble()
+        bubble?.contentDescription = "Orion is working. Tap to open the activity panel."
         refreshMode()
     }
 
@@ -2320,7 +2301,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         listening = false
         pendingConfirm?.invoke(false)
         if (running) {
-            stripText?.text = "Stopping..."
+            bubble?.contentDescription = "Orion is stopping. Tap to view progress."
             panelStatus?.text = "Stopping..."
         } else {
             hideStrip()

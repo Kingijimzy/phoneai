@@ -1726,11 +1726,23 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             if (chatBrowserWebView === web) chatBrowserWebView = null
             if (chatBrowserAddress === address) chatBrowserAddress = null
         }
-        dialog.setOnShowListener {
-            dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.88f).toInt())
-        }
+        dialog.setCanceledOnTouchOutside(false)
         dialog.show()
-        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.88f).toInt())
+        // Keep the agent browser as a compact, left-anchored work panel. The chat remains
+        // visible beside it, and the same WebView stays attached to BrowserAutomation.
+        dialog.window?.let { browserWindow ->
+            browserWindow.setBackgroundDrawableResource(android.R.color.transparent)
+            browserWindow.setDimAmount(0.14f)
+            browserWindow.setGravity(Gravity.START or Gravity.CENTER_VERTICAL)
+            browserWindow.attributes = browserWindow.attributes.apply {
+                x = dp(8)
+                y = 0
+            }
+            browserWindow.setLayout(
+                (resources.displayMetrics.widthPixels * 0.80f).toInt(),
+                (resources.displayMetrics.heightPixels * 0.66f).toInt()
+            )
+        }
         web.loadUrl(initial)
     }
 
