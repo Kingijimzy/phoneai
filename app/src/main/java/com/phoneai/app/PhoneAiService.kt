@@ -96,6 +96,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     scheduleRuntimeDrain()
                 }
             }
+            Thread({ runCatching { OrionDevspace.runDue(this@PhoneAiService) } }, "orion-jobs").apply { isDaemon = true }.start()
             main.postDelayed(this, 10 * 60_000L)
         }
     }

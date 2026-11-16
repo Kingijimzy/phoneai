@@ -76,6 +76,7 @@ internal object OrionRunLog {
             t.startsWith("telegram") -> "Messaging on Telegram"
             t == "open_page" -> "Opening a page"
             t.startsWith("voice") -> "Speaking"
+            t == "devspace" -> "Working in the coding space"
             t == "spawn_worker" -> "Starting a worker"
             t.startsWith("worker_") -> "Checking workers"
             t == "platform_selftest" -> "Testing the platform"
