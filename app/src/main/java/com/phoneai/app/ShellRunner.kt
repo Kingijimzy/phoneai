@@ -217,7 +217,26 @@ object ShellRunner {
                     sharedStoragePath = File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath
                 )
             }
-            ShellExecutionRouting.Backend.INVALID -> "error: unknown shell backend. Use where=builtin, where=linux, or where=termux."
+            ShellExecutionRouting.Backend.UBUNTU -> {
+                val m = OrionUbuntu.manifest(c).getOrNull()
+                val rt = LinuxRuntimeInstaller(c.applicationContext, LinuxRuntimeInstaller.Flavor.UBUNTU) { name, cur, total ->
+                    if (total > 0) safeEmitter("[$name ${cur * 100 / total}%]\n") else safeEmitter("[$name…]\n")
+                }
+                if (m == null || !rt.isReady(m)) {
+                    safeEmitter("Preparing Ubuntu 24.04 runtime…\n")
+                    val msg = OrionUbuntu.install(c.applicationContext) { safeEmitter("[$it]\n") }
+                    if (msg.startsWith("error:")) msg else {
+                        val ready = OrionUbuntu.manifest(c).getOrNull()
+                        if (ready == null) "error: Ubuntu manifest unavailable."
+                        else rt.execute(ready, command, ShellExecutionRouting.commandTimeoutMs(command), safeEmitter, workspaceHostPath = workspace(c).absolutePath,
+                            androidAppDataPath = c.applicationInfo.dataDir,
+                            sharedStoragePath = File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath)
+                    }
+                } else rt.execute(m, command, ShellExecutionRouting.commandTimeoutMs(command), safeEmitter, workspaceHostPath = workspace(c).absolutePath,
+                    androidAppDataPath = c.applicationInfo.dataDir,
+                    sharedStoragePath = File("/storage/emulated/0").takeIf { it.isDirectory }?.absolutePath)
+            }
+            ShellExecutionRouting.Backend.INVALID -> "error: unknown shell backend. Use where=builtin, where=linux, where=ubuntu, or where=termux."
         }
         val remainder = synchronized(outputLock) { pending.toString().also { pending.setLength(0) } }
         if (remainder.isNotBlank()) onOutput(AgentPrivacyFilter.safeOutput(remainder))

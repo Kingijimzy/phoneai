@@ -58,3 +58,28 @@ class OrionDevspaceTest {
         assertEquals("shell", OrionNodes.nodeFor("devspace"))
     }
 }
+
+class OrionUbuntuTest {
+    private val sha = "a".repeat(64)
+    @Test fun picksNewestArm64BaseImageFromCanonicalSums() {
+        val sums = "$sha *ubuntu-base-24.04-base-arm64.tar.gz\n${"b".repeat(64)} *ubuntu-base-24.04.3-base-arm64.tar.gz\n" +
+            "${"c".repeat(64)} *ubuntu-base-24.04.3-base-amd64.tar.gz\nbad *ubuntu-base-24.04.9-base-arm64.tar.gz\n"
+        val (name, hash) = OrionUbuntu.pick(sums)!!
+        assertEquals("ubuntu-base-24.04.3-base-arm64.tar.gz", name)
+        assertEquals("b".repeat(64), hash)
+        assertNull(OrionUbuntu.pick("nothing here"))
+    }
+    @Test fun manifestIsValidAndVersioned() {
+        val m = OrionUbuntu.manifestFor("ubuntu-base-24.04.3-base-arm64.tar.gz", sha, 30_000_000L)
+        assertNull(LinuxRuntimePolicy.validate(m))
+        assertTrue(m.version.startsWith("ubuntu-24.04.3-"))
+    }
+    @Test fun aptProfilesAndRouting() {
+        assertTrue(OrionUbuntu.setupScript("base")!!.contains("build-essential"))
+        assertTrue(OrionUbuntu.setupScript("all")!!.contains("redis-server"))
+        assertNull(OrionUbuntu.setupScript("nope"))
+        assertEquals(ShellExecutionRouting.Backend.UBUNTU, ShellExecutionRouting.backend("Ubuntu"))
+        assertTrue(ShellExecutionRouting.isAptOperation("cd x && apt-get install -y git"))
+        assertEquals(600_000L, ShellExecutionRouting.commandTimeoutMs("apt-get update"))
+    }
+}

@@ -95,7 +95,7 @@ internal object OrionDevspace {
         services[name] = svc
         Thread({
             while (svc.running && svc.restarts <= MAX_RESTARTS) {
-                ShellRunner.run(c, wrapService(name, command, project), "linux")
+                ShellRunner.run(c, wrapService(name, command, project), OrionUbuntu.where(c))
                 if (!svc.running) break
                 svc.restarts++
                 try { Thread.sleep(3000) } catch (_: InterruptedException) { break }
@@ -109,7 +109,7 @@ internal object OrionDevspace {
     fun stopService(c: Context, name: String): String {
         val s = services[name] ?: return "error: no service $name."
         s.running = false
-        ShellRunner.run(c, stopScript(name), "linux")
+        ShellRunner.run(c, stopScript(name), OrionUbuntu.where(c))
         return "Service $name stopped."
     }
 
@@ -172,7 +172,7 @@ internal object OrionDevspace {
     }
 
     fun runJob(c: Context, j: Job, now: Long = System.currentTimeMillis()): String {
-        val out = ShellRunner.run(c, "cd /workspace && ${j.command}", "linux")
+        val out = ShellRunner.run(c, "cd /workspace && ${j.command}", OrionUbuntu.where(c))
         val failed = out.startsWith("error") || Regex("(?m)^exit=(?!0)\\d+").containsMatchIn(out)
         synchronized(this) { save(c, load(c).map { if (it.name == j.name) it.copy(lastRun = now, lastResult = (if (failed) "FAILED " else "ok ") + out.lines().lastOrNull { l -> l.isNotBlank() }.orEmpty().take(80)) else it }) }
         if (failed) OrionReports.report(c, "job ${j.name} failed", out.take(1200))
@@ -185,12 +185,14 @@ internal object OrionDevspace {
     fun run(c: Context, a: JSONObject): String {
         val action = a.optString("action").trim().lowercase()
         val project = a.optString("project").trim()
-        fun guest(script: String?, bad: String): String = if (script == null) "error: $bad" else ShellRunner.run(c, script, "linux")
+        fun guest(script: String?, bad: String): String = if (script == null) "error: $bad" else ShellRunner.run(c, script, OrionUbuntu.where(c))
         return when (action) {
-            "", "help" -> "devspace actions: setup {profile: base|web|data|media|db|net|all}, venv {name, packages?}, run {command, project?, venv?}, new_project {name, kind: python|cli|api|node|web}, " +
+            "", "help" -> "devspace actions: ubuntu_install (full Ubuntu 24.04 arm64 runtime with apt), runtime_status, setup {profile: base|web|data|media|db|net|all}, venv {name, packages?}, run {command, project?, venv?}, new_project {name, kind: python|cli|api|node|web}, " +
                 "project_view {project}, backup {project}, service_start {name, command, port?, project?}, service_stop {name}, service_list, service_logs {name, lines?}, service_health {name|port}, " +
                 "job_add {name, command, every_minutes|daily_at}, job_list, job_remove {name}, job_run {name}. All of it runs in the real Linux space under /workspace."
-            "setup" -> guest(setupScript(a.optString("profile").ifBlank { "base" }), "unknown profile; use base, web, data, media, db, net or all.")
+            "ubuntu_install" -> OrionUbuntu.install(c)
+            "runtime_status" -> "Coding space runs on: " + (if (OrionUbuntu.isInstalled(c)) "Ubuntu 24.04 (arm64, apt)" else "Alpine (apk) — run ubuntu_install for the full Ubuntu runtime") + ". Workspace: /workspace."
+            "setup" -> guest(if (OrionUbuntu.isInstalled(c)) OrionUbuntu.setupScript(a.optString("profile").ifBlank { "base" }) else setupScript(a.optString("profile").ifBlank { "base" }), "unknown profile; use base, web, data, media, db, net or all.")
             "venv" -> guest(venvScript(a.optString("name").ifBlank { "main" }, a.optJSONArray("packages")?.let { p -> List(p.length()) { p.getString(it) } } ?: emptyList()), "bad venv name or package.")
             "run" -> guest(runScript(project, a.optString("venv"), a.optString("command")), "run needs a command (and valid project/venv names).")
             "new_project" -> guest(scaffold(a.optString("name"), a.optString("kind").ifBlank { "python" }), "new_project needs a valid name and kind python|cli|api|node|web.")
@@ -199,10 +201,10 @@ internal object OrionDevspace {
             "service_start" -> startService(c, a.optString("name"), a.optString("command"), a.optInt("port", 0), project)
             "service_stop" -> stopService(c, a.optString("name"))
             "service_list" -> listServices()
-            "service_logs" -> a.optString("name").let { n -> if (!validName(n)) "error: bad service name." else ShellRunner.run(c, "tail -n ${a.optInt("lines", 40).coerceIn(1, 300)} /workspace/.services/$n.log 2>&1 || echo 'no log yet'", "linux") }
+            "service_logs" -> a.optString("name").let { n -> if (!validName(n)) "error: bad service name." else ShellRunner.run(c, "tail -n ${a.optInt("lines", 40).coerceIn(1, 300)} /workspace/.services/$n.log 2>&1 || echo 'no log yet'", OrionUbuntu.where(c)) }
             "service_health" -> {
                 val port = a.optInt("port", 0).takeIf { it > 0 } ?: services[a.optString("name")]?.port ?: 0
-                if (port <= 0) "error: give a port or the name of a service that has one." else ShellRunner.run(c, healthScript(port), "linux")
+                if (port <= 0) "error: give a port or the name of a service that has one." else ShellRunner.run(c, healthScript(port), OrionUbuntu.where(c))
             }
             "job_add" -> addJob(c, a.optString("name"), a.optString("command"), a.optInt("every_minutes", 0), a.optString("daily_at"))
             "job_list" -> listJobs(c)
