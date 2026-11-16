@@ -9,7 +9,7 @@ import org.json.JSONObject
 internal object OrionIntegrationCapabilityExecutor {
     private val supportedTools = setOf(
         "integration_status", "service_status", "connect_service", "github_account_read",
-        "gmail_list_messages", "social", "vault_list", "vault_request", "vault_get", "capability_note"
+        "gmail_list_messages", "social", "google", "notion", "vault_list", "vault_request", "vault_get", "capability_note"
     )
 
     fun supports(tool: String): Boolean = tool in supportedTools
@@ -27,6 +27,8 @@ internal object OrionIntegrationCapabilityExecutor {
         "github_account_read" -> githubAccountRead(args.optString("path"))
         "gmail_list_messages" -> GmailConnector.read(service, args.optString("query"), args.optInt("limit", 5))
         "social" -> OrionSocialConnector.run(service, args)
+        "google" -> OrionWorkspaceApps.google(service, args)
+        "notion" -> OrionWorkspaceApps.notion(service, args)
         "vault_list" -> tools.vaultList()
         "vault_request" -> tools.vaultRequest(args.optString("name"), args.optString("host"), args.optString("style"))
         "vault_get" -> tools.vaultGet(args.optString("name"), args.optString("url"))
