@@ -36,7 +36,18 @@ internal object OrionRunLog {
         steps.firstOrNull { it.id == id }?.let { OrionNodes.recordNode(it.node, failed, now) }
     }
 
-    fun clear() { steps = emptyList() }
+    fun clear() { steps = emptyList(); runFloor = 0L }
+
+    @Volatile private var runFloor = 0L
+
+    /** A new user request starts a new run; the task card only counts its steps. */
+    fun beginRun() { runFloor = ids.get() }
+
+    fun currentRun(list: List<Step> = steps): List<Step> = list.filter { it.id >= runFloor }
+
+    /** done, total, failed for a run. */
+    fun progress(run: List<Step>): Triple<Int, Int, Int> =
+        Triple(run.count { it.status != Status.RUNNING }, run.size, run.count { it.status == Status.FAILED })
 
     fun durationMs(s: Step, now: Long): Long = ((if (s.endedAt == 0L) now else s.endedAt) - s.startedAt).coerceAtLeast(0L)
 

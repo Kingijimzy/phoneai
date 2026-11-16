@@ -60,6 +60,10 @@ class MainActivity : ComponentActivity() {
         }
         setContentView(composeRoot)
         showPreviousCrashIfPresent()
+        // Orion's command center (the chat) is the first thing the owner sees; the shell is one step back.
+        if (savedInstanceState == null && !intent.getBooleanExtra("skip_command_center", false)) {
+            launchDestination(Intent(this, MainChatActivity::class.java), "MainChatActivity")
+        }
     }
 
     private fun launchDestination(intent: Intent, destination: String) {

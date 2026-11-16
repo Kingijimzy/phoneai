@@ -49,48 +49,49 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 
 /**
- * Linear-grade execution HUD: the last few steps Orion took, live, in plain words. Tap a step to see the
- * full output (code and command results live here, never in the chat) and jump to the page that owns it.
+ * Linear-grade run sheet: every step of the current run in plain words, live. Tap a step for its full output
+ * (code and command results live here, never in the chat) and a jump to the page that owns it.
  */
 @Composable
-internal fun OrionExecutionHud(modifier: Modifier = Modifier) {
+internal fun OrionRunSheet(onDismiss: () -> Unit) {
     val steps = OrionRunLog.steps
     var open by remember { mutableStateOf<OrionRunLog.Step?>(null) }
-    var expanded by remember { mutableStateOf(false) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val running = OrionRunLog.runningCount(steps)
     LaunchedEffect(running) { while (running > 0) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(250) } }
-    val pulse by rememberInfiniteTransition(label = "hud").animateFloat(.35f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "p")
-    AnimatedVisibility(steps.isNotEmpty(), enter = fadeIn(tween(200)) + expandVertically(tween(200)), exit = fadeOut(tween(150)) + shrinkVertically(tween(150))) {
-        val shown = steps.takeLast(if (expanded) 12 else 3).reversed()
+    val pulse by rememberInfiniteTransition(label = "sheet").animateFloat(.35f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "p")
+    Dialog(onDismissRequest = onDismiss) {
         Column(
-            modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp).clip(RoundedCornerShape(14.dp))
-                .background(Color(0xE60E0E10)).border(1.dp, OrionUiPalette.border, RoundedCornerShape(14.dp)).padding(vertical = 4.dp)
+            Modifier.fillMaxWidth().heightIn(max = 520.dp).clip(RoundedCornerShape(18.dp)).background(OrionUiPalette.panel)
+                .border(1.dp, OrionUiPalette.border, RoundedCornerShape(18.dp)).padding(vertical = 8.dp)
         ) {
-            Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("EXECUTION", color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, modifier = Modifier.weight(1f))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("EXECUTION", color = OrionUiPalette.muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, modifier = Modifier.weight(1f))
                 Text(if (running > 0) "$running running" else "${steps.count { it.status == OrionRunLog.Status.DONE }} done" +
                     steps.count { it.status == OrionRunLog.Status.FAILED }.let { if (it > 0) " · $it failed" else "" },
-                    color = OrionUiPalette.secondaryText, fontSize = 10.sp)
-                Spacer(Modifier.width(8.dp))
-                Text(if (expanded) "▾" else "▸", color = OrionUiPalette.muted, fontSize = 11.sp)
+                    color = OrionUiPalette.secondaryText, fontSize = 11.sp)
             }
-            shown.forEach { s ->
-                val tone = when (s.status) {
-                    OrionRunLog.Status.RUNNING -> OrionUiPalette.accent
-                    OrionRunLog.Status.DONE -> Color(0xFFB8CDBD)
-                    OrionRunLog.Status.FAILED -> OrionUiPalette.danger
-                }
-                Row(Modifier.fillMaxWidth().clickable { open = s }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(7.dp).clip(CircleShape).background(tone.copy(alpha = if (s.status == OrionRunLog.Status.RUNNING) pulse else 1f)))
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(s.title, color = OrionUiPalette.text, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (s.detail.isNotBlank()) Text(s.detail, color = OrionUiPalette.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                if (steps.isEmpty()) Text("Nothing has run yet.", color = OrionUiPalette.muted, fontSize = 12.sp, modifier = Modifier.padding(16.dp))
+                steps.reversed().forEach { s ->
+                    val tone = when (s.status) {
+                        OrionRunLog.Status.RUNNING -> OrionUiPalette.accent
+                        OrionRunLog.Status.DONE -> Color(0xFFB8CDBD)
+                        OrionRunLog.Status.FAILED -> OrionUiPalette.danger
                     }
-                    Text(OrionRunLog.durationLabel(OrionRunLog.durationMs(s, now)), color = OrionUiPalette.muted, fontSize = 10.sp)
+                    Row(Modifier.fillMaxWidth().clickable { open = s }.padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(tone.copy(alpha = if (s.status == OrionRunLog.Status.RUNNING) pulse else 1f)))
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(s.title, color = OrionUiPalette.text, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (s.detail.isNotBlank()) Text(s.detail, color = OrionUiPalette.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Text(OrionRunLog.durationLabel(OrionRunLog.durationMs(s, now)), color = OrionUiPalette.muted, fontSize = 10.sp)
+                    }
                 }
             }
+            Text("Close", color = OrionUiPalette.secondaryText, fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 10.dp).clip(RoundedCornerShape(50)).clickable { onDismiss() }.padding(horizontal = 12.dp, vertical = 8.dp))
         }
     }
     open?.let { s -> OrionStepDetail(s, onDismiss = { open = null }) }

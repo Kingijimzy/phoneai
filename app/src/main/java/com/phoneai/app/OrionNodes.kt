@@ -77,6 +77,35 @@ internal object OrionNodes {
 
     fun headline(linked: Set<String>): String = "${all.count { it.id in linked }} of ${all.size} links active"
 
+    /**
+     * Network layout: linked nodes sit on an inner ring close to the orb, unlinked ones on a faded outer ring.
+     * Pure geometry (pixels) so it can be tested; positions never leave [margin, size - margin].
+     */
+    fun layout(order: List<String>, linked: Set<String>, w: Float, h: Float, nodeR: Float, margin: Float): Map<String, Pair<Float, Float>> {
+        val cx = w / 2f; val cy = h / 2f
+        val rxO = (w / 2f - nodeR - margin).coerceAtLeast(nodeR)
+        val ryO = (h / 2f - nodeR - margin).coerceAtLeast(nodeR)
+        val inner = order.filter { it in linked }.take(9)
+        val outer = order.filter { it !in inner }
+        val out = LinkedHashMap<String, Pair<Float, Float>>()
+        inner.forEachIndexed { i, id ->
+            val a = Math.toRadians(-90.0 + 360.0 * i / inner.size + 12.0)
+            out[id] = (cx + rxO * .58f * Math.cos(a)).toFloat() to (cy + ryO * .58f * Math.sin(a)).toFloat()
+        }
+        outer.forEachIndexed { i, id ->
+            val a = Math.toRadians(-90.0 + 360.0 * i / outer.size + 180.0 / outer.size)
+            out[id] = (cx + rxO * Math.cos(a)).toFloat() to (cy + ryO * Math.sin(a)).toFloat()
+        }
+        return out
+    }
+
+    /** Orb diameter that clears the inner ring. */
+    fun orbDiameter(w: Float, h: Float, nodeR: Float, margin: Float, gap: Float): Float {
+        val rxI = (w / 2f - nodeR - margin) * .58f
+        val ryI = (h / 2f - nodeR - margin) * .58f
+        return (minOf(rxI, ryI) - nodeR - gap).coerceAtLeast(nodeR * 2f) * 2f
+    }
+
     /** Position on a ring, angle 0 at the top, clockwise. */
     fun ringPoint(index: Int, total: Int, cx: Float, cy: Float, rx: Float, ry: Float): Pair<Float, Float> {
         val a = (-Math.PI / 2) + 2 * Math.PI * index / total
