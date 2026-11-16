@@ -1161,8 +1161,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 cooldown[p.id] = System.currentTimeMillis() + (if (p.noKey) 30000L else 8000L)
                 throw AiException(
                     if (p.noKey) "${p.label}: not running. In Termux run: ollama serve"
-                    else "${p.label}: transient connection failure (${e.javaClass.simpleName}). Orion will try another eligible provider."
-                    , 503
+                    else "${p.label}: transient connection failure (${e.javaClass.simpleName}). Orion will try another eligible provider.",
+                    503
                 )
             }
             if (r == null) {
