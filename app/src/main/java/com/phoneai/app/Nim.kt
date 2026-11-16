@@ -1161,7 +1161,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 cooldown[p.id] = System.currentTimeMillis() + (if (p.noKey) 30000L else 8000L)
                 throw AiException(
                     if (p.noKey) "${p.label}: not running. In Termux run: ollama serve"
-                    else "${p.label}: cannot connect (${e.javaClass.simpleName}). Check internet."
+                    else "${p.label}: transient connection failure (${e.javaClass.simpleName}). Orion will try another eligible provider."
+                    , 503
                 )
             }
             if (r == null) {
@@ -1276,7 +1277,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 )
                 continue
             }
-            if (r.code in listOf(500, 502, 503, 504)) {
+            if (r.code in listOf(500, 502, 503, 504, 529)) {
                 lastHttpStatus = r.code
                 // Temporary provider overload is not proof that the key or model is invalid.
                 // Try one alternate model from the same provider before moving to a backup provider.
@@ -1291,8 +1292,9 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                     }
                 }
                 throw AiException(
-                    if (Prefs.autoSwitch(ctx)) "${p.label}: service temporarily busy (HTTP ${r.code}). Try again shortly or use another saved provider."
-                    else "${p.label}: selected model $model is temporarily busy (HTTP ${r.code}); Auto-switch is off, so Orion did not change models."
+                    if (Prefs.autoSwitch(ctx)) "${p.label}: service temporarily busy (HTTP ${r.code}). Trying another eligible provider when available."
+                    else "${p.label}: selected model $model is temporarily busy (HTTP ${r.code}); Auto-switch is off, so Orion did not change models.",
+                    r.code
                 )
             }
             if (r.code !in 200..299) throw AiException("${p.label}: error ${r.code} ${r.body.take(120)}")
