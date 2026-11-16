@@ -1726,28 +1726,22 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             if (chatBrowserWebView === web) chatBrowserWebView = null
             if (chatBrowserAddress === address) chatBrowserAddress = null
         }
-        dialog.setOnShowListener {
-            dialog.window?.let { window ->
-                val metrics = resources.displayMetrics
-                window.setLayout((metrics.widthPixels * 0.78f).toInt(), (metrics.heightPixels * 0.62f).toInt())
-                window.setGravity(Gravity.START or Gravity.CENTER_VERTICAL)
-                window.attributes = window.attributes.apply {
-                    x = dp(10)
-                    dimAmount = 0.32f
-                }
-                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            }
-        }
+        dialog.setCanceledOnTouchOutside(false)
         dialog.show()
-        dialog.window?.let { window ->
-            val metrics = resources.displayMetrics
-            window.setLayout((metrics.widthPixels * 0.78f).toInt(), (metrics.heightPixels * 0.62f).toInt())
-            window.setGravity(Gravity.START or Gravity.CENTER_VERTICAL)
-            window.attributes = window.attributes.apply {
-                x = dp(10)
-                dimAmount = 0.32f
+        // Keep the agent browser as a compact, left-anchored work panel. The chat remains
+        // visible beside it, and the same WebView stays attached to BrowserAutomation.
+        dialog.window?.let { browserWindow ->
+            browserWindow.setBackgroundDrawableResource(android.R.color.transparent)
+            browserWindow.setDimAmount(0.14f)
+            browserWindow.setGravity(Gravity.START or Gravity.CENTER_VERTICAL)
+            browserWindow.attributes = browserWindow.attributes.apply {
+                x = dp(8)
+                y = 0
             }
-            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            browserWindow.setLayout(
+                (resources.displayMetrics.widthPixels * 0.80f).toInt(),
+                (resources.displayMetrics.heightPixels * 0.66f).toInt()
+            )
         }
         web.loadUrl(initial)
     }
