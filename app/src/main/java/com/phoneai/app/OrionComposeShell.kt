@@ -57,6 +57,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
@@ -104,7 +105,7 @@ fun OrionComposeShell(
     onOpenFeature: (String) -> Unit = {},
     onResumeTask: (String) -> Unit = {}
 ) {
-    var selected by remember { mutableStateOf("Home") }
+    var selected by rememberSaveable { mutableStateOf("Home") }
     val scheme = darkColorScheme(
         primary = Silver,
         onPrimary = Ink,
@@ -130,7 +131,7 @@ fun OrionComposeShell(
                     when (page) {
                         "Home" -> HomePage(status, onOpenChat, onOpenVoice, onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenAgents, onOpenMemory)
                         "Workspace" -> ToolsPage(onOpenFeature)
-                        "Activity" -> ActivityPage(onOpenTasks, onOpenAgents, onOpenSoulEngine, onOpenExtensions, onOpenMemory, onResumeTask)
+                        "Activity" -> ActivityPage(onOpenTasks, onOpenAgents, onOpenSoulEngine, onOpenExtensions, onOpenMemory, onResumeTask, onOpenFeature)
                         else -> SettingsPage(onOpenSettings)
                     }
                 }
@@ -405,7 +406,8 @@ private fun ActivityPage(
     onOpenSoulEngine: () -> Unit,
     onOpenExtensions: () -> Unit,
     onOpenMemory: () -> Unit,
-    onResumeTask: (String) -> Unit
+    onResumeTask: (String) -> Unit,
+    onOpenFeature: (String) -> Unit
 ) {
     var showHistory by remember { mutableStateOf(false) }
     Column(
@@ -425,6 +427,12 @@ private fun ActivityPage(
         ActionRow("Specialist agents", "Review delegated work and open specialist workspaces", Icons.Rounded.SmartToy, onOpenAgents)
         Text("SYSTEM HEALTH", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
         ActionRow("Soul Engine", "Inspect runtime readiness, lifecycle state and self-tests", Icons.Rounded.Hub, onOpenSoulEngine)
+        ActionRow("Chronos & Watcher", "Review background monitoring and scheduled objectives", Icons.Rounded.Bolt) {
+            onOpenFeature("watcher")
+        }
+        ActionRow("Proactive objectives", "Review briefings, schedules and proactive task controls", Icons.Rounded.Bolt) {
+            onOpenFeature("proactive")
+        }
         ActionRow("Self-extension lab", "Review extension builds, sandbox checks and version history", Icons.Rounded.AutoAwesome, onOpenExtensions)
         Text("CONTEXT & LEARNING", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
         ActionRow("Memory & learning", "Review remembered context and recorded lessons", Icons.Rounded.Memory, onOpenMemory)
@@ -490,7 +498,7 @@ private fun SettingsPage(onOpenSettings: (String?) -> Unit) {
 @Composable
 private fun PageHeading(title: String, subtitle: String) {
     Column(Modifier.padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("ORION  /  STUDIO", color = Silver, fontSize = 10.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
+        Text("ORION  /  ${title.uppercase()}", color = Silver, fontSize = 10.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
         Text(title, color = Copy, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.5).sp)
         Text(subtitle, color = Muted, fontSize = 14.sp)
     }
