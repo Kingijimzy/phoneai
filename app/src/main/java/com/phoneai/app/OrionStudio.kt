@@ -503,7 +503,8 @@ p.kill()
             cmd.startsWith("npm") -> "command -v npm >/dev/null 2>&1 || { ${toolchainScript("node", ub)}; command -v npm >/dev/null 2>&1 || " + (if (ub) "apt-get install -y npm 2>&1" else "apk add --no-cache npm 2>&1") + "; }"
             cmd.startsWith("pip") -> "command -v python3 >/dev/null 2>&1 || { ${toolchainScript("python", ub)}; }; " +
                 "python3 -m pip --version >/dev/null 2>&1 || { " + (if (ub) "apt-get update -qq && apt-get install -y python3-pip python3-venv" else "apk add --no-cache py3-pip py3-virtualenv") + "; }; " +
-                "python3 -m pip --version >/dev/null 2>&1 || { echo 'pip bootstrap failed'; exit 127; }"
+                "python3 -m pip --version >/dev/null 2>&1 || { echo 'pip bootstrap failed'; exit 127; }; " +
+                "mkdir -p /workspace/.venvs && (test -x /workspace/.venvs/studio/bin/python || python3 -m venv /workspace/.venvs/studio) || { echo 'studio venv bootstrap failed'; exit 127; }"
             else -> "true"
         }
         return "$prelude; $VENV; ($cmd; echo \$? > /tmp/orion_rc) 2>&1 | tee /tmp/orion_reg.log; rc=\$(cat /tmp/orion_rc 2>/dev/null || echo 1); echo INSTALL_EXIT=\$rc"
