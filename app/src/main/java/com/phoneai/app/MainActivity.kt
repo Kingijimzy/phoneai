@@ -140,6 +140,17 @@ class MainActivity : ComponentActivity() {
             "watcher" -> { destination = SoulWatcherActivity::class.java; intent = Intent(this, destination) }
             "extensions" -> { destination = SelfExtensionLabActivity::class.java; intent = Intent(this, destination) }
             "terminal" -> { destination = TerminalActivity::class.java; intent = Intent(this, destination) }
+            "studio", "studio_terminal", "studio_project", "studio_agent", "studio_tools" -> {
+                destination = StudioActivity::class.java
+                val page = when (route) {
+                    "studio_terminal" -> "terminal"
+                    "studio_project" -> "project"
+                    "studio_agent" -> "agent"
+                    "studio_tools" -> "tools"
+                    else -> "editor"
+                }
+                intent = Intent(this, destination).putExtra("page", page)
+            }
             "workspace" -> { destination = WorkspaceShellActivity::class.java; intent = Intent(this, destination) }
             "cloud_coding" -> { destination = CursorCloudAgentActivity::class.java; intent = Intent(this, destination) }
             "capabilities" -> { destination = CapabilityBoardActivity::class.java; intent = Intent(this, destination) }
