@@ -12,8 +12,8 @@ import android.media.audiofx.NoiseSuppressor
 
 /** Decides when sustained speech over Orion's own voice counts as the owner cutting in. Pure and unit-tested. */
 internal class OrionBargeInPolicy(
-    private val warmupFrames: Int = 15,
-    private val triggerFrames: Int = 14,
+    private val warmupFrames: Int = 8,
+    private val triggerFrames: Int = 9,
     private val minThreshold: Float = 0.035f,
     private val floorMultiple: Float = 3.0f
 ) {

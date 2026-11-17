@@ -68,3 +68,37 @@ class OrionSpeechStreamerTest {
         assertTrue(acc.hasCalls())
     }
 }
+
+class OrionVoiceReworkTest {
+    @Test fun firstClauseIsSpokenEarly() {
+        val s = OrionSpeechStreamer { 1L }
+        val out = s.feed("Right, give me a second while I check that, then")
+        assertEquals(listOf("Right, give me a second while I check that,"), out)
+    }
+
+    @Test fun shortFirstSentenceStartsFast() {
+        val s = OrionSpeechStreamer { 1L }
+        assertEquals(listOf("On it, Kingi."), s.feed("On it, Kingi. Checking now"))
+    }
+
+    @Test fun bargeInReactsWithinAboutAThirdOfASecond() {
+        val p = OrionBargeInPolicy()
+        repeat(8) { assertFalse(p.onFrame(0.01f)) }
+        var frames = 0
+        var fired = false
+        while (!fired && frames < 40) { frames++; fired = p.onFrame(0.25f) }
+        assertTrue(fired); assertTrue("fired after $frames frames", frames <= 10)
+    }
+
+    @Test fun voiceStyleIsInThePersonaAndComposer() {
+        assertTrue(OrionPersona.CORE.contains("HOW YOU SOUND OUT LOUD"))
+        assertTrue(OrionSpokenLine.SYSTEM.contains("sense of humour"))
+    }
+
+    @Test fun linkEmulationFlagIsOptIn() {
+        val off = LinuxRuntimePolicy.prootArgs("/p/proot", "/r", "ls")!!
+        val on = LinuxRuntimePolicy.prootArgs("/p/proot", "/r", "ls", linkEmulation = true)!!
+        assertFalse(off.contains("--link2symlink")); assertTrue(on.contains("--link2symlink"))
+        assertTrue(on.indexOf("--link2symlink") < on.indexOf("-r"))
+    }
+}

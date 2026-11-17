@@ -19,6 +19,8 @@ internal data class LinuxTerminalLaunchConfig(val executable: String, val workin
  * Installs the pinned Alpine rootfs in app-private storage. PRoot is packaged as an ABI-specific
  * native library and executed from nativeLibraryDir (never copied from downloads to filesDir).
  */
+private val linkEmulationCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
 internal class LinuxRuntimeInstaller(
     context: Context,
     private val flavor: Flavor = Flavor.ALPINE,
@@ -164,7 +166,7 @@ internal class LinuxRuntimeInstaller(
         }
         val args = LinuxRuntimePolicy.prootArgs(
             proot.absolutePath, rootfs.absolutePath, command, workspace,
-            androidAppDataPath, sharedStoragePath
+            androidAppDataPath, sharedStoragePath, linkEmulation = supportsLinkEmulation(proot)
         )
             ?: return "error: Linux command rejected by runtime policy."
         // Android's resolver is network-specific. Public DNS literals inside a PRoot guest
@@ -233,7 +235,7 @@ internal class LinuxRuntimeInstaller(
         }
         val argv = LinuxRuntimePolicy.prootArgs(
             proot.absolutePath, rootfs.absolutePath, "exec /bin/sh -i", supplied.absolutePath,
-            androidAppDataPath, sharedStoragePath
+            androidAppDataPath, sharedStoragePath, linkEmulation = supportsLinkEmulation(proot)
         ) ?: error("Interactive Linux command rejected by runtime policy.")
         val environment = arrayOf(
             "HOME=/root",
@@ -262,6 +264,15 @@ internal class LinuxRuntimeInstaller(
     }
 
     private data class ProcessResult(val exitCode: Int, val output: String, val timedOut: Boolean, val cancelled: Boolean = false)
+
+    /** Only pass --link2symlink when this PRoot build lists it, so an older binary never fails to start. */
+    private fun supportsLinkEmulation(proot: File): Boolean = linkEmulationCache.getOrPut(proot.absolutePath) {
+        runCatching {
+            val pr = ProcessBuilder(proot.absolutePath, "--help").redirectErrorStream(true).start()
+            val text = pr.inputStream.bufferedReader().readText()
+            pr.waitFor(); text.contains("link2symlink")
+        }.getOrDefault(false)
+    }
 
     private fun syncGuestDns(): String? {
         return try {
