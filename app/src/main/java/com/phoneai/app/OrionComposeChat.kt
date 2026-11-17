@@ -42,6 +42,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
@@ -618,6 +620,7 @@ internal fun OrionComposeChatScreen(
         .any { displayStatus.contains(it, true) }
     var showTranscript by remember { mutableStateOf(false) }
     var showRunSheet by remember { mutableStateOf(false) }
+    var showEverything by remember { mutableStateOf(false) }
     val socialIds = remember(lines.size) { runCatching { OrionSocialConnector.connectedIds(ctx) }.getOrDefault(emptyList()) }
     val appNodes = remember(lines.size) { OrionWorkspaceApps.connectedNodes(ctx) }
     val linked = remember(socialIds, appNodes) { OrionNodes.linked(socialIds, appNodes) }
@@ -626,6 +629,7 @@ internal fun OrionComposeChatScreen(
     val runningTitle = runSteps.lastOrNull { it.status == OrionRunLog.Status.RUNNING }?.title
     val pillText = OrionPanelText.statusLine(effectiveOrbMode, busy, runningTitle)
     val lastUserText = lines.lastOrNull { it.kind == "me" }?.text.orEmpty()
+    if (showEverything) OrionEverythingSheet(onDismiss = { showEverything = false }, onAction = { if (it == "history") onHistory() else onMenuAction(it) })
     if (showRunSheet) OrionRunSheet(onDismiss = { showRunSheet = false }, onResume = { onSend(it) })
     Column(Modifier.fillMaxSize().background(Color(0xFF000000)).imePadding()) {
         // Top bar: back, title + live link count, LIVE (model) pill, Activity toggle, overflow.
@@ -661,31 +665,22 @@ internal fun OrionComposeChatScreen(
                     contentAlignment = Alignment.Center
                 ) { Icon(Icons.Rounded.MoreVert, "More options", tint = ChatCopy, modifier = Modifier.size(19.dp)) }
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }, modifier = Modifier.background(OrionUiPalette.panel)) {
-                    DropdownMenuItem(text = { Text(if (commandMode) "Switch to Talk mode" else "Switch to Command mode", color = ChatCopy) }, onClick = { menuExpanded = false; onModeChange(!commandMode) })
-                    DropdownMenuItem(text = { Text("New chat", color = ChatCopy) }, onClick = { menuExpanded = false; onNewChat() })
                     fun choose(action: String) {
                         menuExpanded = false
                         onMenuAction(action)
                     }
-                    DropdownMenuItem(text = { Text("Command palette — all pages", color = ChatCopy) }, onClick = { choose("palette") })
-                    DropdownMenuItem(text = { Text("Full-screen live call", color = ChatCopy) }, onClick = { choose("live_call") })
-                    DropdownMenuItem(text = { Text("Chat history", color = ChatCopy) }, onClick = { menuExpanded = false; onHistory() })
-                    DropdownMenuItem(text = { Text("Tasks", color = ChatCopy) }, onClick = { menuExpanded = false; onTasks() })
-                    DropdownMenuItem(text = { Text("Browser preview", color = ChatCopy) }, onClick = { menuExpanded = false; inlineBrowserUrl = "https://duckduckgo.com/" })
-                    DropdownMenuItem(text = { Text("Rename chat", color = ChatCopy) }, onClick = { choose("rename_chat") })
-                    DropdownMenuItem(text = { Text("Model", color = ChatCopy) }, onClick = { choose("model") })
-                    DropdownMenuItem(text = { Text("Clear Chat", color = OrionUiPalette.danger) }, onClick = { choose("clear_chat") })
-                    DropdownMenuItem(text = { Text("Open Terminal", color = ChatCopy) }, onClick = { choose("terminal") })
-                    DropdownMenuItem(text = { Text("Open Browser", color = ChatCopy) }, onClick = { choose("browser") })
-                    DropdownMenuItem(text = { Text("Browse Chat Files", color = ChatCopy) }, onClick = { choose("chat_files") })
-                    DropdownMenuItem(text = { Text("Skills in Session", color = ChatCopy) }, onClick = { choose("skills") })
-                    DropdownMenuItem(text = { Text("Capabilities & Tools", color = ChatCopy) }, onClick = { choose("capabilities") })
-                    DropdownMenuItem(text = { Text("Send Feedback", color = ChatCopy) }, onClick = { choose("feedback") })
-                    DropdownMenuItem(text = { Text("Notification Access", color = ChatCopy) }, onClick = { choose("notifications") })
-                    DropdownMenuItem(text = { Text("Alerts & Briefings", color = ChatCopy) }, onClick = { choose("alerts") })
-                    DropdownMenuItem(text = { Text("MCPs in Session", color = ChatCopy) }, onClick = { choose("mcps") })
-                    DropdownMenuItem(text = { Text("Memories in Session", color = ChatCopy) }, onClick = { choose("memories") })
-                    DropdownMenuItem(text = { Text("Token Usage", color = ChatCopy) }, onClick = { choose("token_usage") })
+                    @Composable fun item(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, danger: Boolean = false, onClick: () -> Unit) =
+                        DropdownMenuItem(
+                            text = { Text(label, color = if (danger) OrionUiPalette.danger else ChatCopy) },
+                            leadingIcon = { Icon(icon, null, tint = if (danger) OrionUiPalette.danger else ChatMuted, modifier = Modifier.size(18.dp)) },
+                            onClick = { menuExpanded = false; onClick() })
+                    item(if (commandMode) "Talk mode" else "Command mode", Icons.Rounded.Bolt) { onModeChange(!commandMode) }
+                    item("New chat", Icons.Rounded.Add) { onNewChat() }
+                    item("History", Icons.Rounded.History) { onHistory() }
+                    item("Rename", Icons.Rounded.Edit) { onMenuAction("rename_chat") }
+                    item("Model", Icons.Rounded.Tune) { onMenuAction("model") }
+                    item("Everything", Icons.Rounded.Apps) { showEverything = true }
+                    item("Clear chat", Icons.Rounded.Delete, danger = true) { onMenuAction("clear_chat") }
                 }
             }
         }
@@ -815,6 +810,7 @@ internal fun OrionComposeChatScreen(
                             .padding(horizontal = 10.dp, vertical = 12.dp))
                 }
             }
+            if (draft.isEmpty() && editingOriginal == null) OrionQuickBar(onEverything = { showEverything = true }, modifier = Modifier.padding(bottom = 8.dp))
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(OrionUiPalette.raised)
                     .border(1.dp, OrionUiPalette.border.copy(alpha = 0.7f), RoundedCornerShape(28.dp)).padding(6.dp),

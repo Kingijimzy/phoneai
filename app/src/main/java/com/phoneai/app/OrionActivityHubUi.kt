@@ -21,6 +21,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Cable
+import androidx.compose.material.icons.rounded.Chat
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.Extension
+import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.Terminal
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,6 +71,18 @@ internal fun openActivityTarget(c: Context, t: OrionActivityHub.Target) {
     }
 }
 
+internal fun laneIcon(l: OrionActivityHub.Lane): ImageVector = when (l) {
+    OrionActivityHub.Lane.CODE -> Icons.Rounded.Code
+    OrionActivityHub.Lane.WEB -> Icons.Rounded.Public
+    OrionActivityHub.Lane.MCP -> Icons.Rounded.Cable
+    OrionActivityHub.Lane.RUNTIME -> Icons.Rounded.Terminal
+    OrionActivityHub.Lane.FILES -> Icons.Rounded.FolderOpen
+    OrionActivityHub.Lane.MEMORY -> Icons.Rounded.Psychology
+    OrionActivityHub.Lane.COMMS -> Icons.Rounded.Chat
+    OrionActivityHub.Lane.PLATFORM -> Icons.Rounded.Extension
+    OrionActivityHub.Lane.OTHER -> Icons.Rounded.MoreHoriz
+}
+
 private fun targetLabel(t: OrionActivityHub.Target): String = when (t) {
     is OrionActivityHub.Target.Studio -> "Code Studio · " + (t.file?.substringAfterLast('/') ?: t.page)
     is OrionActivityHub.Target.Url -> OrionActivityHub.shortUrl(t.url)
@@ -71,10 +98,13 @@ private fun statusTone(s: OrionRunLog.Status): Color = when (s) {
 }
 
 @Composable
-private fun Chip(text: String, onClick: (() -> Unit)?, tint: Color = OrionUiPalette.text) {
-    Text(text, color = tint, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.clip(RoundedCornerShape(50)).background(OrionUiPalette.raised)
-            .let { if (onClick != null) it.clickable { onClick() } else it }.padding(horizontal = 10.dp, vertical = 6.dp))
+private fun Chip(text: String, onClick: (() -> Unit)?, tint: Color = OrionUiPalette.text, icon: ImageVector? = null) {
+    Row(Modifier.clip(RoundedCornerShape(50)).background(OrionUiPalette.raised)
+        .let { if (onClick != null) it.clickable { onClick() } else it }.padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        if (icon != null) { Icon(icon, null, tint = tint, modifier = Modifier.size(13.dp)); Spacer(Modifier.width(5.dp)) }
+        Text(text, color = tint, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }
 
 /** Each kind of work shows itself differently: web as sources, code as files, runtime as a terminal. */
@@ -88,10 +118,10 @@ private fun StepVisual(step: OrionRunLog.Step, now: Long) {
             OrionActivityHub.Lane.WEB -> {
                 val links = (listOfNotNull((target as? OrionActivityHub.Target.Url)?.url) + OrionActivityHub.sources(step.output)).distinct().take(6)
                 if (links.isEmpty()) Text(step.detail.ifBlank { "Reading the web…" }, color = OrionUiPalette.muted, fontSize = 10.sp)
-                links.forEach { u -> Chip("◎  " + OrionActivityHub.shortUrl(u), { openActivityTarget(c, OrionActivityHub.Target.Url(u)) }) }
+                links.forEach { u -> Chip(OrionActivityHub.shortUrl(u), { openActivityTarget(c, OrionActivityHub.Target.Url(u)) }, icon = Icons.Rounded.Link) }
             }
             OrionActivityHub.Lane.CODE, OrionActivityHub.Lane.FILES -> {
-                (target as? OrionActivityHub.Target.Studio)?.file?.let { f -> Chip("▤  $f", { openActivityTarget(c, target) }) }
+                (target as? OrionActivityHub.Target.Studio)?.file?.let { f -> Chip(f, { openActivityTarget(c, target) }, icon = Icons.Rounded.FolderOpen) }
                 Mono(step.output.lineSequence().filter { it.isNotBlank() }.take(4).joinToString("\n").ifBlank { "Working…" })
             }
             OrionActivityHub.Lane.RUNTIME -> {
@@ -99,7 +129,7 @@ private fun StepVisual(step: OrionRunLog.Step, now: Long) {
             }
             OrionActivityHub.Lane.MCP -> {
                 val a = OrionActivityHub.parse(step.args)
-                Chip("⌘  " + listOfNotNull(a?.optString("id")?.takeIf { it.isNotBlank() }, a?.optString("tool")?.takeIf { it.isNotBlank() }).joinToString(" · ").ifBlank { "MCP server" }, null)
+                Chip(listOfNotNull(a?.optString("id")?.takeIf { it.isNotBlank() }, a?.optString("tool")?.takeIf { it.isNotBlank() }).joinToString(" · ").ifBlank { "MCP server" }, null, icon = Icons.Rounded.Cable)
                 Mono(step.output.trim().take(260).ifBlank { "Waiting for the server…" })
             }
             else -> if (step.output.isNotBlank()) Mono(step.output.trim().take(260))
@@ -107,8 +137,7 @@ private fun StepVisual(step: OrionRunLog.Step, now: Long) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(OrionRunLog.durationLabel(OrionRunLog.durationMs(step, now)), color = OrionUiPalette.muted, fontSize = 9.sp)
             if (target != OrionActivityHub.Target.None) {
-                Text("Open ${targetLabel(target)} ↗", color = OrionUiPalette.text, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.clip(RoundedCornerShape(50)).clickable { openActivityTarget(c, target) }.padding(horizontal = 8.dp, vertical = 5.dp))
+                Chip(targetLabel(target), { openActivityTarget(c, target) }, icon = Icons.Rounded.OpenInNew)
             }
         }
     }
@@ -133,14 +162,15 @@ private fun StepRow(step: OrionRunLog.Step, now: Long, expanded: Boolean, onTogg
         Row(Modifier.fillMaxWidth().clickable { onToggle() }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).clip(CircleShape).background(tone))
             Spacer(Modifier.width(10.dp))
-            Text(lane.glyph, color = OrionUiPalette.muted, fontSize = 10.sp, modifier = Modifier.width(22.dp))
+            Icon(laneIcon(lane), null, tint = OrionUiPalette.muted, modifier = Modifier.size(15.dp))
+            Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(step.title, color = OrionUiPalette.text, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (step.detail.isNotBlank()) Text(step.detail, color = OrionUiPalette.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (target != OrionActivityHub.Target.None) {
-                Text("↗", color = OrionUiPalette.text, fontSize = 14.sp,
-                    modifier = Modifier.clip(CircleShape).clickable { openActivityTarget(c, target) }.padding(horizontal = 10.dp, vertical = 4.dp))
+                Icon(Icons.Rounded.OpenInNew, "Open source", tint = OrionUiPalette.text,
+                    modifier = Modifier.size(34.dp).clip(CircleShape).clickable { openActivityTarget(c, target) }.padding(9.dp))
             }
         }
         if (expanded) StepVisual(step, now)
@@ -173,8 +203,8 @@ internal fun OrionActivityHubCard(onOpenAll: () -> Unit, modifier: Modifier = Mo
             Text(if (expanded) "LESS" else "DETAILS", color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
         Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            sum.lanes.take(4).forEach { (lane, n) -> Chip("${lane.glyph} ${lane.label} $n", null, OrionUiPalette.secondaryText) }
-            Chip("History", onOpenAll, OrionUiPalette.text)
+            sum.lanes.take(4).forEach { (lane, n) -> Chip("${lane.label} $n", null, OrionUiPalette.secondaryText, laneIcon(lane)) }
+            Chip("History", onOpenAll, OrionUiPalette.text, Icons.Rounded.History)
         }
         Column(Modifier.padding(top = 6.dp)) {
             (if (expanded) run else run.takeLast(3)).forEach { s ->
@@ -200,7 +230,7 @@ internal fun OrionInterruptionBanner(modifier: Modifier = Modifier) {
                     Text(s.title + if (s.status == OrionRunLog.Status.FAILED) " failed" else "", color = OrionUiPalette.text, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(s.output.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().take(120), color = OrionUiPalette.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                if (t != OrionActivityHub.Target.None) Text("↗", color = OrionUiPalette.text, fontSize = 14.sp)
+                if (t != OrionActivityHub.Target.None) Icon(Icons.Rounded.OpenInNew, "Open source", tint = OrionUiPalette.text, modifier = Modifier.size(18.dp))
             }
         }
     }
