@@ -27,7 +27,7 @@ internal object OrionDevspace {
 
     fun setupScript(profile: String): String? {
         val names = if (profile == "all") profiles.values.flatten().distinct() else profiles[profile] ?: return null
-        return "apk update >/dev/null 2>&1; apk add --no-cache " + names.joinToString(" ") + " 2>&1 | tail -n 25; echo SETUP_DONE"
+        return "set -e; apk update; apk add --no-cache " + names.joinToString(" ") + "; echo SETUP_DONE"
     }
 
     fun venvScript(name: String, packages: List<String>): String? {

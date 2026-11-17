@@ -10,6 +10,8 @@ import org.junit.Test
 class OrionDevspaceTest {
     @Test fun setupProfilesInstallRealPackages() {
         assertTrue(OrionDevspace.setupScript("base")!!.contains("python3"))
+        assertTrue(OrionDevspace.setupScript("base")!!.startsWith("set -e;"))
+        assertFalse(OrionDevspace.setupScript("base")!!.contains("| tail"))
         assertTrue(OrionDevspace.setupScript("media")!!.contains("ffmpeg"))
         assertTrue(OrionDevspace.setupScript("all")!!.contains("redis"))
         assertNull(OrionDevspace.setupScript("nope"))
@@ -76,6 +78,9 @@ class OrionUbuntuTest {
     }
     @Test fun aptProfilesAndRouting() {
         assertTrue(OrionUbuntu.setupScript("base")!!.contains("build-essential"))
+        assertTrue(OrionUbuntu.setupScript("base")!!.startsWith("set -e;"))
+        assertFalse(OrionUbuntu.setupScript("base")!!.contains("| grep"))
+        assertTrue(OrionUbuntu.setupScript("base")!!.contains("apt-get update; apt-get install"))
         assertTrue(OrionUbuntu.setupScript("all")!!.contains("redis-server"))
         assertNull(OrionUbuntu.setupScript("nope"))
         assertEquals(ShellExecutionRouting.Backend.UBUNTU, ShellExecutionRouting.backend("Ubuntu"))
