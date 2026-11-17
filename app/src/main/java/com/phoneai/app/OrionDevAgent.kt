@@ -177,7 +177,10 @@ internal class OrionDevAgent(
         val warning = ShellPolicy.warning(command)
         // Dev builds and tests belong in the same Alpine workspace used by CPython,
         // not Android's minimal /system/bin/sh environment.
-        val result = shellRunner(context.applicationContext, "cd /workspace && $command", "linux")
+        val activeProject = OrionProjectContext.get(context.applicationContext).trim().trim('/')
+        val projectDir = if (activeProject.isBlank()) "/workspace" else if (OrionStudio.validPath(activeProject)) "/workspace/$activeProject" else null
+        if (projectDir == null) return DevResult(action = "run_shell_command", blocker = "active project path is invalid; command was not executed.", summary = "No shell command was executed.")
+        val result = shellRunner(context.applicationContext, "cd \"$projectDir\" && $command", OrionUbuntu.where(context.applicationContext))
         val exitCode = shellExitCode(result)
         if (result.startsWith("error:", ignoreCase = true) || exitCode == null || exitCode != 0) {
             val reason = when {
