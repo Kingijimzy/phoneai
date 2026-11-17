@@ -63,6 +63,14 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
 
     private val painter = OrionOrbPainter()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = android.graphics.Color.argb(34, 205, 214, 224)
+    }
+    private val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = android.graphics.Color.argb(150, 196, 205, 216)
+    }
     private var smoothLevel = 0f
     private var touchEnergy = 0f
     private var wordPulse = 0f
@@ -163,17 +171,9 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
             .plus(touchEnergy * .22f).coerceIn(0f, 1f)
         canvas.drawColor(android.graphics.Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR)
         val radius = min(w, h) * .46f
-        val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = android.graphics.Color.argb(34, 205, 214, 224)
-        }
-        val rim = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = max(1f, min(w, h) * .018f)
-            color = android.graphics.Color.argb(150, 196, 205, 216)
-        }
-        canvas.drawCircle(w / 2f, h / 2f, radius, halo)
-        canvas.drawCircle(w / 2f, h / 2f, radius, rim)
+        rimPaint.strokeWidth = max(1f, min(w, h) * .018f)
+        canvas.drawCircle(w / 2f, h / 2f, radius, haloPaint)
+        canvas.drawCircle(w / 2f, h / 2f, radius, rimPaint)
         painter.draw(
             canvas, w / 2f, h / 2f, min(w, h) * .43f, time,
             level = visualLevel,
