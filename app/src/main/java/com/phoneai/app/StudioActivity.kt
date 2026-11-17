@@ -165,6 +165,8 @@ class StudioActivity : Activity() {
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); handle(intent) }
 
     private fun handle(i: Intent) {
+        val activeProject = OrionProjectContext.get(this)
+        if (projectField.text.toString().trim().trim('/') != activeProject) projectField.setText(activeProject)
         i.getStringExtra("file")?.let { show("editor"); (pages["editor"] as? StudioEditorPage)?.openFile(it) }
         i.getStringExtra("snippet")?.let { code -> show("editor"); (pages["editor"] as? StudioEditorPage)?.openSnippet(code, i.getStringExtra("lang").orEmpty()) }
         i.getStringExtra("page")?.let { show(it) }
