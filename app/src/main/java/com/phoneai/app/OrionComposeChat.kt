@@ -642,7 +642,7 @@ internal fun OrionComposeChatScreen(
     val pillText = OrionPanelText.statusLine(effectiveOrbMode, busy, runningTitle)
     val lastUserText = lines.lastOrNull { it.kind == "me" }?.text.orEmpty()
     if (showEverything) OrionEverythingSheet(onDismiss = { showEverything = false }, onAction = { if (it == "history") onHistory() else onMenuAction(it) })
-    if (showRunSheet) OrionRunSheet(onDismiss = { showRunSheet = false }, onResume = { onSend(it) })
+    if (showRunSheet) OrionRunSheet(onDismiss = { showRunSheet = false }, onResume = { onSend(it) }, events = activityEvents)
     Column(Modifier.fillMaxSize().background(Color(0xFF000000)).imePadding()) {
         // Top bar: back, title + live link count, LIVE (model) pill, Activity toggle, overflow.
         Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 10.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -755,7 +755,7 @@ internal fun OrionComposeChatScreen(
                 }
                 item(key = "orion-interruptions") { OrionInterruptionBanner() }
                 // One live summary per task, updated in place; steps open their source.
-                item(key = "orion-activity-hub") { OrionActivityHubCard(onOpenAll = { showRunSheet = true }) }
+                item(key = "orion-activity-hub") { OrionActivityHubCard(onOpenAll = { showRunSheet = true }, events = activityEvents) }
                 // Task progress is represented by the single Activity Hub card above.
                 // Do not append a second copy of the latest activity event to the transcript.
                 val assistantAlreadyStreaming = lines.lastOrNull()?.let {
@@ -911,8 +911,9 @@ private fun ChatInlineBrowserDialog(
         return uri.toString()
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
-            Modifier.fillMaxSize().padding(10.dp).clip(RoundedCornerShape(18.dp))
+            Modifier.fillMaxWidth(.96f).fillMaxHeight(.80f).clip(RoundedCornerShape(18.dp))
                 .background(OrionUiPalette.panel).border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(18.dp)).padding(10.dp)
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -976,6 +977,7 @@ private fun ChatInlineBrowserDialog(
             DisposableEffect(Unit) {
                 onDispose { /* Keep the WebView alive only for this dialog; do not retain a hidden browsing surface. */ webView?.stopLoading(); webView?.destroy(); webView = null }
             }
+        }
         }
     }
 }
