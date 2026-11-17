@@ -1272,11 +1272,17 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                     val backups = candidates(p, vision).filter { it != model && it !in tried }
                     queue.addAll(0, backups)
                 }
-                if (queue.isEmpty()) throw AiException(
-                    if (Prefs.autoSwitch(ctx)) "${p.label}: selected model $model returned HTTP ${r.code}; no eligible alternate model was available."
-                    else "${p.label}: selected model $model returned HTTP ${r.code}; Auto-switch is off, so Orion kept the selected model.",
-                    r.code
-                )
+                if (queue.isEmpty()) {
+                    // Show what the provider actually said, so a wrong model name or bad parameter is visible instead of guessed at.
+                    val said = r.body.replace("\n", " ").replace(Regex("\\s+"), " ").trim().take(220)
+                    val why = if (said.isNotEmpty()) " Provider said: $said." else ""
+                    val fix = " Open the model picker and choose a model this provider lists (\"$model\" may not exist there)."
+                    throw AiException(
+                        if (Prefs.autoSwitch(ctx)) "${p.label}: selected model $model returned HTTP ${r.code}; no eligible alternate model was available.$why$fix"
+                        else "${p.label}: selected model $model returned HTTP ${r.code}; Auto-switch is off, so Orion kept the selected model.$why$fix",
+                        r.code
+                    )
+                }
                 continue
             }
             if (r.code in listOf(500, 502, 503, 504)) {
