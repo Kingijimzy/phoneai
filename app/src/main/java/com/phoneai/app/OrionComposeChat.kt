@@ -969,13 +969,23 @@ private fun ChatInlineBrowserDialog(
                             override fun onReceivedTitle(view: WebView, title: String?) { if (!title.isNullOrBlank()) pageTitle = title }
                         }
                         webView = this
+                        // The agent's browser tools must inspect the page shown in chat,
+                        // not a separate hidden or external WebView.
+                        BrowserAutomation.attach(this)
                         safeWebUrl(initialUrl)?.let { loadUrl(it) }
                     }
                 },
                 update = { if (webView !== it) webView = it }
             )
             DisposableEffect(Unit) {
-                onDispose { /* Keep the WebView alive only for this dialog; do not retain a hidden browsing surface. */ webView?.stopLoading(); webView?.destroy(); webView = null }
+                onDispose {
+                    webView?.let { web ->
+                        BrowserAutomation.detach(web)
+                        web.stopLoading()
+                        web.destroy()
+                    }
+                    webView = null
+                }
             }
         }
         }
