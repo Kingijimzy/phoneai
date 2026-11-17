@@ -374,7 +374,7 @@ private fun ToolsPage(onOpenFeature: (String) -> Unit) {
             onOpenFeature("studio_terminal")
         }
         ActionRow("Files & project", "Browse project files and shared workspace state", Icons.Rounded.FolderOpen) {
-            onOpenFeature("studio_project")
+            onOpenFeature("studio_files")
         }
         ActionRow("Coding agent", "Plan and execute coding tasks in the same project", Icons.Rounded.SmartToy) {
             onOpenFeature("studio_agent")
