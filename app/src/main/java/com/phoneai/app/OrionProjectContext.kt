@@ -48,7 +48,7 @@ object OrionProjectContext {
     }
 
     private fun normalize(value: String): String {
-        val path = value.trim().replace('\\\\', '/').trim('/')
+        val path = value.trim().replace('\\', '/').trim('/')
         if (path.isBlank()) return ""
         if (path.length > 120 || path.startsWith("/") || path.split('/').any { it.isBlank() || it == "." || it == ".." }) return ""
         if (!Regex("^[A-Za-z0-9._/-]{1,120}$").matches(path)) return ""
