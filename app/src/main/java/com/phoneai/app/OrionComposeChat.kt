@@ -603,16 +603,25 @@ internal fun OrionComposeChatScreen(
     // Scroll only when transcript length changes. Status updates can arrive frequently while
     // a tool/model is running; tying animation to status causes repeated scroll work and fights
     // users who are reading earlier messages.
-    LaunchedEffect(lines.lastOrNull()?.id, (lines.lastOrNull()?.text?.length ?: 0) / 80) {
-        // Keep streaming replies in view in coarse chunks, not every token. Never yank the
-        // reader away from older messages unless they are already near the bottom; always
-        // reveal a newly sent user turn.
+    var showJumpToBottom by remember { mutableStateOf(false) }
+    LaunchedEffect(listState) {
+        kotlinx.coroutines.flow.snapshotFlow {
+            val layout = listState.layoutInfo
+            val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: 0
+            layout.totalItemsCount > 0 && layout.totalItemsCount - 1 - lastVisible > 2
+        }.collect { showJumpToBottom = it }
+    }
+    LaunchedEffect(lines.lastOrNull()?.id, (lines.lastOrNull()?.text?.length ?: 0) / 120) {
+        // Only follow new content when the reader is already near the end. Use the LazyColumn's
+        // actual item count because task/attachment cards are additional list items.
         if (lines.isNotEmpty()) {
             val layout = listState.layoutInfo
             val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index
             val nearBottom = lastVisible == null || layout.totalItemsCount - 1 - lastVisible <= 2
             if (lines.lastOrNull()?.kind == "me" || nearBottom) {
-                listState.animateScrollToItem(lines.lastIndex)
+                kotlinx.coroutines.yield()
+                val lastItem = listState.layoutInfo.totalItemsCount - 1
+                if (lastItem >= 0) listState.animateScrollToItem(lastItem)
             }
         }
     }
@@ -700,11 +709,12 @@ internal fun OrionComposeChatScreen(
         } else {
             OrionLiveMetricsBar()
             val visibleLines = lines.filterNot(::isCompactExecutionNote)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                 state = listState,
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 22.dp, bottom = 20.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 14.dp, bottom = 22.dp)
             ) {
                 itemsIndexed(visibleLines, key = { _, item -> item.id }) { index, item ->
                     val previousUserMessage = if (item.kind == "ai") {
@@ -727,12 +737,16 @@ internal fun OrionComposeChatScreen(
                         } else null
                     ) }
                 }
-                if (attachments.isNotEmpty()) {
+                val inlineArtifactIds = lines.flatMap { line ->
+                    line.content.blocks.filterIsInstance<OrionMessageBlock.GeneratedFile>().map { it.artifactId }
+                }.toSet()
+                val unattached = attachments.distinctBy { it.id }.filterNot { it.id in inlineArtifactIds }
+                if (unattached.isNotEmpty()) {
                     item(key = "orion-chat-attachments-heading") {
                         Text("ATTACHMENTS", color = OrionUiPalette.muted, fontSize = 9.sp,
                             fontWeight = FontWeight.Bold, letterSpacing = .9.sp)
                     }
-                    itemsIndexed(attachments, key = { _, item -> "chat-attachment-${item.id}" }) { _, item ->
+                    itemsIndexed(unattached, key = { _, item -> "chat-attachment-${item.id}" }) { _, item ->
                         OrionChatAttachmentCard(item, onOpenAttachment, onShareAttachment)
                     }
                 }
@@ -750,6 +764,28 @@ internal fun OrionComposeChatScreen(
                 if (busy && !assistantAlreadyStreaming) {
                     item(key = "orion-thinking-indicator") { ThinkingIndicator(displayStatus, effectiveOrbMode) }
                 }
+            }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showJumpToBottom,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 14.dp),
+                enter = fadeIn(tween(120)),
+                exit = androidx.compose.animation.fadeOut(tween(100))
+            ) {
+                Row(
+                    Modifier.clip(RoundedCornerShape(22.dp)).background(OrionUiPalette.raised)
+                        .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(22.dp))
+                        .clickable(role = Role.Button) {
+                            val lastItem = listState.layoutInfo.totalItemsCount - 1
+                            if (lastItem >= 0) kotlinx.coroutines.MainScope().launch { listState.animateScrollToItem(lastItem) }
+                        }
+                        .padding(horizontal = 13.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(Icons.Rounded.ExpandMore, null, tint = OrionUiPalette.text, modifier = Modifier.size(17.dp))
+                    Text("Latest", color = OrionUiPalette.text, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                }
+            }
             }
         }
 
