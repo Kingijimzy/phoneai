@@ -39,6 +39,11 @@ internal object OrionRunLog {
         runCatching { OrionActivityHistory.save(currentRun()) }
     }
 
+    /** Live output for a running step (install progress, command lines). */
+    fun append(id: Long, line: String) {
+        steps = steps.map { if (it.id == id && it.status == Status.RUNNING) it.copy(output = (it.output + line).takeLast(4000)) else it }
+    }
+
     fun clear() { steps = emptyList(); runFloor = 0L }
 
     @Volatile private var runFloor = 0L

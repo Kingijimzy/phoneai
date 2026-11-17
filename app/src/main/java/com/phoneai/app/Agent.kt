@@ -1163,6 +1163,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
 
         fun dispatchNativeTool(name: String, args: JSONObject): String {
             val stepId = OrionRunLog.begin(name, args)
+            OrionProgress.bind(stepId)
             return try {
                 dispatchNativeToolInner(name, args).also { OrionRunLog.finish(stepId, it, OrionReflexion.looksFailed(it)) }
             } catch (e: Throwable) {

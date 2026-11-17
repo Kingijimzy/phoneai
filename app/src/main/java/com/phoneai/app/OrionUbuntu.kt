@@ -101,14 +101,15 @@ internal object OrionUbuntu {
 
     fun setupScript(profile: String): String? {
         val names = if (profile == "all") profiles.values.flatten().distinct() else profiles[profile] ?: return null
-        return "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq 2>&1 | tail -n 3; " +
-            "apt-get install -y -qq --no-install-recommends " + names.joinToString(" ") + " 2>&1 | tail -n 25; echo SETUP_DONE"
+        return OrionStudio.APT_HEAL + "; apt-get update 2>&1 | grep -E '^(Get:|Fetched|E:)'; " +
+            "apt-get install -y --no-install-recommends " + names.joinToString(" ") + " 2>&1; echo SETUP_DONE"
     }
 
     /** Installs (or repairs) the Ubuntu runtime; returns a short human-readable result. */
     fun install(c: Context, onProgress: (String) -> Unit = {}): String {
         val m = manifest(c, refresh = true).getOrElse { return "error: could not look up Ubuntu: ${it.message}" }
         val installer = LinuxRuntimeInstaller(c, LinuxRuntimeInstaller.Flavor.UBUNTU) { name, cur, total ->
+            OrionProgress.bytesProgress(name, cur, total)
             onProgress(if (total > 0) "$name ${cur * 100 / total}%" else name)
         }
         if (installer.isReady(m)) return "Ubuntu ${m.version} is already installed."

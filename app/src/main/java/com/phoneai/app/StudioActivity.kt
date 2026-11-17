@@ -18,8 +18,7 @@ import android.widget.Toast
 import org.json.JSONObject
 
 /**
- * Code Studio host: ten focused pages (editor, terminal, runtime, packages, extensions, debug, build, git, agent,
- * recovery) behind a tab bar, sharing one project and one runtime. Orion drives the same backend from chat.
+ * Code Studio host: ten focused pages grouped into five tabs (Code, Terminal, Agent, Project, Tools), sharing one project and one runtime. Orion drives the same backend from chat.
  */
 class StudioActivity : Activity() {
     internal lateinit var ui: StudioUi
@@ -31,6 +30,15 @@ class StudioActivity : Activity() {
     private lateinit var projectField: EditText
     private lateinit var runtimePill: TextView
     private var current = "editor"
+    private var progressListener: ((OrionProgress.State) -> Unit)? = null
+    private val groups = listOf(
+        Triple("editor", "Code", listOf("editor")),
+        Triple("terminal", "Terminal", listOf("terminal")),
+        Triple("agent", "Agent", listOf("agent")),
+        Triple("project", "Project", listOf("git", "build", "debug", "recovery")),
+        Triple("tools", "Tools", listOf("runtime", "packages", "extensions"))
+    )
+    private fun groupOf(id: String): String = groups.firstOrNull { it.first == id || id in it.third }?.first ?: "editor"
     private var detail: View? = null
 
     internal val project: String get() = projectField.text.toString().trim().trim('/')
@@ -90,24 +98,52 @@ class StudioActivity : Activity() {
         content = FrameLayout(this)
         rootView.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        // tab bar
-        val tabRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(ui.dp(10), ui.dp(6), ui.dp(10), ui.dp(10)); setBackgroundColor(Theme.PANEL) }
-        val all: List<StudioPage> = listOf(
-            StudioEditorPage(this), StudioTerminalPage(this), StudioRuntimePage(this), StudioPackagesPage(this), StudioExtensionsPage(this),
-            StudioDebugPage(this), StudioBuildPage(this), StudioGitPage(this), StudioAgentPage(this), StudioRecoveryPage(this)
-        )
-        all.forEach { p ->
-            pages[p.id] = p
+        // one live progress strip for every download/install, with sizes
+        val strip = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(ui.dp(18), ui.dp(6), ui.dp(18), ui.dp(6)); setBackgroundColor(Theme.PANEL); visibility = View.GONE }
+        val stripText = ui.label("", 11f, Theme.TEXT)
+        val stripBar = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; isIndeterminate = true }
+        strip.addView(stripText); strip.addView(stripBar, LinearLayout.LayoutParams(-1, ui.dp(6)))
+        rootView.addView(strip, LinearLayout.LayoutParams(-1, -2))
+        progressListener = { st ->
+            runOnUiThread {
+                if (st.label.isBlank() && !st.active) { strip.visibility = View.GONE } else {
+                    strip.visibility = View.VISIBLE
+                    stripText.text = (if (st.active) "⬇ " else if (st.ok == true) "✓ " else "✕ ") + st.label +
+                        (if (st.detail.isNotBlank()) " · " + st.detail else "") +
+                        (if (st.size.isNotBlank()) " · " + st.size else "") + (if (st.percent >= 0) " · ${st.percent}%" else "")
+                    stripBar.isIndeterminate = st.active && st.percent < 0
+                    if (st.percent >= 0) stripBar.progress = st.percent
+                    if (!st.active) main.postDelayed({ if (!OrionProgress.state.active) strip.visibility = View.GONE }, 6000)
+                }
+            }
+        }
+        OrionProgress.listen(progressListener!!)
+
+        // five tabs only; related pages share one scrolling page (the harness pattern: few tabs, everything near)
+        val all = listOf(
+            StudioEditorPage(this), StudioTerminalPage(this), StudioAgentPage(this), StudioGitPage(this), StudioBuildPage(this),
+            StudioDebugPage(this), StudioRecoveryPage(this), StudioRuntimePage(this), StudioPackagesPage(this), StudioExtensionsPage(this)
+        ).associateBy { it.id }
+        val tabRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(ui.dp(10), ui.dp(6), ui.dp(2), ui.dp(10)); setBackgroundColor(Theme.PANEL) }
+        groups.forEach { (gid, gtitle, members) ->
             val scroll = ScrollView(this).apply { setBackgroundColor(Theme.BG); visibility = View.GONE }
             val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(ui.dp(18), ui.dp(4), ui.dp(18), ui.dp(30)) }
             scroll.addView(col)
-            p.build(col)
-            scrolls[p.id] = scroll
+            members.forEach { mid ->
+                val p = all.getValue(mid)
+                pages[mid] = p
+                if (members.size > 1) col.addView(ui.section(p.title))
+                p.build(col)
+            }
+            scrolls[gid] = scroll
             content.addView(scroll, FrameLayout.LayoutParams(-1, -1))
-            val tab = ui.chip(p.title) { show(p.id) }
-            tabs[p.id] = tab; tabRow.addView(tab)
+            val tab = ui.chip(gtitle) { show(gid) }
+            tab.textSize = 12f
+            tab.setPadding(ui.dp(4), ui.dp(9), ui.dp(4), ui.dp(9))
+            tab.layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = ui.dp(8) }
+            tabs[gid] = tab; tabRow.addView(tab)
         }
-        rootView.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; setBackgroundColor(Theme.PANEL); addView(tabRow) }, LinearLayout.LayoutParams(-1, -2))
+        rootView.addView(tabRow, LinearLayout.LayoutParams(-1, -2))
         setContentView(rootView)
 
         projectField.addTextChangedListener(object : android.text.TextWatcher {
@@ -128,7 +164,7 @@ class StudioActivity : Activity() {
     }
 
     private fun show(id: String) {
-        val key = if (pages.containsKey(id)) id else "editor"
+        val key = groupOf(id)
         pop()
         current = key
         scrolls.forEach { (k, v) -> v.visibility = if (k == key) View.VISIBLE else View.GONE }
@@ -139,8 +175,23 @@ class StudioActivity : Activity() {
         }
         getSharedPreferences("studio_state", 0).edit().putString("page", key).apply()
         runtimePill.text = OrionUbuntu.label(this).uppercase()
-        pages[key]?.onShow()
+        groups.first { it.first == key }.third.forEach { pages[it]?.onShow() }
+        if (id != key) scrollToSection(id)
     }
+
+    private fun scrollToSection(id: String) {
+        val sc = scrolls[current] ?: return
+        val title = pages[id]?.title?.uppercase() ?: return
+        sc.post {
+            val col = sc.getChildAt(0) as? LinearLayout ?: return@post
+            for (i in 0 until col.childCount) {
+                val v = col.getChildAt(i)
+                if (v is TextView && v.text.toString() == title) { sc.smoothScrollTo(0, v.top); break }
+            }
+        }
+    }
+
+    override fun onDestroy() { progressListener?.let { OrionProgress.unlisten(it) }; super.onDestroy() }
 
     override fun onResume() { super.onResume(); runtimePill.text = OrionUbuntu.label(this).uppercase() }
 }

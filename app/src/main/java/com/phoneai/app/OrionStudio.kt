@@ -39,9 +39,12 @@ internal object OrionStudio {
         "sqlite" to ("sqlite3" to "sqlite")
     )
 
+    /** A previously interrupted apt/dpkg run leaves the package database half-configured; heal it before any apt call. */
+    const val APT_HEAL = "export DEBIAN_FRONTEND=noninteractive; dpkg --configure -a 2>&1 | tail -n 3; apt-get -f install -y -qq 2>&1 | tail -n 3"
+
     fun toolchainScript(name: String, ub: Boolean): String? {
         val (apt, apk) = toolchains[name] ?: return null
-        return if (ub) "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq 2>&1 | tail -n 2; apt-get install -y -qq --no-install-recommends $apt 2>&1 | tail -n 15; echo TOOLCHAIN_DONE $name"
+        return if (ub) "$APT_HEAL; apt-get update 2>&1 | grep -E '^(Get:|Fetched|E:)'; apt-get install -y --no-install-recommends $apt 2>&1; echo TOOLCHAIN_DONE $name"
         else "apk add --no-cache $apk 2>&1 | tail -n 15; echo TOOLCHAIN_DONE $name"
     }
 
@@ -331,7 +334,7 @@ p.kill()
         val body = when (mgr to op) {
             "apt" to "list" -> "dpkg-query -W -f='\${binary:Package} \${Version}\\n' | head -n 300"
             "apt" to "search" -> "apt-cache search $n | head -n 40"
-            "apt" to "install" -> "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq 2>&1 | tail -n 1; apt-get install -y -qq --no-install-recommends $n 2>&1 | tail -n 25"
+            "apt" to "install" -> "$APT_HEAL; apt-get update 2>&1 | grep -E '^(Get:|Fetched|E:)'; apt-get install -y --no-install-recommends $n 2>&1"
             "apt" to "remove" -> "export DEBIAN_FRONTEND=noninteractive; apt-get remove -y -qq $n 2>&1 | tail -n 15"
             "apt" to "update" -> "export DEBIAN_FRONTEND=noninteractive; apt-get update 2>&1 | tail -n 4; apt-get upgrade -y -qq 2>&1 | tail -n 15"
             "apk" to "list" -> "apk info -v | head -n 300"
@@ -419,7 +422,7 @@ p.kill()
         val cmd = j.optString("install")
         if (cmd.isBlank()) return "$id has no package to update (VS Code extensions: reinstall with registry_install_vsx)."
         val upd = cmd.replace("npm install -g ", "npm install -g ").replace("pip install -q ", "pip install -q -U ")
-        return ShellRunner.run(c, installScript(upd, ubuntu(c)), OrionUbuntu.where(c))
+        return OrionProgress.run(c, "Updating", installScript(upd, ubuntu(c)), OrionUbuntu.where(c))
     }
     fun registryEntry(c: Context, id: String): Entry? =
         catalog.firstOrNull { it.id == id } ?: installed(c)[id]?.let {
@@ -497,18 +500,18 @@ p.kill()
     /** Makes sure the package manager and the shared venv exist, then installs and reports the real tail of the log. */
     fun installScript(cmd: String, ub: Boolean): String {
         val prelude = when {
-            cmd.startsWith("npm") -> "command -v npm >/dev/null 2>&1 || { ${toolchainScript("node", ub)}; }"
+            cmd.startsWith("npm") -> "command -v npm >/dev/null 2>&1 || { ${toolchainScript("node", ub)}; command -v npm >/dev/null 2>&1 || " + (if (ub) "apt-get install -y npm 2>&1" else "apk add --no-cache npm 2>&1") + "; }"
             cmd.startsWith("pip") -> "command -v python3 >/dev/null 2>&1 || { ${toolchainScript("python", ub)}; }; " +
                 "[ -f /workspace/.venvs/studio/bin/activate ] || { mkdir -p /workspace/.venvs; python3 -m venv /workspace/.venvs/studio 2>&1 | tail -n 3; }"
             else -> "true"
         }
-        return "$prelude; $VENV; ($cmd) > /tmp/orion_reg.log 2>&1; rc=\$?; tail -n 14 /tmp/orion_reg.log; echo INSTALL_EXIT=\$rc"
+        return "$prelude; $VENV; ($cmd; echo \$? > /tmp/orion_rc) 2>&1 | tee /tmp/orion_reg.log; rc=\$(cat /tmp/orion_rc 2>/dev/null || echo 1); echo INSTALL_EXIT=\$rc"
     }
 
     fun registryInstall(c: Context, a: JSONObject): String {
         val (entry, cmd) = installCommand(a.optString("id").trim(), a.optString("kind"), a.optString("source").trim(), a.optString("run").trim())
             ?: return "error: unknown registry id; give a catalogue id or {kind, source:\"npm:<pkg>\"|\"pip:<pkg>\", id}."
-        val out = ShellRunner.run(c, installScript(cmd, ubuntu(c)), OrionUbuntu.where(c))
+        val out = OrionProgress.run(c, "Installing " + entry.name, installScript(cmd, ubuntu(c)), OrionUbuntu.where(c)).lines().takeLast(30).joinToString("\n")
         if (!out.contains("INSTALL_EXIT=0")) return "Install did not finish cleanly:\n$out"
         val m = installed(c)
         m[entry.id] = JSONObject().put("id", entry.id).put("kind", entry.kind.name).put("name", entry.name).put("about", entry.about).put("install", entry.install).put("run", entry.run).put("at", System.currentTimeMillis())
@@ -518,7 +521,7 @@ p.kill()
 
     fun registryInstallVsx(c: Context, id: String): String {
         val script = vsxInstallScript(id.trim()) ?: return "error: give an Open VSX id like publisher.extension."
-        val out = ShellRunner.run(c, script, OrionUbuntu.where(c))
+        val out = OrionProgress.run(c, "Installing " + id.trim(), script, OrionUbuntu.where(c)).lines().takeLast(30).joinToString("\n")
         if (!out.contains("VSX_INSTALLED")) return "Install did not finish cleanly:\n$out"
         val m = installed(c)
         m[id.trim()] = JSONObject().put("id", id.trim()).put("kind", "EXTENSION").put("name", id.trim()).put("about", "VS Code extension from Open VSX").put("install", "").put("run", "").put("at", System.currentTimeMillis())
@@ -580,6 +583,8 @@ p.kill()
         val project = a.optString("project").trim()
         val where = OrionUbuntu.where(c)
         fun guest(s: String?, bad: String): String = if (s == null) "error: $bad" else ShellRunner.run(c, s, where)
+        fun guestLive(s: String?, bad: String, label: String): String =
+            if (s == null) "error: $bad" else OrionProgress.run(c, label, s, where).lines().takeLast(60).joinToString("\n")
         return when (action) {
             "", "help" -> "studio actions: status (everything running: objective, workers, services, jobs, registry), toolchain_list, toolchain_install {name: ${toolchains.keys.joinToString("|")}}, " +
                 "lsp_install {lang: python|typescript|go|c|bash|rust}, diagnostics {project}, format {project}, complete {file,line,col}, symbols {file}, highlight {file}, " +
@@ -587,10 +592,10 @@ p.kill()
                 "build {project,target?}, test {project}, preview {project,port?,command?}, preview_stop {name}, " +
                 "registry_list {kind?}, registry_search {query}, registry_npm {query}, registry_install {id | kind+source}, registry_remove {id}, registry_run {id,port?}, registry_enable/registry_disable/registry_update {id}, runtime_status, runtime_select {runtime: auto|ubuntu|linux}, terminal {command, project?}, packages {manager: apt|apk|pip|npm, op: list|search|install|remove|update, names[]}, snapshot {project,label?}, snapshots, restore {name}, rollback {project,ref,confirm}, dev_task {objective, project?} (Orion Dev Agent: autonomous inspect-plan-edit-execute-debug-verify worker), open {page: editor|terminal|runtime|packages|extensions|debug|build|git|agent|recovery}, registry_discover {source: openvsx|npm|mcp, query} (live search of Open VSX, npm and the official MCP registry), registry_install_vsx {id}, mcp_tools {id} and mcp_call {id, tool, arguments} (real MCP client for installed servers), file_diagnostics {file}, hover {file,line,col}. Show code to the owner through cards: write it to /workspace files and mention the path; do not paste long code in chat. Projects live under /workspace."
             "status" -> overview(c)
-            "ubuntu_install" -> OrionUbuntu.install(c)
+            "ubuntu_install" -> { OrionProgress.start("Ubuntu 24.04"); OrionUbuntu.install(c).also { OrionProgress.done(!it.startsWith("error:")) } }
             "toolchain_list" -> guest(toolchainListScript(), "")
-            "toolchain_install" -> guest(toolchainScript(a.optString("name").lowercase(), ubuntu(c)), "unknown toolchain; use ${toolchains.keys.joinToString(", ")}.")
-            "lsp_install" -> guest(lspInstallScript(a.optString("lang").lowercase()), "unknown language; use python, typescript, go, c, bash or rust.")
+            "toolchain_install" -> toolchainScript(a.optString("name").lowercase(), ubuntu(c))?.let { OrionProgress.run(c, "Installing " + a.optString("name"), it, where).lines().takeLast(40).joinToString("\n") } ?: "error: unknown toolchain; use ${toolchains.keys.joinToString(", ")}."
+            "lsp_install" -> guestLive(lspInstallScript(a.optString("lang").lowercase()), "unknown language; use python, typescript, go, c, bash or rust.", "Language tools · " + a.optString("lang"))
             "diagnostics" -> guest(diagnosticsScript(project), "bad project path.")
             "format" -> { snapshotScript(project, "before-format")?.let { ShellRunner.run(c, it, where) }; guest(formatScript(project), "bad project path.") }
             "complete" -> guest(completeScript(a.optString("file"), a.optInt("line", 1), a.optInt("col", 0)), "complete needs a relative file, line and col.")
@@ -632,9 +637,9 @@ p.kill()
                 if (cmd.isBlank() || cmd.length > 4000 || d == null) "error: terminal needs a command and a valid project."
                 else ShellRunner.run(c, "cd $d 2>/dev/null || cd /workspace; $VENV; $cmd", where)
             }
-            "packages" -> guest(packageScript(a.optString("manager").lowercase(), a.optString("op").lowercase().ifBlank { "list" },
+            "packages" -> guestLive(packageScript(a.optString("manager").lowercase(), a.optString("op").lowercase().ifBlank { "list" },
                 a.optJSONArray("names")?.let { n -> List(n.length()) { n.optString(it) } } ?: a.optString("name").split(' ', ',').filter { it.isNotBlank() }, ubuntu(c)),
-                "bad package request (managers apt|apk|pip|npm; ops list|search|install|remove|update).")
+                "bad package request (managers apt|apk|pip|npm; ops list|search|install|remove|update).", "Packages · " + a.optString("op").ifBlank { "list" })
             "snapshot" -> guest(snapshotScript(project, a.optString("label")), "bad project path.")
             "snapshots" -> guest(snapshotListScript(), "")
             "restore" -> guest(restoreScript(a.optString("name")), "give a snapshot name from studio snapshots.")
