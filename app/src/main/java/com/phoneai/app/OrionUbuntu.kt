@@ -102,8 +102,8 @@ internal object OrionUbuntu {
 
     fun setupScript(profile: String): String? {
         val names = if (profile == "all") profiles.values.flatten().distinct() else profiles[profile] ?: return null
-        return OrionStudio.APT_HEAL + "; apt-get update 2>&1 | grep -E '^(Get:|Fetched|E:)'; " +
-            "apt-get install -y --no-install-recommends " + names.joinToString(" ") + " 2>&1; echo SETUP_DONE"
+        return "set -e; export DEBIAN_FRONTEND=noninteractive; dpkg --configure -a; apt-get -f install -y -qq; " +
+            "apt-get update; apt-get install -y --no-install-recommends " + names.joinToString(" ") + "; echo SETUP_DONE"
     }
 
     /** Installs (or repairs) the Ubuntu runtime; returns a short human-readable result. */
