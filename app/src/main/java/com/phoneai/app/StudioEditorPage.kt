@@ -77,28 +77,33 @@ internal class StudioEditorPage(host: StudioActivity) : StudioPage(host) {
         val f = File(root, rel).canonicalFile
         return if (f.path.startsWith(root.path + File.separator)) f else null
     }
-    private fun relPath(): String = host.project.trim('/').let { if (it.isEmpty()) "" else "$it/" } + fileField.text.toString().trim().trim('/')
+    private fun relPath(): String {
+        val project = host.project
+        val file = fileField.text.toString().trim().trim('/')
+        return if (project.isBlank()) file else "$project/$file"
+    }
 
     fun openFile(rel: String) {
-        val dir = rel.substringBeforeLast('/', "")
-        host.setProject(dir)
-        fileField.setText(rel.substringAfterLast('/'))
+        val projectPrefix = host.project.trim('/').let { if (it.isBlank()) "" else "$it/" }
+        val scoped = rel.removePrefix(projectPrefix).trim('/')
+        fileField.setText(scoped)
+        val workspacePath = if (projectPrefix.isBlank()) scoped else "$projectPrefix$scoped"
         host.bg {
-            val f = workspaceFile(rel)
+            val f = workspaceFile(workspacePath)
             val text = if (f != null && f.isFile && f.length() < 400_000) runCatching { f.readText() }.getOrNull() else null
-            host.post { if (text == null) info.text = "Could not open /workspace/$rel" else { editor.setText(text); highlight(); info.text = "Opened /workspace/$rel" } }
+            host.post { if (text == null) info.text = "Could not open /workspace/$workspacePath" else { editor.setText(text); highlight(); info.text = "Opened /workspace/$workspacePath" } }
         }
     }
 
     fun openSnippet(code: String, lang: String) {
         val ext = mapOf("python" to "py", "javascript" to "js", "typescript" to "ts", "shell" to "sh", "bash" to "sh", "kotlin" to "kt", "markdown" to "md", "text" to "txt").getOrDefault(lang, lang.ifBlank { "txt" })
-        host.setProject("snippets"); fileField.setText("snippet.$ext"); editor.setText(code); highlight()
+        fileField.setText("snippet.$ext"); editor.setText(code); highlight()
     }
 
     private fun toggleTree() {
         if (tree.visibility == android.view.View.VISIBLE) { tree.visibility = android.view.View.GONE; return }
         host.bg {
-            val root = ShellRunner.workspace(host).canonicalFile
+            val root = OrionProjectContext.root(host).canonicalFile
             val files = root.walkTopDown().maxDepth(4)
                 .onEnter { d -> d == root || !(d.name.startsWith(".") || d.name == "node_modules" || d.name == "__pycache__") }
                 .filter { it.isFile && it.length() < 400_000 }.map { it.relativeTo(root).path }.sorted().take(300).toList()
