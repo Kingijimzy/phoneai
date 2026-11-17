@@ -190,6 +190,7 @@ internal fun OrionActivityHubCard(
     modifier: Modifier = Modifier,
     events: List<OrionActivityEvent> = emptyList()
 ) {
+    val context = LocalContext.current
     val run = OrionRunLog.currentRun()
     if (run.isEmpty() && events.isEmpty()) return
     val sum = run.takeIf { it.isNotEmpty() }?.let { OrionActivityHub.summarize(OrionActivityHistory.runTitle, it) }
@@ -230,6 +231,23 @@ internal fun OrionActivityHubCard(
         if (latestEvent != null) {
             Text(OrionActivityPresentation.summary(latestEvent), color = OrionUiPalette.muted, fontSize = 10.sp,
                 maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
+            latestEvent.typedEvidence.take(2).forEach { evidence ->
+                val label = when (evidence) {
+                    is OrionActivityEvidence.Browser -> "View " + evidence.title.ifBlank { "web page" }
+                    is OrionActivityEvidence.File -> "Open " + evidence.displayPath.substringAfterLast('/')
+                    is OrionActivityEvidence.Terminal -> "Terminal output"
+                    is OrionActivityEvidence.CodeDiff -> "Review " + evidence.fileLabel.substringAfterLast('/')
+                    is OrionActivityEvidence.AgentHandoff -> "Agent details"
+                }
+                val icon = when (evidence) {
+                    is OrionActivityEvidence.Browser -> Icons.Rounded.Public
+                    is OrionActivityEvidence.File -> Icons.Rounded.FolderOpen
+                    is OrionActivityEvidence.Terminal -> Icons.Rounded.Terminal
+                    is OrionActivityEvidence.CodeDiff -> Icons.Rounded.Code
+                    is OrionActivityEvidence.AgentHandoff -> Icons.Rounded.Extension
+                }
+                Chip(label, { openActivityEvidence(context, evidence) }, OrionUiPalette.secondaryText, icon)
+            }
         }
         Column(Modifier.padding(top = 6.dp)) {
             run.takeLast(3).forEach { step ->
