@@ -162,7 +162,7 @@ class CodeStudioActivity : Activity() {
                 3 -> newProject()
                 4 -> refreshFiles()
                 5 -> startActivity(Intent(this, TerminalActivity::class.java))
-                else -> output.text = "Code Studio edits Orion's shared /workspace. Files are shared with Orion's coding tools and selected Linux runtime. Existing files are backed up before overwrite; deleted files are moved to Orion's recycle area."
+                else -> { output.text = "Code Studio edits Orion's shared /workspace. Files are shared with Orion's coding tools and selected Linux runtime. Existing files are backed up before overwrite; deleted files are moved to Orion's recycle area."; toggleTerminal(true) }
             }
         }.show()
     }
@@ -253,8 +253,9 @@ class CodeStudioActivity : Activity() {
 
     private fun saveFile(): Boolean {
         val path = current ?: run { output.text = "Create or open a file first."; return false }
-        val result = fs.write(path, editor.text.toString()); output.text = result
-        if (result.startsWith("saved ")) { dirty = false; updateStatus(); refreshFiles(); return true }
+        val result = fs.write(path, editor.text.toString())
+        if (result.startsWith("saved ")) { dirty = false; updateStatus(); status.text = "$path   · Saved"; refreshFiles(); return true }
+        status.text = result; status.setTextColor(Theme.DANGER)
         return false
     }
     private fun validPath(p: String) = p.isNotBlank() && !p.startsWith("/") && p.split("/").all { it.isNotBlank() && it != "." && it != ".." }
@@ -375,6 +376,7 @@ class CodeStudioActivity : Activity() {
         command.setText(""); execute("cd /workspace && " + value)
     }
     private fun execute(cmd: String) {
+        toggleTerminal(true)
         val where = OrionUbuntu.where(applicationContext)
         val runtime = OrionUbuntu.label(applicationContext)
         output.text = "$ " + cmd + "\nRunning in $runtime…"
