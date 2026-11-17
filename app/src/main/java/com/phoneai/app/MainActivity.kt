@@ -54,7 +54,14 @@ class MainActivity : ComponentActivity() {
                     onOpenAgents = { launchDestination(Intent(this@MainActivity, AgentsActivity::class.java), "AgentsActivity") },
                     onOpenSoulEngine = { launchDestination(Intent(this@MainActivity, SoulEngineActivity::class.java), "SoulEngineActivity") },
                     onOpenExtensions = { launchDestination(Intent(this@MainActivity, SelfExtensionLabActivity::class.java), "SelfExtensionLabActivity") },
-                    onOpenFeature = { route -> openFeature(route) }
+                    onOpenFeature = { route -> openFeature(route) },
+                    onResumeTask = { prompt ->
+                        launchDestination(
+                            Intent(this@MainActivity, MainChatActivity::class.java)
+                                .putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, prompt),
+                            "MainChatActivity/ResumeTask"
+                        )
+                    }
                 )
             }
         }
