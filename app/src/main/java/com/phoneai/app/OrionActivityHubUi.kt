@@ -224,7 +224,7 @@ internal fun OrionActivityHubCard(
         }
         Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             sum?.lanes?.take(4)?.forEach { (lane, n) -> Chip("${lane.label} $n", null, OrionUiPalette.secondaryText, laneIcon(lane)) }
-            if (events.isNotEmpty()) Chip("${events.size} updates", null, OrionUiPalette.secondaryText)
+            if (events.isNotEmpty()) Chip("${events.size} tasks", null, OrionUiPalette.secondaryText)
             Chip("History", onOpenAll, OrionUiPalette.text, Icons.Rounded.History)
         }
         if (latestEvent != null) {
@@ -233,7 +233,7 @@ internal fun OrionActivityHubCard(
         }
         Column(Modifier.padding(top = 6.dp)) {
             run.takeLast(3).forEach { step ->
-                StepRow(step, now, expanded = open == step.id || (!expanded && step.status == OrionRunLog.Status.RUNNING)) { open = if (open == step.id) null else step.id }
+                StepRow(step, now, expanded = open == step.id || step.status == OrionRunLog.Status.RUNNING) { open = if (open == step.id) null else step.id }
             }
         }
     }
