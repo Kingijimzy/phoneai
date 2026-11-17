@@ -162,6 +162,18 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         val visualLevel = (if (mode == Mode.SPEAKING) max(speechAmplitude, wordPulse * .48f) else level)
             .plus(touchEnergy * .22f).coerceIn(0f, 1f)
         canvas.drawColor(android.graphics.Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR)
+        val radius = min(w, h) * .46f
+        val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = android.graphics.Color.argb(34, 205, 214, 224)
+        }
+        val rim = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = max(1f, min(w, h) * .018f)
+            color = android.graphics.Color.argb(150, 196, 205, 216)
+        }
+        canvas.drawCircle(w / 2f, h / 2f, radius, halo)
+        canvas.drawCircle(w / 2f, h / 2f, radius, rim)
         painter.draw(
             canvas, w / 2f, h / 2f, min(w, h) * .43f, time,
             level = visualLevel,
