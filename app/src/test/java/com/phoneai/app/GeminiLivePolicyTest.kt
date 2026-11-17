@@ -35,9 +35,11 @@ class GeminiLivePolicyTest {
         assertTrue(buffer.drain().isEmpty())
     }
 
-    @Test fun sessionHasHardFiveMinuteLimit() {
-        assertEquals(300_000L, GeminiLivePolicy.SESSION_LIMIT_MS)
-        assertTrue(GeminiLivePolicy.SESSION_LIMIT_MS <= 5 * 60 * 1000L)
+    @Test fun callsAreBoundedButResumeAcrossConnections() {
+        // Google drops each connection after a few minutes; Orion resumes with a handle, so the ceiling is per call.
+        assertEquals(40 * 60 * 1000L, GeminiLivePolicy.SESSION_LIMIT_MS)
+        assertTrue(GeminiLivePolicy.MAX_RECONNECTS in 1..20)
+        assertTrue(GeminiLivePolicy.SILENCE_LIMIT_MS <= 2 * 60 * 1000L)
     }
 
     @Test fun audioConfigurationUsesBoundedStandardRatesAndShortChunks() {
@@ -59,13 +61,14 @@ class GeminiLivePolicyTest {
         assertTrue(warning.contains("streams microphone audio"))
         assertTrue(warning.contains("quota"))
         assertTrue(warning.contains("pricing vary"))
-        assertTrue(warning.contains("five minutes"))
+        assertTrue(warning.contains("reconnects long calls"))
+        assertTrue(warning.contains("silence"))
         assertTrue(warning.contains("own gemini key"))
     }
 
     @Test fun optionalLiveModeUsesExplicitStableModelAndNoPhoneActionTools() {
         assertEquals("models/gemini-3.8-live", GeminiLivePolicy.MODEL)
         // This JVM-only test deliberately checks policy constants, not a live network/model call.
-        assertEquals(5 * 60 * 1000L, GeminiLivePolicy.SESSION_LIMIT_MS)
+        assertEquals(40 * 60 * 1000L, GeminiLivePolicy.SESSION_LIMIT_MS)
     }
 }
