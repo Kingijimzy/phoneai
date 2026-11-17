@@ -54,7 +54,7 @@ internal object OrionStudio {
 
     // ---------- language intelligence ----------
     fun lspInstallScript(lang: String): String? = when (lang) {
-        "python" -> "mkdir -p /workspace/.venvs && (test -d /workspace/.venvs/studio || python3 -m venv /workspace/.venvs/studio) && . /workspace/.venvs/studio/bin/activate && pip install -q ruff pyright python-lsp-server jedi pygments pytest 2>&1 | tail -n 5; echo LSP_READY python"
+        "python" -> "mkdir -p /workspace/.venvs && (test -x /workspace/.venvs/studio/bin/python || python3 -m venv /workspace/.venvs/studio) && /workspace/.venvs/studio/bin/python -m pip install -q ruff pyright python-lsp-server jedi pygments pytest 2>&1 | tail -n 5; test -x /workspace/.venvs/studio/bin/ruff && echo LSP_READY python"
         "typescript", "javascript", "node" -> "npm install -g typescript typescript-language-server prettier eslint 2>&1 | tail -n 5; echo LSP_READY typescript"
         "go" -> "go install golang.org/x/tools/gopls@latest 2>&1 | tail -n 5; echo LSP_READY go"
         "c", "cpp" -> "(apt-get install -y -qq clangd clang-format 2>&1 || apk add --no-cache clang-extra-tools 2>&1) | tail -n 5; echo LSP_READY c"
@@ -144,9 +144,9 @@ internal object OrionStudio {
         "build" -> "if [ -f Makefile ]; then make 2>&1 | tail -n 40; elif [ -f package.json ]; then (npm install --no-audit --no-fund 2>&1 | tail -n 5; npm run build --if-present 2>&1 | tail -n 40); " +
             "elif [ -f Cargo.toml ]; then cargo build 2>&1 | tail -n 40; elif [ -f go.mod ]; then go build ./... 2>&1 | tail -n 40; elif [ -f pom.xml ]; then mvn -q -B package 2>&1 | tail -n 40; " +
             "elif [ -f build.gradle -o -f build.gradle.kts ]; then gradle build --no-daemon 2>&1 | tail -n 40; elif [ -f CMakeLists.txt ]; then cmake -S . -B build && cmake --build build 2>&1 | tail -n 40; " +
-            "elif [ -f pyproject.toml -o -f setup.py ]; then pip install -q build 2>&1 | tail -n 2; python3 -m build 2>&1 | tail -n 30; else echo 'no build system detected (Makefile, package.json, Cargo.toml, go.mod, pom.xml, gradle, CMake, pyproject)'; fi"
+            "elif [ -f pyproject.toml -o -f setup.py ]; then /workspace/.venvs/studio/bin/python -m pip install -q build 2>&1 | tail -n 2; /workspace/.venvs/studio/bin/python -m build 2>&1 | tail -n 30; else echo 'no build system detected (Makefile, package.json, Cargo.toml, go.mod, pom.xml, gradle, CMake, pyproject)'; fi"
         else -> "$VENV; if [ -f package.json ]; then npm test --silent 2>&1 | tail -n 50; elif [ -f Cargo.toml ]; then cargo test 2>&1 | tail -n 50; elif [ -f go.mod ]; then go test ./... 2>&1 | tail -n 50; " +
-            "elif [ -f pom.xml ]; then mvn -q -B test 2>&1 | tail -n 50; elif ls test*.py tests >/dev/null 2>&1; then (command -v pytest >/dev/null || pip install -q pytest 2>&1 | tail -n 1); python3 -m pytest -q 2>&1 | tail -n 50; elif [ -f Makefile ]; then make test 2>&1 | tail -n 50; else echo 'no tests detected'; fi"
+            "elif [ -f pom.xml ]; then mvn -q -B test 2>&1 | tail -n 50; elif ls test*.py tests >/dev/null 2>&1; then (test -x /workspace/.venvs/studio/bin/pytest || /workspace/.venvs/studio/bin/python -m pip install -q pytest 2>&1); /workspace/.venvs/studio/bin/python -m pytest -q 2>&1 | tail -n 50; elif [ -f Makefile ]; then make test 2>&1 | tail -n 50; else echo 'no tests detected'; fi"
     }
 
     fun buildScript(project: String, kind: String, target: String): String? {
@@ -342,11 +342,11 @@ p.kill()
             "apk" to "install" -> "apk add --no-cache $n 2>&1 | tail -n 20"
             "apk" to "remove" -> "apk del $n 2>&1 | tail -n 15"
             "apk" to "update" -> "apk update 2>&1 | tail -n 3; apk upgrade 2>&1 | tail -n 15"
-            "pip" to "list" -> "python3 -m pip list --format=freeze 2>&1 | head -n 300"
-            "pip" to "search" -> "python3 -m pip index versions $n 2>&1 | head -n 6"
-            "pip" to "install" -> "python3 -m pip install -q $n 2>&1"
-            "pip" to "remove" -> "python3 -m pip uninstall -y $n 2>&1"
-            "pip" to "update" -> "python3 -m pip install -q -U ${if (names.isEmpty()) "pip" else n} 2>&1"
+            "pip" to "list" -> "/workspace/.venvs/studio/bin/python -m pip list --format=freeze 2>&1 | head -n 300"
+            "pip" to "search" -> "/workspace/.venvs/studio/bin/python -m pip index versions $n 2>&1 | head -n 6"
+            "pip" to "install" -> "/workspace/.venvs/studio/bin/python -m pip install -q $n 2>&1"
+            "pip" to "remove" -> "/workspace/.venvs/studio/bin/python -m pip uninstall -y $n 2>&1"
+            "pip" to "update" -> "/workspace/.venvs/studio/bin/python -m pip install -q -U ${if (names.isEmpty()) "pip" else n} 2>&1"
             "npm" to "list" -> "npm ls -g --depth=0 2>&1 | head -n 100"
             "npm" to "search" -> "npm search --parseable $n 2>&1 | head -n 25"
             "npm" to "install" -> "npm install -g --no-audit --no-fund $n 2>&1 | tail -n 15"
@@ -499,15 +499,19 @@ p.kill()
 
     /** Makes sure the package manager and the shared venv exist, then installs and reports the real tail of the log. */
     fun installScript(cmd: String, ub: Boolean): String {
+        val isPip = cmd.trimStart().startsWith("pip ") || cmd.trimStart().startsWith("pip3 ")
         val prelude = when {
             cmd.startsWith("npm") -> "command -v npm >/dev/null 2>&1 || { ${toolchainScript("node", ub)}; command -v npm >/dev/null 2>&1 || " + (if (ub) "apt-get install -y npm 2>&1" else "apk add --no-cache npm 2>&1") + "; }"
-            cmd.startsWith("pip") -> "command -v python3 >/dev/null 2>&1 || { ${toolchainScript("python", ub)}; }; " +
-                "python3 -m pip --version >/dev/null 2>&1 || { " + (if (ub) "apt-get update -qq && apt-get install -y python3-pip python3-venv" else "apk add --no-cache py3-pip py3-virtualenv") + "; }; " +
-                "python3 -m pip --version >/dev/null 2>&1 || { echo 'pip bootstrap failed'; exit 127; }; " +
-                "mkdir -p /workspace/.venvs && (test -x /workspace/.venvs/studio/bin/python || python3 -m venv /workspace/.venvs/studio) || { echo 'studio venv bootstrap failed'; exit 127; }"
+            isPip -> "command -v python3 >/dev/null 2>&1 || { ${toolchainScript("python", ub)}; }; " +
+                (if (ub) "$APT_HEAL; apt-get update -qq && apt-get install -y python3-venv python3-full" else "apk add --no-cache python3 py3-pip py3-virtualenv") + "; " +
+                "mkdir -p /workspace/.venvs && " +
+                "(test -x /workspace/.venvs/studio/bin/python || python3 -m venv /workspace/.venvs/studio) || { echo 'studio venv bootstrap failed'; exit 127; }; " +
+                "/workspace/.venvs/studio/bin/python -m pip --version >/dev/null 2>&1 || { /workspace/.venvs/studio/bin/python -m ensurepip --upgrade; }; " +
+                "/workspace/.venvs/studio/bin/python -m pip --version >/dev/null 2>&1 || { echo 'studio venv pip bootstrap failed'; exit 127; }"
             else -> "true"
         }
-        return "$prelude; $VENV; ($cmd; echo \$? > /tmp/orion_rc) 2>&1 | tee /tmp/orion_reg.log; rc=\$(cat /tmp/orion_rc 2>/dev/null || echo 1); echo INSTALL_EXIT=\$rc"
+        val effectiveCommand = if (isPip) cmd.trim().replaceFirst(Regex("^pip3?\\s+"), "/workspace/.venvs/studio/bin/python -m pip ") else cmd
+        return "$prelude; $VENV; (set -o pipefail 2>/dev/null || true; $effectiveCommand; echo \$? > /tmp/orion_rc) 2>&1 | tee /tmp/orion_reg.log; rc=\$(cat /tmp/orion_rc 2>/dev/null || echo 1); echo INSTALL_EXIT=\$rc"
     }
 
     fun registryInstall(c: Context, a: JSONObject): String {
