@@ -193,50 +193,8 @@ private fun OrionStructuredBlockCard(
     val clipboard = LocalClipboardManager.current
     when (block) {
         is OrionMessageBlock.Text -> Text(block.markdown, color = ChatCopy, fontSize = 13.sp, lineHeight = 20.sp)
-        is OrionMessageBlock.Code -> if (block.language.lowercase() in setOf("diff", "patch") || looksLikeUnifiedDiff(block.source)) {
-            OrionDiffCard(block.source, block.filename)
-        } else Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                .background(OrionUiPalette.background)
-                .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp))
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(block.filename ?: block.language.uppercase(), color = OrionUiPalette.secondaryText,
-                    fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .7.sp)
-                Spacer(Modifier.weight(1f))
-                Text("COPY", color = ChatMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { clipboard.setText(AnnotatedString(block.source)) }.padding(4.dp))
-            }
-            block.source.lines().forEachIndexed { index, line ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text((index + 1).toString(), color = OrionUiPalette.muted, fontSize = 11.sp, fontFamily = mono)
-                    Text(highlightCode(line), color = ChatCopy, fontSize = 11.sp, fontFamily = mono, lineHeight = 16.sp)
-                }
-            }
-        }
-        is OrionMessageBlock.Terminal -> {
-            val failed = block.state.equals("failed", true) || (block.exitCode != null && block.exitCode != 0)
-            val active = block.state.equals("running", true)
-            val accent = if (failed) OrionUiPalette.danger else if (active) OrionUiPalette.warning else OrionUiPalette.success
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(OrionUiPalette.background)
-                    .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp)).padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("TERMINAL", color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.weight(1f))
-                    Text(block.state.uppercase(), color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                }
-                if (block.command.isNotBlank()) Text(buildAnnotatedString { withStyle(SpanStyle(color = OrionUiPalette.success, fontWeight = FontWeight.Bold)) { append("$ ") }; append(block.command) }, color = ChatCopy, fontSize = 12.sp, fontFamily = mono)
-                if (block.source.isNotBlank()) Text(block.source, color = ChatMuted, fontSize = 10.sp, fontFamily = mono, lineHeight = 15.sp)
-                if (block.stdout.isNotBlank()) Text(block.stdout.takeLast(5000), color = ChatCopy, fontSize = 11.sp, fontFamily = mono, lineHeight = 15.sp)
-                if (block.stderr.isNotBlank()) Text(block.stderr.takeLast(3000), color = OrionUiPalette.danger, fontSize = 11.sp, fontFamily = mono, lineHeight = 15.sp)
-                if (block.exitCode != null) Text("Exit code " + block.exitCode, color = accent, fontSize = 9.sp)
-            }
-        }
+        is OrionMessageBlock.Code -> OrionCompactCodeCard(block)
+        is OrionMessageBlock.Terminal -> OrionCompactTerminalCard(block)
         is OrionMessageBlock.GeneratedFile -> {
             val stored = resolveGeneratedFileAttachment(block, attachment)
             Column(
@@ -330,6 +288,78 @@ private fun OrionStructuredBlockCard(
             }
         }
         is OrionMessageBlock.Image -> ImageResultCard(block.legacyPayload)
+    }
+}
+
+@Composable
+private fun OrionCompactCodeCard(block: OrionMessageBlock.Code) {
+    var expanded by remember(block.filename, block.source.hashCode()) { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
+    val lines = remember(block.source) { block.source.lines() }
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+            .background(OrionUiPalette.background)
+            .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp))
+            .padding(horizontal = 11.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(block.filename ?: block.language.uppercase(), color = ChatCopy,
+                fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("${lines.size} lines · CODE", color = ChatMuted, fontSize = 9.sp)
+        }
+        if (expanded) {
+            Text(block.source.take(12000), color = ChatCopy, fontSize = 10.sp, lineHeight = 14.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("COPY", color = OrionUiPalette.secondaryText, fontSize = 9.sp,
+                    modifier = Modifier.clickable { clipboard.setText(AnnotatedString(block.source)) }.padding(vertical = 5.dp))
+                Text("HIDE CODE", color = ChatMuted, fontSize = 9.sp,
+                    modifier = Modifier.clickable { expanded = false }.padding(vertical = 5.dp))
+            }
+        } else {
+            Text("Code saved as an artifact. Source is hidden from the conversation.",
+                color = ChatMuted, fontSize = 10.sp, lineHeight = 14.sp)
+            Text("SHOW CODE", color = OrionUiPalette.secondaryText, fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable { expanded = true }.padding(vertical = 4.dp))
+        }
+    }
+}
+
+@Composable
+private fun OrionCompactTerminalCard(block: OrionMessageBlock.Terminal) {
+    var expanded by remember(block.command, block.state, block.exitCode) { mutableStateOf(false) }
+    val failed = block.state.equals("failed", true) || (block.exitCode != null && block.exitCode != 0)
+    val accent = if (failed) OrionUiPalette.danger else if (block.state.equals("running", true)) OrionUiPalette.warning else OrionUiPalette.success
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(OrionUiPalette.background)
+            .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp)).padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("TERMINAL", color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            Text(block.state.uppercase(), color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        }
+        if (block.command.isNotBlank()) Text("$ " + block.command, color = ChatCopy, fontSize = 11.sp,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(if (expanded) "HIDE OUTPUT" else "VIEW OUTPUT", color = OrionUiPalette.secondaryText,
+                fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable { expanded = !expanded }.padding(vertical = 4.dp))
+            Spacer(Modifier.weight(1f))
+            block.exitCode?.let { Text("exit $it", color = accent, fontSize = 9.sp) }
+        }
+        if (expanded) {
+            if (block.source.isNotBlank()) Text(block.source.take(1200), color = ChatMuted, fontSize = 9.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+            if (block.stdout.isNotBlank()) Text(block.stdout.takeLast(1600), color = ChatCopy, fontSize = 10.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, lineHeight = 14.sp)
+            if (block.stderr.isNotBlank()) Text(block.stderr.takeLast(1200), color = OrionUiPalette.danger,
+                fontSize = 10.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, lineHeight = 14.sp)
+        }
     }
 }
 
