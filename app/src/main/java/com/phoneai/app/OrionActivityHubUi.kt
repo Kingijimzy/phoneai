@@ -60,11 +60,13 @@ import androidx.compose.ui.window.Dialog
 
 internal fun openActivityTarget(c: Context, t: OrionActivityHub.Target) {
     runCatching {
+        val activity = generateSequence(c) { (it as? android.content.ContextWrapper)?.baseContext }
+            .filterIsInstance<MainChatActivity>().firstOrNull()
         when (t) {
             is OrionActivityHub.Target.Studio -> c.startActivity(Intent(c, StudioActivity::class.java)
                 .putExtra("page", t.page).also { i -> t.file?.let { i.putExtra("file", it) } }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             is OrionActivityHub.Target.Url -> {
-                if (c is MainChatActivity) c.openBrowserFromActivity(t.url)
+                if (activity != null) activity.openBrowserFromActivity(t.url)
                 else c.startActivity(Intent(c, MainChatActivity::class.java)
                     .putExtra(MainChatActivity.EXTRA_OPEN_BROWSER_URL, t.url)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
