@@ -95,6 +95,11 @@ internal class StudioEditorPage(host: StudioActivity) : StudioPage(host) {
         host.setProject("snippets"); fileField.setText("snippet.$ext"); editor.setText(code); highlight()
     }
 
+    /** Open the workspace file browser from the unified Workspace hub. */
+    fun showFiles() {
+        if (tree.visibility != android.view.View.VISIBLE) toggleTree()
+    }
+
     private fun toggleTree() {
         if (tree.visibility == android.view.View.VISIBLE) { tree.visibility = android.view.View.GONE; return }
         host.bg {
