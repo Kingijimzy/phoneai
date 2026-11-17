@@ -101,7 +101,8 @@ fun OrionComposeShell(
     onOpenAgents: () -> Unit = {},
     onOpenSoulEngine: () -> Unit = {},
     onOpenExtensions: () -> Unit = {},
-    onOpenFeature: (String) -> Unit = {}
+    onOpenFeature: (String) -> Unit = {},
+    onResumeTask: (String) -> Unit = {}
 ) {
     var selected by remember { mutableStateOf("Home") }
     val scheme = darkColorScheme(
@@ -129,7 +130,7 @@ fun OrionComposeShell(
                     when (page) {
                         "Home" -> HomePage(status, onOpenChat, onOpenVoice, onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenAgents, onOpenMemory)
                         "Workspace" -> ToolsPage(onOpenFeature)
-                        "Activity" -> ActivityPage(onOpenTasks, onOpenAgents, onOpenSoulEngine, onOpenExtensions, onOpenMemory)
+                        "Activity" -> ActivityPage(onOpenTasks, onOpenAgents, onOpenSoulEngine, onOpenExtensions, onOpenMemory, onResumeTask)
                         else -> SettingsPage(onOpenSettings, onOpenFeature)
                     }
                 }
@@ -403,14 +404,22 @@ private fun ActivityPage(
     onOpenAgents: () -> Unit,
     onOpenSoulEngine: () -> Unit,
     onOpenExtensions: () -> Unit,
-    onOpenMemory: () -> Unit
+    onOpenMemory: () -> Unit,
+    onResumeTask: (String) -> Unit
 ) {
+    var showHistory by remember { mutableStateOf(false) }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp)
     ) {
         PageHeading("Activity", "Follow Orion's work, review outcomes and manage the systems behind active objectives.")
+        OrionInterruptionBanner()
+        OrionActivityHubCard(onOpenAll = { showHistory = true })
+        if (showHistory) OrionRunSheet(
+            onDismiss = { showHistory = false },
+            onResume = onResumeTask
+        )
         Text("EXECUTION", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
         ActionRow("Tasks & workflows", "Open objectives, queued work, progress and recovery controls", Icons.Rounded.TaskAlt, onOpenTasks)
         ActionRow("Specialist agents", "Review delegated work and open specialist workspaces", Icons.Rounded.SmartToy, onOpenAgents)
