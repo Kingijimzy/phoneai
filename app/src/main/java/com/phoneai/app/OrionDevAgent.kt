@@ -23,6 +23,14 @@ internal class OrionDevAgent(
 ) {
     private val workspace = OrionPythonWorkspace(context)
 
+    /** Resolve agent file operations against the same active project shown by Studio. */
+    private fun projectPath(path: String): String {
+        val active = OrionProjectContext.get(context.applicationContext).trim().trim('/')
+        val relative = path.trim().trim('/')
+        if (active.isBlank() || relative == active || relative.startsWith("$active/")) return relative
+        return if (relative.isBlank()) active else "$active/$relative"
+    }
+
     /** Result of a Dev Agent operation: what was attempted and what was actually verified. */
     data class DevResult(
         val action: String,
@@ -61,7 +69,7 @@ internal class OrionDevAgent(
             )
         }
         val listing = if (workspacePath.isBlank() || workspacePath == ".") workspace.list()
-            else workspace.list(workspacePath)
+            else workspace.list(projectPath(workspacePath))
         if (listing.startsWith("error:")) {
             return DevResult(action = "understand_repository", blocker = listing, summary = "Could not list the workspace.")
         }
@@ -86,7 +94,7 @@ internal class OrionDevAgent(
 
     /** Inspect a single source file's contents without modifying it. */
     fun readSourceFile(workspacePath: String): DevResult {
-        val content = workspace.read(workspacePath)
+        val content = workspace.read(projectPath(workspacePath))
         if (content.startsWith("error:")) {
             return DevResult(action = "read_source_file", blocker = content, summary = "Could not read $workspacePath.")
         }
@@ -106,7 +114,7 @@ internal class OrionDevAgent(
         if (content.isBlank()) {
             return DevResult(action = "write_source_file", blocker = "empty content refused", summary = "No file was written.")
         }
-        val result = workspace.write(workspacePath, content)
+        val result = workspace.write(projectPath(workspacePath), content)
         if (result.startsWith("error:")) {
             return DevResult(action = "write_source_file", blocker = result, summary = "Write to $workspacePath was not saved.")
         }
@@ -236,7 +244,7 @@ internal class OrionDevAgent(
      * without applying it, and list what verification steps would be needed.
      */
     fun planChange(workspacePath: String, proposedChange: String): DevResult {
-        val current = workspace.read(workspacePath)
+        val current = workspace.read(projectPath(workspacePath))
         if (current.startsWith("error:")) {
             return DevResult(action = "plan_change", blocker = current, summary = "Cannot plan a change to an unreadable file.")
         }
@@ -259,7 +267,7 @@ internal class OrionDevAgent(
      * and what remains to be done. This is the Dev Agent's honest status report.
      */
     fun projectSummary(): DevResult {
-        val listing = workspace.list()
+        val listing = workspace.list(OrionProjectContext.get(context.applicationContext))
         val fileCount = if (listing.startsWith("error:")) 0 else listing.lines().filter { it.isNotEmpty() }.size
         val backupCount = workspace.backupCount()
         val trashCount = workspace.trashCount()
