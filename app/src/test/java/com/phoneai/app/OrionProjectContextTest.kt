@@ -9,6 +9,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -26,6 +27,12 @@ class OrionProjectContextTest {
         assertEquals("projects/demo", OrionProjectContext.get(context))
         assertEquals("", OrionProjectContext.set(context, ""))
         assertEquals("", OrionProjectContext.get(context))
+    }
+
+    @Test fun selectedProjectRootResolvesInsideTheSharedWorkspace() {
+        OrionProjectContext.set(context, "projects/demo")
+        val workspace = ShellRunner.workspace(context).canonicalFile
+        assertEquals(File(workspace, "projects/demo").canonicalFile, OrionProjectContext.root(context).canonicalFile)
     }
 
     @Test fun migratesThePreviouslySavedStudioProject() {
