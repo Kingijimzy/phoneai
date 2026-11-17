@@ -247,7 +247,8 @@ private fun HomePage(
                 Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(14.dp)).background(Silver)
                     .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onOpenChat)
                     .semantics { contentDescription = "Open Orion chat"; role = androidx.compose.ui.semantics.Role.Button }
-                    .padding(horizontal = 14.dp, vertical = 14.dp),                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
             ) {
                 Icon(Icons.Rounded.ChatBubbleOutline, null, tint = Ink, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(9.dp))
