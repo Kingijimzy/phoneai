@@ -244,7 +244,7 @@ object Prefs {
     fun geminiMicSensitivity(c: Context): String = sp(c).getString("gemini_mic_sensitivity", "medium")?.takeIf { it in setOf("low", "medium", "high") } ?: "medium"
     fun setGeminiMicSensitivity(c: Context, v: String) = sp(c).edit().putString("gemini_mic_sensitivity", if (v in setOf("low", "medium", "high")) v else "medium").apply()
 
-    fun geminiLiveEnabled(c: Context): Boolean = sp(c).getBoolean("gemini_live_enabled", false)
+    fun geminiLiveEnabled(c: Context): Boolean = sp(c).getBoolean("gemini_live_enabled", key(c, "gemini").isNotBlank())
     fun setGeminiLiveEnabled(c: Context, enabled: Boolean) {
         sp(c).edit().putBoolean("gemini_live_enabled", enabled).apply()
     }
