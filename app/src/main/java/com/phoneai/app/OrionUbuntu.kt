@@ -84,6 +84,7 @@ internal object OrionUbuntu {
 
     fun where(c: Context): String = when (choice(c)) {
         "linux" -> "linux"
+        "ubuntu" -> "ubuntu"
         else -> if (isInstalled(c)) "ubuntu" else "linux"
     }
 
