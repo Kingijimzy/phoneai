@@ -324,121 +324,71 @@ private fun HomeActionCard(
 
 @Composable
 private fun ToolsPage(onOpenFeature: (String) -> Unit) {
-    var showRegisteredTools by remember { mutableStateOf(false) }
-
-    data class Feature(
-        val title: String,
-        val detail: String,
-        val icon: androidx.compose.ui.graphics.vector.ImageVector,
-        val route: String
-    )
-    val groups = listOf(
-        "EVERYDAY ASSISTANT" to listOf(
-            Feature("Chat with Orion", "The main conversation, commands and image attachments", Icons.Rounded.ChatBubbleOutline, "chat"),
-            Feature("Live conversation", "Speak with Orion using the standard voice experience", Icons.Rounded.GraphicEq, "live"),
-            Feature("Orion Browser", "Open pages and run assisted research", Icons.Rounded.Public, "browser"),
-            Feature("Tasks & workflows", "Saved tasks, reminders and repeatable routines", Icons.Rounded.TaskAlt, "tasks")
-        ),
-        "WORK, MEMORY & LEARNING" to listOf(
-            Feature("Agent workspace", "Trading Coach, Research, Code, Planner and Writer agents", Icons.Rounded.SmartToy, "agents"),
-            Feature("Teach mode", "Teach Orion a workflow and review recorded steps", Icons.Rounded.AutoAwesome, "teach"),
-            Feature("Memory", "Review, edit, pin and manage remembered information", Icons.Rounded.Memory, "memory"),
-            Feature("Knowledge graph", "Explore linked knowledge and saved context", Icons.Rounded.Hub, "knowledge_graph"),
-            Feature("Proactive work", "Scheduled briefings and proactive task controls", Icons.Rounded.Bolt, "proactive")
-        ),
-        "TRADING, GAMES & DEVICE" to listOf(
-            Feature("Trading desk", "Market tools, watchlists, journal and analysis", Icons.Rounded.TaskAlt, "trading"),
-            Feature("Gaming Coach", "Game-focused coaching and supported device workflows", Icons.Rounded.SmartToy, "gaming"),
-            Feature("Device utilities", "Network Radar, Game Sentinel and file tools", Icons.Rounded.Tune, "device_utilities")
-        ),
-        "SYSTEM, EXTENSIONS & DEVELOPMENT" to listOf(
-            Feature("Soul Engine", "System dashboard, readiness and self-tests", Icons.Rounded.Hub, "soul_engine"),
-            Feature("Watcher", "Background watcher status and controls", Icons.Rounded.Bolt, "watcher"),
-            Feature("Self-extension lab", "Build, sandbox-test and manage reusable extensions", Icons.Rounded.AutoAwesome, "extensions"),
-            Feature("Terminal", "Termux bridge and supported terminal workflows", Icons.Rounded.Tune, "terminal"),
-            Feature("Workspace files", "Scoped file workspace with allowlisted operations", Icons.Rounded.Memory, "workspace"),
-            Feature("Cloud coding agent", "Connected coding-agent workspace", Icons.Rounded.SmartToy, "cloud_coding"),
-            Feature("Capability & integrations board", "Connected services, permissions and capability gaps", Icons.Rounded.Public, "capabilities"),
-            Feature("Capability report", "Inspect the current capability and readiness report", Icons.Rounded.Shield, "capability_report"),
-            Feature("Approval & capabilities", "Approval mode, trusted sessions and tool access", Icons.Rounded.Shield, "agent_control"),
-            Feature("Termux bridge", "Optional external terminal runtime with explicit approval", Icons.Rounded.Tune, "termux_bridge"),
-            Feature("Owner Control Center", "Private autonomy, recovery, extension and Watcher controls", Icons.Rounded.Settings, "owner_control")
-        ),
-        "ADVANCED VOICE" to listOf(
-            Feature("Gemini Live (experimental)", "Optional live provider mode; uses its own API quota", Icons.Rounded.Mic, "gemini_live")
-        )
-    )
-
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 24.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp)
     ) {
-        PageHeading("Workspace", "Your connected work areas, development tools and capabilities in one place.")
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 54.dp).clip(RoundedCornerShape(14.dp)).background(Panel)
-                .border(1.dp, Hairline, RoundedCornerShape(14.dp)).padding(13.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(Icons.Rounded.Widgets, null, tint = Silver, modifier = Modifier.size(22.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("Platform map", color = Copy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text("${groups.sumOf { it.second.size }} destinations · ${ToolRegistry.all.size} registered tools", color = Muted, fontSize = 11.sp)
-            }
-            Text("DIRECT", color = Silver, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-        }
-
-        groups.forEach { (heading, features) ->
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(heading, color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                features.forEach { feature ->
-                    ActionRow(feature.title, feature.detail, feature.icon) { onOpenFeature(feature.route) }
-                }
-            }
-        }
-
+        PageHeading(
+            "Workspace",
+            "One project context shared by your editor, terminal, agent and runtime."
+        )
         Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Panel)
-                .border(1.dp, Hairline, RoundedCornerShape(16.dp)).padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .border(1.dp, Hairline, RoundedCornerShape(16.dp)).padding(15.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp)
         ) {
+            Text("DEVELOPMENT ENVIRONMENT", color = Silver, fontSize = 9.sp,
+                fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+            Text("Code Studio", color = Copy, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Edit files, run commands, delegate coding work and manage builds without switching between disconnected tools.",
+                color = Muted, fontSize = 12.sp, lineHeight = 17.sp
+            )
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = androidx.compose.ui.semantics.Role.Button) { showRegisteredTools = !showRegisteredTools },
-                verticalAlignment = Alignment.CenterVertically
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(11.dp))
+                    .background(Silver).clickable(role = androidx.compose.ui.semantics.Role.Button) {
+                        onOpenFeature("studio")
+                    }.padding(horizontal = 13.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("Registered agent tools", color = Copy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.heightIn(min = 44.dp))
-                    Text("${ToolRegistry.all.size} registered contracts · access labels from the live registry", color = Muted, fontSize = 11.sp)
-                }
-                Text(if (showRegisteredTools) "HIDE" else "VIEW", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            }
-            if (showRegisteredTools) {
-                Text("These are tool contracts, not separate app pages. Availability still depends on the current capability, permission and policy state.", color = Muted, fontSize = 11.sp)
-                ToolRegistry.all.forEach { definition ->
-                    val readOnly = definition.access == ToolAccess.READ
-                    val badgeColor = if (readOnly) Silver else OrionUiPalette.warning
-                    val badgeBackground = if (readOnly) PanelRaised else Panel
-                    Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp)).background(PanelRaised)
-                            .border(1.dp, Hairline, RoundedCornerShape(11.dp)).padding(horizontal = 11.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(9.dp)
-                    ) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text(definition.name, color = Copy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                            Text(definition.description, color = Muted, fontSize = 10.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        }
-                        Text(
-                            definition.access.name,
-                            Modifier.clip(RoundedCornerShape(7.dp)).background(badgeBackground)
-                                .border(1.dp, badgeColor.copy(alpha = .45f), RoundedCornerShape(7.dp))
-                                .padding(horizontal = 7.dp, vertical = 5.dp),
-                            color = badgeColor, fontSize = 8.sp, fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
+                Icon(Icons.Rounded.Code, null, tint = Ink, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Open Code Studio", color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(6.dp))
+                Icon(Icons.Rounded.ChevronRight, null, tint = Ink, modifier = Modifier.size(17.dp))
             }
         }
+        Text("QUICK ACCESS", color = Silver, fontSize = 10.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Terminal", "Run commands in the active workspace runtime", Icons.Rounded.Terminal) {
+            onOpenFeature("studio_terminal")
+        }
+        ActionRow("Files & project", "Browse project files and shared workspace state", Icons.Rounded.FolderOpen) {
+            onOpenFeature("studio_project")
+        }
+        ActionRow("Coding agent", "Plan and execute coding tasks in the same project", Icons.Rounded.SmartToy) {
+            onOpenFeature("studio_agent")
+        }
+        ActionRow("Git, build & recovery", "Review changes, build output and recovery tools", Icons.Rounded.AccountTree) {
+            onOpenFeature("studio_project")
+        }
+        ActionRow("Runtime & packages", "Select the runtime and manage installed packages", Icons.Rounded.Tune) {
+            onOpenFeature("studio_tools")
+        }
+        Text("CONNECTED WORK AREAS", color = Silver, fontSize = 10.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Cloud coding agent", "Open the connected remote coding workspace", Icons.Rounded.Cloud) {
+            onOpenFeature("cloud_coding")
+        }
+        ActionRow("Browser & research", "Open the assisted browser for research and web tasks", Icons.Rounded.Public) {
+            onOpenFeature("browser")
+        }
+        Text(
+            "All Code Studio shortcuts open the same project and runtime session. Other capabilities remain in their existing owners until their screens are migrated into the shared shell.",
+            color = Muted, fontSize = 10.sp, lineHeight = 15.sp
+        )
     }
 }
 
