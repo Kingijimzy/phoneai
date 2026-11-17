@@ -626,7 +626,7 @@ internal fun OrionComposeChatScreen(
     val runningTitle = runSteps.lastOrNull { it.status == OrionRunLog.Status.RUNNING }?.title
     val pillText = OrionPanelText.statusLine(effectiveOrbMode, busy, runningTitle)
     val lastUserText = lines.lastOrNull { it.kind == "me" }?.text.orEmpty()
-    if (showRunSheet) OrionRunSheet(onDismiss = { showRunSheet = false })
+    if (showRunSheet) OrionRunSheet(onDismiss = { showRunSheet = false }, onResume = { onSend(it) })
     Column(Modifier.fillMaxSize().background(Color(0xFF000000)).imePadding()) {
         // Top bar: back, title + live link count, LIVE (model) pill, Activity toggle, overflow.
         Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 10.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -741,11 +741,13 @@ internal fun OrionComposeChatScreen(
                         OrionChatAttachmentCard(item, onOpenAttachment, onShareAttachment)
                     }
                 }
-                item(key = "orion-tool-pills") { OrionToolPills(lines) }
-                // Keep the conversation primary: show one live task card for the latest
-                // task only. Full event history remains available from the Tasks surface.
-                OrionActivityTimeline.latestChatCard(activityEvents)?.let { event ->
-                    item(key = "activity-${event.eventId}") { androidx.compose.foundation.layout.Box(Modifier.orionEnter()) { OrionComposeActivityCard(event) } }
+                item(key = "orion-interruptions") { OrionInterruptionBanner() }
+                // One live summary per task, updated in place; steps open their source.
+                item(key = "orion-activity-hub") { OrionActivityHubCard(onOpenAll = { showRunSheet = true }) }
+                if (OrionRunLog.currentRun().isEmpty()) {
+                    OrionActivityTimeline.latestChatCard(activityEvents)?.let { event ->
+                        item(key = "activity-${event.eventId}") { androidx.compose.foundation.layout.Box(Modifier.orionEnter()) { OrionComposeActivityCard(event) } }
+                    }
                 }
                 val assistantAlreadyStreaming = lines.lastOrNull()?.let {
                     it.kind == "ai" && it.text.isNotBlank()

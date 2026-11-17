@@ -1054,6 +1054,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        OrionActivityHistory.attach(this)
         super.onCreate(savedInstanceState)
         commandMode = savedInstanceState?.getBoolean(STATE_COMMAND_MODE)
             ?: intent.getBooleanExtra(EXTRA_FORCE_COMMAND, false)
