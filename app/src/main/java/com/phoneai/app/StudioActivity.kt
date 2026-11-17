@@ -160,7 +160,14 @@ class StudioActivity : Activity() {
     private fun handle(i: Intent) {
         i.getStringExtra("file")?.let { show("editor"); (pages["editor"] as? StudioEditorPage)?.openFile(it) }
         i.getStringExtra("snippet")?.let { code -> show("editor"); (pages["editor"] as? StudioEditorPage)?.openSnippet(code, i.getStringExtra("lang").orEmpty()) }
-        i.getStringExtra("page")?.let { show(it) }
+        i.getStringExtra("page")?.let { page ->
+            if (page == "files") {
+                show("editor")
+                (pages["editor"] as? StudioEditorPage)?.showFiles()
+            } else {
+                show(page)
+            }
+        }
     }
 
     private fun show(id: String) {
