@@ -184,7 +184,11 @@ class StudioActivity : Activity() {
         }
         getSharedPreferences("studio_state", 0).edit().putString("page", key).apply()
         runtimePill.text = OrionUbuntu.label(this).uppercase()
-        groups.first { it.first == key }.third.forEach { pages[it]?.onShow() }
+        // Paint the tab first, then refresh its pages one frame apart so a tap never waits on git/disk work.
+        val shown = key
+        groups.first { it.first == key }.third.forEachIndexed { i, pid ->
+            scrolls[key]?.postDelayed({ if (current == shown) pages[pid]?.onShow() }, 40L * (i + 1))
+        }
         if (id != key) scrollToSection(id)
     }
 

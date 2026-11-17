@@ -49,7 +49,16 @@ internal object OrionRunLog {
     @Volatile private var runFloor = 0L
 
     /** A new user request starts a new run; the task card only counts its steps. */
-    fun beginRun(title: String = "") { runFloor = ids.get(); OrionActivityHistory.runTitle = title.replace(Regex("\\s+"), " ").trim().take(120) }
+    fun beginRun(title: String = "") { runFloor = ids.get(); OrionActivityHistory.runTitle = cleanTitle(title) }
+
+    /** Strips internal wrappers such as "[ORION MISSION ...] Mission: X" so the user sees only the task. */
+    fun cleanTitle(raw: String): String {
+        var t = raw.trim()
+        Regex("(?i)mission:\\s*([^\\n]+)").find(t)?.let { if (t.startsWith("[")) t = it.groupValues[1] }
+        t = t.replace(Regex("^(\\[[^\\]]*\\]\\s*)+"), "")
+        t = t.lineSequence().firstOrNull { it.isNotBlank() } ?: ""
+        return t.replace(Regex("\\s+"), " ").trim().take(90)
+    }
 
     fun currentRun(list: List<Step> = steps): List<Step> = list.filter { it.id >= runFloor }
 
