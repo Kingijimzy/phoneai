@@ -205,6 +205,7 @@ class OrionStudioInstallTest {
         assertTrue(pip.contains("python3 -m venv") && pip.contains("apk add"))
         assertTrue(pip.contains("/workspace/.venvs/studio/bin/python -m pip install -q y"))
         assertFalse(pip.contains("python3 -m pip install -q y"))
+        assertTrue(pip.contains("/workspace/.venvs/studio/bin/python -m pip check"))
         val ubuntuPip = OrionStudio.installScript("pip install -q requests", true)
         assertTrue(ubuntuPip.contains("python3-full") && ubuntuPip.contains("/workspace/.venvs/studio/bin/python -m pip install -q requests"))
         assertFalse(ubuntuPip.contains("python3 -m pip install -q requests"))
