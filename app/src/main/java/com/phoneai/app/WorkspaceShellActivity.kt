@@ -4,11 +4,16 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 
-/** Legacy workspace entry point retained for existing navigation routes. */
+/** Legacy workspace route retained as a redirect to the single Studio host. */
 class WorkspaceShellActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        startActivity(Intent(this, CodeStudioActivity::class.java))
+        val target = Intent(this, StudioActivity::class.java).apply {
+            putExtras(intent)
+            if (!hasExtra("page")) putExtra("page", "editor")
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        startActivity(target)
         finish()
     }
 }
