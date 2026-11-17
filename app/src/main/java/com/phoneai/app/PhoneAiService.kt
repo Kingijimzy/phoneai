@@ -209,6 +209,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         TelegramListenerService.ensureRunning(this)
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         voice = Voice(this)
+        voice.warmUp()
         voice.onSpeaking = { s ->
             speaking = s
             if (s && Prefs.bargeIn(this)) bargeMonitor.start { onBargeIn() } else bargeMonitor.stop()
@@ -1056,14 +1057,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
      * This is not a permission bypass: Agent dispatch still checks tool modes, packs, Android
      * grants, and action-specific confirmation before each tool runs.
      */
-    fun executeSharedToolRequest(text: String, source: String = "alternate surface", completion: ((String) -> Unit)? = null) {
+    fun executeSharedToolRequest(text: String, source: String = "alternate surface", completion: ((String) -> Unit)? = null) =
+        executeSharedToolRequest(text, source, completion, 0)
+
+    /** A request that arrives while Orion is busy waits its turn (up to ~90 s) instead of being refused. */
+    private fun executeSharedToolRequest(text: String, source: String, completion: ((String) -> Unit)?, waited: Int) {
         val command = text.trim()
         if (command.isEmpty()) return
         main.post {
             if (running) {
-                val message = "Orion is already working. Let the current task finish, then retry this request."
-                mainChatListener?.onMessage("ai", message)
-                completion?.invoke(message)
+                if (waited < 60) {
+                    if (waited == 0) mainChatListener?.onStatus("Queued behind the current task: ${command.take(50)}", currentMode())
+                    main.postDelayed({ executeSharedToolRequest(command, source, completion, waited + 1) }, 1500)
+                } else {
+                    val message = "Orion is still busy with another task, so I could not start this one."
+                    mainChatListener?.onMessage("ai", message)
+                    completion?.invoke(message)
+                }
                 return@post
             }
             handsActive = false

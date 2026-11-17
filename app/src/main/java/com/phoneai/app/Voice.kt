@@ -193,6 +193,17 @@ class Voice(private val ctx: Context) {
     private fun splitForSpeech(text: String, limit: Int = 420): List<String> =
         SpeechChunker.split(text, limit)
 
+    /** Loads Kokoro and runs one silent-length generation so the first real sentence starts without model-load delay. */
+    fun warmUp() {
+        if (!Prefs.neuralVoice(ctx) || Locale.getDefault().language != "en" || !NeuralVoiceInstaller.isInstalled(ctx)) return
+        neuralWorker.execute {
+            try {
+                val engine = obtainNeuralEngine(NeuralVoiceInstaller.modelFile(ctx))
+                engine.generate(text = "Hm.", sid = Prefs.kokoroSpeakerId(ctx), speed = 1.0f)
+            } catch (_: Throwable) { }
+        }
+    }
+
     fun isSpeaking(): Boolean = pending.get() > 0 || tts?.isSpeaking == true
 
     fun speak(text: String, onDone: (() -> Unit)? = null) {

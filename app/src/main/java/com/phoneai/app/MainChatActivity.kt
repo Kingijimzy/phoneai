@@ -113,9 +113,28 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
     }
 
+    private var browsingChip: TextView? = null
+
+    /** Orion's own browsing never takes over the screen: a small chip appears, and the page opens only if tapped. */
     override fun onOpenBrowser(url: String) {
         runOnUiThread {
-            if (!isFinishing && !isDestroyed) showChatBrowserPopup(url)
+            if (isFinishing || isDestroyed) return@runOnUiThread
+            val host = runCatching { android.net.Uri.parse(url).host }.getOrNull()?.removePrefix("www.") ?: url.take(30)
+            browsingChip?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+            val chip = TextView(this).apply {
+                text = "Orion is browsing  $host  ›"
+                setTextColor(0xFFE6E6E6.toInt()); textSize = 12f
+                setPadding(dp(14), dp(8), dp(14), dp(8))
+                background = rounded(0xF2202020.toInt(), 18, 0x555F5F5F)
+                elevation = dp(6).toFloat()
+                setOnClickListener { showChatBrowserPopup(url); (parent as? android.view.ViewGroup)?.removeView(this) }
+            }
+            val lp = android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT, android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(72) }
+            (window.decorView.findViewById<android.view.ViewGroup>(android.R.id.content)).addView(chip, lp)
+            browsingChip = chip
+            chip.postDelayed({ (chip.parent as? android.view.ViewGroup)?.removeView(chip) }, 7000)
         }
     }
 
@@ -2141,7 +2160,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }
     }
 
-    private fun addMessage(kind: String, text: String) {
+    private fun addMessage(kind: String, rawText: String) {
+        val text = if (kind == "ai") OrionChatText.tidy(rawText) else rawText
         if (composeChatActive) {
             val draftId = streamingMessageId
             if (kind == "ai" && draftId != null) {
@@ -2256,11 +2276,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             if (id == null) {
                 val freshId = System.nanoTime()
                 streamingMessageId = freshId
-                composeLines.add(OrionChatLine(freshId, "ai", streamingBuffer.toString()))
+                composeLines.add(OrionChatLine(freshId, "ai", OrionChatText.tidy(streamingBuffer.toString())))
             } else {
                 val index = composeLines.indexOfFirst { it.id == id }
-                if (index >= 0) composeLines[index] = OrionChatLine(id, "ai", streamingBuffer.toString())
-                else composeLines.add(OrionChatLine(id, "ai", streamingBuffer.toString()))
+                if (index >= 0) composeLines[index] = OrionChatLine(id, "ai", OrionChatText.tidy(streamingBuffer.toString()))
+                else composeLines.add(OrionChatLine(id, "ai", OrionChatText.tidy(streamingBuffer.toString())))
             }
         }
     }

@@ -52,7 +52,7 @@ internal object OrionActivityHub {
             t in setOf("dev_write", "dev_read", "devspace", "dev_python") -> Lane.CODE
             t in setOf("shell", "python_exec", "execute_system_op", "termux_command", "dev_shell") -> Lane.RUNTIME
             t.startsWith("browser") || t in setOf("web_search", "live_web_search", "fetch_url", "research_web", "open_url", "live_news", "live_sports", "weather", "web_api", "github_public", "github_search_repositories") -> Lane.WEB
-            t.startsWith("workspace") || t in setOf("find_files", "open_file", "save_file", "show_file", "document_extract", "backup_list", "backup_restore") -> Lane.FILES
+            t.startsWith("workspace") || t in setOf("find_files", "open_file", "save_file", "show_file", "document_extract", "backup_list", "backup_restore") || t.contains("image") || t.contains("ocr") || t.contains("vision") || t.contains("screenshot") -> Lane.FILES
             t in setOf("remember", "recall", "update_memory", "forget", "fact_add", "fact_query", "fact_forget", "knowledge_search", "discussion_search", "decision_history") -> Lane.MEMORY
             t.startsWith("telegram") || t.startsWith("gmail") || t in setOf("sms", "dial", "social", "notion", "google") -> Lane.COMMS
             t in setOf("spawn_worker", "worker_list", "worker_result", "worker_cancel", "platform_selftest", "open_page") -> Lane.PLATFORM
