@@ -823,7 +823,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val b = OrbView(this)
         b.backing = true
         b.contentDescription = if (running) "Orion is working. Tap to view progress." else "Orion assistant. Tap to open."
-        val lp = WindowManager.LayoutParams(dp(48), dp(48), OVERLAY, NOT_FOCUSABLE, PixelFormat.TRANSLUCENT)
+        val lp = WindowManager.LayoutParams(dp(56), dp(56), OVERLAY, NOT_FOCUSABLE, PixelFormat.TRANSLUCENT)
         lp.gravity = Gravity.TOP or Gravity.START
         lp.x = dp(8)
         lp.y = dp(180)
