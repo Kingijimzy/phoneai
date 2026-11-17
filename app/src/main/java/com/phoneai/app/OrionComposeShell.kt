@@ -35,6 +35,7 @@ import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Hub
@@ -418,6 +419,9 @@ private fun ActivityPage(
         PageHeading("Activity", "Follow Orion's work, review outcomes and manage the systems behind active objectives.")
         OrionInterruptionBanner()
         OrionActivityHubCard(onOpenAll = { showHistory = true })
+        ActionRow("Run history & evidence", "Search completed tasks, inspect tool steps and resume interrupted work", Icons.Rounded.History) {
+            showHistory = true
+        }
         if (showHistory) OrionRunSheet(
             onDismiss = { showHistory = false },
             onResume = onResumeTask
