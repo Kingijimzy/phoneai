@@ -41,14 +41,14 @@ class StudioActivity : Activity() {
     private fun groupOf(id: String): String = groups.firstOrNull { it.first == id || id in it.third }?.first ?: "editor"
     private var detail: View? = null
 
-    internal val project: String get() = projectField.text.toString().trim().trim('/')
+    internal val project: String get() = OrionProjectContext.get(this)
 
     internal fun bg(block: () -> Unit) { Thread { runCatching(block) }.start() }
     internal fun post(block: () -> Unit) { runOnUiThread { runCatching(block) } }
     internal fun postDelayed(r: Runnable, ms: Long) { main.postDelayed(r, ms) }
     internal fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
     internal fun currentPageId() = current
-    internal fun setProject(p: String) { projectField.setText(p) }
+    internal fun setProject(p: String) { projectField.setText(OrionProjectContext.set(this, p)) }
     internal fun currentFile(): String? = (pages["editor"] as? StudioEditorPage)?.currentFile()
     internal fun openChat() { startActivity(Intent(this, MainChatActivity::class.java)) }
     internal fun scrollToBottom() { scrolls[current]?.post { scrolls[current]?.fullScroll(View.FOCUS_DOWN) } }
@@ -91,7 +91,9 @@ class StudioActivity : Activity() {
         runtimePill = ui.badge("", Theme.OK)
         titleRow.addView(runtimePill)
         top.addView(titleRow)
-        projectField = ui.field("project folder under /workspace (blank = whole workspace)").apply { setText(prefs.getString("project", "")) }
+        val initialProject = OrionProjectContext.get(this).ifBlank { prefs.getString("project", "").orEmpty() }
+        projectField = ui.field("project folder under /workspace (blank = whole workspace)").apply { setText(initialProject) }
+        OrionProjectContext.set(this, initialProject)
         top.addView(projectField)
         rootView.addView(top, LinearLayout.LayoutParams(-1, -2))
 
@@ -149,7 +151,11 @@ class StudioActivity : Activity() {
         projectField.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
             override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
-            override fun afterTextChanged(s: android.text.Editable?) { prefs.edit().putString("project", s.toString().trim()).apply() }
+            override fun afterTextChanged(s: android.text.Editable?) {
+                val value = s?.toString().orEmpty().trim()
+                runCatching { OrionProjectContext.set(this@StudioActivity, value) }
+                    .onFailure { toast("Invalid project path: use a folder under /workspace") }
+            }
         })
         handle(intent)
         if (intent.getStringExtra("page") == null && intent.getStringExtra("file") == null && intent.getStringExtra("snippet") == null) show(prefs.getString("page", "editor").orEmpty())
@@ -193,5 +199,10 @@ class StudioActivity : Activity() {
 
     override fun onDestroy() { progressListener?.let { OrionProgress.unlisten(it) }; super.onDestroy() }
 
-    override fun onResume() { super.onResume(); runtimePill.text = OrionUbuntu.label(this).uppercase() }
+    override fun onResume() {
+        super.onResume()
+        runtimePill.text = OrionUbuntu.label(this).uppercase()
+        val active = OrionProjectContext.get(this)
+        if (projectField.text.toString().trim().trim('/') != active) projectField.setText(active)
+    }
 }
