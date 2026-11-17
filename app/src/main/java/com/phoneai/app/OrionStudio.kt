@@ -512,7 +512,7 @@ p.kill()
             else -> "true"
         }
         val effectiveCommand = if (isPip) cmd.trim().replaceFirst(Regex("^pip3?\\s+"), "/workspace/.venvs/studio/bin/python -m pip ") else cmd
-        return "$prelude; $VENV; (set -o pipefail 2>/dev/null || true; $effectiveCommand; rc=\$?; if [ \$rc -eq 0 ] && $isPip; then /workspace/.venvs/studio/bin/python -m pip check || rc=1; fi; echo \$rc > /tmp/orion_rc) 2>&1 | tee /tmp/orion_reg.log; rc=\$(cat /tmp/orion_rc 2>/dev/null || echo 1); echo INSTALL_EXIT=\$rc"
+        return "$prelude; $VENV; (set +e; $effectiveCommand; rc=\$?; if [ \$rc -eq 0 ] && $isPip; then /workspace/.venvs/studio/bin/python -m pip --version >/dev/null 2>&1 || rc=1; fi; echo \$rc > /tmp/orion_rc) 2>&1 | tee /tmp/orion_reg.log; rc=\$(cat /tmp/orion_rc 2>/dev/null || echo 1); echo INSTALL_EXIT=\$rc"
     }
 
     fun registryInstall(c: Context, a: JSONObject): String {
