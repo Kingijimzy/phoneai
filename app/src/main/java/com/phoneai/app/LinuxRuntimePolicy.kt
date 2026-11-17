@@ -74,7 +74,8 @@ internal object LinuxRuntimePolicy {
         command: String,
         workspaceHostPath: String? = null,
         androidAppDataPath: String? = null,
-        sharedStoragePath: String? = null
+        sharedStoragePath: String? = null,
+        linkEmulation: Boolean = false
     ): List<String>? {
         if (command.isBlank() || command.length > MAX_COMMAND || command.contains('\u0000')) return null
         if (!prootPath.startsWith("/") || prootPath.contains("..") ||
@@ -86,7 +87,11 @@ internal object LinuxRuntimePolicy {
             // PRoot -0 maps the guest process to Alpine root without granting Android host-root access.
             // The previous launcher inherited Android app UID 10390, which cannot write to
             // root-owned guest paths such as /root/.api-anything even though HOME was /root.
-            addAll(listOf(prootPath, "-0", "-r", rootfsDir, "-b", "/dev", "-b", "/proc"))
+            addAll(listOf(prootPath, "-0"))
+            // Android denies hard links inside app storage, and dpkg makes one for /var/lib/dpkg/status-old
+            // ("error creating new backup file ... Permission denied"). PRoot emulates them with symlinks.
+            if (linkEmulation) add("--link2symlink")
+            addAll(listOf("-r", rootfsDir, "-b", "/dev", "-b", "/proc"))
             // Expose only host paths that the Android app UID can already access. Android's
             // permission model and SELinux continue to enforce every host read/write.
             if (androidAppDataPath != null) addAll(listOf("-b", "$androidAppDataPath:/android-app"))

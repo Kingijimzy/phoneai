@@ -52,7 +52,7 @@ internal class OrionSpeechStreamer(private val clock: () -> Long = System::curre
     }
 
     private fun findCut(s: String, first: Boolean): Int {
-        val minLen = if (first) 14 else 28
+        val minLen = if (first) 10 else 24
         var i = 0
         while (i < s.length) {
             val c = s[i]
@@ -61,7 +61,7 @@ internal class OrionSpeechStreamer(private val clock: () -> Long = System::curre
                 c == '\n' && i > 0 && s[i - 1] == '\n'
             val digitDot = c == '.' && i > 0 && s[i - 1].isDigit() && next?.isDigit() == true
             if (boundary && !digitDot && next != null && i + 1 >= minLen) return i + 1
-            if (first && (c == ',' || c == ':' || c == ';' || c == '—') && next != null && next.isWhitespace() && i + 1 >= 36) return i + 1
+            if (first && (c == ',' || c == ':' || c == ';' || c == '—') && next != null && next.isWhitespace() && i + 1 >= 22) return i + 1
             i++
         }
         if (s.length >= 220) {
