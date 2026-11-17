@@ -9,6 +9,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.net.HttpURLConnection
 import java.net.URL
+import java.io.IOException
 import java.util.Locale
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
@@ -20,6 +21,8 @@ object Bybit {
     private const val MAIN = "https://api.bybit.com"
     private const val TEST = "https://api-testnet.bybit.com"
     private const val RECV = "5000"
+    // Public market-data fallbacks; signed account/order calls stay on the canonical host.
+    private val PUBLIC_BASES = listOf("https://api.bytick.com", "https://api.bybit.nl", "https://api.bybit-tr.com", MAIN)
 
     private val names = mapOf(
         "bitcoin" to "BTC", "ethereum" to "ETH", "ether" to "ETH", "solana" to "SOL", "ripple" to "XRP",
@@ -66,8 +69,8 @@ object Bybit {
         val conn = url.openConnection() as HttpURLConnection
         try {
             conn.requestMethod = method
-            conn.connectTimeout = 15000
-            conn.readTimeout = 20000
+            conn.connectTimeout = if (signed) 15000 else 4500
+            conn.readTimeout = if (signed) 20000 else 7500
             conn.setRequestProperty("Accept", "application/json")
             if (signed) {
                 if (!hasKeys(c)) throw BybitException("No Bybit key saved. Add it in Orion settings, Trading card.")
@@ -100,18 +103,38 @@ object Bybit {
         }
     }
 
+    /** Public market requests retry transport failures only; parsed Bybit API errors are returned directly. */
+    private fun publicCall(c: Context, path: String, query: String): JSONObject {
+        val failures = mutableListOf<String>()
+        for (base in PUBLIC_BASES) {
+            try { return call(c, base, "GET", path, query, null, false) }
+            catch (e: BybitException) { throw e }
+            catch (e: Exception) {
+                val kind = when (e) {
+                    is javax.net.ssl.SSLException -> "TLS"
+                    is java.net.UnknownHostException -> "DNS"
+                    is java.net.SocketTimeoutException -> "TIMEOUT"
+                    is IOException -> "HTTP/IO"
+                    else -> e.javaClass.simpleName
+                }
+                failures += base.removePrefix("https://") + ": " + kind + " (" + (e.message ?: "").take(100) + ")"
+            }
+        }
+        throw BybitException("Bybit public market data unavailable. Transport failures by host: " + failures.joinToString("; "))
+    }
+
     // ---------------------------------------------------------------- market data (mainnet, no key)
 
     fun price(c: Context, symbol: String, forTrade: Boolean = false): Double {
-        val base = if (forTrade) tradeBase(c) else MAIN
-        val o = call(c, base, "GET", "/v5/market/tickers", "category=linear&symbol=$symbol", null, false)
+        val o = if (forTrade) call(c, tradeBase(c), "GET", "/v5/market/tickers", "category=linear&symbol=$symbol", null, false)
+            else publicCall(c, "/v5/market/tickers", "category=linear&symbol=$symbol")
         val l = o.getJSONObject("result").getJSONArray("list")
         if (l.length() == 0) throw BybitException("I can't find $symbol on Bybit.")
         return l.getJSONObject(0).getString("lastPrice").toDouble()
     }
 
     fun change24h(c: Context, symbol: String): Double {
-        val o = call(c, MAIN, "GET", "/v5/market/tickers", "category=linear&symbol=$symbol", null, false)
+        val o = publicCall(c, "/v5/market/tickers", "category=linear&symbol=$symbol")
         val l = o.getJSONObject("result").getJSONArray("list")
         if (l.length() == 0) return 0.0
         return l.getJSONObject(0).optString("price24hPcnt", "0").toDoubleOrNull()?.times(100.0) ?: 0.0
@@ -119,7 +142,7 @@ object Bybit {
 
     /** Candles, oldest first. interval: 15, 60, 240, D. The last one may still be forming. */
     fun candles(c: Context, symbol: String, interval: String, limit: Int = 200): List<Candle> {
-        val o = call(c, MAIN, "GET", "/v5/market/kline", "category=linear&symbol=$symbol&interval=$interval&limit=$limit", null, false)
+        val o = publicCall(c, "/v5/market/kline", "category=linear&symbol=$symbol&interval=$interval&limit=$limit")
         val l = o.getJSONObject("result").getJSONArray("list")
         val out = ArrayList<Candle>(l.length())
         for (i in l.length() - 1 downTo 0) {
@@ -180,12 +203,12 @@ object Bybit {
         val oiNow = t.optString("openInterest", "").toDoubleOrNull() ?: 0.0
         val chg = (t.optString("price24hPcnt", "0").toDoubleOrNull() ?: 0.0) * 100.0
         val oiOld = try {
-            val l = call(c, MAIN, "GET", "/v5/market/open-interest", "category=linear&symbol=$symbol&intervalTime=1h&limit=25", null, false)
+            val l = publicCall(c, "/v5/market/open-interest", "category=linear&symbol=$symbol&intervalTime=1h&limit=25")
                 .getJSONObject("result").getJSONArray("list")
             if (l.length() >= 25) l.getJSONObject(24).optString("openInterest", "").toDoubleOrNull() else null
         } catch (_: Exception) { null }
         val longShare = try {
-            call(c, MAIN, "GET", "/v5/market/account-ratio", "category=linear&symbol=$symbol&period=1h&limit=1", null, false)
+            publicCall(c, "/v5/market/account-ratio", "category=linear&symbol=$symbol&period=1h&limit=1")
                 .getJSONObject("result").getJSONArray("list").let { if (it.length() == 0) null else it.getJSONObject(0).optString("buyRatio", "").toDoubleOrNull() }
         } catch (_: Exception) { null }
         return DerivativesRead.Input(symbol, funding, oiNow, oiOld, chg, longShare)

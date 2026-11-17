@@ -438,7 +438,7 @@ internal class GeminiLiveSession(
                 return@forEach
             }
             service.executeSharedToolRequest(request, "Gemini Live") { result ->
-                if (!stopped.get()) socket?.send(GeminiLivePolicy.toolResponse(id, name, result.ifBlank { "Done." }).toString())
+                if (!stopped.get()) socket?.send(GeminiLivePolicy.toolResponse(id, name, GeminiLivePolicy.clipToolResult(result)).toString())
             }
         }
     }

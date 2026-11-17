@@ -51,6 +51,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var reloadButton: TextView
     private lateinit var stopButton: TextView
     private lateinit var agentPrompt: EditText
+    private lateinit var agentPanel: LinearLayout
     private lateinit var agentResult: TextView
     private lateinit var agentRun: TextView
     private var agentAttached = false
@@ -59,11 +60,11 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
     private fun pill(text: String, action: () -> Unit) = TextView(this).apply {
         this.text = text
-        textSize = 13f
+        textSize = 11f
         setTextColor(Theme.TEXT)
         typeface = Typeface.DEFAULT
         gravity = Gravity.CENTER
-        setPadding(dp(11), dp(10), dp(11), dp(10))
+        setPadding(dp(8), dp(6), dp(8), dp(6))
         isClickable = true
         isFocusable = true
         setOnClickListener { action() }
@@ -74,7 +75,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         GradientDrawable.Orientation.TOP_BOTTOM,
         intArrayOf(fill, 0xE8131313.toInt())
     ).apply {
-        cornerRadius = dp(15).toFloat()
+        cornerRadius = dp(11).toFloat()
         setStroke(dp(1), 0x555F5F5F)
     }
 
@@ -86,7 +87,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Theme.BG)
-            setPadding(dp(10), dp(8), dp(10), dp(6))
+            setPadding(dp(8), dp(5), dp(8), dp(4))
         }
         val heading = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -104,6 +105,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             typeface = Typeface.DEFAULT_BOLD
         }
         heading.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
+        heading.addView(pill("Ask Orion") { agentPanel.visibility = if (agentPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE })
         heading.addView(pill("Done") { finish() })
         root.addView(heading)
 
@@ -111,12 +113,12 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             hint = "Search or enter website"
             setHintTextColor(Color.LTGRAY)
             setTextColor(Color.WHITE)
-            textSize = 14f
+            textSize = 13f
             setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
             imeOptions = EditorInfo.IME_ACTION_GO
             background = rounded(Theme.PANEL2)
-            setPadding(dp(12), dp(4), dp(12), dp(4))
+            setPadding(dp(10), dp(3), dp(10), dp(3))
             setOnEditorActionListener { _, actionId, event ->
                 if (actionId == EditorInfo.IME_ACTION_GO ||
                     (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
@@ -124,7 +126,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
                 } else false
             }
         }
-        root.addView(address, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(8) })
+        root.addView(address, LinearLayout.LayoutParams(-1, dp(40)).apply { topMargin = dp(5) })
 
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
@@ -217,9 +219,9 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         controlsScroll.addView(controls, -2, -2)
         root.addView(controlsScroll, LinearLayout.LayoutParams(-1, -2))
 
-        val agentPanel = LinearLayout(this).apply {
+        agentPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), dp(8), dp(10), dp(8))
+            setPadding(dp(9), dp(6), dp(9), dp(6))
             background = GradientDrawable().apply {
                 setColor(Theme.PANEL); cornerRadius = dp(16).toFloat(); setStroke(dp(1), Theme.LINE)
             }
@@ -264,6 +266,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             maxLines = 3
         }
         agentPanel.addView(agentResult)
+        agentPanel.visibility = View.GONE
         root.addView(agentPanel, LinearLayout.LayoutParams(-1, -2).apply {
             topMargin = dp(6)
             bottomMargin = dp(6)
@@ -278,11 +281,11 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             clipToPadding = false
         }
         tabsScroll.addView(tabStrip, -2, -2)
-        root.addView(tabsScroll, LinearLayout.LayoutParams(-1, dp(42)))
+        root.addView(tabsScroll, LinearLayout.LayoutParams(-1, dp(34)))
         webContainer = android.widget.FrameLayout(this)
         val browserBall = TextView(this).apply {
             text = "O"
-            textSize = 20f
+            textSize = 16f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             setTextColor(Theme.BG)
@@ -315,6 +318,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
                     true
                 }
                 menu.menu.add("Ask Orion to act").setOnMenuItemClickListener {
+                    agentPanel.visibility = View.VISIBLE
                     agentPrompt.requestFocus()
                     val imm = getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
                     imm?.showSoftInput(agentPrompt, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
@@ -331,7 +335,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
                 menu.show()
             }
         }
-        webContainer.addView(browserBall, android.widget.FrameLayout.LayoutParams(dp(52), dp(52), Gravity.END or Gravity.BOTTOM).apply {
+        webContainer.addView(browserBall, android.widget.FrameLayout.LayoutParams(dp(42), dp(42), Gravity.END or Gravity.BOTTOM).apply {
             rightMargin = dp(16)
             bottomMargin = dp(16)
         })
@@ -614,7 +618,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             val item = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(9), 0, dp(4), 0)
+                setPadding(dp(7), 0, dp(3), 0)
                 background = rounded(if (index == activeTabIndex) Theme.PANEL2 else Theme.PANEL)
             }
             val titleView = TextView(this).apply {
@@ -625,14 +629,14 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
                 setSingleLine(true)
                 setOnClickListener { selectTab(index) }
                 isClickable = true
-                setPadding(0, dp(8), dp(5), dp(8))
+                setPadding(0, dp(6), dp(4), dp(6))
             }
             item.addView(titleView)
             if (browserTabs.size > 1) {
                 item.addView(pill("×") { closeTab(index) }.apply { setPadding(dp(5), dp(6), dp(5), dp(6)) })
             }
             item.setOnClickListener { selectTab(index) }
-            tabStrip.addView(item, LinearLayout.LayoutParams(-2, dp(34)).apply { rightMargin = dp(5) })
+            tabStrip.addView(item, LinearLayout.LayoutParams(-2, dp(30)).apply { rightMargin = dp(5) })
         }
         tabStrip.addView(pill("+") {
             createTab("https://duckduckgo.com/", true)

@@ -60,11 +60,17 @@ import androidx.compose.ui.window.Dialog
 
 internal fun openActivityTarget(c: Context, t: OrionActivityHub.Target) {
     runCatching {
+        val activity = generateSequence(c) { (it as? android.content.ContextWrapper)?.baseContext }
+            .filterIsInstance<MainChatActivity>().firstOrNull()
         when (t) {
             is OrionActivityHub.Target.Studio -> c.startActivity(Intent(c, StudioActivity::class.java)
                 .putExtra("page", t.page).also { i -> t.file?.let { i.putExtra("file", it) } }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            is OrionActivityHub.Target.Url -> c.startActivity(Intent(c, BrowserActivity::class.java)
-                .putExtra(BrowserActivity.EXTRA_URL, t.url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            is OrionActivityHub.Target.Url -> {
+                if (activity != null) activity.openBrowserFromActivity(t.url)
+                else c.startActivity(Intent(c, MainChatActivity::class.java)
+                    .putExtra(MainChatActivity.EXTRA_OPEN_BROWSER_URL, t.url)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
             is OrionActivityHub.Target.Page -> OrionPages.open(c, t.id)
             OrionActivityHub.Target.None -> Unit
         }
@@ -179,36 +185,73 @@ private fun StepRow(step: OrionRunLog.Step, now: Long, expanded: Boolean, onTogg
 
 /** One live summary per task, updated in place. Never one message per command. */
 @Composable
-internal fun OrionActivityHubCard(onOpenAll: () -> Unit, modifier: Modifier = Modifier) {
+internal fun OrionActivityHubCard(
+    onOpenAll: () -> Unit,
+    modifier: Modifier = Modifier,
+    events: List<OrionActivityEvent> = emptyList()
+) {
+    val context = LocalContext.current
     val run = OrionRunLog.currentRun()
-    if (run.isEmpty()) return
-    val sum = OrionActivityHub.summarize(OrionActivityHistory.runTitle, run)
-    var expanded by remember { mutableStateOf(false) }
+    if (run.isEmpty() && events.isEmpty()) return
+    val sum = run.takeIf { it.isNotEmpty() }?.let { OrionActivityHub.summarize(OrionActivityHistory.runTitle, it) }
+    val latestEvent = events.maxByOrNull { it.timestampMs }
     var open by remember { mutableStateOf<Long?>(null) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(sum.running) { while (sum.running > 0) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(500) } }
-    val tone = when (sum.status) { "running" -> OrionUiPalette.accent; "failed" -> OrionUiPalette.danger; "partial" -> OrionUiPalette.warning; else -> Color(0xFFB8CDBD) }
+    val runningCount = sum?.running ?: 0
+    LaunchedEffect(runningCount) { while (runningCount > 0) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(500) } }
+    val tone = when {
+        latestEvent?.status == OrionActivityStatus.ACTIVE -> OrionUiPalette.accent
+        latestEvent?.status == OrionActivityStatus.FAILED -> OrionUiPalette.danger
+        latestEvent?.status == OrionActivityStatus.WAITING -> OrionUiPalette.warning
+        sum?.status == "running" -> OrionUiPalette.accent
+        sum?.status == "failed" -> OrionUiPalette.danger
+        sum?.status == "partial" -> OrionUiPalette.warning
+        else -> Color(0xFFB8CDBD)
+    }
     Column(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(OrionUiPalette.panel)
         .border(1.dp, OrionUiPalette.border, RoundedCornerShape(14.dp)).padding(horizontal = 12.dp, vertical = 10.dp)) {
-        Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().clickable { onOpenAll() }, verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).clip(CircleShape).background(tone))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(sum.title, color = OrionUiPalette.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${sum.done}/${sum.total} steps · " + sum.status.uppercase() +
-                    (if (sum.failed > 0) " · ${sum.failed} failed" else "") +
-                    " · " + OrionRunLog.durationLabel(((if (sum.running > 0) now else sum.endedAt) - sum.startedAt).coerceAtLeast(0L)),
-                    color = OrionUiPalette.muted, fontSize = 10.sp)
+                Text(latestEvent?.let(OrionActivityPresentation::title) ?: sum?.title ?: "Recent activity",
+                    color = OrionUiPalette.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(latestEvent?.let { OrionActivityPresentation.summary(it) } ?: sum?.let {
+                    "${it.done}/${it.total} steps · ${it.status.uppercase()}" + (if (it.failed > 0) " · ${it.failed} failed" else "")
+                } ?: "Tap to inspect the live task stream",
+                    color = OrionUiPalette.muted, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            Text(if (expanded) "LESS" else "DETAILS", color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Text("OPEN", color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
         Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            sum.lanes.take(4).forEach { (lane, n) -> Chip("${lane.label} $n", null, OrionUiPalette.secondaryText, laneIcon(lane)) }
+            sum?.lanes?.take(4)?.forEach { (lane, n) -> Chip("${lane.label} $n", null, OrionUiPalette.secondaryText, laneIcon(lane)) }
+            if (events.isNotEmpty()) Chip("${events.size} tasks", null, OrionUiPalette.secondaryText)
             Chip("History", onOpenAll, OrionUiPalette.text, Icons.Rounded.History)
         }
+        if (latestEvent != null) {
+            Text(OrionActivityPresentation.summary(latestEvent), color = OrionUiPalette.muted, fontSize = 10.sp,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
+            latestEvent.typedEvidence.take(2).forEach { evidence ->
+                val label = when (evidence) {
+                    is OrionActivityEvidence.Browser -> "View " + evidence.title.ifBlank { "web page" }
+                    is OrionActivityEvidence.File -> "Open " + evidence.displayPath.substringAfterLast('/')
+                    is OrionActivityEvidence.Terminal -> "Terminal output"
+                    is OrionActivityEvidence.CodeDiff -> "Review " + evidence.fileLabel.substringAfterLast('/')
+                    is OrionActivityEvidence.AgentHandoff -> "Agent details"
+                }
+                val icon = when (evidence) {
+                    is OrionActivityEvidence.Browser -> Icons.Rounded.Public
+                    is OrionActivityEvidence.File -> Icons.Rounded.FolderOpen
+                    is OrionActivityEvidence.Terminal -> Icons.Rounded.Terminal
+                    is OrionActivityEvidence.CodeDiff -> Icons.Rounded.Code
+                    is OrionActivityEvidence.AgentHandoff -> Icons.Rounded.Extension
+                }
+                Chip(label, { openActivityEvidence(context, evidence) }, OrionUiPalette.secondaryText, icon)
+            }
+        }
         Column(Modifier.padding(top = 6.dp)) {
-            (if (expanded) run else run.takeLast(3)).forEach { s ->
-                StepRow(s, now, expanded = open == s.id || (!expanded && s.status == OrionRunLog.Status.RUNNING)) { open = if (open == s.id) null else s.id }
+            run.takeLast(3).forEach { step ->
+                StepRow(step, now, expanded = open == step.id || step.status == OrionRunLog.Status.RUNNING) { open = if (open == step.id) null else step.id }
             }
         }
     }
@@ -236,9 +279,25 @@ internal fun OrionInterruptionBanner(modifier: Modifier = Modifier) {
     }
 }
 
+private fun openActivityEvidence(c: Context, evidence: OrionActivityEvidence) {
+    when (evidence) {
+        is OrionActivityEvidence.Browser -> openActivityTarget(c, OrionActivityHub.Target.Url(evidence.url))
+        is OrionActivityEvidence.File -> openActivityTarget(c, OrionActivityHub.Target.Studio("editor", evidence.displayPath.removePrefix("/workspace/").removePrefix("/")))
+        is OrionActivityEvidence.Terminal -> openActivityTarget(c, OrionActivityHub.Target.Studio("terminal"))
+        is OrionActivityEvidence.CodeDiff -> openActivityTarget(c, OrionActivityHub.Target.Studio("editor", evidence.fileLabel.removePrefix("/workspace/").removePrefix("/")))
+        is OrionActivityEvidence.AgentHandoff -> openActivityTarget(c, OrionActivityHub.Target.Studio("agent"))
+    }
+}
+
 /** The full hub: this task live, plus every past task, searchable and resumable. */
 @Composable
-internal fun OrionRunSheet(onDismiss: () -> Unit, onResume: (String) -> Unit = {}) {
+internal fun OrionRunSheet(
+    onDismiss: () -> Unit,
+    onResume: (String) -> Unit = {},
+    events: List<OrionActivityEvent> = emptyList()
+) {
+    val context = LocalContext.current
+    var openEvent by remember { mutableStateOf<String?>(null) }
     var tab by remember { mutableStateOf(0) }
     var query by remember { mutableStateOf("") }
     var openEntry by remember { mutableStateOf<Long?>(null) }
@@ -261,8 +320,54 @@ internal fun OrionRunSheet(onDismiss: () -> Unit, onResume: (String) -> Unit = {
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
                 if (tab == 0) {
                     OrionInterruptionBanner(Modifier.padding(bottom = 8.dp))
-                    if (live.isEmpty()) Text("Nothing is running. Past tasks are under History.", color = OrionUiPalette.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 12.dp))
-                    live.reversed().forEach { s -> StepRow(s, now, openStep == s.id) { openStep = if (openStep == s.id) null else s.id } }
+                    if (live.isEmpty() && events.isEmpty()) Text("No live activity has been reported. Past tasks are under History.", color = OrionUiPalette.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 12.dp))
+                    live.reversed().forEach { step -> StepRow(step, now, openStep == step.id) { openStep = if (openStep == step.id) null else step.id } }
+                    if (events.isNotEmpty()) {
+                        Text("CHAT TASK STREAM", color = OrionUiPalette.secondaryText, fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+                        events.sortedByDescending { it.timestampMs }.forEach { event ->
+                            val selected = openEvent == event.eventId
+                            val tone = when (event.status) {
+                                OrionActivityStatus.ACTIVE -> OrionUiPalette.accent
+                                OrionActivityStatus.WAITING -> OrionUiPalette.warning
+                                OrionActivityStatus.FAILED -> OrionUiPalette.danger
+                                OrionActivityStatus.SUCCEEDED -> Color(0xFFB8CDBD)
+                                else -> OrionUiPalette.muted
+                            }
+                            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp))
+                                .background(if (selected) OrionUiPalette.raised else Color.Transparent)
+                                .clickable { openEvent = if (selected) null else event.eventId }
+                                .padding(vertical = 8.dp, horizontal = 8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.size(7.dp).clip(CircleShape).background(tone))
+                                    Spacer(Modifier.width(8.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(OrionActivityPresentation.title(event), color = OrionUiPalette.text, fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(OrionActivityPresentation.summary(event), color = OrionUiPalette.muted, fontSize = 9.sp,
+                                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    Text(if (selected) "LESS" else "DETAILS", color = OrionUiPalette.secondaryText, fontSize = 8.sp)
+                                }
+                                if (selected) {
+                                    event.evidence.takeLast(8).forEach { line ->
+                                        Text(line, color = OrionUiPalette.muted, fontSize = 9.sp, modifier = Modifier.padding(start = 15.dp, top = 3.dp))
+                                    }
+                                    event.typedEvidence.forEach { evidence ->
+                                        val label = when (evidence) {
+                                            is OrionActivityEvidence.Browser -> "Open " + evidence.title.ifBlank { "page" }
+                                            is OrionActivityEvidence.File -> "Open " + evidence.displayPath.substringAfterLast('/')
+                                            is OrionActivityEvidence.Terminal -> "Open Terminal"
+                                            is OrionActivityEvidence.CodeDiff -> "Open " + evidence.fileLabel.substringAfterLast('/')
+                                            is OrionActivityEvidence.AgentHandoff -> "Open Agent"
+                                        }
+                                        Text(label, color = OrionUiPalette.text, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.padding(start = 15.dp, top = 6.dp).clickable { openActivityEvidence(context, evidence) })
+                                    }
+                                }
+                            }
+                        }
+                    }
                 } else {
                     BasicTextField(query, { query = it }, singleLine = true, cursorBrush = SolidColor(OrionUiPalette.text),
                         textStyle = TextStyle(color = OrionUiPalette.text, fontSize = 13.sp),

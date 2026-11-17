@@ -32,8 +32,10 @@ class ShellExecutionRoutingTest {
         assertEquals(600_000L, ShellExecutionRouting.commandTimeoutMs("pip install requests"))
         assertEquals(600_000L, ShellExecutionRouting.commandTimeoutMs("gradle test"))
         assertEquals(600_000L, ShellExecutionRouting.commandTimeoutMs("./gradlew assembleDebug"))
-        assertEquals(120_000L, ShellExecutionRouting.commandTimeoutMs("python3 --version"))
-        assertEquals(120_000L, ShellExecutionRouting.commandTimeoutMs("echo apk add python3"))
+        assertEquals(300_000L, ShellExecutionRouting.commandTimeoutMs("python3 --version"))
+        assertEquals(600_000L, ShellExecutionRouting.commandTimeoutMs("git clone https://github.com/a/b && pnpm install"))
+        assertEquals(600_000L, ShellExecutionRouting.commandTimeoutMs("python3 -m pip install flask"))
+        assertEquals(300_000L, ShellExecutionRouting.commandTimeoutMs("echo apk add python3"))
     }
 
     @Test fun packageMutationDetectionAvoidsCommandTextFalsePositives() {

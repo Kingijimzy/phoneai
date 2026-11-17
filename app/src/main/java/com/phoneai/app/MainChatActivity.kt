@@ -113,7 +113,33 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
     }
 
+    private var browsingChip: TextView? = null
+
+    /** Orion's own browsing never takes over the screen: a small chip appears, and the page opens only if tapped. */
     override fun onOpenBrowser(url: String) {
+        runOnUiThread {
+            if (isFinishing || isDestroyed) return@runOnUiThread
+            val host = runCatching { android.net.Uri.parse(url).host }.getOrNull()?.removePrefix("www.") ?: url.take(30)
+            browsingChip?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+            val chip = TextView(this).apply {
+                text = "Orion is browsing  $host  ›"
+                setTextColor(0xFFE6E6E6.toInt()); textSize = 12f
+                setPadding(dp(14), dp(8), dp(14), dp(8))
+                background = rounded(0xF2202020.toInt(), 18, 0x555F5F5F)
+                elevation = dp(6).toFloat()
+                setOnClickListener { showChatBrowserPopup(url); (parent as? android.view.ViewGroup)?.removeView(this) }
+            }
+            val lp = android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT, android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(72) }
+            (window.decorView.findViewById<android.view.ViewGroup>(android.R.id.content)).addView(chip, lp)
+            browsingChip = chip
+            chip.postDelayed({ (chip.parent as? android.view.ViewGroup)?.removeView(chip) }, 7000)
+        }
+    }
+
+    /** Opens an activity-hub URL in the compact browser overlay without leaving the conversation. */
+    fun openBrowserFromActivity(url: String) {
         runOnUiThread {
             if (!isFinishing && !isDestroyed) showChatBrowserPopup(url)
         }
@@ -680,7 +706,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             .setTitle("Orion capabilities & tools")
             .setNegativeButton("CLOSE", null)
             .create()
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(8), dp(16), dp(8)); setBackgroundColor(0xFF101010.toInt()) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(8), dp(16), dp(8)); background = GradientDrawable().apply { setColor(0xE51B1B1B.toInt()); cornerRadius = dp(20).toFloat(); setStroke(dp(1), 0x887F8995.toInt()) } }
         val search = EditText(this).apply {
             hint = "Search tools, skills, browser, shell…"
             setSingleLine(true); setTextColor(0xFFF4F4F4.toInt()); setHintTextColor(0xFF888888.toInt())
@@ -1753,8 +1779,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 y = 0
             }
             browserWindow.setLayout(
-                (resources.displayMetrics.widthPixels * 0.80f).toInt(),
-                (resources.displayMetrics.heightPixels * 0.66f).toInt()
+                (resources.displayMetrics.widthPixels * 0.68f).toInt(),
+                (resources.displayMetrics.heightPixels * 0.54f).toInt()
             )
         }
         web.loadUrl(initial)
@@ -2134,16 +2160,33 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }
     }
 
-    private fun addMessage(kind: String, text: String) {
+    private fun addMessage(kind: String, rawText: String) {
+        val text = if (kind == "ai") OrionChatText.tidy(rawText) else rawText
         if (composeChatActive) {
             val draftId = streamingMessageId
             if (kind == "ai" && draftId != null) {
                 val index = composeLines.indexOfFirst { it.id == draftId }
                 if (index >= 0) composeLines[index] = OrionChatLine(draftId, "ai", text)
-                else composeLines.add(OrionChatLine(System.nanoTime(), kind, text))
+                else composeLines.add(OrionChatLine(draftId, "ai", text))
                 streamingMessageId = null
                 streamingBuffer.setLength(0)
-            } else composeLines.add(OrionChatLine(System.nanoTime(), kind, text))
+            } else if (kind == "ai") {
+                // The status callback can return to IDLE before the final response callback.
+                // If the final text completes the last streamed assistant draft, replace that
+                // draft in place instead of appending a second copy of the same answer.
+                val last = composeLines.lastOrNull()
+                if (last?.kind == "ai" && last.text.isNotBlank() && text.startsWith(last.text)) {
+                    val index = composeLines.lastIndex
+                    composeLines[index] = OrionChatLine(last.id, "ai", text)
+                } else if (last?.kind != "ai" || last.text != text) {
+                    composeLines.add(OrionChatLine(System.nanoTime(), kind, text))
+                }
+                streamingMessageId = null
+                streamingBuffer.setLength(0)
+            } else {
+                val last = composeLines.lastOrNull()
+                if (last?.kind != kind || last.text != text) composeLines.add(OrionChatLine(System.nanoTime(), kind, text))
+            }
             return
         }
         if (kind == "me") {
@@ -2233,11 +2276,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             if (id == null) {
                 val freshId = System.nanoTime()
                 streamingMessageId = freshId
-                composeLines.add(OrionChatLine(freshId, "ai", streamingBuffer.toString()))
+                composeLines.add(OrionChatLine(freshId, "ai", OrionChatText.tidy(streamingBuffer.toString())))
             } else {
                 val index = composeLines.indexOfFirst { it.id == id }
-                if (index >= 0) composeLines[index] = OrionChatLine(id, "ai", streamingBuffer.toString())
-                else composeLines.add(OrionChatLine(id, "ai", streamingBuffer.toString()))
+                if (index >= 0) composeLines[index] = OrionChatLine(id, "ai", OrionChatText.tidy(streamingBuffer.toString()))
+                else composeLines.add(OrionChatLine(id, "ai", OrionChatText.tidy(streamingBuffer.toString())))
             }
         }
     }

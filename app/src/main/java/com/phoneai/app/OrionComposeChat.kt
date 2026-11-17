@@ -68,6 +68,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -106,6 +107,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.draw.scale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Choose power-of-two sampling so previews stay near 1200px even for very large photos. */
@@ -603,16 +605,26 @@ internal fun OrionComposeChatScreen(
     // Scroll only when transcript length changes. Status updates can arrive frequently while
     // a tool/model is running; tying animation to status causes repeated scroll work and fights
     // users who are reading earlier messages.
-    LaunchedEffect(lines.lastOrNull()?.id, (lines.lastOrNull()?.text?.length ?: 0) / 80) {
-        // Keep streaming replies in view in coarse chunks, not every token. Never yank the
-        // reader away from older messages unless they are already near the bottom; always
-        // reveal a newly sent user turn.
+    var showJumpToBottom by remember { mutableStateOf(false) }
+    val chatScrollScope = rememberCoroutineScope()
+    LaunchedEffect(listState) {
+        androidx.compose.runtime.snapshotFlow {
+            val layout = listState.layoutInfo
+            val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: 0
+            layout.totalItemsCount > 0 && layout.totalItemsCount - 1 - lastVisible > 2
+        }.collect { showJumpToBottom = it }
+    }
+    LaunchedEffect(lines.lastOrNull()?.id, (lines.lastOrNull()?.text?.length ?: 0) / 120) {
+        // Only follow new content when the reader is already near the end. Use the LazyColumn's
+        // actual item count because task/attachment cards are additional list items.
         if (lines.isNotEmpty()) {
             val layout = listState.layoutInfo
             val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index
             val nearBottom = lastVisible == null || layout.totalItemsCount - 1 - lastVisible <= 2
             if (lines.lastOrNull()?.kind == "me" || nearBottom) {
-                listState.animateScrollToItem(lines.lastIndex)
+                kotlinx.coroutines.yield()
+                val lastItem = listState.layoutInfo.totalItemsCount - 1
+                if (lastItem >= 0) listState.animateScrollToItem(lastItem)
             }
         }
     }
@@ -630,7 +642,7 @@ internal fun OrionComposeChatScreen(
     val pillText = OrionPanelText.statusLine(effectiveOrbMode, busy, runningTitle)
     val lastUserText = lines.lastOrNull { it.kind == "me" }?.text.orEmpty()
     if (showEverything) OrionEverythingSheet(onDismiss = { showEverything = false }, onAction = { if (it == "history") onHistory() else onMenuAction(it) })
-    if (showRunSheet) OrionRunSheet(onDismiss = { showRunSheet = false }, onResume = { onSend(it) })
+    if (showRunSheet) OrionRunSheet(onDismiss = { showRunSheet = false }, onResume = { onSend(it) }, events = activityEvents)
     Column(Modifier.fillMaxSize().background(Color(0xFF000000)).imePadding()) {
         // Top bar: back, title + live link count, LIVE (model) pill, Activity toggle, overflow.
         Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 10.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -700,11 +712,12 @@ internal fun OrionComposeChatScreen(
         } else {
             OrionLiveMetricsBar()
             val visibleLines = lines.filterNot(::isCompactExecutionNote)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                 state = listState,
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 22.dp, bottom = 20.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 14.dp, bottom = 22.dp)
             ) {
                 itemsIndexed(visibleLines, key = { _, item -> item.id }) { index, item ->
                     val previousUserMessage = if (item.kind == "ai") {
@@ -727,29 +740,53 @@ internal fun OrionComposeChatScreen(
                         } else null
                     ) }
                 }
-                if (attachments.isNotEmpty()) {
+                val inlineArtifactIds = lines.flatMap { line ->
+                    line.content.blocks.filterIsInstance<OrionMessageBlock.GeneratedFile>().map { it.artifactId }
+                }.toSet()
+                val unattached = attachments.distinctBy { it.id }.filterNot { it.id in inlineArtifactIds }
+                if (unattached.isNotEmpty()) {
                     item(key = "orion-chat-attachments-heading") {
                         Text("ATTACHMENTS", color = OrionUiPalette.muted, fontSize = 9.sp,
                             fontWeight = FontWeight.Bold, letterSpacing = .9.sp)
                     }
-                    itemsIndexed(attachments, key = { _, item -> "chat-attachment-${item.id}" }) { _, item ->
+                    itemsIndexed(unattached, key = { _, item -> "chat-attachment-${item.id}" }) { _, item ->
                         OrionChatAttachmentCard(item, onOpenAttachment, onShareAttachment)
                     }
                 }
                 item(key = "orion-interruptions") { OrionInterruptionBanner() }
                 // One live summary per task, updated in place; steps open their source.
-                item(key = "orion-activity-hub") { OrionActivityHubCard(onOpenAll = { showRunSheet = true }) }
-                if (OrionRunLog.currentRun().isEmpty()) {
-                    OrionActivityTimeline.latestChatCard(activityEvents)?.let { event ->
-                        item(key = "activity-${event.eventId}") { androidx.compose.foundation.layout.Box(Modifier.orionEnter()) { OrionComposeActivityCard(event) } }
-                    }
-                }
+                item(key = "orion-activity-hub") { OrionActivityHubCard(onOpenAll = { showRunSheet = true }, events = activityEvents) }
+                // Task progress is represented by the single Activity Hub card above.
+                // Do not append a second copy of the latest activity event to the transcript.
                 val assistantAlreadyStreaming = lines.lastOrNull()?.let {
                     it.kind == "ai" && it.text.isNotBlank()
                 } == true
                 if (busy && !assistantAlreadyStreaming) {
                     item(key = "orion-thinking-indicator") { ThinkingIndicator(displayStatus, effectiveOrbMode) }
                 }
+            }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showJumpToBottom,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 14.dp),
+                enter = fadeIn(tween(120)),
+                exit = androidx.compose.animation.fadeOut(tween(100))
+            ) {
+                Row(
+                    Modifier.clip(RoundedCornerShape(22.dp)).background(OrionUiPalette.raised)
+                        .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(22.dp))
+                        .clickable(role = Role.Button) {
+                            val lastItem = listState.layoutInfo.totalItemsCount - 1
+                            if (lastItem >= 0) chatScrollScope.launch { listState.animateScrollToItem(lastItem) }
+                        }
+                        .padding(horizontal = 13.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(Icons.Rounded.ExpandMore, null, tint = OrionUiPalette.text, modifier = Modifier.size(17.dp))
+                    Text("Latest", color = OrionUiPalette.text, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+            OrionLiveFloat(Modifier.align(Alignment.TopEnd))
             }
         }
 
@@ -875,13 +912,14 @@ private fun ChatInlineBrowserDialog(
         return uri.toString()
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
-            Modifier.fillMaxSize().padding(10.dp).clip(RoundedCornerShape(18.dp))
+            Modifier.fillMaxWidth(.76f).fillMaxHeight(.58f).clip(RoundedCornerShape(20.dp))
                 .background(OrionUiPalette.panel).border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(18.dp)).padding(10.dp)
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("BROWSER", color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(1f))
-                Text("OPEN FULL", color = ChatMuted, fontSize = 10.sp, modifier = Modifier.clickable {
+                Text("EXPAND", color = ChatMuted, fontSize = 10.sp, modifier = Modifier.clickable {
                     val target = safeWebUrl(currentUrl) ?: safeWebUrl(address) ?: "https://duckduckgo.com/"
                     onOpenFullBrowser(target)
                 }.padding(6.dp))
@@ -932,14 +970,25 @@ private fun ChatInlineBrowserDialog(
                             override fun onReceivedTitle(view: WebView, title: String?) { if (!title.isNullOrBlank()) pageTitle = title }
                         }
                         webView = this
+                        // The agent's browser tools must inspect the page shown in chat,
+                        // not a separate hidden or external WebView.
+                        BrowserAutomation.attach(this)
                         safeWebUrl(initialUrl)?.let { loadUrl(it) }
                     }
                 },
                 update = { if (webView !== it) webView = it }
             )
             DisposableEffect(Unit) {
-                onDispose { /* Keep the WebView alive only for this dialog; do not retain a hidden browsing surface. */ webView?.stopLoading(); webView?.destroy(); webView = null }
+                onDispose {
+                    webView?.let { web ->
+                        BrowserAutomation.detach(web)
+                        web.stopLoading()
+                        web.destroy()
+                    }
+                    webView = null
+                }
             }
+        }
         }
     }
 }

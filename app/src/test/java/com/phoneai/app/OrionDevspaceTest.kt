@@ -203,6 +203,15 @@ class OrionStudioInstallTest {
         assertTrue(npm.contains("command -v npm") && npm.contains("apt-get install") && npm.contains("INSTALL_EXIT"))
         val pip = OrionStudio.installScript("pip install -q y", false)
         assertTrue(pip.contains("python3 -m venv") && pip.contains("apk add"))
+        assertTrue(pip.contains("/workspace/.venvs/studio/bin/python -m pip install -q y"))
+        assertFalse(pip.contains("python3 -m pip install -q y"))
+        assertTrue(pip.contains("/workspace/.venvs/studio/bin/python -m pip --version"))
+        assertFalse(pip.contains("pip check"))
+        val ubuntuPip = OrionStudio.installScript("pip install -q requests", true)
+        assertTrue(ubuntuPip.contains("python3-full") && ubuntuPip.contains("/workspace/.venvs/studio/bin/python -m pip install -q requests"))
+        assertFalse(ubuntuPip.contains("python3 -m pip install -q requests"))
+        assertTrue(OrionStudio.packageScript("pip", "install", listOf("requests"), true)!!
+            .contains("/workspace/.venvs/studio/bin/python -m pip install -q"))
         assertTrue(OrionStudio.VENV.contains("[ -f /workspace/.venvs/studio/bin/activate ] &&"))
         assertFalse(OrionStudio.diagnosticsScript("app")!!.contains(". /workspace/.venvs/studio/bin/activate 2>/dev/null"))
     }
