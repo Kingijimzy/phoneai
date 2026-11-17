@@ -11,6 +11,7 @@ internal class StudioTerminalPage(host: StudioActivity) : StudioPage(host) {
     private lateinit var out: TextView
     private lateinit var input: EditText
     private lateinit var runtime: TextView
+    private lateinit var recent: TextView
     private val history = ArrayList<String>()
     private val buffer = StringBuilder()
 
@@ -31,9 +32,14 @@ internal class StudioTerminalPage(host: StudioActivity) : StudioPage(host) {
             ui.chip("Disk") { run("df -h /workspace | tail -n 2") }
         ))
         root.addView(ui.section("Recent"))
+        recent = ui.output(220)
+        root.addView(recent)
     }
 
-    override fun onShow() { runtime.text = "Runtime: ${OrionUbuntu.label(host)} · /workspace/" + host.project }
+    override fun onShow() {
+        runtime.text = "Runtime: ${OrionUbuntu.label(host)} · /workspace/" + host.project
+        recent.text = ShellCommandStore.recentTranscript(host, 20).ifBlank { "No saved terminal commands yet." }
+    }
 
     private fun run(command: String) {
         val cmd = command.trim()
