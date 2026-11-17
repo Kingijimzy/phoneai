@@ -15,7 +15,8 @@ internal object OrionRunLog {
 
     data class Step(
         val id: Long, val tool: String, val title: String, val detail: String, val node: String?,
-        val startedAt: Long, val endedAt: Long = 0L, val status: Status = Status.RUNNING, val output: String = ""
+        val startedAt: Long, val endedAt: Long = 0L, val status: Status = Status.RUNNING, val output: String = "",
+        val args: String = ""
     )
 
     private val ids = AtomicLong(1)
@@ -26,14 +27,16 @@ internal object OrionRunLog {
 
     fun begin(tool: String, args: JSONObject?, now: Long = System.currentTimeMillis()): Long {
         val id = ids.getAndIncrement()
-        val s = Step(id, tool, title(tool, args), detail(args), OrionNodes.nodeFor(tool, args), now)
+        val s = Step(id, tool, title(tool, args), detail(args), OrionNodes.nodeFor(tool, args), now, args = args?.toString()?.take(800).orEmpty())
         steps = (steps + s).takeLast(KEEP)
+        runCatching { OrionActivityHistory.save(currentRun()) }
         return id
     }
 
     fun finish(id: Long, output: String, failed: Boolean, now: Long = System.currentTimeMillis()) {
         steps = steps.map { if (it.id == id) it.copy(endedAt = now, status = if (failed) Status.FAILED else Status.DONE, output = output.take(20_000)) else it }
         steps.firstOrNull { it.id == id }?.let { OrionNodes.recordNode(it.node, failed, now) }
+        runCatching { OrionActivityHistory.save(currentRun()) }
     }
 
     fun clear() { steps = emptyList(); runFloor = 0L }
@@ -41,7 +44,7 @@ internal object OrionRunLog {
     @Volatile private var runFloor = 0L
 
     /** A new user request starts a new run; the task card only counts its steps. */
-    fun beginRun() { runFloor = ids.get() }
+    fun beginRun(title: String = "") { runFloor = ids.get(); OrionActivityHistory.runTitle = title.replace(Regex("\\s+"), " ").trim().take(120) }
 
     fun currentRun(list: List<Step> = steps): List<Step> = list.filter { it.id >= runFloor }
 

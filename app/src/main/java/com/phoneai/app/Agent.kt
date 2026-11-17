@@ -1508,7 +1508,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
 
     fun run(inputCommand: String) {
         if (background) { runInner(inputCommand); return }
-        OrionRunLog.beginRun()
+        OrionRunLog.beginRun(inputCommand)
         OrionLiveMetrics.begin()
         try { runInner(inputCommand) } finally { OrionLiveMetrics.end(Nim.lastChatModel()) }
     }
