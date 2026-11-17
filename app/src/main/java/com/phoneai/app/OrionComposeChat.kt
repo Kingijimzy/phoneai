@@ -913,12 +913,12 @@ private fun ChatInlineBrowserDialog(
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
-            Modifier.fillMaxWidth(.96f).fillMaxHeight(.80f).clip(RoundedCornerShape(18.dp))
+            Modifier.fillMaxWidth(.76f).fillMaxHeight(.58f).clip(RoundedCornerShape(20.dp))
                 .background(OrionUiPalette.panel).border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(18.dp)).padding(10.dp)
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("BROWSER", color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(1f))
-                Text("OPEN FULL", color = ChatMuted, fontSize = 10.sp, modifier = Modifier.clickable {
+                Text("EXPAND", color = ChatMuted, fontSize = 10.sp, modifier = Modifier.clickable {
                     val target = safeWebUrl(currentUrl) ?: safeWebUrl(address) ?: "https://duckduckgo.com/"
                     onOpenFullBrowser(target)
                 }.padding(6.dp))
