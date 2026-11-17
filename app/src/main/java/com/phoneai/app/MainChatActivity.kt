@@ -2140,10 +2140,26 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             if (kind == "ai" && draftId != null) {
                 val index = composeLines.indexOfFirst { it.id == draftId }
                 if (index >= 0) composeLines[index] = OrionChatLine(draftId, "ai", text)
-                else composeLines.add(OrionChatLine(System.nanoTime(), kind, text))
+                else composeLines.add(OrionChatLine(draftId, "ai", text))
                 streamingMessageId = null
                 streamingBuffer.setLength(0)
-            } else composeLines.add(OrionChatLine(System.nanoTime(), kind, text))
+            } else if (kind == "ai") {
+                // The status callback can return to IDLE before the final response callback.
+                // If the final text completes the last streamed assistant draft, replace that
+                // draft in place instead of appending a second copy of the same answer.
+                val last = composeLines.lastOrNull()
+                if (last?.kind == "ai" && last.text.isNotBlank() && text.startsWith(last.text)) {
+                    val index = composeLines.lastIndex
+                    composeLines[index] = OrionChatLine(last.id, "ai", text)
+                } else if (last?.kind != "ai" || last.text != text) {
+                    composeLines.add(OrionChatLine(System.nanoTime(), kind, text))
+                }
+                streamingMessageId = null
+                streamingBuffer.setLength(0)
+            } else {
+                val last = composeLines.lastOrNull()
+                if (last?.kind != kind || last.text != text) composeLines.add(OrionChatLine(System.nanoTime(), kind, text))
+            }
             return
         }
         if (kind == "me") {
