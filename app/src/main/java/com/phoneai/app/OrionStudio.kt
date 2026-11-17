@@ -499,7 +499,8 @@ p.kill()
 
     /** Makes sure the package manager and the shared venv exist, then installs and reports the real tail of the log. */
     fun installScript(cmd: String, ub: Boolean): String {
-        val isPip = cmd.trimStart().matches(Regex("^pip3?(?:\\\\s+.*)?$"))
+        val trimmedCommand = cmd.trimStart()
+        val isPip = trimmedCommand == "pip" || trimmedCommand == "pip3" || trimmedCommand.startsWith("pip ") || trimmedCommand.startsWith("pip3 ")
         val prelude = when {
             cmd.startsWith("npm") -> "command -v npm >/dev/null 2>&1 || { ${toolchainScript("node", ub)}; command -v npm >/dev/null 2>&1 || " + (if (ub) "apt-get install -y npm 2>&1" else "apk add --no-cache npm 2>&1") + "; }"
             isPip -> "command -v python3 >/dev/null 2>&1 || { ${toolchainScript("python", ub)}; }; " +
