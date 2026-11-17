@@ -687,7 +687,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             .setTitle("Orion capabilities & tools")
             .setNegativeButton("CLOSE", null)
             .create()
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(8), dp(16), dp(8)); setBackgroundColor(0xFF101010.toInt()) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(8), dp(16), dp(8)); background = GradientDrawable().apply { setColor(0xE51B1B1B.toInt()); cornerRadius = dp(20).toFloat(); setStroke(dp(1), 0x887F8995.toInt()) } }
         val search = EditText(this).apply {
             hint = "Search tools, skills, browser, shell…"
             setSingleLine(true); setTextColor(0xFFF4F4F4.toInt()); setHintTextColor(0xFF888888.toInt())
@@ -1760,8 +1760,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 y = 0
             }
             browserWindow.setLayout(
-                (resources.displayMetrics.widthPixels * 0.80f).toInt(),
-                (resources.displayMetrics.heightPixels * 0.66f).toInt()
+                (resources.displayMetrics.widthPixels * 0.68f).toInt(),
+                (resources.displayMetrics.heightPixels * 0.54f).toInt()
             )
         }
         web.loadUrl(initial)
