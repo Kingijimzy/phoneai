@@ -337,8 +337,8 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
                     transcriptView.text = transcripts.joinToString("\\n")
                     return@runOnUiThread
                 }
-                val command = SharedToolSurfacePolicy.commandAfterWake(text)
-                    ?: trimmed.takeIf { pendingWakeTranscript && it.isNotBlank() }
+                val command = if (GeminiLivePolicy.NATIVE_AUDIO) null else SharedToolSurfacePolicy.commandAfterWake(text)
+                    ?: trimmed.takeIf { !GeminiLivePolicy.NATIVE_AUDIO && pendingWakeTranscript && it.isNotBlank() }
                 if (command != null) {
                     pendingWakeTranscript = false
                     if (command.equals(lastHandoffCommand, ignoreCase = true)) return@runOnUiThread
@@ -363,7 +363,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
                 visual.mode = OrbView.Mode.SPEAKING
                 // Gemini output transcription enters the same Voice engine as every other Orion reply;
                 // native Gemini audio is not played, preserving the selected local Kokoro voice.
-                orionVoice?.speak(text)
+                if (!GeminiLivePolicy.NATIVE_AUDIO) orionVoice?.speak(text)
             } else if (microphoneEnabled && orionVoice?.isSpeaking() != true) {
                 // The user's completed turn has arrived; show the real response-planning phase.
                 visual.mode = OrbView.Mode.THINKING
@@ -432,6 +432,16 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
     override fun onOutputLevel(level: Float) {
         // Gemini Live is text-output in Orion voice mode. The local Voice engine supplies
         // the real PCM amplitude; an empty Gemini audio queue must not flatten the orb.
+        if (GeminiLivePolicy.NATIVE_AUDIO) {
+            runOnUiThread {
+                if (::visual.isInitialized && active) {
+                    visual.speechAmplitude = level
+                    if (level > 0.02f) visual.mode = OrbView.Mode.SPEAKING
+                    else if (visual.mode == OrbView.Mode.SPEAKING) visual.mode = if (microphoneEnabled) OrbView.Mode.LISTENING else OrbView.Mode.IDLE
+                }
+            }
+            return
+        }
         if (orionVoice?.isSpeaking() == true) return
         runOnUiThread {
             if (::visual.isInitialized) {

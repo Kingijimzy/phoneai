@@ -9,7 +9,62 @@ internal object GeminiLivePolicy {
     const val INPUT_SAMPLE_RATE = 16_000
     const val OUTPUT_SAMPLE_RATE = 24_000
     const val AUDIO_CHUNK_SAMPLES = 640 // 40 ms at 16 kHz
-    const val SESSION_LIMIT_MS = 5 * 60 * 1000L
+    /** Orion plays the model's own audio (no text-to-speech re-reading) and lets it call Orion's tools. */
+    const val NATIVE_AUDIO = true
+    /** Reconnects with the saved resumption handle make long calls possible; this is only a safety ceiling. */
+    const val SESSION_LIMIT_MS = 40 * 60 * 1000L
+    const val MAX_RECONNECTS = 12
+    const val ASK_ORION = "ask_orion"
+
+    /** Raw model audio parts of one serverContent event, in order. */
+    fun audioParts(serverContent: org.json.JSONObject): List<ByteArray> {
+        val parts = serverContent.optJSONObject("modelTurn")?.optJSONArray("parts") ?: return emptyList()
+        val out = ArrayList<ByteArray>()
+        for (i in 0 until parts.length()) {
+            val inline = parts.optJSONObject(i)?.optJSONObject("inlineData") ?: continue
+            if (!inline.optString("mimeType").startsWith("audio/")) continue
+            val data = inline.optString("data")
+            if (data.isNotEmpty()) runCatching { java.util.Base64.getDecoder().decode(data) }.getOrNull()?.let { out += it }
+        }
+        return out
+    }
+
+    /** The one function the voice model can call: hand a real task to Orion's full tool agent. */
+    fun toolDeclarations(): org.json.JSONArray = org.json.JSONArray().put(
+        org.json.JSONObject().put("functionDeclarations", org.json.JSONArray().put(
+            org.json.JSONObject()
+                .put("name", ASK_ORION)
+                .put("description", "Hand a task to Orion's full phone agent and get the result: open or control apps, send messages, search the live web, read or write files and code, run commands, check memory, trading, accounts, anything Orion can do on this phone. Call it whenever the owner wants something done or looked up; keep talking naturally while it runs.")
+                .put("behavior", "NON_BLOCKING")
+                .put("parameters", org.json.JSONObject().put("type", "OBJECT")
+                    .put("properties", org.json.JSONObject().put("request", org.json.JSONObject().put("type", "STRING")
+                        .put("description", "The task in the owner's words, with any detail they gave.")))
+                    .put("required", org.json.JSONArray().put("request")))
+        ))
+    )
+
+    /** Pulls (id, name, request) triples out of a toolCall event. */
+    fun toolRequests(message: org.json.JSONObject): List<Triple<String, String, String>> {
+        val calls = message.optJSONObject("toolCall")?.optJSONArray("functionCalls") ?: return emptyList()
+        return List(calls.length()) { calls.getJSONObject(it) }.map {
+            Triple(it.optString("id"), it.optString("name"), it.optJSONObject("args")?.optString("request").orEmpty())
+        }
+    }
+
+    fun toolResponse(id: String, name: String, result: String): org.json.JSONObject =
+        org.json.JSONObject().put("toolResponse", org.json.JSONObject().put("functionResponses", org.json.JSONArray().put(
+            org.json.JSONObject().put("id", id).put("name", name)
+                .put("response", org.json.JSONObject().put("result", result.take(2000)).put("scheduling", "WHEN_IDLE"))
+        )))
+
+    /** How the model should behave as a voice: natural, aware of the owner, acting through ask_orion. */
+    const val VOICE_STYLE = "You are Orion, speaking live with your owner. This is a real conversation, not a read-aloud. " +
+        "Sound like a person who knows him well: react first (laugh, tease, a beat of sympathy, a quick \"hm\"), then answer. " +
+        "Short turns. Contractions. Fragments are fine. Dry, warm humour when he is relaxed; calm and plain when he is stressed. " +
+        "Match his pace and energy, notice hesitation and tone, and never open two replies the same way. " +
+        "Use what you know about him (profile, memory and recent chats below) naturally, the way a friend would, without announcing it. " +
+        "When he asks you to do or look up anything, say a short natural line (\"on it\", \"give me a sec\") and call ask_orion with his request; keep chatting while it runs and tell him the outcome in your own words when it returns. " +
+        "Never read lists, code, links or ids aloud; say what matters. Never claim you did something until ask_orion has returned."
     const val TOKEN_NEW_SESSION_WINDOW_MS = 90 * 1000L
     const val TOKEN_EXPIRE_AFTER_MS = 7 * 60 * 1000L
     const val PLAYBACK_QUEUE_CAPACITY = 100
@@ -30,7 +85,7 @@ internal object GeminiLivePolicy {
     const val QUOTA_WARNING =
         "Gemini Live streams microphone audio to Google and consumes Gemini API quota. " +
         "Audio-token usage accumulates with conversation context; account limits and pricing vary. " +
-        "Orion automatically ends each session after five minutes. Continue only with your own Gemini key."
+        "Orion reconnects long calls automatically and ends them after silence. Continue only with your own Gemini key."
 }
 
 

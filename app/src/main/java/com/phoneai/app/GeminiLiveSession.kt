@@ -26,8 +26,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.sqrt
 
 /**
- * Opt-in, conversation-only Gemini Live transport. It uses a single-use, short-lived Live token
- * and does not expose Orion phone-control tools to the model. All audio remains on this device
+ * Gemini Live speech-to-speech transport: the model's own audio is played as it streams, and its one tool,
+ * ask_orion, hands real tasks to Orion's agent. It uses a single-use, short-lived Live token. All audio remains on this device
  * except the microphone PCM explicitly streamed to the Live API.
  */
 internal class GeminiLiveSession(
@@ -63,6 +63,9 @@ internal class GeminiLiveSession(
     @Volatile private var localSpeechActive = false
 
     @Volatile private var socket: WebSocket? = null
+    @Volatile private var player: GeminiNativePlayer? = null
+    @Volatile private var resumptionHandle: String? = null
+    private val reconnects = java.util.concurrent.atomic.AtomicInteger()
     @Volatile private var setupConfig: JSONObject? = null
     @Volatile private var recorder: AudioRecord? = null
     @Volatile private var microphoneEnabled = true
@@ -74,7 +77,7 @@ internal class GeminiLiveSession(
         listener.onStatus("Requesting one-time Gemini Live access…")
         Thread({
             try {
-                val config = buildSetup()
+                val config = buildSetup(resumptionHandle)
                 setupConfig = config
                 val token = requestEphemeralToken()
                 if (stopped.get()) {
@@ -106,6 +109,7 @@ internal class GeminiLiveSession(
                     }
 
                     override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                        if (!stopped.get() && response == null && resumeAfterClose()) return
                         if (!stopped.get()) {
                             val code = response?.code
                             val message = if (code == 429 || t.message.orEmpty().contains("quota", true)) {
@@ -119,7 +123,10 @@ internal class GeminiLiveSession(
                     }
 
                     override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                        if (!stopped.get()) listener.onStatus("Gemini Live connection closed ($code).")
+                        if (!stopped.get()) {
+                            if (resumeAfterClose()) return
+                            listener.onStatus("Gemini Live connection closed ($code).")
+                        }
                         disposeClient()
                     }
                 })
@@ -127,6 +134,52 @@ internal class GeminiLiveSession(
                 if (!stopped.get()) fail(friendlyTokenError(error))
             }
         }, "OrionGeminiLiveConnect").apply { isDaemon = true; start() }
+    }
+
+    /**
+     * Google closes a Live connection every few minutes. With a saved resumption handle Orion opens a new one
+     * and the conversation carries on, so a call is not cut off mid-sentence.
+     */
+    private fun resumeAfterClose(): Boolean {
+        val handle = resumptionHandle ?: return false
+        if (!audioStarted.get() || reconnects.incrementAndGet() > GeminiLivePolicy.MAX_RECONNECTS) return false
+        listener.onStatus("Reconnecting · conversation continues")
+        player?.flush()
+        socket = null
+        Thread({
+            try {
+                val config = buildSetup(handle)
+                setupConfig = config
+                val token = requestEphemeralToken()
+                if (stopped.get()) return@Thread
+                reopen(token)
+            } catch (error: Throwable) {
+                if (!stopped.get()) fail(friendlyTokenError(error))
+            }
+        }, "OrionGeminiLiveResume").apply { isDaemon = true; start() }
+        return true
+    }
+
+    private fun reopen(token: String) {
+        val request = Request.Builder()
+            .url("wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained")
+            .header("Authorization", "Token $token").build()
+        socket = client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                val activeSetup = setupConfig
+                if (stopped.get() || activeSetup == null || !webSocket.send(JSONObject().put("setup", activeSetup).toString())) {
+                    if (!stopped.get()) fail("Gemini Live could not resume. Start the call again.")
+                }
+            }
+            override fun onMessage(webSocket: WebSocket, text: String) { if (!stopped.get()) handleServerMessage(text) }
+            override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) { if (!stopped.get()) handleServerMessage(bytes.utf8()) }
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (!stopped.get() && !resumeAfterClose()) fail("Gemini Live connection failed. Check network and API access.")
+            }
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (!stopped.get() && !resumeAfterClose()) listener.onStatus("Gemini Live connection closed ($code).")
+            }
+        })
     }
 
     fun setMicrophoneEnabled(enabled: Boolean) {
@@ -143,6 +196,7 @@ internal class GeminiLiveSession(
 
     fun stop() {
         if (!stopped.compareAndSet(false, true)) return
+        player?.stop(); player = null
         // Only send realtime input when setup completed and microphone capture actually started.
         // Sending audioStreamEnd before the initial setup message would violate the WebSocket protocol.
         if (audioStarted.get()) {
@@ -177,19 +231,15 @@ internal class GeminiLiveSession(
 
     @Volatile private var lastActivityAtMs = System.currentTimeMillis()
 
-    private fun buildSetup(): JSONObject {
+    private fun buildSetup(handle: String? = null): JSONObject {
         val instructions = buildString {
-            append("You are Orion in optional Gemini Live voice mode. ")
-            append("Have a natural, concise, useful voice conversation. ")
-            append("Your response is returned as text and spoken by Orion's selected local British neural voice. Write speech-ready prose: natural sentences, clear pauses, restrained warmth, and no raw tool traces or unnecessary markup. ")
+            append(GeminiLivePolicy.VOICE_STYLE)
+            append(" ")
             append(OrionVoicePersona.INSTRUCTIONS)
             append(" ")
             append(OrionIdentity.LOCK)
-            append(" ")
-            append("This realtime model does not directly execute phone tools. If the user clearly addresses Orion by name and gives a command, the app will end this realtime session and hand the command to Orion's shared guarded tool executor. ")
-            append("Never claim that you performed an action on the device. For action requests without the explicit wake phrase 'Orion', explain briefly that they can say 'Orion, [request]' to hand off to the app-approved tools. ")
-            append("Do not request passwords, API keys, PINs, recovery phrases, or one-time codes. ")
-            append("\\n\\n")
+            append(" Do not request passwords, API keys, PINs, recovery phrases, or one-time codes. ")
+            append("\n\n")
             append(OrionSessionContextProvider.forLiveVoice(appContext).take(14_000))
             val languagePolicy = Prefs.languagePolicy(appContext)
             if (languagePolicy.isNotBlank()) {
@@ -211,6 +261,8 @@ internal class GeminiLiveSession(
         val generationConfig = JSONObject()
             .put("responseModalities", JSONArray().put(GeminiLivePolicy.RESPONSE_MODALITY))
             .put("maxOutputTokens", 1024)
+            .put("speechConfig", JSONObject().put("voiceConfig", JSONObject().put("prebuiltVoiceConfig",
+                JSONObject().put("voiceName", Prefs.geminiVoice(appContext)))))
         return JSONObject()
             .put("model", GeminiLivePolicy.MODEL)
             .put("generationConfig", generationConfig)
@@ -218,7 +270,8 @@ internal class GeminiLiveSession(
             .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection", activityDetectionConfig()))
             .put("inputAudioTranscription", JSONObject())
             .put("outputAudioTranscription", JSONObject())
-            .put("sessionResumption", JSONObject())
+            .put("sessionResumption", JSONObject().also { if (!handle.isNullOrBlank()) it.put("handle", handle) })
+            .put("tools", GeminiLivePolicy.toolDeclarations())
             .put(
                 "contextWindowCompression",
                 JSONObject()
@@ -318,6 +371,13 @@ internal class GeminiLiveSession(
             startAudioIo()
             return
         }
+        message.optJSONObject("sessionResumptionUpdate")?.let { u ->
+            if (u.optBoolean("resumable", true)) u.optString("newHandle").takeIf { it.isNotBlank() }?.let { resumptionHandle = it }
+        }
+        if (message.has("toolCall")) {
+            handleToolCalls(message)
+            return
+        }
         message.optJSONObject("usageMetadata")?.let { usage ->
             val total = usage.optLong("totalTokenCount", -1L)
             if (total >= 0L) listener.onUsage("Gemini Live reports $total tokens for the current usage update; this is not a dollar-cost estimate.")
@@ -325,9 +385,14 @@ internal class GeminiLiveSession(
         val serverContent = message.optJSONObject("serverContent") ?: return
         if (serverContent.optBoolean("interrupted", false)) {
             localSpeechActive = false
+            player?.flush()
             transcriptFlush?.cancel(false)
             modelTextBuffer.clear()
             listener.onOutputInterrupted()
+        }
+        GeminiLivePolicy.audioParts(serverContent).forEach { chunk ->
+            lastActivityAtMs = System.currentTimeMillis()
+            player?.enqueue(chunk)
         }
         serverContent.optJSONObject("inputTranscription")?.optString("text").orEmpty()
             .takeIf { it.isNotBlank() }?.let { listener.onTranscript(it, false) }
@@ -359,6 +424,25 @@ internal class GeminiLiveSession(
         }
     }
 
+    /** The voice model asked Orion's agent to do something; run it and speak the result through the model. */
+    private fun handleToolCalls(message: JSONObject) {
+        GeminiLivePolicy.toolRequests(message).forEach { (id, name, request) ->
+            if (name != GeminiLivePolicy.ASK_ORION || request.isBlank()) {
+                socket?.send(GeminiLivePolicy.toolResponse(id, name, "Nothing to do.").toString())
+                return@forEach
+            }
+            listener.onStatus("Orion is working · $request".take(90))
+            val service = PhoneAiService.instance
+            if (service == null) {
+                socket?.send(GeminiLivePolicy.toolResponse(id, name, "Orion's accessibility service is not running, so I could not do that.").toString())
+                return@forEach
+            }
+            service.executeSharedToolRequest(request, "Gemini Live") { result ->
+                if (!stopped.get()) socket?.send(GeminiLivePolicy.toolResponse(id, name, result.ifBlank { "Done." }).toString())
+            }
+        }
+    }
+
     private fun appendModelTranscript(text: String) {
         modelTextBuffer.append(text)
         scheduleTranscriptFlushIfReady()
@@ -377,6 +461,7 @@ internal class GeminiLiveSession(
     private fun startAudioIo() {
         if (stopped.get() || !audioStarted.compareAndSet(false, true)) return
         try {
+            if (GeminiLivePolicy.NATIVE_AUDIO) player = GeminiNativePlayer { listener.onOutputLevel(it) }.also { it.start() }
             val inputMin = AudioRecord.getMinBufferSize(
                 GeminiLivePolicy.INPUT_SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO,
