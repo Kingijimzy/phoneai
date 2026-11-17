@@ -119,6 +119,13 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }
     }
 
+    /** Opens an activity-hub URL in the compact browser overlay without leaving the conversation. */
+    fun openBrowserFromActivity(url: String) {
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) showChatBrowserPopup(url)
+        }
+    }
+
     override fun onModeSwitch(commandMode: Boolean) {
         runOnUiThread {
             if (this.commandMode == commandMode) return@runOnUiThread
