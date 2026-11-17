@@ -154,6 +154,7 @@ class StudioActivity : Activity() {
             override fun afterTextChanged(s: android.text.Editable?) {
                 val value = s?.toString().orEmpty().trim()
                 runCatching { OrionProjectContext.set(this@StudioActivity, value) }
+                    .onSuccess { pages["terminal"]?.onShow() }
                     .onFailure { toast("Invalid project path: use a folder under /workspace") }
             }
         })
