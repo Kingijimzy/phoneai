@@ -285,9 +285,29 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         orionRuntime?.pause("accessibility_interrupted")
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        // Removing the launcher task is not a request to shut down the accessibility
+        // companion. Drop the Activity reference and restore the orb while the service
+        // remains enabled by the owner in Android Accessibility settings.
+        main.post {
+            mainChatListener = null
+            mainChatActive = false
+            if (OrionMasterControl.isEnabled(this) && panel == null) {
+                showBubble()
+                startWake()
+            }
+        }
+    }
+
     override fun onDestroy() {
+        main.removeCallbacks(autonomyTick)
         clearPointOverlay()
         closeFloatingBrowser()
+        closePanel(false)
+        hideBubble()
+        hideStrip()
+        if (instance === this) instance = null
         super.onDestroy()
     }
 
@@ -1562,7 +1582,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.background = rounded(0xE61B1B1B.toInt(), dp(22).toFloat(), 0x667A7A7A)
+        root.background = rounded(0xD91B1B1B.toInt(), dp(24).toFloat(), 0x887F8995.toInt())
         root.setPadding(dp(9), dp(5), dp(9), dp(9))
         root.elevation = dp(18).toFloat()
 
@@ -1578,7 +1598,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val head = LinearLayout(this)
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
-        head.background = rounded(0xD92A2A2A.toInt(), dp(16).toFloat(), 0x665A5A5A)
+        head.background = rounded(0xB927292C.toInt(), dp(18).toFloat(), 0x887F8995.toInt())
         head.setPadding(dp(6), dp(3), dp(5), dp(3))
         val orb = OrbView(this)
         orb.contentDescription = "Orion animated character. Tap to speak."
@@ -1742,10 +1762,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
         // Keep the command surface compact enough to reveal the app underneath. Full chat
         // remains a separate destination for long conversations, files and history.
-        val panelHeight = (size.second * 0.44f).toInt().coerceAtLeast(dp(280))
-            .coerceAtMost((size.second * 0.48f).toInt())
+        val panelHeight = (size.second * 0.36f).toInt().coerceAtLeast(dp(260))
+            .coerceAtMost((size.second * 0.40f).toInt())
         val lp = WindowManager.LayoutParams(
-            size.first - dp(24), panelHeight, OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
+            size.first - dp(32), panelHeight, OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         lp.y = dp(12)
@@ -2795,8 +2815,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
         val size = screenSize()
         val lp = WindowManager.LayoutParams(
-            (size.first * 0.82f).toInt(),
-            (size.second * 0.68f).toInt(),
+            (size.first * 0.68f).toInt(),
+            (size.second * 0.52f).toInt(),
             OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
