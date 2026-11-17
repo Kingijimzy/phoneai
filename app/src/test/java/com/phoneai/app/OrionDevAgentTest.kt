@@ -32,7 +32,7 @@ class OrionDevAgentTest {
         val allowed = agent.runShellCommand("python3 --version", confirm = { true })
         assertTrue(allowed.blocker.orEmpty().isEmpty())
         assertEquals("linux", executedBackend)
-        assertEquals("cd /workspace && python3 --version", executedCommand)
+        assertEquals("cd \"/workspace\" && python3 --version", executedCommand)
         assertTrue(allowed.evidence.contains("Python 3.12.15"))
     }
 
