@@ -68,6 +68,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -605,6 +606,7 @@ internal fun OrionComposeChatScreen(
     // a tool/model is running; tying animation to status causes repeated scroll work and fights
     // users who are reading earlier messages.
     var showJumpToBottom by remember { mutableStateOf(false) }
+    val chatScrollScope = rememberCoroutineScope()
     LaunchedEffect(listState) {
         androidx.compose.runtime.snapshotFlow {
             val layout = listState.layoutInfo
@@ -774,7 +776,7 @@ internal fun OrionComposeChatScreen(
                         .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(22.dp))
                         .clickable(role = Role.Button) {
                             val lastItem = listState.layoutInfo.totalItemsCount - 1
-                            if (lastItem >= 0) kotlinx.coroutines.MainScope().launch { listState.animateScrollToItem(lastItem) }
+                            if (lastItem >= 0) chatScrollScope.launch { listState.animateScrollToItem(lastItem) }
                         }
                         .padding(horizontal = 13.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
