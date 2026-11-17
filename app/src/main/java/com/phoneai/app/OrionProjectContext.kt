@@ -43,5 +43,5 @@ object OrionProjectContext {
     }
 
     private fun normalize(value: String): String =
-        value.trim().replace('\\\\', '/').trim('/')
+        value.trim().replace('\\', '/').trim('/')
 }
