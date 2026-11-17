@@ -293,9 +293,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         main.post {
             mainChatListener = null
             mainChatActive = false
-            if (OrionMasterControl.isEnabled(this) && panel == null) {
+            closePanel(false)
+            closeFloatingBrowser()
+            if (OrionMasterControl.isEnabled(this)) {
                 showBubble()
-                startWake()
+                if (!running) startWake()
             }
         }
     }
@@ -916,8 +918,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             if (mainChatListener === listener) {
                 mainChatListener = null
                 mainChatActive = false
-                if (!running && panel == null) showBubble()
-                startWake()
+                // The orb is the persistent companion surface, including while an agent
+                // continues working after the chat Activity is closed.
+                if (panel == null) showBubble()
+                if (!running) startWake()
             }
         }
     }
