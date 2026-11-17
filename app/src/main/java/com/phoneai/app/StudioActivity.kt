@@ -91,7 +91,7 @@ class StudioActivity : Activity() {
         runtimePill = ui.badge("", Theme.OK)
         titleRow.addView(runtimePill)
         top.addView(titleRow)
-        val initialProject = OrionProjectContext.get(this).ifBlank { prefs.getString("project", "").orEmpty() }
+        val initialProject = OrionProjectContext.get(this)
         projectField = ui.field("project folder under /workspace (blank = whole workspace)").apply { setText(initialProject) }
         OrionProjectContext.set(this, initialProject)
         top.addView(projectField)
