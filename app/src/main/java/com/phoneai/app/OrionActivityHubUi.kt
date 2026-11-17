@@ -259,9 +259,25 @@ internal fun OrionInterruptionBanner(modifier: Modifier = Modifier) {
     }
 }
 
+private fun openActivityEvidence(c: Context, evidence: OrionActivityEvidence) {
+    when (evidence) {
+        is OrionActivityEvidence.Browser -> openActivityTarget(c, OrionActivityHub.Target.Url(evidence.url))
+        is OrionActivityEvidence.File -> openActivityTarget(c, OrionActivityHub.Target.Studio("editor", evidence.displayPath.removePrefix("/workspace/").removePrefix("/")))
+        is OrionActivityEvidence.Terminal -> openActivityTarget(c, OrionActivityHub.Target.Studio("terminal"))
+        is OrionActivityEvidence.CodeDiff -> openActivityTarget(c, OrionActivityHub.Target.Studio("editor", evidence.fileLabel.removePrefix("/workspace/").removePrefix("/")))
+        is OrionActivityEvidence.AgentHandoff -> openActivityTarget(c, OrionActivityHub.Target.Studio("agent"))
+    }
+}
+
 /** The full hub: this task live, plus every past task, searchable and resumable. */
 @Composable
-internal fun OrionRunSheet(onDismiss: () -> Unit, onResume: (String) -> Unit = {}) {
+internal fun OrionRunSheet(
+    onDismiss: () -> Unit,
+    onResume: (String) -> Unit = {},
+    events: List<OrionActivityEvent> = emptyList()
+) {
+    val context = LocalContext.current
+    var openEvent by remember { mutableStateOf<String?>(null) }
     var tab by remember { mutableStateOf(0) }
     var query by remember { mutableStateOf("") }
     var openEntry by remember { mutableStateOf<Long?>(null) }
@@ -284,8 +300,54 @@ internal fun OrionRunSheet(onDismiss: () -> Unit, onResume: (String) -> Unit = {
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
                 if (tab == 0) {
                     OrionInterruptionBanner(Modifier.padding(bottom = 8.dp))
-                    if (live.isEmpty()) Text("Nothing is running. Past tasks are under History.", color = OrionUiPalette.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 12.dp))
-                    live.reversed().forEach { s -> StepRow(s, now, openStep == s.id) { openStep = if (openStep == s.id) null else s.id } }
+                    if (live.isEmpty() && events.isEmpty()) Text("No live activity has been reported. Past tasks are under History.", color = OrionUiPalette.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 12.dp))
+                    live.reversed().forEach { step -> StepRow(step, now, openStep == step.id) { openStep = if (openStep == step.id) null else step.id } }
+                    if (events.isNotEmpty()) {
+                        Text("CHAT TASK STREAM", color = OrionUiPalette.secondaryText, fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+                        events.sortedByDescending { it.timestampMs }.forEach { event ->
+                            val selected = openEvent == event.eventId
+                            val tone = when (event.status) {
+                                OrionActivityStatus.ACTIVE -> OrionUiPalette.accent
+                                OrionActivityStatus.WAITING -> OrionUiPalette.warning
+                                OrionActivityStatus.FAILED -> OrionUiPalette.danger
+                                OrionActivityStatus.SUCCEEDED -> Color(0xFFB8CDBD)
+                                else -> OrionUiPalette.muted
+                            }
+                            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp))
+                                .background(if (selected) OrionUiPalette.raised else Color.Transparent)
+                                .clickable { openEvent = if (selected) null else event.eventId }
+                                .padding(vertical = 8.dp, horizontal = 8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.size(7.dp).clip(CircleShape).background(tone))
+                                    Spacer(Modifier.width(8.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(OrionActivityPresentation.title(event), color = OrionUiPalette.text, fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(OrionActivityPresentation.summary(event), color = OrionUiPalette.muted, fontSize = 9.sp,
+                                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    Text(if (selected) "LESS" else "DETAILS", color = OrionUiPalette.secondaryText, fontSize = 8.sp)
+                                }
+                                if (selected) {
+                                    event.evidence.takeLast(8).forEach { line ->
+                                        Text(line, color = OrionUiPalette.muted, fontSize = 9.sp, modifier = Modifier.padding(start = 15.dp, top = 3.dp))
+                                    }
+                                    event.typedEvidence.forEach { evidence ->
+                                        val label = when (evidence) {
+                                            is OrionActivityEvidence.Browser -> "Open " + evidence.title.ifBlank { "page" }
+                                            is OrionActivityEvidence.File -> "Open " + evidence.displayPath.substringAfterLast('/')
+                                            is OrionActivityEvidence.Terminal -> "Open Terminal"
+                                            is OrionActivityEvidence.CodeDiff -> "Open " + evidence.fileLabel.substringAfterLast('/')
+                                            is OrionActivityEvidence.AgentHandoff -> "Open Agent"
+                                        }
+                                        Text(label, color = OrionUiPalette.text, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.padding(start = 15.dp, top = 6.dp).clickable { openActivityEvidence(context, evidence) })
+                                    }
+                                }
+                            }
+                        }
+                    }
                 } else {
                     BasicTextField(query, { query = it }, singleLine = true, cursorBrush = SolidColor(OrionUiPalette.text),
                         textStyle = TextStyle(color = OrionUiPalette.text, fontSize = 13.sp),
