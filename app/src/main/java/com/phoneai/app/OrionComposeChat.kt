@@ -606,7 +606,7 @@ internal fun OrionComposeChatScreen(
     // users who are reading earlier messages.
     var showJumpToBottom by remember { mutableStateOf(false) }
     LaunchedEffect(listState) {
-        kotlinx.coroutines.flow.snapshotFlow {
+        androidx.compose.runtime.snapshotFlow {
             val layout = listState.layoutInfo
             val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: 0
             layout.totalItemsCount > 0 && layout.totalItemsCount - 1 - lastVisible > 2
