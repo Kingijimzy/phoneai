@@ -9,6 +9,8 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.DocumentsContract
 import android.text.Editable
+import android.text.Spannable
+import android.text.style.ForegroundColorSpan
 import android.text.TextWatcher
 import android.view.Gravity
 import android.view.inputmethod.EditorInfo
@@ -21,6 +23,7 @@ import java.util.Locale
 
 /** Mobile IDE backed by Orion's shared /workspace used by CPython and Alpine. */
 class CodeStudioActivity : Activity() {
+    private class SyntaxColorSpan(color: Int) : ForegroundColorSpan(color)
     private lateinit var fs: OrionPythonWorkspace
     private lateinit var explorer: LinearLayout
     private lateinit var tabs: LinearLayout
@@ -97,7 +100,7 @@ class CodeStudioActivity : Activity() {
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                    if (!loading) { dirty = true; updateStatus(); updateNumbers() }
+                    if (!loading) { dirty = true; updateStatus(); updateNumbers(); highlightEditor() }
                 }
                 override fun afterTextChanged(s: Editable?) = Unit
             })
@@ -216,7 +219,7 @@ class CodeStudioActivity : Activity() {
     private fun load(path: String) {
         val value = fs.read(path)
         if (value.startsWith("error:")) { output.text = value; return }
-        current = path; openTabs.add(path); loading = true; editor.setText(value); editor.setSelection(editor.text.length); loading = false
+        current = path; openTabs.add(path); loading = true; editor.setText(value); editor.setSelection(editor.text.length); highlightEditor(); loading = false
         dirty = false; drawTabs(); updateStatus(); updateNumbers(); refreshFiles()
     }
     private fun drawTabs() {
@@ -250,6 +253,27 @@ class CodeStudioActivity : Activity() {
         status.setTextColor(if (dirty) Theme.WARN else Theme.MUTED)
     }
     private fun updateNumbers() { numbers.text = (1..(editor.text.toString().count { it == '\n' } + 1)).joinToString("\n") }
+
+    /** Apply the shared Orion lexer without replacing text or disturbing the cursor/selection. */
+    private fun highlightEditor() {
+        val editable = editor.text as? Spannable ?: return
+        editable.getSpans(0, editable.length, SyntaxColorSpan::class.java).forEach(editable::removeSpan)
+        val path = current ?: return
+        val source = editable.toString()
+        if (source.length > 200_000 || source.isEmpty()) return
+        val colors = mapOf(
+            OrionStudioEditor.Tok.COMMENT to Theme.MUTED,
+            OrionStudioEditor.Tok.STRING to 0xFFA5C9A5.toInt(),
+            OrionStudioEditor.Tok.NUMBER to 0xFFD7B58C.toInt(),
+            OrionStudioEditor.Tok.KEYWORD to 0xFFC4B2E6.toInt()
+        )
+        OrionStudioEditor.highlight(OrionStudioEditor.langOf(path), source).forEach { token ->
+            val color = colors[token.tok] ?: return@forEach
+            if (token.start >= 0 && token.end <= editable.length && token.start < token.end) {
+                editable.setSpan(SyntaxColorSpan(color), token.start, token.end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
+    }
 
     private fun saveFile(): Boolean {
         val path = current ?: run { output.text = "Create or open a file first."; return false }
