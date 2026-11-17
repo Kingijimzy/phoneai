@@ -580,7 +580,7 @@ p.kill()
     // ---------- dispatcher ----------
     fun run(c: Context, a: JSONObject): String {
         val action = a.optString("action").trim().lowercase()
-        val project = a.optString("project").trim()
+        val project = if (a.has("project")) a.optString("project").trim() else OrionProjectContext.get(c)
         val where = OrionUbuntu.where(c)
         fun guest(s: String?, bad: String): String = if (s == null) "error: $bad" else ShellRunner.run(c, s, where)
         fun guestLive(s: String?, bad: String, label: String): String =
