@@ -192,10 +192,10 @@ internal fun OrionActivityHubCard(
     if (run.isEmpty() && events.isEmpty()) return
     val sum = run.takeIf { it.isNotEmpty() }?.let { OrionActivityHub.summarize(OrionActivityHistory.runTitle, it) }
     val latestEvent = events.maxByOrNull { it.timestampMs }
-    var expanded by remember { mutableStateOf(false) }
     var open by remember { mutableStateOf<Long?>(null) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(sum.running) { while (sum.running > 0) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(500) } }
+    val runningCount = sum?.running ?: 0
+    LaunchedEffect(runningCount) { while (runningCount > 0) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(500) } }
     val tone = when {
         latestEvent?.status == OrionActivityStatus.ACTIVE -> OrionUiPalette.accent
         latestEvent?.status == OrionActivityStatus.FAILED -> OrionUiPalette.danger
@@ -230,7 +230,7 @@ internal fun OrionActivityHubCard(
                 maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
         }
         Column(Modifier.padding(top = 6.dp)) {
-            (if (expanded) run else run.takeLast(3)).forEach { step ->
+            run.takeLast(3).forEach { step ->
                 StepRow(step, now, expanded = open == step.id || (!expanded && step.status == OrionRunLog.Status.RUNNING)) { open = if (open == step.id) null else step.id }
             }
         }
