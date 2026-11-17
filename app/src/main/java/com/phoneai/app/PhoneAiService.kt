@@ -2303,7 +2303,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 }
             } else {
                 emptyListens = 0
-                submit(text)
+                val reaction = if (handsActive) OrionReactions.forUtterance(text, System.nanoTime().toInt()) else null
+                if (reaction != null) {
+                    voice.speak(reaction)
+                    voice.whenIdle { if (handsActive && !running) listenNow() }
+                } else submit(text)
             }
         }, { partial ->
             showStatusText(partial)
