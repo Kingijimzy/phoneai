@@ -147,11 +147,12 @@ class MainActivity : ComponentActivity() {
             "watcher" -> { destination = SoulWatcherActivity::class.java; intent = Intent(this, destination) }
             "extensions" -> { destination = SelfExtensionLabActivity::class.java; intent = Intent(this, destination) }
             "terminal" -> { destination = TerminalActivity::class.java; intent = Intent(this, destination) }
-            "studio", "studio_terminal", "studio_project", "studio_agent", "studio_tools" -> {
+            "studio", "studio_terminal", "studio_project", "studio_files", "studio_agent", "studio_tools" -> {
                 destination = StudioActivity::class.java
                 val page = when (route) {
                     "studio_terminal" -> "terminal"
-                    "studio_project" -> "files"
+                    "studio_project" -> "project"
+                    "studio_files" -> "files"
                     "studio_agent" -> "agent"
                     "studio_tools" -> "tools"
                     else -> "editor"
