@@ -27,7 +27,6 @@ object OrionProjectContext {
     @JvmStatic
     fun set(context: Context, project: String): String {
         val normalized = normalize(project)
-        require(project.isBlank() || normalized.isNotBlank()) { "Project path must be a safe workspace-relative path." }
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putString(KEY_ACTIVE, normalized).apply()
         // Keep the old preference readable for older app components during migration.
@@ -38,20 +37,11 @@ object OrionProjectContext {
 
     @JvmStatic
     fun root(context: Context): File {
-        val workspace = ShellRunner.workspace(context).canonicalFile
+        val workspace = ShellRunner.workspace(context)
         val active = get(context)
-        val selected = if (active.isBlank()) workspace else File(workspace, active).canonicalFile
-        require(selected.path == workspace.path || selected.path.startsWith(workspace.path + File.separator)) {
-            "Active project escapes the workspace."
-        }
-        return selected
+        return if (active.isBlank()) workspace else File(workspace, active)
     }
 
-    private fun normalize(value: String): String {
-        val path = value.trim().replace('\\', '/').trim('/')
-        if (path.isBlank()) return ""
-        if (path.length > 120 || path.startsWith("/") || path.contains("..") || path.split('/').any { it.isBlank() || it == "." || it == ".." }) return ""
-        if (!Regex("^[A-Za-z0-9._/-]{1,120}$").matches(path)) return ""
-        return path
-    }
+    private fun normalize(value: String): String =
+        value.trim().replace('\\\\', '/').trim('/')
 }
