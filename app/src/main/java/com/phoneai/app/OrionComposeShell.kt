@@ -123,12 +123,13 @@ fun OrionComposeShell(
                 ) { page ->
                     when (page) {
                         "Home" -> HomePage(status, onOpenChat, onOpenVoice, onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenAgents, onOpenMemory)
-                        "Tools" -> ToolsPage(onOpenFeature)
+                        "Workspace" -> ToolsPage(onOpenFeature)
+                        "Activity" -> ActivityPage(onOpenTasks, onOpenAgents, onOpenSoulEngine, onOpenExtensions, onOpenMemory)
                         else -> SettingsPage(onOpenSettings, onOpenFeature)
                     }
                 }
-                BottomDock(selected) { next ->
-                    when (next) { "Chat" -> onOpenChat(); "Live" -> onOpenVoice(); else -> selected = next }
+                BottomDock(selected, onOpenChat) { next ->
+                    selected = next
                 }
             }
         }
@@ -246,8 +247,7 @@ private fun HomePage(
                 Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(14.dp)).background(Silver)
                     .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onOpenChat)
                     .semantics { contentDescription = "Open Orion chat"; role = androidx.compose.ui.semantics.Role.Button }
-                    .padding(horizontal = 14.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
+                    .padding(horizontal = 14.dp, vertical = 14.dp),                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
             ) {
                 Icon(Icons.Rounded.ChatBubbleOutline, null, tint = Ink, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(9.dp))
@@ -372,7 +372,7 @@ private fun ToolsPage(onOpenFeature: (String) -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp)
     ) {
-        PageHeading("Feature directory", "Every major Orion destination, grouped by what it helps you do.")
+        PageHeading("Workspace", "Your connected work areas, development tools and capabilities in one place.")
         Row(
             Modifier.fillMaxWidth().heightIn(min = 54.dp).clip(RoundedCornerShape(14.dp)).background(Panel)
                 .border(1.dp, Hairline, RoundedCornerShape(14.dp)).padding(13.dp),
@@ -438,6 +438,35 @@ private fun ToolsPage(onOpenFeature: (String) -> Unit) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ActivityPage(
+    onOpenTasks: () -> Unit,
+    onOpenAgents: () -> Unit,
+    onOpenSoulEngine: () -> Unit,
+    onOpenExtensions: () -> Unit,
+    onOpenMemory: () -> Unit
+) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(13.dp)
+    ) {
+        PageHeading("Activity", "Follow Orion's work, review outcomes and manage the systems behind active objectives.")
+        Text("EXECUTION", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Tasks & workflows", "Open objectives, queued work, progress and recovery controls", Icons.Rounded.TaskAlt, onOpenTasks)
+        ActionRow("Specialist agents", "Review delegated work and open specialist workspaces", Icons.Rounded.SmartToy, onOpenAgents)
+        Text("SYSTEM HEALTH", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Soul Engine", "Inspect runtime readiness, lifecycle state and self-tests", Icons.Rounded.Hub, onOpenSoulEngine)
+        ActionRow("Self-extension lab", "Review extension builds, sandbox checks and version history", Icons.Rounded.AutoAwesome, onOpenExtensions)
+        Text("CONTEXT & LEARNING", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Memory & learning", "Review remembered context and recorded lessons", Icons.Rounded.Memory, onOpenMemory)
+        Text(
+            "Execution history and evidence remain owned by their existing task and runtime services. This page is the unified entry point; it does not fabricate live activity.",
+            color = Muted, fontSize = 10.sp, lineHeight = 15.sp
+        )
     }
 }
 
@@ -532,11 +561,11 @@ private fun MiniTile(title: String, icon: androidx.compose.ui.graphics.vector.Im
 }
 
 @Composable
-private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
+private fun BottomDock(selected: String, onOpenChat: () -> Unit, onSelect: (String) -> Unit) {
     val items = listOf(
         Triple("Home", Icons.Rounded.Home, "Home"),
-        Triple("Chat", Icons.Rounded.ChatBubbleOutline, "Chat"),
-        Triple("Tools", Icons.Rounded.Widgets, "Tools"),
+        Triple("Workspace", Icons.Rounded.Widgets, "Workspace"),
+        Triple("Activity", Icons.Rounded.TaskAlt, "Activity"),
         Triple("Settings", Icons.Rounded.Settings, "Settings")
     )
     Row(
@@ -550,23 +579,30 @@ private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        items.take(2).forEach { (label, icon, _) ->
-            DockItem(label, icon, selected == label, Modifier.weight(1f)) { onSelect(label) }
+        DockItem(items[0].first, items[0].second, selected == items[0].first, Modifier.weight(1f)) {
+            onSelect(items[0].first)
+        }
+        DockItem(items[1].first, items[1].second, selected == items[1].first, Modifier.weight(1f)) {
+            onSelect(items[1].first)
         }
         Box(
-            Modifier.weight(1.12f).height(58.dp).clip(RoundedCornerShape(16.dp))
-                .background(PanelRaised)
-                .border(1.5.dp, Silver, RoundedCornerShape(16.dp))
-                .clickable { onSelect("Live") },
+            Modifier.weight(1.15f).height(58.dp).clip(RoundedCornerShape(16.dp))
+                .background(Silver)
+                .border(1.dp, Silver, RoundedCornerShape(16.dp))
+                .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onOpenChat)
+                .semantics { contentDescription = "Open central Orion chat"; role = androidx.compose.ui.semantics.Role.Button },
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Icon(Icons.Rounded.GraphicEq, null, tint = Color.White, modifier = Modifier.size(25.dp))
-                Text("LIVE", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Icon(Icons.Rounded.ChatBubbleOutline, null, tint = Ink, modifier = Modifier.size(23.dp))
+                Text("CHAT", color = Ink, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             }
         }
-        items.drop(2).forEach { (label, icon, _) ->
-            DockItem(label, icon, selected == label, Modifier.weight(1f)) { onSelect(label) }
+        DockItem(items[2].first, items[2].second, selected == items[2].first, Modifier.weight(1f)) {
+            onSelect(items[2].first)
+        }
+        DockItem(items[3].first, items[3].second, selected == items[3].first, Modifier.weight(1f)) {
+            onSelect(items[3].first)
         }
     }
 }
@@ -588,4 +624,3 @@ private fun DockItem(label: String, icon: androidx.compose.ui.graphics.vector.Im
         Text(label, color = tint, fontSize = 9.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
     }
 }
-
