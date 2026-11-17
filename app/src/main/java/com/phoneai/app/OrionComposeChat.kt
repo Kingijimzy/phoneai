@@ -753,11 +753,8 @@ internal fun OrionComposeChatScreen(
                 item(key = "orion-interruptions") { OrionInterruptionBanner() }
                 // One live summary per task, updated in place; steps open their source.
                 item(key = "orion-activity-hub") { OrionActivityHubCard(onOpenAll = { showRunSheet = true }) }
-                if (OrionRunLog.currentRun().isEmpty()) {
-                    OrionActivityTimeline.latestChatCard(activityEvents)?.let { event ->
-                        item(key = "activity-${event.eventId}") { androidx.compose.foundation.layout.Box(Modifier.orionEnter()) { OrionComposeActivityCard(event) } }
-                    }
-                }
+                // Task progress is represented by the single Activity Hub card above.
+                // Do not append a second copy of the latest activity event to the transcript.
                 val assistantAlreadyStreaming = lines.lastOrNull()?.let {
                     it.kind == "ai" && it.text.isNotBlank()
                 } == true
