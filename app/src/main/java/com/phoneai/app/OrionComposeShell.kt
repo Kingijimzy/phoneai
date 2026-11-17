@@ -131,7 +131,7 @@ fun OrionComposeShell(
                         "Home" -> HomePage(status, onOpenChat, onOpenVoice, onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenAgents, onOpenMemory)
                         "Workspace" -> ToolsPage(onOpenFeature)
                         "Activity" -> ActivityPage(onOpenTasks, onOpenAgents, onOpenSoulEngine, onOpenExtensions, onOpenMemory, onResumeTask)
-                        else -> SettingsPage(onOpenSettings, onOpenFeature)
+                        else -> SettingsPage(onOpenSettings)
                     }
                 }
                 BottomDock(selected, onOpenChat) { next ->
@@ -436,32 +436,54 @@ private fun ActivityPage(
 }
 
 @Composable
-private fun SettingsPage(onOpenSettings: (String?) -> Unit, onOpenFeature: (String) -> Unit) {
+private fun SettingsPage(onOpenSettings: (String?) -> Unit) {
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 24.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp)
     ) {
-        PageHeading("Settings", "Choose one settings area at a time. Each shortcut opens its own section.")
-        Text("AI & MODELS", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("Providers & model selection", "Dedicated controls for API connections, chat model, vision model and fallback", Icons.Rounded.AutoAwesome) { onOpenSettings("providers") }
-        Text("VOICE & INTERACTION", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("Voice, wake word & speech", "Dedicated voice page for microphone, speech and live-call controls", Icons.Rounded.GraphicEq) { onOpenSettings("voice") }
-        ActionRow("Response style & character", "Dedicated character page for personality and response presentation", Icons.Rounded.SmartToy) { onOpenSettings("character") }
-        Text("MEMORY & LEARNING", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("Memory & routines", "Review saved memory, routines and learning controls", Icons.Rounded.Memory) { onOpenSettings("memory") }
-        ActionRow("Skill Studio", "Manage registered skills and reusable procedures", Icons.Rounded.AutoAwesome) { onOpenSettings("skills") }
-        ActionRow("Knowledge base", "Import and manage local reference documents", Icons.Rounded.Hub) { onOpenSettings("knowledge") }
-        Text("CONNECTED SERVICES", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("Integrations & MCP", "Telegram, MCP servers, connection checks and scopes", Icons.Rounded.Public) { onOpenSettings("integrations") }
-        Text("DEVICE & PRIVACY", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("Permissions & device access", "Accessibility, microphone, notifications, keyboard and location access", Icons.Rounded.Shield) { onOpenSettings("permissions") }
-        ActionRow("Orion health & updates", "Installed version, permission checks, diagnostics and release status", Icons.Rounded.Shield) { onOpenSettings("health") }
-        Text("AUTOMATION & LOCAL TOOLS", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("Screen recording", "Recording controls and saved screen-capture settings", Icons.Rounded.Settings) { onOpenSettings("recording") }
-        ActionRow("Browser & automation", "Browser handoff and assisted navigation settings", Icons.Rounded.Public) { onOpenSettings("browser") }
-        ActionRow("Phone tools & diagnostics", "Network Radar, Game Sentinel, files and local device utilities", Icons.Rounded.Tune) { onOpenSettings("tools") }
-        Text("SYSTEM", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("All settings & permissions", "Open the complete settings index and advanced configuration", Icons.Rounded.Settings) { onOpenSettings(null) }
+        PageHeading(
+            "Settings",
+            "Configure Orion's intelligence, voice, connected services and device access."
+        )
+        Text("AI & EXPERIENCE", color = Silver, fontSize = 10.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Providers & models", "Connections, model selection, vision and fallback", Icons.Rounded.AutoAwesome) {
+            onOpenSettings("providers")
+        }
+        ActionRow("Voice & speech", "Microphone, wake word, spoken replies and live voice", Icons.Rounded.GraphicEq) {
+            onOpenSettings("voice")
+        }
+        ActionRow("Character & response style", "Orion identity and response presentation", Icons.Rounded.SmartToy) {
+            onOpenSettings("character")
+        }
+        Text("CONNECTED SERVICES", color = Silver, fontSize = 10.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Integrations & MCP", "Telegram, connected services, tool scopes and server access", Icons.Rounded.Public) {
+            onOpenSettings("integrations")
+        }
+        ActionRow("Browser & automation", "Assisted browsing and automation preferences", Icons.Rounded.Public) {
+            onOpenSettings("browser")
+        }
+        Text("DEVICE & PRIVACY", color = Silver, fontSize = 10.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Permissions & device access", "Android permissions, accessibility and notification access", Icons.Rounded.Shield) {
+            onOpenSettings("permissions")
+        }
+        ActionRow("Screen recording", "Android-approved capture and recording access", Icons.Rounded.Settings) {
+            onOpenSettings("recording")
+        }
+        ActionRow("Phone tools & diagnostics", "Network, device utilities and local diagnostics", Icons.Rounded.Tune) {
+            onOpenSettings("tools")
+        }
+        Text("SYSTEM", color = Silver, fontSize = 10.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Orion health & updates", "Capability readiness, diagnostics and release status", Icons.Rounded.Shield) {
+            onOpenSettings("health")
+        }
+        ActionRow("Advanced settings index", "Open the complete settings directory", Icons.Rounded.Settings) {
+            onOpenSettings(null)
+        }
     }
 }
 
