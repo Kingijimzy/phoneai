@@ -59,6 +59,20 @@ internal object ShellCommandStore {
         }
     }
 
+    /** Full persisted terminal transcript, newest command first, including captured output and exit state. */
+    fun recentTranscript(c: Context, limit: Int = 20): String {
+        val rows = runCatching { JSONArray(prefs(c).getString(KEY, "[]") ?: "[]") }.getOrElse { JSONArray() }
+        val start = maxOf(0, rows.length() - limit.coerceIn(1, 50))
+        return (rows.length() - 1 downTo start).mapNotNull { index ->
+            val row = rows.optJSONObject(index) ?: return@mapNotNull null
+            val at = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.US)
+                .format(java.util.Date(row.optLong("at")))
+            val code = if (row.isNull("exitCode")) "unknown" else row.optString("exitCode")
+            val state = if (row.optBoolean("verified", false)) "verified" else "unverified"
+            "$at · ${row.optString("backend")} · exit=$code · $state\n$ ${row.optString("command")}\n${row.optString("output")}"
+        }.joinToString("\n\n")
+    }
+
     /** Number of stored shell command records. */
     fun count(c: Context): Int {
         return runCatching { JSONArray(prefs(c).getString(KEY, "[]") ?: "[]").length() }.getOrDefault(0)
