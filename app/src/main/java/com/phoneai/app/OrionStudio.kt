@@ -342,11 +342,11 @@ p.kill()
             "apk" to "install" -> "apk add --no-cache $n 2>&1 | tail -n 20"
             "apk" to "remove" -> "apk del $n 2>&1 | tail -n 15"
             "apk" to "update" -> "apk update 2>&1 | tail -n 3; apk upgrade 2>&1 | tail -n 15"
-            "pip" to "list" -> "pip list --format=freeze 2>&1 | head -n 300"
-            "pip" to "search" -> "pip index versions $n 2>&1 | head -n 6"
-            "pip" to "install" -> "pip install -q $n 2>&1 | tail -n 20"
-            "pip" to "remove" -> "pip uninstall -y $n 2>&1 | tail -n 10"
-            "pip" to "update" -> "pip install -q -U ${if (names.isEmpty()) "pip" else n} 2>&1 | tail -n 15"
+            "pip" to "list" -> "python3 -m pip list --format=freeze 2>&1 | head -n 300"
+            "pip" to "search" -> "python3 -m pip index versions $n 2>&1 | head -n 6"
+            "pip" to "install" -> "python3 -m pip install -q $n 2>&1"
+            "pip" to "remove" -> "python3 -m pip uninstall -y $n 2>&1"
+            "pip" to "update" -> "python3 -m pip install -q -U ${if (names.isEmpty()) "pip" else n} 2>&1"
             "npm" to "list" -> "npm ls -g --depth=0 2>&1 | head -n 100"
             "npm" to "search" -> "npm search --parseable $n 2>&1 | head -n 25"
             "npm" to "install" -> "npm install -g --no-audit --no-fund $n 2>&1 | tail -n 15"
@@ -491,7 +491,7 @@ p.kill()
         catalog.firstOrNull { it.id == id }?.let { return it to it.install }
         val k = runCatching { Kind.valueOf(kind.uppercase()) }.getOrNull() ?: return null
         if (!Regex("^(npm|pip):[A-Za-z0-9@/._-]{1,80}$").matches(source) || source.contains("..")) return null
-        val cmd = if (source.startsWith("npm:")) "npm install -g ${source.removePrefix("npm:")}" else "pip install -q ${source.removePrefix("pip:")}"
+        val cmd = if (source.startsWith("npm:")) "npm install -g ${source.removePrefix("npm:")}" else "python3 -m pip install -q ${source.removePrefix("pip:")}"
         val eid = id.ifBlank { source.substringAfter(':').replace(Regex("[^A-Za-z0-9._-]"), "-") }
         if (!OrionDevspace.validName(eid)) return null
         return Entry(eid, k, eid, "custom ${source}", cmd, run) to cmd
@@ -502,7 +502,8 @@ p.kill()
         val prelude = when {
             cmd.startsWith("npm") -> "command -v npm >/dev/null 2>&1 || { ${toolchainScript("node", ub)}; command -v npm >/dev/null 2>&1 || " + (if (ub) "apt-get install -y npm 2>&1" else "apk add --no-cache npm 2>&1") + "; }"
             cmd.startsWith("pip") -> "command -v python3 >/dev/null 2>&1 || { ${toolchainScript("python", ub)}; }; " +
-                "[ -f /workspace/.venvs/studio/bin/activate ] || { mkdir -p /workspace/.venvs; python3 -m venv /workspace/.venvs/studio 2>&1 | tail -n 3; }"
+                "python3 -m pip --version >/dev/null 2>&1 || { " + (if (ub) "apt-get update -qq && apt-get install -y python3-pip python3-venv" else "apk add --no-cache py3-pip py3-virtualenv") + "; }; " +
+                "python3 -m pip --version >/dev/null 2>&1 || { echo 'pip bootstrap failed'; exit 127; }"
             else -> "true"
         }
         return "$prelude; $VENV; ($cmd; echo \$? > /tmp/orion_rc) 2>&1 | tee /tmp/orion_reg.log; rc=\$(cat /tmp/orion_rc 2>/dev/null || echo 1); echo INSTALL_EXIT=\$rc"
