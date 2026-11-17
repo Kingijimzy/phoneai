@@ -151,7 +151,7 @@ class MainActivity : ComponentActivity() {
                 destination = StudioActivity::class.java
                 val page = when (route) {
                     "studio_terminal" -> "terminal"
-                    "studio_project" -> "project"
+                    "studio_project" -> "files"
                     "studio_agent" -> "agent"
                     "studio_tools" -> "tools"
                     else -> "editor"
