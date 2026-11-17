@@ -1382,8 +1382,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (kind == "note" && addFloatingActivityNote(box, text)) return
         val t = TextView(this)
         t.text = if (kind == "note") text else Markdown.render(text)
-        t.textSize = if (kind == "note") 10f else 14f
-        t.setLineSpacing(dp(2).toFloat(), 1.02f)
+        t.textSize = if (kind == "note") 9f else 13f
+        t.setLineSpacing(dp(1).toFloat(), 1.0f)
         t.maxWidth = (screenSize().first * 0.86f).toInt()
         val lp = LinearLayout.LayoutParams(WRAP, WRAP)
         lp.setMargins(0, dp(5), 0, dp(5))
@@ -1400,7 +1400,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 t.setTextColor(Theme.TEXT)
                 t.background = rounded(Theme.BG, dp(8).toFloat())
                 lp.gravity = Gravity.START
-                lp.setMargins(0, dp(8), dp(20), dp(8))
+                lp.setMargins(0, dp(5), dp(12), dp(5))
             }
             else -> {
                 t.setTextColor(Theme.MUTED)
@@ -1408,8 +1408,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             }
         }
         if (kind != "note") {
-            if (kind == "me") t.setPadding(dp(13), dp(10), dp(13), dp(10))
-            else t.setPadding(dp(3), dp(7), dp(3), dp(7))
+            if (kind == "me") t.setPadding(dp(10), dp(7), dp(10), dp(7))
+            else t.setPadding(dp(2), dp(4), dp(2), dp(4))
             t.contentDescription = if (kind == "me") "Your message. Long press to copy." else "Orion reply. Long press to copy."
             t.setOnLongClickListener {
                 val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
@@ -1562,8 +1562,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.background = rounded(Theme.PANEL, dp(26).toFloat(), Theme.LINE_STRONG)
-        root.setPadding(dp(12), dp(7), dp(12), dp(12))
+        root.background = rounded(0xE61B1B1B.toInt(), dp(22).toFloat(), 0x667A7A7A)
+        root.setPadding(dp(9), dp(5), dp(9), dp(9))
         root.elevation = dp(18).toFloat()
 
         val handle = View(this).apply {
@@ -1572,14 +1572,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         root.addView(handle, LinearLayout.LayoutParams(dp(34), dp(4)).apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            bottomMargin = dp(8)
+            bottomMargin = dp(5)
         })
 
         val head = LinearLayout(this)
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
-        head.background = rounded(Theme.PANEL2, dp(20).toFloat(), Theme.LINE)
-        head.setPadding(dp(8), dp(5), dp(6), dp(5))
+        head.background = rounded(0xD92A2A2A.toInt(), dp(16).toFloat(), 0x665A5A5A)
+        head.setPadding(dp(6), dp(3), dp(5), dp(3))
         val orb = OrbView(this)
         orb.contentDescription = "Orion animated character. Tap to speak."
         orb.isClickable = true
@@ -1590,16 +1590,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 listenNow()
             }
         }
-        head.addView(orb, LinearLayout.LayoutParams(dp(56), dp(56)))
+        head.addView(orb, LinearLayout.LayoutParams(dp(44), dp(44)))
         val titleCol = LinearLayout(this)
         titleCol.orientation = LinearLayout.VERTICAL
         titleCol.setPadding(dp(8), 0, 0, 0)
-        val title = label(Prefs.orionEntityName(this).uppercase(), 16f, Theme.TEXT)
+        val title = label(Prefs.orionEntityName(this).uppercase(), 14f, Theme.TEXT)
         title.typeface = Typeface.DEFAULT_BOLD
         titleCol.addView(title)
-        val st = label(if (running) "ORION  ·  WORKING" else "PERSONAL COMPANION  ·  READY", 10f, Theme.SILVER)
+        val st = label(if (running) "WORKING" else "READY", 9f, Theme.SILVER)
         titleCol.addView(st)
-        val tagline = label("Think with you. Act with permission.", 10f, Theme.MUTED)
+        val tagline = label("Think with you · Act with permission", 9f, Theme.MUTED)
         titleCol.addView(tagline)
         head.addView(titleCol, LinearLayout.LayoutParams(0, WRAP, 1f))
         val stop = label("■ Stop", 12f, Theme.WARN)
@@ -1609,11 +1609,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         head.addView(stop)
         stopBtnRef = stop
         val fresh = label("＋ New", 13f, Theme.MUTED)
-        fresh.setPadding(dp(10), dp(6), dp(10), dp(6))
+        fresh.setPadding(dp(7), dp(4), dp(7), dp(4))
         fresh.setOnClickListener { newChat() }
         head.addView(fresh)
         val close = label("×", 22f, Theme.MUTED)
-        close.setPadding(dp(12), dp(4), dp(10), dp(4))
+        close.setPadding(dp(8), dp(3), dp(7), dp(3))
         close.setOnClickListener { closePanel(true) }
         head.addView(close)
         root.addView(head)
@@ -1651,6 +1651,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val fullChatLp = LinearLayout.LayoutParams(WRAP, WRAP)
         fullChatLp.setMargins(0, 0, dp(6), 0)
         chips.addView(fullChatChip, fullChatLp)
+        val destinations = listOf("Studio" to "studio", "Terminal" to "terminal", "Files" to "workspace", "Browser" to "browser", "Trading" to "trading")
+        destinations.forEach { (title, page) ->
+            val shortcut = chip(title) { OrionPages.open(this, page) }
+            val shortcutLp = LinearLayout.LayoutParams(WRAP, WRAP)
+            shortcutLp.setMargins(0, 0, dp(6), 0)
+            chips.addView(shortcut, shortcutLp)
+        }
         for ((chipName, cmd) in quick) {
             val c = chip(chipName) { submit(cmd) }
             val clp = LinearLayout.LayoutParams(WRAP, WRAP)
@@ -1679,8 +1686,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             cornerRadius = dp(22).toFloat()
             setStroke(dp(1), 0xFF414141.toInt())
         }
-        input.setPadding(dp(15), dp(10), dp(15), dp(10))
-        input.minHeight = dp(46)
+        input.setPadding(dp(12), dp(7), dp(12), dp(7))
+        input.minHeight = dp(42)
         input.setSingleLine(true)
         input.maxLines = 1
         input.ellipsize = android.text.TextUtils.TruncateAt.END
@@ -1692,7 +1699,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             submit(t)
             true
         }
-        row.addView(input, LinearLayout.LayoutParams(0, dp(46), 1f))
+        row.addView(input, LinearLayout.LayoutParams(0, dp(42), 1f))
         lateinit var micBtn: TextView
         micBtn = pill("Mic", Theme.PANEL2, Theme.SILVER) {
             if (listening) {
@@ -1707,11 +1714,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 listenNow()
             }
         }
-        micBtn.setPadding(dp(7), dp(8), dp(7), dp(8))
+        micBtn.setPadding(dp(6), dp(6), dp(6), dp(6))
         micBtn.minWidth = dp(60)
         micBtn.maxLines = 1
         micBtn.isSingleLine = true
-        val micLp = LinearLayout.LayoutParams(dp(60), dp(46))
+        val micLp = LinearLayout.LayoutParams(dp(54), dp(42))
         micLp.setMargins(dp(8), 0, 0, 0)
         row.addView(micBtn, micLp)
         micBtnRef = micBtn
@@ -1720,7 +1727,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             openMainChat(true)
         }
         imageBtn.contentDescription = "Choose an image for Orion to analyse"
-        val imageLp = LinearLayout.LayoutParams(dp(42), dp(46))
+        val imageLp = LinearLayout.LayoutParams(dp(38), dp(42))
         imageLp.setMargins(dp(6), 0, 0, 0)
         row.addView(imageBtn, imageLp)
         val send = pill("Send", Theme.CYAN, Theme.ON_ACCENT) {
@@ -1728,17 +1735,17 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             input.setText("")
             submit(t)
         }
-        val sendLp = LinearLayout.LayoutParams(dp(66), dp(46))
+        val sendLp = LinearLayout.LayoutParams(dp(58), dp(42))
         sendLp.setMargins(dp(8), 0, 0, 0)
         row.addView(send, sendLp)
         root.addView(row)
 
         // Keep the command surface compact enough to reveal the app underneath. Full chat
         // remains a separate destination for long conversations, files and history.
-        val panelHeight = (size.second * 0.56f).toInt().coerceAtLeast(dp(320))
-            .coerceAtMost((size.second * 0.60f).toInt())
+        val panelHeight = (size.second * 0.44f).toInt().coerceAtLeast(dp(280))
+            .coerceAtMost((size.second * 0.48f).toInt())
         val lp = WindowManager.LayoutParams(
-            size.first - dp(16), panelHeight, OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
+            size.first - dp(24), panelHeight, OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         lp.y = dp(12)
