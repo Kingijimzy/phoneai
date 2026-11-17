@@ -252,6 +252,16 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             finish()
             return
         }
+        val usedMs = GeminiLiveBudget.usedToday(this)
+        val budget = GeminiLiveBudget.budgetMinutes(this)
+        if (GeminiLiveBudget.remainingMs(usedMs, budget) <= 0L) {
+            Toast.makeText(this, "Today's Live budget ($budget min) is used up. Orion's normal voice still works.", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        sessionBudgetLimitMs = GeminiLiveBudget.sessionLimitMs(usedMs, budget)
+        sessionStartedMs = System.currentTimeMillis()
+        Toast.makeText(this, GeminiLiveBudget.label(GeminiLiveBudget.remainingMs(usedMs, budget)), Toast.LENGTH_SHORT).show()
         liveConversationId = ChatHistoryStore.activeSessionId(this)
         active = true
         liveConnected = false
@@ -262,7 +272,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         updateControls()
         main.removeCallbacks(sessionLimit)
         main.removeCallbacks(connectTimeout)
-        main.postDelayed(sessionLimit, GeminiLivePolicy.SESSION_LIMIT_MS)
+        main.postDelayed(sessionLimit, sessionBudgetLimitMs)
         main.postDelayed(connectTimeout, CONNECT_TIMEOUT_MS)
         session = GeminiLiveSession(this, key, this).also { it.start() }
     }
@@ -523,7 +533,12 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
     override fun onMessage(kind: String, text: String) { }
     override fun onStatus(text: String, mode: OrbView.Mode) { }
 
+    private var sessionBudgetLimitMs = GeminiLivePolicy.SESSION_LIMIT_MS
+    private var sessionStartedMs = 0L
+
     override fun onDestroy() {
+        if (sessionStartedMs > 0L) GeminiLiveBudget.record(this, System.currentTimeMillis() - sessionStartedMs)
+        sessionStartedMs = 0L
         main.removeCallbacks(sessionLimit)
         main.removeCallbacks(connectTimeout)
         session?.stop()
