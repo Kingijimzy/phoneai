@@ -15,6 +15,17 @@ internal object GeminiLivePolicy {
     const val SESSION_LIMIT_MS = 40 * 60 * 1000L
     const val MAX_RECONNECTS = 12
     const val ASK_ORION = "ask_orion"
+    const val MAX_TOOL_RESULT_CHARS = 700
+
+    /**
+     * Hybrid split: Gemini hears the owner and answers in its own voice, so it only needs the gist of a task result.
+     * The full output stays in Orion's chat and files, which saves Live tokens and keeps long code out of the call.
+     */
+    fun clipToolResult(result: String): String {
+        val t = result.trim().ifBlank { "Done." }
+        if (t.length <= MAX_TOOL_RESULT_CHARS) return t
+        return t.take(MAX_TOOL_RESULT_CHARS).substringBeforeLast(' ') + " … (full details are in the chat)"
+    }
 
     /** Raw model audio parts of one serverContent event, in order. */
     fun audioParts(serverContent: org.json.JSONObject): List<ByteArray> {

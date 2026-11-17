@@ -786,6 +786,7 @@ internal fun OrionComposeChatScreen(
                     Text("Latest", color = OrionUiPalette.text, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                 }
             }
+            OrionLiveFloat(Modifier.align(Alignment.TopEnd))
             }
         }
 

@@ -2160,7 +2160,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }
     }
 
-    private fun addMessage(kind: String, text: String) {
+    private fun addMessage(kind: String, rawText: String) {
+        val text = if (kind == "ai") OrionChatText.tidy(rawText) else rawText
         if (composeChatActive) {
             val draftId = streamingMessageId
             if (kind == "ai" && draftId != null) {
@@ -2275,11 +2276,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             if (id == null) {
                 val freshId = System.nanoTime()
                 streamingMessageId = freshId
-                composeLines.add(OrionChatLine(freshId, "ai", streamingBuffer.toString()))
+                composeLines.add(OrionChatLine(freshId, "ai", OrionChatText.tidy(streamingBuffer.toString())))
             } else {
                 val index = composeLines.indexOfFirst { it.id == id }
-                if (index >= 0) composeLines[index] = OrionChatLine(id, "ai", streamingBuffer.toString())
-                else composeLines.add(OrionChatLine(id, "ai", streamingBuffer.toString()))
+                if (index >= 0) composeLines[index] = OrionChatLine(id, "ai", OrionChatText.tidy(streamingBuffer.toString()))
+                else composeLines.add(OrionChatLine(id, "ai", OrionChatText.tidy(streamingBuffer.toString())))
             }
         }
     }
