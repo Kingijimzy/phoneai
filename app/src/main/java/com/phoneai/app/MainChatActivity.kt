@@ -113,28 +113,74 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
     }
 
-    private var browsingChip: TextView? = null
+    private var miniBrowser: android.widget.LinearLayout? = null
+    private var miniWeb: android.webkit.WebView? = null
+    private var miniTitle: TextView? = null
+    private val miniHide = Runnable { closeMiniBrowser() }
 
-    /** Orion's own browsing never takes over the screen: a small chip appears, and the page opens only if tapped. */
+    private fun closeMiniBrowser() {
+        miniWeb?.let { BrowserAutomation.detach(it); it.stopLoading(); it.destroy() }
+        miniWeb = null
+        miniBrowser?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+        miniBrowser = null
+    }
+
+    /**
+     * Orion's own browsing renders in a small live panel inside the chat: no dialog, no full screen, no focus theft.
+     * Orion's browser tools drive this very WebView; tapping the title expands it, the cross closes it, and it
+     * folds away by itself once Orion stops using it.
+     */
     override fun onOpenBrowser(url: String) {
         runOnUiThread {
             if (isFinishing || isDestroyed) return@runOnUiThread
-            val host = runCatching { android.net.Uri.parse(url).host }.getOrNull()?.removePrefix("www.") ?: url.take(30)
-            browsingChip?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
-            val chip = TextView(this).apply {
-                text = "Orion is browsing  $host  ›"
-                setTextColor(0xFFE6E6E6.toInt()); textSize = 12f
-                setPadding(dp(14), dp(8), dp(14), dp(8))
-                background = rounded(0xF2202020.toInt(), 18, 0x555F5F5F)
-                elevation = dp(6).toFloat()
-                setOnClickListener { showChatBrowserPopup(url); (parent as? android.view.ViewGroup)?.removeView(this) }
+            val safe = ChatBrowserUrlPolicy.normalize(url) ?: return@runOnUiThread
+            val host = runCatching { android.net.Uri.parse(safe).host }.getOrNull()?.removePrefix("www.") ?: safe.take(30)
+            if (miniBrowser == null) {
+                val panel = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    background = rounded(0xFF141414.toInt(), 14, 0x555F5F5F)
+                    elevation = dp(8).toFloat()
+                    clipToOutline = true
+                }
+                val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(10), dp(6), dp(4), dp(6)) }
+                val title = TextView(this).apply {
+                    setTextColor(0xFFE6E6E6.toInt()); textSize = 11f; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+                    setOnClickListener { miniWeb?.url?.let { u -> showChatBrowserPopup(u) }; closeMiniBrowser() }
+                }
+                val close = TextView(this).apply {
+                    text = "✕"; setTextColor(0xFFBDBDBD.toInt()); textSize = 14f; setPadding(dp(12), dp(4), dp(12), dp(4))
+                    setOnClickListener { closeMiniBrowser() }
+                }
+                head.addView(title, LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                head.addView(close)
+                val web = android.webkit.WebView(this).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.allowFileAccess = false
+                    settings.allowContentAccess = false
+                    settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                    isFocusable = false
+                    isFocusableInTouchMode = false
+                    webViewClient = object : android.webkit.WebViewClient() {
+                        override fun shouldOverrideUrlLoading(view: android.webkit.WebView, request: android.webkit.WebResourceRequest): Boolean =
+                            ChatBrowserUrlPolicy.normalize(request.url.toString()) == null
+                        override fun onPageFinished(view: android.webkit.WebView, u: String?) {
+                            miniTitle?.text = "Orion · " + (view.title?.takeIf { t -> t.isNotBlank() } ?: host)
+                            window.decorView.removeCallbacks(miniHide); window.decorView.postDelayed(miniHide, 30_000)
+                        }
+                    }
+                }
+                panel.addView(head, LinearLayout.LayoutParams(-1, android.view.ViewGroup.LayoutParams.WRAP_CONTENT))
+                panel.addView(web, LinearLayout.LayoutParams(-1, dp(190)))
+                val lp = android.widget.FrameLayout.LayoutParams(dp(250), android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                    Gravity.BOTTOM or Gravity.END).apply { bottomMargin = dp(150); marginEnd = dp(12) }
+                window.decorView.findViewById<android.view.ViewGroup>(android.R.id.content).addView(panel, lp)
+                miniBrowser = panel; miniWeb = web; miniTitle = title
+                BrowserAutomation.attach(web)
             }
-            val lp = android.widget.FrameLayout.LayoutParams(
-                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT, android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
-                android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(72) }
-            (window.decorView.findViewById<android.view.ViewGroup>(android.R.id.content)).addView(chip, lp)
-            browsingChip = chip
-            chip.postDelayed({ (chip.parent as? android.view.ViewGroup)?.removeView(chip) }, 7000)
+            miniTitle?.text = "Orion · $host"
+            miniWeb?.loadUrl(safe)
+            window.decorView.removeCallbacks(miniHide); window.decorView.postDelayed(miniHide, 30_000)
         }
     }
 
@@ -1820,6 +1866,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     }
 
     override fun onDestroy() {
+        closeMiniBrowser()
         attachedService?.detachMainChat(this)
         attachedService = null
         super.onDestroy()
