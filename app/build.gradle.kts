@@ -191,10 +191,10 @@ dependencies {
 }
 
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
-    // Robolectric downloads its Android framework jar outside Gradle dependency
-    // resolution. Use Maven Central canonical hostname; repo1 returned HTTP 429
-    // in CI and caused unrelated tests to fail.
-    systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
+    // Robolectric fetches Android framework jars outside Gradle dependency
+    // resolution. Use the Google-hosted Maven Central mirror to avoid shared-runner
+    // rate limits on Maven Central hostnames.
+    systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2")
     testLogging {
         events = setOf(
             org.gradle.api.tasks.testing.logging.TestLogEvent.FAILED,
