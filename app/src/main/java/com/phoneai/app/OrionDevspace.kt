@@ -58,10 +58,27 @@ internal object OrionDevspace {
             "api" -> file("server.py", "import json\nfrom http.server import BaseHTTPRequestHandler, HTTPServer\n\n\nclass H(BaseHTTPRequestHandler):\n    def do_GET(self):\n        body = json.dumps({'ok': True, 'path': self.path}).encode()\n        self.send_response(200)\n        self.send_header('Content-Type', 'application/json')\n        self.send_header('Content-Length', str(len(body)))\n        self.end_headers()\n        self.wfile.write(body)\n\n\nHTTPServer(('0.0.0.0', 8080), H).serve_forever()") + file("README.md", "# $name\n\nJSON API on :8080. Start with service_start.")
             "node" -> file("package.json", "{\n  \"name\": \"$name\",\n  \"version\": \"0.1.0\",\n  \"main\": \"index.js\",\n  \"scripts\": { \"start\": \"node index.js\" }\n}") + file("index.js", "require('http').createServer((req, res) => {\n  res.setHeader('Content-Type', 'application/json');\n  res.end(JSON.stringify({ ok: true, path: req.url }));\n}).listen(3000, '0.0.0.0');") + file("README.md", "# $name\n\nnpm start (port 3000)")
             "web" -> file("index.html", "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>$name</title><h1>$name</h1><p>Served from Orion.</p>") + file("README.md", "# $name\n\nStatic site. Serve with: python3 -m http.server 8000")
+            "android" -> androidFiles(name, ::file)
             else -> return null
         }
         return "mkdir -p $d && cd $d && (git init -q 2>/dev/null; true)\n$files" + "ls -la $d"
     }
+
+    /** A minimal Kotlin Android app plus a GitHub Actions workflow that builds the debug APK and uploads it as an artifact. */
+    private fun androidFiles(name: String, file: (String, String) -> String): String {
+        val pkg = "com.orion." + name.lowercase().replace(Regex("[^a-z0-9]"), "")
+        val dir = pkg.replace('.', '/')
+        return "mkdir -p .github/workflows app/src/main/java/$dir\n" +
+            file("settings.gradle.kts", "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }\ndependencyResolutionManagement { repositories { google(); mavenCentral() } }\nrootProject.name = \"$name\"\ninclude(\":app\")") +
+            file("build.gradle.kts", "plugins {\n    id(\"com.android.application\") version \"8.5.2\" apply false\n    id(\"org.jetbrains.kotlin.android\") version \"1.9.24\" apply false\n}") +
+            file("gradle.properties", "android.useAndroidX=true\norg.gradle.jvmargs=-Xmx2g") +
+            file("app/build.gradle.kts", "plugins {\n    id(\"com.android.application\")\n    id(\"org.jetbrains.kotlin.android\")\n}\nandroid {\n    namespace = \"$pkg\"\n    compileSdk = 34\n    defaultConfig { applicationId = \"$pkg\"; minSdk = 26; targetSdk = 34; versionCode = 1; versionName = \"0.1.0\" }\n    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }\n    kotlinOptions { jvmTarget = \"17\" }\n}\ndependencies {\n    testImplementation(\"junit:junit:4.13.2\")\n}") +
+            file("app/src/main/AndroidManifest.xml", "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <application android:label=\"$name\">\n        <activity android:name=\".MainActivity\" android:exported=\"true\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>") +
+            file("app/src/main/java/$dir/MainActivity.kt", "package $pkg\n\nimport android.app.Activity\nimport android.os.Bundle\nimport android.widget.TextView\n\nclass MainActivity : Activity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        setContentView(TextView(this).apply { text = \"$name is running\"; textSize = 24f; setPadding(48, 96, 48, 48) })\n    }\n}") +
+            file(".github/workflows/android.yml", ANDROID_WORKFLOW)
+    }
+
+    private const val ANDROID_WORKFLOW = "name: Android build\non:\n  push:\n  pull_request:\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-java@v4\n        with: { distribution: temurin, java-version: 17 }\n      - uses: gradle/actions/setup-gradle@v4\n        with: { gradle-version: 8.9 }\n      - run: gradle testDebugUnitTest assembleDebug\n      - uses: actions/upload-artifact@v4\n        with:\n          name: app-debug-apk\n          path: app/build/outputs/apk/debug/app-debug.apk"
 
     fun backupScript(project: String): String? =
         if (!validName(project)) null else "mkdir -p /workspace/backups && tar czf /workspace/backups/$project-\$(date +%Y%m%d-%H%M%S).tgz -C /workspace $project && ls -la /workspace/backups | tail -n 5"
@@ -187,7 +204,7 @@ internal object OrionDevspace {
         val project = a.optString("project").trim()
         fun guest(script: String?, bad: String): String = if (script == null) "error: $bad" else ShellRunner.run(c, script, OrionUbuntu.where(c))
         return when (action) {
-            "", "help" -> "devspace actions: ubuntu_install (full Ubuntu 24.04 arm64 runtime with apt), runtime_status, setup {profile: base|web|data|media|db|net|all}, venv {name, packages?}, run {command, project?, venv?}, new_project {name, kind: python|cli|api|node|web}, " +
+            "", "help" -> "devspace actions: playbook {name?} (engineering playbooks: build-platform, debugging, tdd, review, github-flow, inspect — read the right one before building or debugging), ubuntu_install (full Ubuntu 24.04 arm64 runtime with apt), runtime_status, setup {profile: base|web|data|media|db|net|all}, venv {name, packages?}, run {command, project?, venv?}, new_project {name, kind: python|cli|api|node|web}, " +
                 "project_view {project}, backup {project}, service_start {name, command, port?, project?}, service_stop {name}, service_list, service_logs {name, lines?}, service_health {name|port}, " +
                 "job_add {name, command, every_minutes|daily_at}, job_list, job_remove {name}, job_run {name}. All of it runs in the real Linux space under /workspace."
             "ubuntu_install" -> OrionUbuntu.install(c)
@@ -195,7 +212,8 @@ internal object OrionDevspace {
             "setup" -> guest(if (OrionUbuntu.isInstalled(c)) OrionUbuntu.setupScript(a.optString("profile").ifBlank { "base" }) else setupScript(a.optString("profile").ifBlank { "base" }), "unknown profile; use base, web, data, media, db, net or all.")
             "venv" -> guest(venvScript(a.optString("name").ifBlank { "main" }, a.optJSONArray("packages")?.let { p -> List(p.length()) { p.getString(it) } } ?: emptyList()), "bad venv name or package.")
             "run" -> guest(runScript(project, a.optString("venv"), a.optString("command")), "run needs a command (and valid project/venv names).")
-            "new_project" -> guest(scaffold(a.optString("name"), a.optString("kind").ifBlank { "python" }), "new_project needs a valid name and kind python|cli|api|node|web.")
+            "new_project" -> guest(scaffold(a.optString("name"), a.optString("kind").ifBlank { "python" }), "new_project needs a valid name and kind python|cli|api|node|web|android.")
+            "playbook" -> OrionPlaybooks.run(a.optString("name"))
             "project_view" -> guest(viewScript(project.ifBlank { a.optString("name") }), "project_view needs a valid project name.")
             "backup" -> guest(backupScript(project.ifBlank { a.optString("name") }), "backup needs a valid project name.")
             "service_start" -> startService(c, a.optString("name"), a.optString("command"), a.optInt("port", 0), project)
