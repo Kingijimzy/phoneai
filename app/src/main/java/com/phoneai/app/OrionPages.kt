@@ -13,7 +13,7 @@ internal object OrionPages {
     val all: List<Page> = listOf(
         Page("chat", "Chat (home)", "The conversation with Orion", MainChatActivity::class.java, "home talk"),
         Page("live", "Live call", "Hands-free voice conversation", LiveConversationActivity::class.java, "voice call talk"),
-        Page("studio", "Code Studio", "Toolchains, Git, diagnostics, build, preview, registry, live runtime", StudioActivity::class.java, "code ide lsp git debug build registry plugins mcp marketplace"),
+        Page("studio", "Code Studio", "Editor, files, terminal, Git, build, runtime", CodeSpaceActivity::class.java, "code ide lsp git debug build registry plugins mcp marketplace"),
         Page("terminal", "Terminal", "Linux shell and sandbox", TerminalActivity::class.java, "shell linux bash proot"),
         Page("workspace", "Workspace", "Files and projects Orion builds", WorkspaceShellActivity::class.java, "files code project"),
         Page("browser", "Browser", "Orion's built-in browser", BrowserActivity::class.java, "web internet"),
