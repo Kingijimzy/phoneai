@@ -15,4 +15,19 @@ class OrionSelfEditTest {
     @Test fun repoShapeIsChecked() {
         assertTrue(OrionSelfEdit.repoOk("Kingijimzy/phoneai")); assertFalse(OrionSelfEdit.repoOk("../x"))
     }
+
+    /** Slashed branch names are used inside URL paths, so they must be validated before use. */
+    @Test fun branchNamesAreValidated() {
+        assertTrue(OrionSelfEdit.branchOk("orion/self-edit"))
+        assertTrue(OrionSelfEdit.branchOk("fix/self-edit-branch-ensure"))
+        assertTrue(OrionSelfEdit.branchOk("main"))
+        assertFalse(OrionSelfEdit.branchOk(""))
+        assertFalse(OrionSelfEdit.branchOk("/leading"))
+        assertFalse(OrionSelfEdit.branchOk("trailing/"))
+        assertFalse(OrionSelfEdit.branchOk("double//slash"))
+        assertFalse(OrionSelfEdit.branchOk("has..dots"))
+        assertFalse(OrionSelfEdit.branchOk("ends.lock"))
+        assertFalse(OrionSelfEdit.branchOk("bad name with spaces"))
+        assertFalse(OrionSelfEdit.branchOk("bad~tilde"))
+    }
 }
