@@ -712,7 +712,7 @@ internal fun OrionComposeChatScreen(
             Spacer(Modifier.height(8.dp))
         } else {
             OrionLiveMetricsBar()
-            val visibleLines = lines.filterNot(::isCompactExecutionNote)
+            val visibleLines = OrionChatFlood.fold(lines.filterNot(::isCompactExecutionNote))
             Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),

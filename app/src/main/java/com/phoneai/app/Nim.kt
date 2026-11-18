@@ -1275,7 +1275,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 }
                 if (queue.isEmpty()) {
                     // Show what the provider actually said, so a wrong model name or bad parameter is visible instead of guessed at.
-                    val said = r.body.replace("\n", " ").replace(Regex("\\s+"), " ").trim().take(220)
+                    val said = OrionChatFlood.cleanError(r.body).take(220).takeUnless { r.body.isBlank() }.orEmpty()
                     val why = if (said.isNotEmpty()) " Provider said: $said." else ""
                     val fix = " Open the model picker and choose a model this provider lists (\"$model\" may not exist there)."
                     throw AiException(

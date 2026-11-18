@@ -771,15 +771,14 @@ private fun BrowserActivityCard(raw: String, onOpenBrowser: (String?) -> Unit) {
                 color = OrionUiPalette.muted, fontSize = 10.sp, lineHeight = 14.sp
             )
         }
-        if (result.isNotBlank()) Text(result, color = ChatMuted, fontSize = 11.sp, lineHeight = 16.sp)
-        Text("Interactive pages open in the in-chat browser popup. Use its Close control to return here.", color = OrionUiPalette.muted, fontSize = 9.sp, lineHeight = 13.sp)
+        OrionChatFlood.cleanResult(result).takeIf { it.isNotBlank() }?.let { Text(it.take(600), color = ChatMuted, fontSize = 11.sp, lineHeight = 16.sp, maxLines = 6, overflow = TextOverflow.Ellipsis) }
     }
 }
 
 @Composable
 private fun ToolActivityCard(raw: String) {
     val marker = raw.lineSequence().firstOrNull().orEmpty()
-    val detail = raw.substringAfter("\n", "").trim().take(2400)
+    val detail = OrionChatFlood.cleanResult(raw.substringAfter("\n", "")).take(2400)
     val clipboard = LocalClipboardManager.current
     var expanded by remember(raw) { mutableStateOf(false) }
     val warning = marker.startsWith("[APPROVAL:")

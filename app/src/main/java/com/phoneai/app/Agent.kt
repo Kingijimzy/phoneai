@@ -1311,7 +1311,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             if (toolRounds > 0) {
                 preserveToolTranscript("The model follow-up failed after tool execution. Review the recorded tool results before retrying; do not repeat non-idempotent actions without checking their outcome.")
             }
-            ui.say("I couldn't reach the AI just now. " + (e.message ?: "Please try again."))
+            ui.say("I couldn't reach the AI just now. " + OrionChatFlood.cleanError(e.message))
             return
         }
         if (stopped) return
