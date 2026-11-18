@@ -73,6 +73,7 @@ internal object OrionCentralBrain {
         runCatching { McpConnector.catalogueForPrompt(app) }.getOrNull()?.takeIf { it.isNotBlank() }?.let {
             sections += "CONNECTED MCP SERVER TOOLS (call with mcp_call {name, arguments}; prefer these over guessing):\n" + it.take(3500)
         }
+        runCatching { OrionPlugins.promptBlock(app) }.getOrNull()?.takeIf { it.isNotBlank() }?.let { sections += it }
         // Canonical identity is injected into every executive context, independent of provider or UI surface.
         sections += OrionPrimeDirective.contextBlock()
         sections += OrionEntityPhilosophy.doctrineBlock()
