@@ -11,6 +11,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -205,18 +206,12 @@ class CodeSpaceActivity : ComponentActivity() {
         val lang = remember(t.file.name) { OrionStudioEditor.langOf(t.file.name) }
         val transform = remember(lang) { VisualTransformation { TransformedText(CodeSpaceModel.annotate(lang, it.text), OffsetMapping.Identity) } }
         val style = TextStyle(color = MaterialTheme.colorScheme.onBackground, fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 19.sp)
-        val lines = t.text.count { it == '\n' } + 1
-        Row(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            Column(Modifier.background(MaterialTheme.colorScheme.surface).padding(horizontal = 8.dp, vertical = 10.dp), horizontalAlignment = Alignment.End) {
-                Text((1..lines.coerceAtMost(5000)).joinToString("\n"), style = style.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp))
-            }
-            Box(Modifier.horizontalScroll(rememberScrollState()).fillMaxHeight().padding(10.dp)) {
-                BasicTextField(
-                    value = t.text, onValueChange = { t.text = it }, textStyle = style, softWrap = false,
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), visualTransformation = transform,
-                    modifier = Modifier.fillMaxHeight()
-                )
-            }
+        Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
+            BasicTextField(
+                value = t.text, onValueChange = { t.text = it }, textStyle = style,
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), visualTransformation = transform,
+                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 400.dp)
+            )
         }
     }
 

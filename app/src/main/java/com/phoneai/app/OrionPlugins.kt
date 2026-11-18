@@ -101,7 +101,7 @@ internal object OrionPlugins {
     fun promptBlock(c: Context): String {
         val on = installed(c).filter { it.second }.map { it.first }
         if (on.isEmpty()) return ""
-        return "INSTALLED PLUGINS (call with plugin {action:\\"run\\", id, tool, args}; they run in the Linux runtime):\n" +
+        return "INSTALLED PLUGINS (call with plugin {action:\"run\", id, tool, args}; they run in the Linux runtime):\n" +
             on.joinToString("\n") { p -> "- ${p.id}: " + p.tools.joinToString("; ") { t -> t.name + "(" + placeholder.findAll(t.command).map { it.groupValues[1] }.distinct().joinToString(",") + ") " + t.description.take(60) } }.take(2500)
     }
 
