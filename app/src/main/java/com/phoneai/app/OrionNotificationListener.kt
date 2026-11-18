@@ -23,7 +23,8 @@ class OrionNotificationListener : NotificationListenerService() {
         val whenMillis: Long,
         val app: String,
         val title: String,
-        val text: String
+        val text: String,
+        val pkg: String = ""
     )
 
     override fun onListenerConnected() {
@@ -73,7 +74,8 @@ class OrionNotificationListener : NotificationListenerService() {
                 whenMillis = sbn.postTime,
                 app = app.take(60),
                 title = title.take(180),
-                text = text.take(500)
+                text = text.take(500),
+                pkg = pkg.take(160)
             )
             synchronized(lock) {
                 recent[sbn.key] = item
@@ -225,6 +227,43 @@ class OrionNotificationListener : NotificationListenerService() {
         fun refreshConsent() {
             val service = instance ?: return
             try { service.activeNotifications?.forEach { service.capture(it) } } catch (_: Exception) { }
+        }
+
+        /** True when Android has bound the listener process. Access is not implied by this. */
+        fun isConnected(): Boolean = instance != null
+
+        /**
+         * Bounded, newest-first snapshot for the owner-facing notification centre.
+         * Read-only: no keys leave the app and nothing here is written to storage.
+         */
+        fun recentNotifications(): List<SafeNotification> {
+            if (instance == null) return emptyList()
+            return synchronized(lock) { recent.values.toList().sortedByDescending { it.whenMillis } }
+        }
+
+        /** True only when the notification is still present in the live status bar. */
+        fun isActive(key: String): Boolean {
+            val service = instance ?: return false
+            if (key.isBlank()) return false
+            return try {
+                service.activeNotifications?.any { it.key == key } == true
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        /** True when the active notification advertises a free-form direct-reply action. */
+        fun canReply(key: String): Boolean {
+            val service = instance ?: return false
+            if (key.isBlank()) return false
+            return try {
+                val sbn = service.activeNotifications?.firstOrNull { it.key == key } ?: return false
+                sbn.notification.actions?.any { action ->
+                    action.remoteInputs?.any { it.allowFreeFormInput } == true
+                } == true
+            } catch (_: Exception) {
+                false
+            }
         }
 
         /** Bounded recent notification context for the central brain; no notification keys are exposed. */
