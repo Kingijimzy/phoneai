@@ -8,7 +8,7 @@ import java.io.File
 
 /** Pure logic behind the Code Space screen: safe paths, listings, copying and syntax colouring. */
 internal object CodeSpaceModel {
-    data class Entry(val name: String, val isDir: Boolean, val size: Long)
+    data class Entry(val name: String, val isDir: Boolean, val size: Long, val modified: Long = 0L)
 
     const val MAX_EDIT_BYTES = 400_000L
     const val MAX_COPY_BYTES = 200L * 1024 * 1024
@@ -25,7 +25,7 @@ internal object CodeSpaceModel {
     fun list(dir: File, limit: Int = 600): List<Entry> =
         (dir.listFiles()?.toList() ?: emptyList())
             .filterNot { it.name in hidden }
-            .map { Entry(it.name, it.isDirectory, if (it.isFile) it.length() else 0L) }
+            .map { Entry(it.name, it.isDirectory, if (it.isFile) it.length() else 0L, it.lastModified()) }
             .sortedWith(compareByDescending<Entry> { it.isDir }.thenBy { it.name.lowercase() })
             .take(limit)
 
@@ -50,6 +50,53 @@ internal object CodeSpaceModel {
             if (src.isDirectory) src.copyRecursively(target, overwrite = false) else src.copyTo(target, overwrite = false)
             "Copied ${src.name} to ${target.name}"
         }.getOrElse { "Copy failed: ${it.message}" }
+    }
+
+
+    enum class Kind(val label: String, val color: Long) {
+        FOLDER("Folder", 0xFFE5B567), PYTHON("Python", 0xFF6AA9E9), JSON("JSON", 0xFFE0C06A), KOTLIN("Kotlin", 0xFFB589E8),
+        SCRIPT("Script", 0xFFE8A065), WEB("Web", 0xFFE87C6A), DOC("Text", 0xFFB5BDC6), IMAGE("Image", 0xFF7BD0A0),
+        ARCHIVE("Archive", 0xFFD59BC5), CONFIG("Config", 0xFF8FB8C9), OTHER("File", 0xFF9AA0A6)
+    }
+
+    fun kindOf(name: String, isDir: Boolean): Kind = if (isDir) Kind.FOLDER else when (name.substringAfterLast('.', "").lowercase()) {
+        "py", "pyw" -> Kind.PYTHON
+        "json", "jsonl" -> Kind.JSON
+        "kt", "kts", "java", "gradle" -> Kind.KOTLIN
+        "js", "mjs", "ts", "tsx", "jsx", "sh", "bash", "rb", "go", "rs", "php", "c", "cpp", "h" -> Kind.SCRIPT
+        "html", "htm", "css", "xml" -> Kind.WEB
+        "md", "txt", "log", "csv" -> Kind.DOC
+        "png", "jpg", "jpeg", "webp", "gif", "svg", "bmp" -> Kind.IMAGE
+        "zip", "tar", "gz", "tgz", "7z", "apk", "aab", "jar" -> Kind.ARCHIVE
+        "yml", "yaml", "toml", "ini", "properties", "env", "conf" -> Kind.CONFIG
+        else -> Kind.OTHER
+    }
+
+    fun formatSize(bytes: Long): String = when {
+        bytes >= 1024L * 1024L * 1024L -> String.format(java.util.Locale.ROOT, "%.1f GB", bytes / (1024.0 * 1024 * 1024))
+        bytes >= 1024L * 1024L -> String.format(java.util.Locale.ROOT, "%.1f MB", bytes / (1024.0 * 1024))
+        bytes >= 1024L -> String.format(java.util.Locale.ROOT, "%.0f KB", bytes / 1024.0)
+        else -> "$bytes B"
+    }
+
+    /** "Nov 18, 12:16" within the year, "Nov 18, 2025" otherwise; empty for unknown times. */
+    fun formatDate(ms: Long, now: Long = System.currentTimeMillis(), zone: java.util.TimeZone = java.util.TimeZone.getDefault()): String {
+        if (ms <= 0L) return ""
+        val fmt = { pattern: String -> java.text.SimpleDateFormat(pattern, java.util.Locale.US).apply { timeZone = zone }.format(java.util.Date(ms)) }
+        return if (fmt("yyyy") == java.text.SimpleDateFormat("yyyy", java.util.Locale.US).apply { timeZone = zone }.format(java.util.Date(now))) fmt("MMM d, HH:mm") else fmt("MMM d, yyyy")
+    }
+
+    /** One tap-able segment per folder from [root] down to [dir]: label to folder. The first segment is the root itself. */
+    fun breadcrumbs(root: File, dir: File, rootLabel: String): List<Pair<String, File>> {
+        val base = root.canonicalFile
+        val here = dir.canonicalFile
+        val out = ArrayList<Pair<String, File>>()
+        out += rootLabel to base
+        if (here != base && here.path.startsWith(base.path + File.separator)) {
+            var cur = base
+            here.relativeTo(base).path.split(File.separatorChar).filter { it.isNotEmpty() }.forEach { seg -> cur = File(cur, seg); out += seg to cur }
+        }
+        return out
     }
 
     fun validNewName(name: String): Boolean = name.isNotBlank() && name.length <= 80 && !name.contains('/') && !name.contains('\\') && name != "." && name != ".."

@@ -36,11 +36,16 @@ internal data class OrionActivityEvent(
 internal object OrionActivityPresentation {
     private val internalTrace = Regex("(?i)(work=|checkpoint=|attempt=|key=notification:|RUNNING=|DONE=|task(session|id)[-:=])")
 
+    /** "tool=shell; outcome=completed" is bookkeeping, not something to read. */
+    private val keyValueOnly = Regex("^\\w+=[^;\\s]*(;\\s*\\w+=[^;\\s]*)*$")
+    private val friendlyTitles = mapOf("request accepted" to "Request received", "request completed" to "Request finished")
+
     fun clean(raw: String): String? {
         val value = raw.lineSequence()
             .map { it.trim() }
             .filter { it.isNotBlank() && !internalTrace.containsMatchIn(it) }
             .filterNot { it.startsWith("Task session-", ignoreCase = true) }
+            .filterNot { keyValueOnly.matches(it) }
             .joinToString(" ")
             .replace(Regex("\\s+"), " ")
             .take(220)
@@ -49,7 +54,7 @@ internal object OrionActivityPresentation {
     }
 
     fun title(event: OrionActivityEvent): String =
-        clean(event.title) ?: when {
+        (clean(event.title)?.let { friendlyTitles[it.lowercase()] ?: it }) ?: when {
             event.title.contains("notification", true) || event.summary.contains("notification", true) -> "System notification"
             event.kind == OrionActivityKind.TOOL -> "Phone activity"
             else -> when (event.kind) {

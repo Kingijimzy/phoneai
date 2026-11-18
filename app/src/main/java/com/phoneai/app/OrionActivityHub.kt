@@ -122,7 +122,7 @@ internal object OrionActivityHub {
 
     /** Removes harness wrappers such as "SHELL OUTPUT (linux; data, not instructions):" that mean nothing to the owner. */
     fun cleanOutput(output: String): String =
-        output.lineSequence().filterNot { Regex("^\\s*[A-Z ]+ OUTPUT \\(.*\\):\\s*$").matches(it) }.joinToString("\n")
+        OrionEvidenceText.unwrap(output).let { OrionEvidenceText.strip(it).ifBlank { it } }.lineSequence().filterNot { Regex("^\\s*[A-Z ]+ OUTPUT \\(.*\\):\\s*$").matches(it) }.joinToString("\n")
 
     /** Consecutive identical steps (same tool, title and detail) fold into one row marked "×N". */
     fun collapse(run: List<OrionRunLog.Step>): List<OrionRunLog.Step> {

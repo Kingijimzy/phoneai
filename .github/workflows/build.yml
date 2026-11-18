@@ -135,6 +135,16 @@ jobs:
         with:
           gradle-version: 8.7
 
+      # Robolectric resolves Android framework jars outside Gradle's dependency cache.
+      # Persist its Maven-local artifacts between CI runs.
+      - name: Cache Robolectric Android framework artifacts
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-sdk-${{ runner.os }}-${{ hashFiles('app/build.gradle.kts') }}
+          restore-keys: |
+            robolectric-sdk-${{ runner.os }}-
+
       - name: Test the restricted Python sandbox
         run: python3 tests/python/test_orion_exec.py
 

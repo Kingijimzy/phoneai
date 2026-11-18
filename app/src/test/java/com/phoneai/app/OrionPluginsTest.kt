@@ -38,4 +38,27 @@ class OrionPluginsTest {
         assertNotNull(ToolRegistry.find("plugin"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("plugin"))
     }
+
+    @Test fun manifestsDeclarePermissionsRequirementsAndHooks() {
+        val (p, why) = OrionPlugins.parse("""{"id":"net-tools","permissions":["network","shell"],"requires":["curl"],"on_install":"echo hi","tools":[{"name":"get","command":"curl {url}"}]}""")
+        assertNotNull(why, p)
+        assertEquals(listOf("network", "shell"), p!!.permissions)
+        assertEquals(listOf("curl"), p.requires)
+        assertEquals("echo hi", p.onInstall)
+    }
+
+    @Test fun unknownPermissionsAndOddRequirementsAreRefused() {
+        assertTrue(OrionPlugins.parse("""{"id":"bad-one","permissions":["root"],"tools":[{"name":"aa","command":"ls"}]}""").second.contains("permission"))
+        assertTrue(OrionPlugins.parse("""{"id":"bad-two","requires":["rm -rf /"],"tools":[{"name":"aa","command":"ls"}]}""").second.contains("requires"))
+    }
+
+    @Test fun everyBuiltInCatalogManifestIsValid() {
+        assertTrue(OrionPlugins.catalog.isNotEmpty())
+        OrionPlugins.catalog.forEach { (id, m) ->
+            val (p, why) = OrionPlugins.parse(m)
+            assertNotNull("$id: $why", p)
+            assertEquals(id, p!!.id)
+            assertTrue("$id needs permissions declared", p.permissions.isNotEmpty())
+        }
+    }
 }
