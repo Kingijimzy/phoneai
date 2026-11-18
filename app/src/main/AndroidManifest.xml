@@ -69,6 +69,7 @@
         <activity android:name=".SoulWatcherActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".KnowledgeGraphActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".MemoryActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".CodeSpaceActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".StudioActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".CapabilityBoardActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".OrionCapabilityReportActivity" android:exported="false" />
