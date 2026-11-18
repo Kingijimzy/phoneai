@@ -32,6 +32,6 @@ class OrionPlaybooksTest {
     }
 
     @Test fun devspaceExposesPlaybooks() {
-        assertTrue(ToolRegistry.find("devspace")!!.description.contains("playbook"))
+        assertTrue(ToolRegistry.find("devspace")!!.promptLine.contains("playbook"))
     }
 }
