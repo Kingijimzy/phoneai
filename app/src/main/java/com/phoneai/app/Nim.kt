@@ -185,13 +185,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         return Prefs.model(ctx, p, vision)
     }
 
-    private val bad = listOf(
-        "embed", "guard", "rerank", "reward", "clip", "parse", "safety", "retriev", "bge",
-        "whisper", "tts", "asr", "nemoguard", "riva", "fastpitch", "diffusion", "stable",
-        "flux", "sdxl", "bria", "cosmos", "grounding", "segment", "ocr", "detect", "nvclip",
-        "image", "imagen", "veo", "live", "transcribe", "translate", "audio", "moderation", "orpheus",
-        "judge", "systemone", "classif"
-    )
+    private val bad get() = ProviderModelCapabilityPolicy.nonChatMarkers
     private val visionKeys = listOf(
         "vision", "-vl", "vila", "pixtral", "llava", "paligemma", "multimodal", "nemotron-nano-12b-v2-vl",
         "llama-4", "gemma-3", "gemini", "claude", "gpt-4o", "gpt-4.1"
@@ -1005,6 +999,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             val answer = chatOne(p, messages, vision, maxTokens, temperature, hasBackup, fastResponse, delta)
             lastSuccess[mode] = p.label + " / " + selectedModel(p, vision)
             lastFailure.remove(p.id)
+            OrionProviderHealth.record(ctx, p.id, true, "")
             return answer
         }
         val order = listOf(primary) + backups
@@ -1019,6 +1014,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 }
                 val msg = (e.message ?: "Unknown provider error").take(220)
                 lastFailure[p.id] = msg
+                OrionProviderHealth.record(ctx, p.id, false, msg)
                 failures.add(msg)
                 if (!ProviderFallbackPolicy.shouldTryBackup(e, Prefs.autoSwitch(ctx)) || i == order.size - 1) {
                     val tried = if (order.size > 1) " Tried ${i + 1} provider(s): ${order.take(i + 1).joinToString { it.label }}." else
@@ -1265,6 +1261,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                     }
                 }
                 lastNote = "$model -> ${r.code} ${r.body.replace("\n", " ").take(100)}"
+                if (ProviderModelCapabilityPolicy.isEndpointMismatch(r.body)) runCatching { Prefs.resetModel(ctx, p, vision) }
                 // Retired catalog models must never be persisted as the provider's active choice.
                 // Put distinct known fallbacks immediately after the failed model so quota-saver mode
                 // still makes a real recovery attempt instead of failing on a single stale default.

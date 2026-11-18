@@ -343,9 +343,17 @@ object Prefs {
     fun setProvider(c: Context, vision: Boolean, pid: String) =
         sp(c).edit().putString(if (vision) "provider_vision" else "provider_text", pid).apply()
 
+    /** Forget a saved model the provider has proven wrong, so the provider default is used next. */
+    fun resetModel(c: Context, p: Provider, vision: Boolean) = sp(c).edit().remove((if (vision) "vm_" else "tm_") + p.id).apply()
+
     fun model(c: Context, p: Provider, vision: Boolean): String {
         val def = if (vision) (p.visionModel ?: p.textModel) else p.textModel
         val saved = sp(c).getString((if (vision) "vm_" else "tm_") + p.id, null)
+        // A judge/classifier/embedding model can never answer chat; a saved one would fail every turn forever.
+        if (!vision && saved != null && ProviderModelCapabilityPolicy.mustEvict(saved)) {
+            sp(c).edit().remove("tm_" + p.id).apply()
+            return def
+        }
         // Migrate stale NVIDIA preferences. Model pickers can persist embedding,
         // retrieval, or vision-only catalog entries as chat models; those cannot answer chat.
         // Always restore the intended DeepSeek chat default for those incompatible selections.
