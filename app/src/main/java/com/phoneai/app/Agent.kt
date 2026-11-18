@@ -1040,6 +1040,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
         }
         var command = input.trim()
         if (command.isEmpty()) return
+        OrionBrain.beginGoal(command)
         // All action-capable entry points share the same owner-turn bookkeeping.
         recordOwnerTurn(command, "typed chat")
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
@@ -2260,6 +2261,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         val failed = result.trimStart().startsWith("error", ignoreCase = true)
         val failureCategory = if (failed) ActionLearningPolicy.classifyFailure(result).ifBlank { "execution_error" } else ""
         OrionSelfModel.record(svc, tool, !failed, if (failed) result else "")
+        if (tool != "brain") OrionBrain.recordStep(svc, tool, !failed, failureCategory)
         val finalResult = OrionExecutive.afterTool(svc, tool, a, result, failed, priorNote)
         if (!nonLoggedAction) {
         svc.recordChatEvent(

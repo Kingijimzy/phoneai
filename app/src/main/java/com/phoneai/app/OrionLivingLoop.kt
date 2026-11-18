@@ -125,6 +125,7 @@ object OrionLivingLoop {
      * Returns what it noticed (empty when all is well). Never throws.
      */
     fun tick(c: Context, now: Long = System.currentTimeMillis()): String = runCatching {
+        OrionBrain.dream(c, now).takeIf { it.isNotBlank() }?.let { OrionLessons.learn(c, it, now) }
         val broken = OrionSelfModel.degraded(c).filter { !it.flagged }
         if (broken.isEmpty()) return@runCatching ""
         broken.forEach { h ->

@@ -1007,6 +1007,7 @@ class Tools(
     }
 
     fun selfEdit(a: org.json.JSONObject): String = OrionSelfEdit.run(svc, a)
+    fun brain(a: org.json.JSONObject): String = OrionBrain.run(svc, a)
     fun mesh(a: org.json.JSONObject): String = OrionMeshLink.run(svc, a)
     fun plugin(a: org.json.JSONObject): String = OrionPlugins.execute(svc, a)
     fun webApi(a: org.json.JSONObject): String = OrionWebApi.call(a)
