@@ -49,7 +49,7 @@ class OrionPluginsTest {
 
     @Test fun unknownPermissionsAndOddRequirementsAreRefused() {
         assertTrue(OrionPlugins.parse("""{"id":"bad-one","permissions":["root"],"tools":[{"name":"aa","command":"ls"}]}""").second.contains("permission"))
-        assertTrue(OrionPlugins.parse("""{"id":"bad-two","requires":["rm -rf /"],"tools":[{"name":"a","command":"ls"}]}""").second.contains("requires"))
+        assertTrue(OrionPlugins.parse("""{"id":"bad-two","requires":["rm -rf /"],"tools":[{"name":"aa","command":"ls"}]}""").second.contains("requires"))
     }
 
     @Test fun everyBuiltInCatalogManifestIsValid() {
