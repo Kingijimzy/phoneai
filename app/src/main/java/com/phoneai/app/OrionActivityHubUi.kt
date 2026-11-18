@@ -128,7 +128,7 @@ private fun StepVisual(step: OrionRunLog.Step, now: Long) {
             }
             OrionActivityHub.Lane.CODE, OrionActivityHub.Lane.FILES -> {
                 (target as? OrionActivityHub.Target.Studio)?.file?.let { f -> Chip(f, { openActivityTarget(c, target) }, icon = Icons.Rounded.FolderOpen) }
-                Mono(step.output.lineSequence().filter { it.isNotBlank() }.take(4).joinToString("\n").ifBlank { "Working…" })
+                Mono(OrionActivityHub.cleanOutput(step.output).lineSequence().filter { it.isNotBlank() }.take(4).joinToString("\n").ifBlank { "Working…" })
             }
             OrionActivityHub.Lane.RUNTIME -> {
                 Mono("$ " + step.detail + "\n" + step.output.trim().takeLast(320).ifBlank { if (step.status == OrionRunLog.Status.RUNNING) "running…" else "" })
@@ -136,9 +136,9 @@ private fun StepVisual(step: OrionRunLog.Step, now: Long) {
             OrionActivityHub.Lane.MCP -> {
                 val a = OrionActivityHub.parse(step.args)
                 Chip(listOfNotNull(a?.optString("id")?.takeIf { it.isNotBlank() }, a?.optString("tool")?.takeIf { it.isNotBlank() }).joinToString(" · ").ifBlank { "MCP server" }, null, icon = Icons.Rounded.Cable)
-                Mono(step.output.trim().take(260).ifBlank { "Waiting for the server…" })
+                Mono(OrionActivityHub.cleanOutput(step.output).trim().take(260).ifBlank { "Waiting for the server…" })
             }
-            else -> if (step.output.isNotBlank()) Mono(step.output.trim().take(260))
+            else -> if (step.output.isNotBlank()) Mono(OrionActivityHub.cleanOutput(step.output).trim().take(260))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(OrionRunLog.durationLabel(OrionRunLog.durationMs(step, now)), color = OrionUiPalette.muted, fontSize = 9.sp)
@@ -250,7 +250,7 @@ internal fun OrionActivityHubCard(
             }
         }
         Column(Modifier.padding(top = 6.dp)) {
-            run.takeLast(3).forEach { step ->
+            OrionActivityHub.collapse(run).takeLast(3).forEach { step ->
                 StepRow(step, now, expanded = open == step.id || step.status == OrionRunLog.Status.RUNNING) { open = if (open == step.id) null else step.id }
             }
         }
@@ -271,7 +271,7 @@ internal fun OrionInterruptionBanner(modifier: Modifier = Modifier) {
             Row(Modifier.fillMaxWidth().clickable { openActivityTarget(c, t) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(s.title + if (s.status == OrionRunLog.Status.FAILED) " failed" else "", color = OrionUiPalette.text, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(s.output.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().take(120), color = OrionUiPalette.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(OrionActivityHub.cleanOutput(s.output).lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().take(120), color = OrionUiPalette.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (t != OrionActivityHub.Target.None) Icon(Icons.Rounded.OpenInNew, "Open source", tint = OrionUiPalette.text, modifier = Modifier.size(18.dp))
             }
@@ -321,7 +321,7 @@ internal fun OrionRunSheet(
                 if (tab == 0) {
                     OrionInterruptionBanner(Modifier.padding(bottom = 8.dp))
                     if (live.isEmpty() && events.isEmpty()) Text("No live activity has been reported. Past tasks are under History.", color = OrionUiPalette.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 12.dp))
-                    live.reversed().forEach { step -> StepRow(step, now, openStep == step.id) { openStep = if (openStep == step.id) null else step.id } }
+                    OrionActivityHub.collapse(live).reversed().forEach { step -> StepRow(step, now, openStep == step.id) { openStep = if (openStep == step.id) null else step.id } }
                     if (events.isNotEmpty()) {
                         Text("CHAT TASK STREAM", color = OrionUiPalette.secondaryText, fontSize = 9.sp,
                             fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))

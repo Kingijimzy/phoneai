@@ -23,6 +23,8 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
     private lateinit var transcriptView: TextView
     private lateinit var usageView: TextView
     private lateinit var micButton: TextView
+    private lateinit var pttButton: TextView
+    private var pushToTalk = false
     private lateinit var endButton: TextView
     private lateinit var standardModeButton: TextView
 
@@ -136,6 +138,15 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
 
         micButton = control("Start microphone", true) { toggleMicrophone() }
         endButton = control("End call") { endCall(returnToStandard = false) }
+        pttButton = control("Push to talk: off") { togglePushToTalk() }
+        micButton.setOnTouchListener { v, ev ->
+            if (!pushToTalk || !active) return@setOnTouchListener false
+            when (ev.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> { microphoneEnabled = true; session?.setMicrophoneEnabled(true); visual.mode = OrbView.Mode.LISTENING; updateControls(); true }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> { microphoneEnabled = false; session?.setMicrophoneEnabled(false); visual.mode = OrbView.Mode.IDLE; updateControls(); true }
+                else -> true
+            }
+        }
         val controls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -147,6 +158,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             marginStart = dp(8)
         })
         root.addView(controls, LinearLayout.LayoutParams(-1, android.view.ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(pttButton, LinearLayout.LayoutParams(-1, android.view.ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
         standardModeButton = label("Switch to standard Orion voice", 12f, Theme.SILVER, true).apply {
             setPadding(dp(10), dp(12), dp(10), dp(8))
             isClickable = true
@@ -155,7 +167,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         }
         root.addView(standardModeButton, LinearLayout.LayoutParams(-1, dp(44)))
 
-        root.addView(label("Say “Orion, …” to hand an explicit request to Orion’s guarded tools · maximum 5 minutes", 10f, 0xFF787878.toInt()),
+        root.addView(label("Ask Orion to do things out loud · calls reconnect up to 40 min · daily Live budget applies", 10f, 0xFF787878.toInt()),
             LinearLayout.LayoutParams(-1, dp(30)))
         setContentView(root)
 
@@ -265,7 +277,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         liveConversationId = ChatHistoryStore.activeSessionId(this)
         active = true
         liveConnected = false
-        microphoneEnabled = true
+        microphoneEnabled = !pushToTalk
         visual.mode = OrbView.Mode.THINKING
         statusView.text = "CONNECTING · QUOTA MAY APPLY"
         transcriptView.text = "Connecting securely with a short-lived session token…"
@@ -275,6 +287,29 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         main.postDelayed(sessionLimit, sessionBudgetLimitMs)
         main.postDelayed(connectTimeout, CONNECT_TIMEOUT_MS)
         session = GeminiLiveSession(this, key, this).also { it.start() }
+        main.removeCallbacks(counterTick)
+        main.post(counterTick)
+    }
+
+    private val counterTick = object : Runnable {
+        override fun run() {
+            if (!active || isFinishing) return
+            val elapsed = (System.currentTimeMillis() - sessionStartedMs).coerceAtLeast(0L)
+            val left = GeminiLiveBudget.remainingMs(GeminiLiveBudget.usedToday(this@GeminiLiveActivity) + elapsed, GeminiLiveBudget.budgetMinutes(this@GeminiLiveActivity))
+            usageView.text = GeminiLivePolicy.counterText(elapsed, left)
+            main.postDelayed(this, 1000)
+        }
+    }
+
+    private fun togglePushToTalk() {
+        pushToTalk = !pushToTalk
+        pttButton.text = if (pushToTalk) "Push to talk: on (hold the button to speak)" else "Push to talk: off"
+        if (active) {
+            microphoneEnabled = !pushToTalk
+            session?.setMicrophoneEnabled(microphoneEnabled)
+            visual.mode = if (microphoneEnabled) OrbView.Mode.LISTENING else OrbView.Mode.IDLE
+        }
+        updateControls()
     }
 
     private fun toggleMicrophone() {
@@ -282,6 +317,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             if (quotaWarningAccepted) startSession() else showQuotaWarning()
             return
         }
+        if (pushToTalk) return
         microphoneEnabled = !microphoneEnabled
         session?.setMicrophoneEnabled(microphoneEnabled)
         visual.mode = if (microphoneEnabled) OrbView.Mode.LISTENING else OrbView.Mode.IDLE
@@ -290,6 +326,9 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
     }
 
     private fun endCall(returnToStandard: Boolean) {
+        if (sessionStartedMs > 0L) GeminiLiveBudget.record(this, System.currentTimeMillis() - sessionStartedMs)
+        sessionStartedMs = 0L
+        main.removeCallbacks(counterTick)
         main.removeCallbacks(sessionLimit)
         main.removeCallbacks(connectTimeout)
         session?.stop()
@@ -311,6 +350,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         if (!::micButton.isInitialized || !::endButton.isInitialized) return
         micButton.text = when {
             !active -> "Start microphone"
+            pushToTalk -> if (microphoneEnabled) "Listening…" else "Hold to talk"
             microphoneEnabled -> "Mute microphone"
             else -> "Resume microphone"
         }

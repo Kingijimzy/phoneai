@@ -210,6 +210,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         voice = Voice(this)
         voice.warmUp()
+        OrionMeshLink.startServer(this)
         voice.onSpeaking = { s ->
             speaking = s
             if (s && Prefs.bargeIn(this)) bargeMonitor.start { onBargeIn() } else bargeMonitor.stop()

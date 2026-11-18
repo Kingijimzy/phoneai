@@ -17,6 +17,13 @@ internal object GeminiLivePolicy {
     const val ASK_ORION = "ask_orion"
     const val MAX_TOOL_RESULT_CHARS = 700
 
+    /** "Live 03:12 · 24 min left today" shown during a call. */
+    fun counterText(elapsedMs: Long, leftMs: Long): String {
+        val sec = elapsedMs / 1000
+        val left = (leftMs + 59_999L) / 60_000L
+        return "Live %02d:%02d · %d min left today".format(sec / 60, sec % 60, left)
+    }
+
     /**
      * Hybrid split: Gemini hears the owner and answers in its own voice, so it only needs the gist of a task result.
      * The full output stays in Orion's chat and files, which saves Live tokens and keeps long code out of the call.
