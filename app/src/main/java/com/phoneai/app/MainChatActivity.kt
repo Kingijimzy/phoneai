@@ -433,12 +433,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 Thread {
                     var loadError = ""
                     val loaded = try {
-                        val excluded = listOf(
-                            "embed", "embedding", "rerank", "retriev", "ocr", "whisper", "parakeet",
-                            "tts", "asr", "translat", "moderation", "content-safety", "nemoguard",
-                            "parse", "clip", "segment", "detect", "diffusion", "image-generation",
-                            "video-generation", "pose-estimation", "classifier", "live"
-                        )
+                        val excluded = ProviderModelCapabilityPolicy.nonChatMarkers
                         Nim(this).allModels(p).filter { id ->
                             id.isNotBlank() && excluded.none { token -> id.lowercase().contains(token) }
                         }.distinct()

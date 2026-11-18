@@ -38,6 +38,7 @@ internal object ProviderFallbackPolicy {
 
         // Rotate only for known provider/model failures. A generic exception or an
         // unclassified 400 must not silently spend another provider's quota.
+        if (error is AiException && error.httpStatus == 400 && ProviderModelCapabilityPolicy.isEndpointMismatch(message)) return true
         return error is AiException && error.httpStatus?.let { it in recoverableHttpStatuses } == true
     }
 }

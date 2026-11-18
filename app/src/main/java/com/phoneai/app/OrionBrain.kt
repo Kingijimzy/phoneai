@@ -163,10 +163,44 @@ internal object OrionBrain {
         if (!force && (all.size < DREAM_MIN_STEPS || now - prefs.getLong("dreamed", 0L) < DREAM_EVERY_MS)) return@runCatching ""
         val result = consolidate(all, now)
         result.lessons.forEach { OrionLessons.learn(c, it, now) }
+        // Graph review goes to the owner as one follow-up, only when the findings changed since the last dream.
+        val issues = runCatching { graphIssues(KnowledgeGraph.all(c)) }.getOrDefault(emptyList())
+        val sig = issues.joinToString("|").hashCode().toString()
+        if (issues.isNotEmpty() && prefs.getString("graphSig", "") != sig) {
+            runCatching { OrionFollowUpStore.add(c, "Review knowledge graph: " + issues.take(2).joinToString("; "), now) }
+            prefs.edit().putString("graphSig", sig).apply()
+        }
         synchronized(lock) { save(c, result.keep) }
         prefs.edit().putLong("dreamed", now).apply()
         "Dreamed over ${all.size} actions: ${result.lessons.size} lesson(s), kept ${result.keep.size}."
     }.getOrDefault("")
+
+    // ------------------------------------------------------------------ knowledge-graph consolidation
+
+    /**
+     * Suggestions only: the graph is built from owner-approved memories, so dreaming may notice problems but must
+     * never rewrite trusted facts. Finds one-word entities that are the first word of a longer one with overlapping
+     * facts ("kingi" / "kingi jim"), which are almost always the same person or thing written two ways.
+     */
+    fun graphIssues(facts: List<GraphFact>): List<String> {
+        val entities = facts.flatMap { listOf(it.a, it.b) }.distinct()
+        val out = ArrayList<String>()
+        for (short in entities.filter { ' ' !in it && it.length >= 3 }) {
+            for (long in entities.filter { it != short && it.startsWith("$short ") }) {
+                val shared = facts.count { f -> (f.a == short || f.b == short) && facts.any { g -> g !== f && (g.a == long || g.b == long) && g.rel == f.rel } }
+                val reason = if (shared > 0) "$shared matching relation(s)" else "same first word"
+                out += "'$short' and '$long' may be the same entity ($reason)"
+            }
+        }
+        val weak = facts.count { it.count <= 1 }
+        if (facts.size >= 10 && weak * 10 >= facts.size * 7) out += "$weak of ${facts.size} facts were seen only once; confirm or prune them in Memory"
+        return out.take(6)
+    }
+
+    fun graphReport(c: Context): String {
+        val issues = runCatching { graphIssues(KnowledgeGraph.all(c)) }.getOrDefault(emptyList())
+        return if (issues.isEmpty()) "Knowledge graph: nothing to consolidate." else "Knowledge graph review: " + issues.joinToString("; ") + "."
+    }
 
     // ------------------------------------------------------------------ the tool
 
@@ -174,8 +208,14 @@ internal object OrionBrain {
         "capabilities", "registry" -> capabilityReport(c, a.optString("name").ifBlank { null })
         "check" -> capabilityReport(c, a.optString("name").ifBlank { null })
         "why" -> whyReport(c)
+        "providers" -> OrionProviderHealth.report(c)
+        "selftest" -> OrionProviderHealth.selfTest(c)
+        "graph" -> graphReport(c)
+        "cerebro" -> OrionCerebro.status(c)
+        "prometheus" -> OrionPrometheus.status(c)
+        "chronos" -> OrionChronos.status(c)
         "dream" -> dream(c, force = true).ifBlank { "Nothing to consolidate yet." }
-        "status" -> summary(registry(c)) + "\nRecent actions:\n" + whyReport(c, 5)
-        else -> "error: action must be status, capabilities, check, why or dream."
+        "status" -> summary(registry(c)) + "\n" + OrionProviderHealth.report(c) + "\n" + OrionCerebro.status(c) + "\n" + OrionPrometheus.status(c) + "\n" + OrionChronos.status(c) + "\nRecent actions:\n" + whyReport(c, 5)
+        else -> "error: action must be status, capabilities, check, providers, selftest, why, dream, graph, cerebro, prometheus or chronos."
     }
 }
