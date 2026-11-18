@@ -204,7 +204,7 @@ internal object OrionDevspace {
         val project = a.optString("project").trim()
         fun guest(script: String?, bad: String): String = if (script == null) "error: $bad" else ShellRunner.run(c, script, OrionUbuntu.where(c))
         return when (action) {
-            "", "help" -> "devspace actions: playbook {name?} (engineering playbooks: build-platform, debugging, tdd, review, github-flow, inspect — read the right one before building or debugging), ubuntu_install (full Ubuntu 24.04 arm64 runtime with apt), runtime_status, setup {profile: base|web|data|media|db|net|all}, venv {name, packages?}, run {command, project?, venv?}, new_project {name, kind: python|cli|api|node|web}, " +
+            "", "help" -> "devspace actions: playbook {name?} (engineering playbooks: build-platform, debugging, tdd, review, github-flow, inspect — read the right one before building or debugging), playbook_add {name, description, body} / playbook_import {name, url of a SKILL.md on GitHub} / playbook_remove {name} to extend them yourself, ubuntu_install (full Ubuntu 24.04 arm64 runtime with apt), runtime_status, setup {profile: base|web|data|media|db|net|all}, venv {name, packages?}, run {command, project?, venv?}, new_project {name, kind: python|cli|api|node|web}, " +
                 "project_view {project}, backup {project}, service_start {name, command, port?, project?}, service_stop {name}, service_list, service_logs {name, lines?}, service_health {name|port}, " +
                 "job_add {name, command, every_minutes|daily_at}, job_list, job_remove {name}, job_run {name}. All of it runs in the real Linux space under /workspace."
             "ubuntu_install" -> OrionUbuntu.install(c)
@@ -213,7 +213,10 @@ internal object OrionDevspace {
             "venv" -> guest(venvScript(a.optString("name").ifBlank { "main" }, a.optJSONArray("packages")?.let { p -> List(p.length()) { p.getString(it) } } ?: emptyList()), "bad venv name or package.")
             "run" -> guest(runScript(project, a.optString("venv"), a.optString("command")), "run needs a command (and valid project/venv names).")
             "new_project" -> guest(scaffold(a.optString("name"), a.optString("kind").ifBlank { "python" }), "new_project needs a valid name and kind python|cli|api|node|web|android.")
-            "playbook" -> OrionPlaybooks.run(a.optString("name"))
+            "playbook" -> OrionPlaybooks.run(c, a.optString("name"))
+            "playbook_add" -> OrionPlaybooks.add(c, a.optString("name"), a.optString("description"), a.optString("body"))
+            "playbook_import" -> OrionPlaybooks.import(c, a.optString("name"), a.optString("url"))
+            "playbook_remove" -> OrionPlaybooks.remove(c, a.optString("name"))
             "project_view" -> guest(viewScript(project.ifBlank { a.optString("name") }), "project_view needs a valid project name.")
             "backup" -> guest(backupScript(project.ifBlank { a.optString("name") }), "backup needs a valid project name.")
             "service_start" -> startService(c, a.optString("name"), a.optString("command"), a.optInt("port", 0), project)

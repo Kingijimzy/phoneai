@@ -303,11 +303,12 @@ private fun OrionCompactCodeCard(block: OrionMessageBlock.Code) {
             .padding(horizontal = 11.dp, vertical = 9.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(block.filename ?: block.language.uppercase(), color = ChatCopy,
-                fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
+        Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically) {
+            Text("‹›", color = OrionUiPalette.secondaryText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("  " + (block.filename ?: block.language.ifBlank { "code" }), color = ChatCopy,
+                fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${lines.size} lines · CODE", color = ChatMuted, fontSize = 9.sp)
+            Text("${lines.size} lines  " + if (expanded) "⌃" else "⌄", color = ChatMuted, fontSize = 10.sp)
         }
         if (expanded) {
             Text(block.source.take(12000), color = ChatCopy, fontSize = 10.sp, lineHeight = 14.sp,
@@ -318,12 +319,6 @@ private fun OrionCompactCodeCard(block: OrionMessageBlock.Code) {
                 Text("HIDE CODE", color = ChatMuted, fontSize = 9.sp,
                     modifier = Modifier.clickable { expanded = false }.padding(vertical = 5.dp))
             }
-        } else {
-            Text("Code saved as an artifact. Source is hidden from the conversation.",
-                color = ChatMuted, fontSize = 10.sp, lineHeight = 14.sp)
-            Text("SHOW CODE", color = OrionUiPalette.secondaryText, fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.clickable { expanded = true }.padding(vertical = 4.dp))
         }
     }
 }
@@ -338,19 +333,11 @@ private fun OrionCompactTerminalCard(block: OrionMessageBlock.Terminal) {
             .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp)).padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("TERMINAL", color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.weight(1f))
-            Text(block.state.uppercase(), color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-        }
-        if (block.command.isNotBlank()) Text("$ " + block.command, color = ChatCopy, fontSize = 11.sp,
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (expanded) "HIDE OUTPUT" else "VIEW OUTPUT", color = OrionUiPalette.secondaryText,
-                fontSize = 9.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clickable { expanded = !expanded }.padding(vertical = 4.dp))
-            Spacer(Modifier.weight(1f))
-            block.exitCode?.let { Text("exit $it", color = accent, fontSize = 9.sp) }
+        Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically) {
+            Text(if (failed) "✕" else if (block.state.equals("running", true)) "…" else "✓", color = accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("  " + (block.command.ifBlank { "command" }), color = ChatCopy, fontSize = 11.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text((block.exitCode?.let { "exit $it  " } ?: "") + if (expanded) "⌃" else "⌄", color = ChatMuted, fontSize = 10.sp)
         }
         if (expanded) {
             if (block.source.isNotBlank()) Text(block.source.take(1200), color = ChatMuted, fontSize = 9.sp,

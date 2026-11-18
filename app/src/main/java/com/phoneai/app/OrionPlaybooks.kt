@@ -1,5 +1,8 @@
 package com.phoneai.app
 
+import android.content.Context
+import org.json.JSONObject
+
 /**
  * Built-in engineering playbooks, loaded on demand through `devspace {action:"playbook", name}` so they cost nothing
  * until used. Adapted, with credit, from the MIT-licensed Hermes Agent skills (systematic-debugging,
@@ -58,4 +61,65 @@ CODEBASE INSPECTION (adapted from Hermes). 1) devspace project_view for the tree
     fun index(): String = "playbooks (devspace {action:\"playbook\", name}): " + playbooks.entries.joinToString("; ") { "${it.key} — ${it.value.first}" }
 
     fun run(name: String): String = if (name.isBlank()) index() else body(name) ?: "error: no playbook '$name'. " + index()
+
+    // ---- plugin-style extension: owner or Orion can add playbooks, or import a SKILL.md (e.g. from Hermes) by URL ----
+    private const val PREFS = "orion_playbooks"
+    private const val MAX_CUSTOM = 24
+    private const val MAX_BODY = 6000
+    private val namePattern = Regex("^[a-z0-9][a-z0-9-]{1,39}$")
+
+    /** Turns a GitHub "blob" page link into its raw file link; other links pass through. */
+    fun rawUrl(url: String): String = url.trim().replace(Regex("^https://github\\.com/([^/]+)/([^/]+)/blob/"), "https://raw.githubusercontent.com/$1/$2/")
+
+    /** Splits an optional YAML front matter block off a SKILL.md; returns (description, body). */
+    fun parseSkill(text: String): Pair<String, String> {
+        val t = text.replace("\r", "").trim()
+        if (!t.startsWith("---")) return "" to t
+        val end = t.indexOf("\n---", 3)
+        if (end < 0) return "" to t
+        val front = t.substring(3, end)
+        val desc = Regex("(?m)^description:\\s*[\"']?(.+?)[\"']?\\s*$").find(front)?.groupValues?.get(1).orEmpty()
+        return desc to t.substring(end + 4).trim()
+    }
+
+    private fun load(c: Context): JSONObject = runCatching { JSONObject(c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("custom", "{}")) }.getOrDefault(JSONObject())
+    private fun save(c: Context, o: JSONObject) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("custom", o.toString()).apply()
+
+    fun add(c: Context, name: String, description: String, body: String): String {
+        val n = name.trim().lowercase()
+        if (!namePattern.matches(n)) return "error: playbook name must be 2-40 lowercase letters, digits or dashes."
+        if (n in playbooks) return "error: '$n' is a built-in playbook; choose another name."
+        if (body.isBlank()) return "error: playbook body is empty."
+        val all = load(c)
+        if (!all.has(n) && all.length() >= MAX_CUSTOM) return "error: $MAX_CUSTOM custom playbooks is the limit; remove one first."
+        all.put(n, JSONObject().put("d", description.trim().ifBlank { "custom playbook" }.take(120)).put("b", body.trim().take(MAX_BODY)))
+        save(c, all)
+        return "saved playbook '$n' (${minOf(body.trim().length, MAX_BODY)} chars)."
+    }
+
+    fun remove(c: Context, name: String): String {
+        val all = load(c)
+        return if (all.remove(name.trim().lowercase()) != null) { save(c, all); "removed ${name.trim()}." } else "error: no custom playbook '${name.trim()}'."
+    }
+
+    fun import(c: Context, name: String, url: String): String {
+        val u = rawUrl(url)
+        if (!u.startsWith("https://raw.githubusercontent.com/")) return "error: import takes a GitHub file link (github.com/.../blob/... or raw.githubusercontent.com/...)."
+        val text = runCatching {
+            (java.net.URL(u).openConnection() as java.net.HttpURLConnection).run { connectTimeout = 15000; readTimeout = 30000; inputStream.bufferedReader().use { it.readText() } }
+        }.getOrElse { return "error: could not download that file (${it.message})." }
+        val (desc, body) = parseSkill(text)
+        return add(c, name, desc, body)
+    }
+
+    fun index(c: Context): String {
+        val custom = load(c).let { o -> o.keys().asSequence().toList().joinToString("; ") { "$it — ${o.getJSONObject(it).optString("d")}" } }
+        return index() + if (custom.isBlank()) "" else "; custom: $custom"
+    }
+
+    fun run(c: Context, name: String): String {
+        if (name.isBlank()) return index(c)
+        val n = name.trim().lowercase()
+        return load(c).optJSONObject(n)?.optString("b")?.takeIf { it.isNotBlank() } ?: body(n) ?: "error: no playbook '$name'. " + index(c)
+    }
 }
