@@ -29,6 +29,7 @@ internal object OrionMemoryLayers {
         // L3 episodic: what worked or failed on similar tasks, and lessons already learned.
         val episodic = listOf(
             runCatching { ExperienceStore.promptBlock(c, q) }.getOrDefault(""),
+            runCatching { OrionBrain.promptBlock(c, q) }.getOrDefault(""),
             OrionLivingLoop.promptBlock(c)
         ).filter { it.isNotBlank() }.joinToString("\n")
         if (episodic.isNotBlank()) layers += Layer("L3 EPISODIC", episodic, 4)
