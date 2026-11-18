@@ -59,4 +59,13 @@ class OrionChatPolishTest {
     @Test fun callCounterReadsNaturally() {
         assertEquals("Live 03:12 · 24 min left today", GeminiLivePolicy.counterText(192_000L, 24 * 60_000L))
     }
+
+    @Test fun codeBeingWrittenShowsPathAndLines() {
+        val args = """{"path":"app/main.py","content":"import os\nprint(1)\nprint(2)"}"""
+        val st = OrionRunLog.Step(1, "dev_write", "Writing a file", "", null, 0L, 0L, OrionRunLog.Status.RUNNING, "", args)
+        val preview = OrionLiveFloatPolicy.codePreview(st)!!
+        assertEquals("app/main.py", preview.first)
+        assertEquals(listOf("import os", "print(1)", "print(2)"), preview.second)
+        assertEquals(null, OrionLiveFloatPolicy.codePreview(st.copy(tool = "shell")))
+    }
 }

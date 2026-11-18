@@ -394,7 +394,10 @@ internal fun ChatBubble(
     val clipboard = LocalClipboardManager.current
     var actionsVisible by remember(item.id) { mutableStateOf(false) }
     var openBlock by remember(item.id) { mutableStateOf(false) }
-    val collapsible = !mine && (replyType != OrionReplyType.NORMAL || (note && !item.text.startsWith("[")))
+    // Only things that need attention stay boxed (approvals, files, images, diagrams, notes); ordinary replies flow as plain text.
+    val framed = !mine && replyType != OrionReplyType.NORMAL && (replyType == OrionReplyType.DIAGRAM ||
+        primaryBlock is OrionMessageBlock.Approval || primaryBlock is OrionMessageBlock.GeneratedFile || primaryBlock is OrionMessageBlock.Image)
+    val collapsible = !mine && (framed || (note && !item.text.startsWith("[")))
     AnimatedVisibility(
         visible = true,
         enter = fadeIn(animationSpec = tween(260)) +
@@ -426,7 +429,7 @@ internal fun ChatBubble(
                         if (mine || note) Modifier.clip(RoundedCornerShape(17.dp))
                             .background(if (note) OrionUiPalette.panel else OrionUiPalette.raised)
                             .border(1.dp, if (mine) Color(0x00000000) else Color(0x40545458), RoundedCornerShape(17.dp))
-                        else if (replyType != OrionReplyType.NORMAL) Modifier
+                        else if (framed) Modifier
                             .clip(RoundedCornerShape(16.dp))
                             .background(when (replyType) {
                                 OrionReplyType.RESEARCH -> OrionUiPalette.panel
@@ -447,11 +450,11 @@ internal fun ChatBubble(
                         else Modifier
                     )
                     .padding(
-                        horizontal = if (mine || note || replyType != OrionReplyType.NORMAL) 13.dp else 0.dp,
-                        vertical = if (mine || note || replyType != OrionReplyType.NORMAL) 12.dp else 0.dp
+                        horizontal = if (mine || note || framed) 13.dp else 0.dp,
+                        vertical = if (mine || note || framed) 12.dp else 0.dp
                     )
             ) {
-                if (note || replyType != OrionReplyType.NORMAL) {
+                if (note || framed) {
                     Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable(enabled = collapsible) { openBlock = !openBlock }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         Text(
                             when (primaryBlock) {

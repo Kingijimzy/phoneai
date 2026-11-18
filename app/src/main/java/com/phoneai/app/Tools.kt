@@ -161,8 +161,8 @@ class Tools(
         if (!u.startsWith("http://") && !u.startsWith("https://")) return "error: url must start with http or https"
         return try {
             val conn = URL(u).openConnection() as HttpURLConnection
-            conn.connectTimeout = 12000
-            conn.readTimeout = 15000
+            conn.connectTimeout = 15000
+            conn.readTimeout = 30000
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) OrionAI")
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
