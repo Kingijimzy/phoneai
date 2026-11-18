@@ -36,6 +36,17 @@ internal object OrionLiveFloatPolicy {
     fun tail(output: String, lines: Int = 4, width: Int = 52): List<String> =
         output.lineSequence().map { it.trimEnd() }.filter { it.isNotBlank() }.toList().takeLast(lines).map { it.take(width) }
 
+    private val writeTools = setOf("dev_write", "workspace_write", "save_file", "devspace")
+
+    /** For file-writing steps: the path and the last lines of the code being written, read from the step's arguments. */
+    fun codePreview(step: OrionRunLog.Step, lines: Int = 5): Pair<String, List<String>>? {
+        if (step.tool !in writeTools) return null
+        val path = Regex("\"(?:path|file|name)\"\\s*:\\s*\"([^\"]{1,80})\"").find(step.args)?.groupValues?.get(1) ?: return null
+        val raw = Regex("\"(?:content|code|text)\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)").find(step.args)?.groupValues?.get(1).orEmpty()
+        val code = raw.replace("\\n", "\n").replace("\\t", "  ").replace("\\\"", "\"")
+        return path to tail(code, lines)
+    }
+
     fun headline(step: OrionRunLog.Step): String = step.title.ifBlank { step.tool }.replace(Regex("\\s+"), " ").take(40)
 }
 
@@ -63,7 +74,11 @@ internal fun OrionLiveFloat(modifier: Modifier = Modifier) {
                 fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Text(OrionRunLog.durationLabel(OrionRunLog.durationMs(running, now)), color = OrionUiPalette.text, fontSize = 10.sp)
         }
-        if (!folded) OrionLiveFloatPolicy.tail(running.output).forEach {
+        val preview = OrionLiveFloatPolicy.codePreview(running)
+        if (!folded && preview != null) {
+            Text("✎ " + preview.first, color = OrionUiPalette.text, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            preview.second.forEach { Text(it, color = OrionUiPalette.text.copy(alpha = .75f), fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Clip) }
+        } else if (!folded) OrionLiveFloatPolicy.tail(running.output).forEach {
             Text(it, color = OrionUiPalette.text.copy(alpha = .75f), fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Clip)
         }
     }
