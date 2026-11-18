@@ -25,7 +25,7 @@ internal object OrionMeshLink {
     }.getOrNull()
 
     private fun hex(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
-    private fun unhex(s: String) = ByteArray(s.length / 2) { s.substring(it * 2, it * 2 + 2).toInt(16) }
+    private fun unhex(s: String) = ByteArray(s.length / 2) { s.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
 
     /** Accepts connections; [peerFor] maps a node id to its guard, [handle] runs an already-verified request. */
     class Server(port: Int, private val peerFor: (String) -> Pair<String, OrionMesh.Guard>?, private val handle: (String, String, String) -> String) {
@@ -91,17 +91,15 @@ internal object OrionMeshLink {
         }.getOrNull()
     }
 
-    private fun handleRequest(peer: String, action: String, body: String): String = when (action) {
-        "ping" -> "pong from this Orion"
-        "task.submit" -> {
-            val svc = PhoneAiService.instance ?: return "error: Orion's service is not running on that device"
-            val latch = java.util.concurrent.CountDownLatch(1)
-            var out = "no answer"
-            svc.executeSharedToolRequest(body, "Mesh · $peer") { out = it; latch.countDown() }
-            latch.await(140, java.util.concurrent.TimeUnit.SECONDS)
-            out
-        }
-        else -> "error: '$action' is not supported by this build yet"
+    private fun handleRequest(peer: String, action: String, body: String): String {
+        if (action == "ping") return "pong from this Orion"
+        if (action != "task.submit") return "error: '$action' is not supported by this build yet"
+        val svc = PhoneAiService.instance ?: return "error: Orion's service is not running on that device"
+        val latch = java.util.concurrent.CountDownLatch(1)
+        var out = "no answer"
+        svc.executeSharedToolRequest(body, "Mesh · $peer") { out = it; latch.countDown() }
+        latch.await(140, java.util.concurrent.TimeUnit.SECONDS)
+        return out
     }
 
     fun run(c: Context, a: JSONObject): String {
