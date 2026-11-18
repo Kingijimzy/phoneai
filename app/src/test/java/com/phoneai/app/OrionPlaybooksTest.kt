@@ -34,4 +34,15 @@ class OrionPlaybooksTest {
     @Test fun devspaceExposesPlaybooks() {
         assertTrue(ToolRegistry.find("devspace")!!.promptLine.contains("playbook"))
     }
+
+    @Test fun githubBlobLinksBecomeRawLinks() {
+        assertEquals("https://raw.githubusercontent.com/o/r/main/skills/x/SKILL.md", OrionPlaybooks.rawUrl("https://github.com/o/r/blob/main/skills/x/SKILL.md"))
+    }
+
+    @Test fun skillFrontMatterIsSplitOff() {
+        val (d, b) = OrionPlaybooks.parseSkill("---\nname: x\ndescription: \"Find the root cause\"\n---\n\n# Body\nsteps")
+        assertEquals("Find the root cause", d)
+        assertEquals("# Body\nsteps", b)
+        assertEquals("" to "plain text", OrionPlaybooks.parseSkill("plain text"))
+    }
 }
