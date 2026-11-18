@@ -16,7 +16,13 @@ internal object OrionProviderPayloadRecovery {
             if (role == "system" || role == "developer") systemMessages += JSONObject(item.toString())
             else conversational += JSONObject(item.toString())
         }
-        systemMessages.forEach { result.put(it) }
+        // Free tiers (Groq, etc.) reject on the system prompt itself, so later passes shorten it too, keeping head and tail.
+        val systemLimit = when (pass) { 1 -> Int.MAX_VALUE; 2 -> 14_000; else -> 6_000 }
+        systemMessages.forEach { m ->
+            val c = m.opt("content")
+            if (c is String && c.length > systemLimit) m.put("content", c.take(systemLimit * 7 / 10) + "\n[…system context shortened to fit this provider's request limit…]\n" + c.takeLast(systemLimit * 3 / 10))
+            result.put(m)
+        }
         val keep = when (pass) { 1 -> 8; 2 -> 4; else -> 2 }
         val latestUser = conversational.indexOfLast { it.optString("role").equals("user", true) }
         if (latestUser >= 0) {

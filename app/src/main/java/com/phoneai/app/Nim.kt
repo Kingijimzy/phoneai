@@ -189,7 +189,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         "embed", "guard", "rerank", "reward", "clip", "parse", "safety", "retriev", "bge",
         "whisper", "tts", "asr", "nemoguard", "riva", "fastpitch", "diffusion", "stable",
         "flux", "sdxl", "bria", "cosmos", "grounding", "segment", "ocr", "detect", "nvclip",
-        "image", "imagen", "veo", "live", "transcribe", "translate", "audio", "moderation", "orpheus"
+        "image", "imagen", "veo", "live", "transcribe", "translate", "audio", "moderation", "orpheus",
+        "judge", "systemone", "classif"
     )
     private val visionKeys = listOf(
         "vision", "-vl", "vila", "pixtral", "llava", "paligemma", "multimodal", "nemotron-nano-12b-v2-vl",

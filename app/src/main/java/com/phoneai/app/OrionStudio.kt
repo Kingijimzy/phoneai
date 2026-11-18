@@ -198,20 +198,25 @@ internal object OrionStudio {
         if (method != "tools/list" && method != "tools/call") return null
         val py = """
 import json, os, subprocess, select, time, sys
-p = subprocess.Popen(os.environ['ORION_MCP_CMD'], shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
+p = subprocess.Popen(os.environ['ORION_MCP_CMD'], shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=open('/tmp/orion_mcp_err.txt', 'w'), text=True, bufsize=1)
 def send(o):
     p.stdin.write(json.dumps(o) + '\n'); p.stdin.flush()
-def recv(i, t=90):
+def recv(i, t=240):
     end = time.time() + t
     while time.time() < end:
         r, _, _ = select.select([p.stdout], [], [], 1)
-        if not r: continue
+        if not r:
+            if p.poll() is not None: break
+            continue
         line = p.stdout.readline()
         if not line: break
         try: m = json.loads(line)
         except Exception: continue
         if m.get('id') == i: return m
-    return {'error': 'timeout waiting for MCP server'}
+    err = ''
+    try: err = open('/tmp/orion_mcp_err.txt').read()[-600:].strip()
+    except Exception: pass
+    return {'error': ('server exited: ' if p.poll() is not None else 'timeout waiting for MCP server: ') + (err or 'no output from the server; check that its package is installed')}
 send({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2024-11-05', 'capabilities': {}, 'clientInfo': {'name': 'orion', 'version': '1'}}})
 r = recv(1)
 if 'error' in r and 'result' not in r:
