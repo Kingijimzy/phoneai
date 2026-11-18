@@ -17,6 +17,7 @@ internal object OrionPages {
         Page("terminal", "Terminal", "Linux shell and sandbox", TerminalActivity::class.java, "shell linux bash proot"),
         Page("workspace", "Workspace", "Files and projects Orion builds", WorkspaceShellActivity::class.java, "files code project"),
         Page("browser", "Browser", "Orion's built-in browser", BrowserActivity::class.java, "web internet"),
+        Page("notifications", "Notifications", "Everything your apps told you, in one place", NotificationCenterActivity::class.java, "notification centre alerts inbox feed"),
         Page("tasks", "Tasks", "Objectives, missions and goals", TaskCenterActivity::class.java, "todo missions goals"),
         Page("agents", "Specialists", "Sub-agents and specialists", AgentsActivity::class.java, "agent subagent coder"),
         Page("capabilities", "Capabilities", "Every tool Orion has", CapabilityBoardActivity::class.java, "tools"),
