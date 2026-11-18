@@ -46,6 +46,7 @@ import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -743,14 +744,17 @@ internal fun OrionComposeChatScreen(
                 val inlineArtifactIds = lines.flatMap { line ->
                     line.content.blocks.filterIsInstance<OrionMessageBlock.GeneratedFile>().map { it.artifactId }
                 }.toSet()
-                val unattached = attachments.distinctBy { it.sha256.ifBlank { it.id } }.filterNot { it.id in inlineArtifactIds }
+                val unattached = OrionChatAttachmentPolicy.listed(attachments, inlineArtifactIds)
                 if (unattached.isNotEmpty()) {
-                    item(key = "orion-chat-attachments-heading") {
-                        Text("ATTACHMENTS", color = OrionUiPalette.muted, fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold, letterSpacing = .9.sp)
-                    }
-                    itemsIndexed(unattached, key = { _, item -> "chat-attachment-${item.id}" }) { _, item ->
-                        OrionChatAttachmentCard(item, onOpenAttachment, onShareAttachment)
+                    item(key = "orion-chat-attachments") {
+                        var showFiles by rememberSaveable { mutableStateOf(false) }
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(Modifier.clip(RoundedCornerShape(14.dp)).clickable { showFiles = !showFiles }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("FILES IN THIS CHAT · ${unattached.size}", color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .9.sp)
+                                Icon(if (showFiles) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null, tint = OrionUiPalette.muted, modifier = Modifier.size(16.dp))
+                            }
+                            if (showFiles) unattached.forEach { OrionChatAttachmentCard(it, onOpenAttachment, onShareAttachment) }
+                        }
                     }
                 }
                 item(key = "orion-interruptions") { OrionInterruptionBanner() }
@@ -1061,12 +1065,13 @@ internal fun OrionArchivedConversationScreen(
                     onShareAttachment = onShareAttachment
                 )
             }
-            if (attachments.isNotEmpty()) {
+            val archiveFiles = OrionChatAttachmentPolicy.listed(attachments, emptySet())
+            if (archiveFiles.isNotEmpty()) {
                 item(key = "archive-attachments-heading") {
-                    Text("ATTACHMENTS", color = OrionUiPalette.muted, fontSize = 9.sp,
+                    Text("FILES IN THIS CHAT · ${archiveFiles.size}", color = OrionUiPalette.muted, fontSize = 9.sp,
                         fontWeight = FontWeight.Bold, letterSpacing = .9.sp)
                 }
-                itemsIndexed(attachments, key = { _, item -> "archive-attachment-${item.id}" }) { _, item ->
+                itemsIndexed(archiveFiles, key = { _, item -> "archive-attachment-${item.id}" }) { _, item ->
                     OrionChatAttachmentCard(item, onOpenAttachment, onShareAttachment)
                 }
             }

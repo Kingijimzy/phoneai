@@ -229,8 +229,6 @@ internal fun OrionActivityHubCard(
             Chip("History", onOpenAll, OrionUiPalette.text, Icons.Rounded.History)
         }
         if (latestEvent != null) {
-            Text(OrionActivityPresentation.summary(latestEvent), color = OrionUiPalette.muted, fontSize = 10.sp,
-                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
             latestEvent.typedEvidence.take(2).forEach { evidence ->
                 val label = when (evidence) {
                     is OrionActivityEvidence.Browser -> "View " + evidence.title.ifBlank { "web page" }

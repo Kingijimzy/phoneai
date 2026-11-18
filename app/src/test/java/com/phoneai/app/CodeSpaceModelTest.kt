@@ -50,4 +50,34 @@ class CodeSpaceModelTest {
         assertEquals(code, a.text)
         assertTrue(a.spanStyles.isNotEmpty())
     }
+
+    @Test fun filesGetTypedIconsSizesAndDates() {
+        assertEquals(CodeSpaceModel.Kind.FOLDER, CodeSpaceModel.kindOf("src", true))
+        assertEquals(CodeSpaceModel.Kind.PYTHON, CodeSpaceModel.kindOf("app.PY", false))
+        assertEquals(CodeSpaceModel.Kind.JSON, CodeSpaceModel.kindOf("plugin.json", false))
+        assertEquals(CodeSpaceModel.Kind.IMAGE, CodeSpaceModel.kindOf("a.png", false))
+        assertEquals(CodeSpaceModel.Kind.OTHER, CodeSpaceModel.kindOf("README", false))
+        assertEquals("512 B", CodeSpaceModel.formatSize(512))
+        assertEquals("2 KB", CodeSpaceModel.formatSize(2048))
+        assertEquals("1.5 MB", CodeSpaceModel.formatSize(1_572_864))
+        val utc = java.util.TimeZone.getTimeZone("UTC")
+        val now = 1_794_000_000_000L // Nov 2026
+        assertEquals("", CodeSpaceModel.formatDate(0, now, utc))
+        assertTrue(CodeSpaceModel.formatDate(now - 86_400_000L, now, utc).contains(","))
+        assertTrue(CodeSpaceModel.formatDate(now - 400L * 86_400_000L, now, utc).contains("2025"))
+    }
+
+    @Test fun listingCarriesModifiedTime() {
+        val d = tmp.newFolder("m")
+        File(d, "a.txt").writeText("x")
+        assertTrue(CodeSpaceModel.list(d).single().modified > 0L)
+    }
+
+    @Test fun breadcrumbsWalkFromTheRootDown() {
+        val root = tmp.newFolder("bc")
+        val deep = File(root, "projects/phoneai").also { it.mkdirs() }
+        assertEquals(listOf("Workspace", "projects", "phoneai"), CodeSpaceModel.breadcrumbs(root, deep, "Workspace").map { it.first })
+        assertEquals(listOf("Workspace"), CodeSpaceModel.breadcrumbs(root, root, "Workspace").map { it.first })
+        assertEquals(deep.canonicalFile, CodeSpaceModel.breadcrumbs(root, deep, "Workspace").last().second)
+    }
 }

@@ -384,7 +384,9 @@ internal fun ChatBubble(
     // Only things that need attention stay boxed (approvals, files, images, diagrams, notes); ordinary replies flow as plain text.
     val framed = !mine && replyType != OrionReplyType.NORMAL && (replyType == OrionReplyType.DIAGRAM ||
         primaryBlock is OrionMessageBlock.Approval || primaryBlock is OrionMessageBlock.GeneratedFile || primaryBlock is OrionMessageBlock.Image)
-    val collapsible = !mine && (framed || (note && !item.text.startsWith("[")))
+    // Terminal runs are already a one-line chip; they get no second frame, header or ORION tag.
+    val bare = note && item.content.blocks.isNotEmpty() && item.content.blocks.all { it is OrionMessageBlock.Terminal }
+    val collapsible = !mine && (framed || (note && !bare && !item.text.startsWith("[")))
     AnimatedVisibility(
         visible = true,
         enter = fadeIn(animationSpec = tween(260)) +
@@ -413,7 +415,7 @@ internal fun ChatBubble(
             Column(
                 (if (mine) Modifier.widthIn(max = 320.dp) else Modifier.fillMaxWidth(if (note) 1f else .98f))
                     .then(
-                        if (mine || note) Modifier.clip(RoundedCornerShape(17.dp))
+                        if (mine || (note && !bare)) Modifier.clip(RoundedCornerShape(17.dp))
                             .background(if (note) OrionUiPalette.panel else OrionUiPalette.raised)
                             .border(1.dp, if (mine) Color(0x00000000) else Color(0x40545458), RoundedCornerShape(17.dp))
                         else if (framed) Modifier
@@ -437,11 +439,11 @@ internal fun ChatBubble(
                         else Modifier
                     )
                     .padding(
-                        horizontal = if (mine || note || framed) 13.dp else 0.dp,
-                        vertical = if (mine || note || framed) 12.dp else 0.dp
+                        horizontal = if (mine || (note && !bare) || framed) 13.dp else 0.dp,
+                        vertical = if (mine || (note && !bare) || framed) 12.dp else 0.dp
                     )
             ) {
-                if (note || framed) {
+                if ((note && !bare) || framed) {
                     Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable(enabled = collapsible) { openBlock = !openBlock }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         Text(
                             when (primaryBlock) {
