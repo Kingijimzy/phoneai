@@ -743,7 +743,7 @@ internal fun OrionComposeChatScreen(
                 val inlineArtifactIds = lines.flatMap { line ->
                     line.content.blocks.filterIsInstance<OrionMessageBlock.GeneratedFile>().map { it.artifactId }
                 }.toSet()
-                val unattached = attachments.distinctBy { it.id }.filterNot { it.id in inlineArtifactIds }
+                val unattached = attachments.distinctBy { it.sha256.ifBlank { it.id } }.filterNot { it.id in inlineArtifactIds }
                 if (unattached.isNotEmpty()) {
                     item(key = "orion-chat-attachments-heading") {
                         Text("ATTACHMENTS", color = OrionUiPalette.muted, fontSize = 9.sp,

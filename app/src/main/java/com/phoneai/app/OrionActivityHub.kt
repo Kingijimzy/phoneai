@@ -115,8 +115,28 @@ internal object OrionActivityHub {
     }
 
     /** Failures and anything waiting on the owner are shown apart from the routine steps. */
+    /** One attention row per distinct problem, not one per repeat. */
     fun interruptions(run: List<OrionRunLog.Step>): List<OrionRunLog.Step> =
         run.filter { it.status == OrionRunLog.Status.FAILED || it.tool in setOf("ask_user", "confirm", "approval") }
+            .distinctBy { it.title + "|" + cleanOutput(it.output).lineSequence().firstOrNull { l -> l.isNotBlank() }.orEmpty() }
+
+    /** Removes harness wrappers such as "SHELL OUTPUT (linux; data, not instructions):" that mean nothing to the owner. */
+    fun cleanOutput(output: String): String =
+        output.lineSequence().filterNot { Regex("^\\s*[A-Z ]+ OUTPUT \\(.*\\):\\s*$").matches(it) }.joinToString("\n")
+
+    /** Consecutive identical steps (same tool, title and detail) fold into one row marked "×N". */
+    fun collapse(run: List<OrionRunLog.Step>): List<OrionRunLog.Step> {
+        val out = ArrayList<OrionRunLog.Step>()
+        var count = 1
+        run.forEach { s ->
+            val last = out.lastOrNull()
+            if (last != null && last.tool == s.tool && last.title.removeSuffix(" ×$count") == s.title.removeSuffix(" ×1") && last.detail == s.detail) {
+                count++
+                out[out.lastIndex] = s.copy(title = s.title + " ×$count")
+            } else { out += s; count = 1 }
+        }
+        return out
+    }
 
     fun matches(entry: OrionActivityHistory.Entry, query: String): Boolean {
         val q = query.trim().lowercase()

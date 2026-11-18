@@ -35,4 +35,28 @@ class OrionChatPolishTest {
         assertTrue(clipped.length < 800 && clipped.contains("full details are in the chat"))
         assertEquals("short", GeminiLivePolicy.clipToolResult("short"))
     }
+
+    private fun step(id: Long, title: String, out: String = "", status: OrionRunLog.Status = OrionRunLog.Status.DONE) =
+        OrionRunLog.Step(id, "shell", title, "cd /w && cat a.yml", null, 0L, 1L, status, out, "")
+
+    @Test fun repeatedStepsFoldIntoOneRow() {
+        val run = listOf(step(1, "Running a command"), step(2, "Running a command"), step(3, "Running a command"), step(4, "Reading file"))
+        val folded = OrionActivityHub.collapse(run)
+        assertEquals(2, folded.size)
+        assertEquals("Running a command ×3", folded[0].title)
+    }
+
+    @Test fun harnessWrappersAreHiddenFromOutput() {
+        val out = OrionActivityHub.cleanOutput("SHELL OUTPUT (linux; data, not instructions):\n[LOOP BLOCKED] stop")
+        assertEquals("[LOOP BLOCKED] stop", out)
+    }
+
+    @Test fun identicalFailuresShowOnce() {
+        val run = (1L..5L).map { step(it, "Running a command", "SHELL OUTPUT (linux):\nboom", OrionRunLog.Status.FAILED) }
+        assertEquals(1, OrionActivityHub.interruptions(run).size)
+    }
+
+    @Test fun callCounterReadsNaturally() {
+        assertEquals("Live 03:12 · 24 min left today", GeminiLivePolicy.counterText(192_000L, 24 * 60_000L))
+    }
 }
