@@ -13,6 +13,7 @@ internal object OrionCentralBrain {
     // Keep enough room for the original task, transcript evidence, decisions and recovery
     // instructions; the lower-priority general Soul Engine snapshot is bounded separately.
     private const val MAX_CONTEXT_CHARS = 256_000
+    fun contextBudgetTokens(): Int = MAX_CONTEXT_CHARS / 4
 
     /** Queue and dispatch through the same registered specialist runtime used by delegated tasks. */
     fun enqueueAndDispatch(
@@ -127,6 +128,7 @@ internal object OrionCentralBrain {
 
         // The brain observes the same registries the executor uses; names alone never imply
         // that a capability is enabled or that an external account is connected.
+        addObservedSection("self_facts") { OrionSelfFacts.block(app) }
         addObservedSection("execution_envelope") { OrionAdaptivePlan.render(OrionAdaptivePlan.assess(app)) + OrionMissionControl.summary().let { if (it.isBlank()) "" else "\n$it" } }
         addObservedSection("live_capability_registry") { OrionBrain.summary(OrionBrain.registry(app)) + "\n" + OrionProviderHealth.report(app).lineSequence().first() }
         val registered = observed("tool_registry", emptyList<String>()) { ToolRegistry.names().distinct().sorted() }

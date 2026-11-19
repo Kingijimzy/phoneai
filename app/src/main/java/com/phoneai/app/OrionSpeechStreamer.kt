@@ -5,27 +5,33 @@ package com.phoneai.app
  * instead of waiting for the whole reply. Code fences are held back (never spoken); the first chunk is allowed to
  * break early at a clause so the first word arrives fast, later chunks end at sentence boundaries.
  */
-internal class OrionSpeechStreamer(private val clock: () -> Long = System::currentTimeMillis) {
+internal class OrionSpeechStreamer(private val clock: () -> Long = System::currentTimeMillis, private val maxSpokenChars: Int = 360) {
     private val buf = StringBuilder()
     private var emitted = 0
     private var lastFeed = 0L
     private var muted = false
+    private var spokenChars = 0
+    /** True once enough has been spoken: the rest of a long answer stays in chat, it is not read aloud. */
+    var capped = false
+        private set
     var spokeAny = false
         private set
 
+    fun maxSpokenCharsValue(): Int = maxSpokenChars
+
     fun mute() { muted = true; buf.setLength(0) }
-    fun reset() { buf.setLength(0); emitted = 0; spokeAny = false; muted = false }
+    fun reset() { buf.setLength(0); emitted = 0; spokeAny = false; muted = false; spokenChars = 0; capped = false }
 
     fun feed(delta: String): List<String> {
         val now = clock()
         if (lastFeed != 0L && now - lastFeed > 60_000) reset()
         lastFeed = now
-        if (muted || delta.isEmpty()) return emptyList()
+        if (muted || capped || delta.isEmpty()) return emptyList()
         buf.append(delta)
         return drain(false)
     }
 
-    fun flush(): List<String> = if (muted) { buf.setLength(0); emptyList() } else drain(true)
+    fun flush(): List<String> = if (muted || capped) { buf.setLength(0); emptyList() } else drain(true)
 
     private fun drain(final: Boolean): List<String> {
         val out = ArrayList<String>()
@@ -46,7 +52,10 @@ internal class OrionSpeechStreamer(private val clock: () -> Long = System::curre
             }
             val chunk = view.substring(0, cut).trim()
             buf.delete(0, cut)
-            if (chunk.isNotEmpty()) { out += chunk; emitted++; spokeAny = true }
+            if (chunk.isNotEmpty()) {
+                out += chunk; emitted++; spokeAny = true; spokenChars += chunk.length
+                if (spokenChars >= maxSpokenChars) { capped = true; buf.setLength(0); break }
+            }
         }
         return out
     }
