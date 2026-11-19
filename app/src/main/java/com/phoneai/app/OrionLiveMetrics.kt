@@ -21,11 +21,12 @@ internal object OrionLiveMetrics {
     var state by mutableStateOf(Snapshot())
         private set
 
-    fun begin(now: Long = System.currentTimeMillis()) { state = Snapshot(active = true, startedAt = now) }
+    fun begin(now: Long = System.currentTimeMillis()) { state = Snapshot(active = true, startedAt = now); OrionSpeedTrace.begin(now) }
 
     fun onDelta(chars: Int, model: String, now: Long = System.currentTimeMillis()) {
         val s = state
         if (!s.active) return
+        if (s.firstWordAt == 0L) OrionSpeedTrace.mark("token", now)
         state = s.copy(
             firstWordAt = if (s.firstWordAt == 0L) now else s.firstWordAt,
             lastWordAt = now, chars = s.chars + chars,
@@ -40,7 +41,7 @@ internal object OrionLiveMetrics {
 
     fun end(model: String, now: Long = System.currentTimeMillis()) {
         val s = state
-        if (s.active) state = s.copy(active = false, endedAt = now, model = model.ifBlank { s.model })
+        if (s.active) { state = s.copy(active = false, endedAt = now, model = model.ifBlank { s.model }); OrionSpeedTrace.end(model.ifBlank { s.model }, now) }
     }
 
     fun elapsedMs(s: Snapshot, now: Long): Long = if (s.startedAt == 0L) 0L else ((if (s.active) now else s.endedAt) - s.startedAt).coerceAtLeast(0L)

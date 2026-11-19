@@ -2486,8 +2486,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 speechStreamer.flush().forEach { voice.speak(it) }
                 speechStreamer.reset()
             } else {
+                // The provider did not stream (or the reply arrived whole). Speak a concise local cut at once:
+                // an extra model call to "compose" speech used to add seconds before the first sound.
                 speechStreamer.reset()
-                speakComposed(text)
+                speakLocal(text)
             }
         }
     }
@@ -2495,6 +2497,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private val speakSeq = java.util.concurrent.atomic.AtomicInteger()
 
     /** Speech is a separate channel: the model writes what Orion says aloud, with a mood; chat keeps the full text. */
+    private fun speakLocal(text: String) {
+        val mine = speakSeq.incrementAndGet()
+        val line = OrionSpokenLine.fallback(text) ?: return
+        if (mine != speakSeq.get() || line.text.isBlank()) return
+        voice.speakLine(line)
+    }
+
+    @Suppress("unused")
     private fun speakComposed(text: String) {
         val mine = speakSeq.incrementAndGet()
         Thread {

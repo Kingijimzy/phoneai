@@ -353,6 +353,7 @@ class Voice(private val ctx: Context) {
                                 val activeTrack = track
                                 if (activeTrack == null || !writeNeuralSamples(activeTrack, samples, token)) 0
                                 else {
+                                    if (samples.isNotEmpty()) OrionSpeedTrace.mark("audio")
                                     callbackFrames += samples.size
                                     if (samples.isNotEmpty()) {
                                         for (sample in samples) peakSampleAmplitude = maxOf(peakSampleAmplitude, kotlin.math.abs(sample))

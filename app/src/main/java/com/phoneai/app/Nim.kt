@@ -37,6 +37,9 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         private val modelCatalogCache = ConcurrentHashMap<String, Pair<Long, List<String>>>()
         private const val MODEL_CATALOG_TTL_MS = 10 * 60 * 1000L
 
+        /** Whether this provider's chat endpoint is read as a token stream. The speech path and the self-facts both read this one rule. */
+        fun supportsStreaming(p: Provider): Boolean = !p.anthropicStyle && p.id != "opencode-zen" && p.id != "gemini"
+
         fun budget(id: String): Int = when (id) {
             "gemini" -> 9
             "groq", "cerebras", "mistral" -> 24
@@ -1151,7 +1154,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             }
             val r: Http? = try {
                 // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
-                if (onDelta != null && !vision && !p.anthropicStyle && p.id != "opencode-zen" && p.id != "gemini") {
+                if (onDelta != null && !vision && supportsStreaming(p)) {
                     requestStream(p, url, payload, key, if (fastResponse) 30000 else 180000, onDelta)
                 } else request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 30000 else 180000)
             } catch (e: java.net.SocketTimeoutException) {

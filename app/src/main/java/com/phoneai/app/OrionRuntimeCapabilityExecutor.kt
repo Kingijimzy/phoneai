@@ -229,7 +229,31 @@ internal object OrionRuntimeCapabilityExecutor {
         else -> null
     }
 
+    private val needsOpenBrowser = setOf(
+        "browser_snapshot", "browser_find", "browser_extract", "browser_verify", "browser_click", "browser_click_verify",
+        "browser_type", "browser_scroll", "browser_back", "browser_wait", "browser_upload", "browser_handoff"
+    )
+
+    /** Orion opens its own browser when a browser tool needs one; "not open" is never the answer to a task. Prefers the in-chat browser. */
+    private fun ensureBrowserOpen(service: PhoneAiService): String? {
+        if (BrowserAutomation.awaitWebView(250L) != null) return null
+        runCatching { service.openUrl("https://duckduckgo.com/") }
+        return if (BrowserAutomation.awaitWebView(8000L) == null)
+            "error: Orion Browser could not be opened automatically (Android may be blocking it from the background); open it once from the app and retry"
+        else null
+    }
+
     private fun executeBrowser(
+        tool: String,
+        args: JSONObject,
+        service: PhoneAiService,
+        openBrowser: (String) -> Unit
+    ): String? {
+        if (tool in needsOpenBrowser) ensureBrowserOpen(service)?.let { return it }
+        return executeBrowserTool(tool, args, service, openBrowser)
+    }
+
+    private fun executeBrowserTool(
         tool: String,
         args: JSONObject,
         service: PhoneAiService,
