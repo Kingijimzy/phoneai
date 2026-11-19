@@ -202,12 +202,27 @@ internal object OrionBrain {
         return if (issues.isEmpty()) "Knowledge graph: nothing to consolidate." else "Knowledge graph review: " + issues.joinToString("; ") + "."
     }
 
+    // ------------------------------------------------------------------ context on demand
+
+    @Volatile private var deferredSections: List<String> = emptyList()
+    fun rememberDeferred(sections: List<String>) { deferredSections = sections.take(40) }
+
+    /** Reads a section that was not pushed into the prompt for this request. */
+    fun contextOnDemand(name: String): String {
+        if (deferredSections.isEmpty()) return "Every context section was already included for the last request."
+        if (name.isBlank()) return "Available on request: " + deferredSections.joinToString(" | ") { ContextRelevance.label(it) }
+        val hit = deferredSections.firstOrNull { ContextRelevance.label(it).contains(name.trim(), ignoreCase = true) }
+            ?: return "error: no deferred section matches '$name'. Available: " + deferredSections.joinToString(" | ") { ContextRelevance.label(it) }
+        return hit.take(12_000)
+    }
+
     // ------------------------------------------------------------------ the tool
 
     fun run(c: Context, a: JSONObject): String = when (a.optString("action").ifBlank { "status" }) {
         "capabilities", "registry" -> capabilityReport(c, a.optString("name").ifBlank { null })
         "check" -> capabilityReport(c, a.optString("name").ifBlank { null })
         "why" -> whyReport(c)
+        "context" -> contextOnDemand(a.optString("name"))
         "providers" -> OrionProviderHealth.report(c)
         "selftest" -> OrionProviderHealth.selfTest(c)
         "graph" -> graphReport(c)
@@ -216,6 +231,6 @@ internal object OrionBrain {
         "chronos" -> OrionChronos.status(c)
         "dream" -> dream(c, force = true).ifBlank { "Nothing to consolidate yet." }
         "status" -> summary(registry(c)) + "\n" + OrionProviderHealth.report(c) + "\n" + OrionCerebro.status(c) + "\n" + OrionPrometheus.status(c) + "\n" + OrionChronos.status(c) + "\nRecent actions:\n" + whyReport(c, 5)
-        else -> "error: action must be status, capabilities, check, providers, selftest, why, dream, graph, cerebro, prometheus or chronos."
+        else -> "error: action must be status, capabilities, check, providers, selftest, why, dream, graph, cerebro, prometheus, chronos or context."
     }
 }

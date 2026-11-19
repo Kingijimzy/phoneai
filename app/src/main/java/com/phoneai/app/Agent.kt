@@ -1062,7 +1062,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
         // Historical recall, ordinary actions and multi-step objectives all use the same
         // model-facing native-tool loop. The model chooses recall when conversation memory
         // is needed; no parallel execution path owns the same request.
-        val activeModel = if (directActionRoute) commandNim else talkNim
+        // One brain: every turn runs on the tool-capable model. Whether a request "looks like an action" no longer decides
+        // which model reasons about it; the model decides whether to act. directActionRoute only guards the no-tools warning.
+        val activeModel = commandNim
         activeModel.beginCommand()
         stopped = false
         setRequestScope(command)
