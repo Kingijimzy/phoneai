@@ -54,7 +54,14 @@ class MainActivity : ComponentActivity() {
                     onOpenAgents = { launchDestination(Intent(this@MainActivity, AgentsActivity::class.java), "AgentsActivity") },
                     onOpenSoulEngine = { launchDestination(Intent(this@MainActivity, SoulEngineActivity::class.java), "SoulEngineActivity") },
                     onOpenExtensions = { launchDestination(Intent(this@MainActivity, SelfExtensionLabActivity::class.java), "SelfExtensionLabActivity") },
-                    onOpenFeature = { route -> openFeature(route) }
+                    onOpenFeature = { route -> openFeature(route) },
+                    onResumeTask = { prompt ->
+                        launchDestination(
+                            Intent(this@MainActivity, MainChatActivity::class.java)
+                                .putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, prompt),
+                            "MainChatActivity/ResumeTask"
+                        )
+                    }
                 )
             }
         }
@@ -140,6 +147,18 @@ class MainActivity : ComponentActivity() {
             "watcher" -> { destination = SoulWatcherActivity::class.java; intent = Intent(this, destination) }
             "extensions" -> { destination = SelfExtensionLabActivity::class.java; intent = Intent(this, destination) }
             "terminal" -> { destination = TerminalActivity::class.java; intent = Intent(this, destination) }
+            "studio", "studio_terminal", "studio_project", "studio_files", "studio_agent", "studio_tools" -> {
+                destination = StudioActivity::class.java
+                val page = when (route) {
+                    "studio_terminal" -> "terminal"
+                    "studio_project" -> "project"
+                    "studio_files" -> "files"
+                    "studio_agent" -> "agent"
+                    "studio_tools" -> "tools"
+                    else -> "editor"
+                }
+                intent = Intent(this, destination).putExtra("page", page)
+            }
             "workspace" -> { destination = WorkspaceShellActivity::class.java; intent = Intent(this, destination) }
             "cloud_coding" -> { destination = CursorCloudAgentActivity::class.java; intent = Intent(this, destination) }
             "capabilities" -> { destination = CapabilityBoardActivity::class.java; intent = Intent(this, destination) }

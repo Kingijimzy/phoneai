@@ -26,10 +26,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.AccountTree
+import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Hub
@@ -52,6 +58,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
@@ -96,9 +103,10 @@ fun OrionComposeShell(
     onOpenAgents: () -> Unit = {},
     onOpenSoulEngine: () -> Unit = {},
     onOpenExtensions: () -> Unit = {},
-    onOpenFeature: (String) -> Unit = {}
+    onOpenFeature: (String) -> Unit = {},
+    onResumeTask: (String) -> Unit = {}
 ) {
-    var selected by remember { mutableStateOf("Home") }
+    var selected by rememberSaveable { mutableStateOf("Home") }
     val scheme = darkColorScheme(
         primary = Silver,
         onPrimary = Ink,
@@ -123,12 +131,13 @@ fun OrionComposeShell(
                 ) { page ->
                     when (page) {
                         "Home" -> HomePage(status, onOpenChat, onOpenVoice, onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenAgents, onOpenMemory)
-                        "Tools" -> ToolsPage(onOpenFeature)
-                        else -> SettingsPage(onOpenSettings, onOpenFeature)
+                        "Workspace" -> ToolsPage(onOpenFeature)
+                        "Activity" -> ActivityPage(onOpenTasks, onOpenAgents, onOpenSoulEngine, onOpenExtensions, onOpenMemory, onResumeTask, onOpenFeature)
+                        else -> SettingsPage(onOpenSettings)
                     }
                 }
-                BottomDock(selected) { next ->
-                    when (next) { "Chat" -> onOpenChat(); "Live" -> onOpenVoice(); else -> selected = next }
+                BottomDock(selected, onOpenChat) { next ->
+                    selected = next
                 }
             }
         }
@@ -323,158 +332,177 @@ private fun HomeActionCard(
 
 @Composable
 private fun ToolsPage(onOpenFeature: (String) -> Unit) {
-    var showRegisteredTools by remember { mutableStateOf(false) }
-
-    data class Feature(
-        val title: String,
-        val detail: String,
-        val icon: androidx.compose.ui.graphics.vector.ImageVector,
-        val route: String
-    )
-    val groups = listOf(
-        "EVERYDAY ASSISTANT" to listOf(
-            Feature("Chat with Orion", "The main conversation, commands and image attachments", Icons.Rounded.ChatBubbleOutline, "chat"),
-            Feature("Live conversation", "Speak with Orion using the standard voice experience", Icons.Rounded.GraphicEq, "live"),
-            Feature("Orion Browser", "Open pages and run assisted research", Icons.Rounded.Public, "browser"),
-            Feature("Tasks & workflows", "Saved tasks, reminders and repeatable routines", Icons.Rounded.TaskAlt, "tasks")
-        ),
-        "WORK, MEMORY & LEARNING" to listOf(
-            Feature("Agent workspace", "Trading Coach, Research, Code, Planner and Writer agents", Icons.Rounded.SmartToy, "agents"),
-            Feature("Teach mode", "Teach Orion a workflow and review recorded steps", Icons.Rounded.AutoAwesome, "teach"),
-            Feature("Memory", "Review, edit, pin and manage remembered information", Icons.Rounded.Memory, "memory"),
-            Feature("Knowledge graph", "Explore linked knowledge and saved context", Icons.Rounded.Hub, "knowledge_graph"),
-            Feature("Proactive work", "Scheduled briefings and proactive task controls", Icons.Rounded.Bolt, "proactive")
-        ),
-        "TRADING, GAMES & DEVICE" to listOf(
-            Feature("Trading desk", "Market tools, watchlists, journal and analysis", Icons.Rounded.TaskAlt, "trading"),
-            Feature("Gaming Coach", "Game-focused coaching and supported device workflows", Icons.Rounded.SmartToy, "gaming"),
-            Feature("Device utilities", "Network Radar, Game Sentinel and file tools", Icons.Rounded.Tune, "device_utilities")
-        ),
-        "SYSTEM, EXTENSIONS & DEVELOPMENT" to listOf(
-            Feature("Soul Engine", "System dashboard, readiness and self-tests", Icons.Rounded.Hub, "soul_engine"),
-            Feature("Watcher", "Background watcher status and controls", Icons.Rounded.Bolt, "watcher"),
-            Feature("Self-extension lab", "Build, sandbox-test and manage reusable extensions", Icons.Rounded.AutoAwesome, "extensions"),
-            Feature("Terminal", "Termux bridge and supported terminal workflows", Icons.Rounded.Tune, "terminal"),
-            Feature("Workspace files", "Scoped file workspace with allowlisted operations", Icons.Rounded.Memory, "workspace"),
-            Feature("Cloud coding agent", "Connected coding-agent workspace", Icons.Rounded.SmartToy, "cloud_coding"),
-            Feature("Capability & integrations board", "Connected services, permissions and capability gaps", Icons.Rounded.Public, "capabilities"),
-            Feature("Capability report", "Inspect the current capability and readiness report", Icons.Rounded.Shield, "capability_report"),
-            Feature("Approval & capabilities", "Approval mode, trusted sessions and tool access", Icons.Rounded.Shield, "agent_control"),
-            Feature("Termux bridge", "Optional external terminal runtime with explicit approval", Icons.Rounded.Tune, "termux_bridge"),
-            Feature("Owner Control Center", "Private autonomy, recovery, extension and Watcher controls", Icons.Rounded.Settings, "owner_control")
-        ),
-        "ADVANCED VOICE" to listOf(
-            Feature("Gemini Live (experimental)", "Optional live provider mode; uses its own API quota", Icons.Rounded.Mic, "gemini_live")
-        )
-    )
-
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 24.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp)
     ) {
-        PageHeading("Feature directory", "Every major Orion destination, grouped by what it helps you do.")
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 54.dp).clip(RoundedCornerShape(14.dp)).background(Panel)
-                .border(1.dp, Hairline, RoundedCornerShape(14.dp)).padding(13.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(Icons.Rounded.Widgets, null, tint = Silver, modifier = Modifier.size(22.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("Platform map", color = Copy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text("${groups.sumOf { it.second.size }} destinations · ${ToolRegistry.all.size} registered tools", color = Muted, fontSize = 11.sp)
-            }
-            Text("DIRECT", color = Silver, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-        }
-
-        groups.forEach { (heading, features) ->
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(heading, color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                features.forEach { feature ->
-                    ActionRow(feature.title, feature.detail, feature.icon) { onOpenFeature(feature.route) }
-                }
-            }
-        }
-
+        PageHeading(
+            "Workspace",
+            "One project context shared by your editor, terminal, agent and runtime."
+        )
         Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Panel)
-                .border(1.dp, Hairline, RoundedCornerShape(16.dp)).padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .border(1.dp, Hairline, RoundedCornerShape(16.dp)).padding(15.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp)
         ) {
+            Text("DEVELOPMENT ENVIRONMENT", color = Silver, fontSize = 9.sp,
+                fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+            Text("Code Studio", color = Copy, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Edit files, run commands, delegate coding work and manage builds without switching between disconnected tools.",
+                color = Muted, fontSize = 12.sp, lineHeight = 17.sp
+            )
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = androidx.compose.ui.semantics.Role.Button) { showRegisteredTools = !showRegisteredTools },
-                verticalAlignment = Alignment.CenterVertically
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(11.dp))
+                    .background(Silver).clickable(role = androidx.compose.ui.semantics.Role.Button) {
+                        onOpenFeature("studio")
+                    }.padding(horizontal = 13.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("Registered agent tools", color = Copy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.heightIn(min = 44.dp))
-                    Text("${ToolRegistry.all.size} registered contracts · access labels from the live registry", color = Muted, fontSize = 11.sp)
-                }
-                Text(if (showRegisteredTools) "HIDE" else "VIEW", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            }
-            if (showRegisteredTools) {
-                Text("These are tool contracts, not separate app pages. Availability still depends on the current capability, permission and policy state.", color = Muted, fontSize = 11.sp)
-                ToolRegistry.all.forEach { definition ->
-                    val readOnly = definition.access == ToolAccess.READ
-                    val badgeColor = if (readOnly) Silver else OrionUiPalette.warning
-                    val badgeBackground = if (readOnly) PanelRaised else Panel
-                    Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp)).background(PanelRaised)
-                            .border(1.dp, Hairline, RoundedCornerShape(11.dp)).padding(horizontal = 11.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(9.dp)
-                    ) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text(definition.name, color = Copy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                            Text(definition.description, color = Muted, fontSize = 10.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        }
-                        Text(
-                            definition.access.name,
-                            Modifier.clip(RoundedCornerShape(7.dp)).background(badgeBackground)
-                                .border(1.dp, badgeColor.copy(alpha = .45f), RoundedCornerShape(7.dp))
-                                .padding(horizontal = 7.dp, vertical = 5.dp),
-                            color = badgeColor, fontSize = 8.sp, fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
+                Icon(Icons.Rounded.Code, null, tint = Ink, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Open Code Studio", color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(6.dp))
+                Icon(Icons.Rounded.ChevronRight, null, tint = Ink, modifier = Modifier.size(17.dp))
             }
         }
+        Text("QUICK ACCESS", color = Silver, fontSize = 10.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Terminal", "Run commands in the active workspace runtime", Icons.Rounded.Terminal) {
+            onOpenFeature("studio_terminal")
+        }
+        ActionRow("Files & project", "Browse project files and shared workspace state", Icons.Rounded.FolderOpen) {
+            onOpenFeature("studio_files")
+        }
+        ActionRow("Coding agent", "Plan and execute coding tasks in the same project", Icons.Rounded.SmartToy) {
+            onOpenFeature("studio_agent")
+        }
+        ActionRow("Git, build & recovery", "Review changes, build output and recovery tools", Icons.Rounded.AccountTree) {
+            onOpenFeature("studio_project")
+        }
+        ActionRow("Runtime & packages", "Select the runtime and manage installed packages", Icons.Rounded.Tune) {
+            onOpenFeature("studio_tools")
+        }
+        Text("CONNECTED WORK AREAS", color = Silver, fontSize = 10.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Cloud coding agent", "Open the connected remote coding workspace", Icons.Rounded.Cloud) {
+            onOpenFeature("cloud_coding")
+        }
+        ActionRow("Browser & research", "Open the assisted browser for research and web tasks", Icons.Rounded.Public) {
+            onOpenFeature("browser")
+        }
+        Text(
+            "All Code Studio shortcuts open the same project and runtime session. Other capabilities remain in their existing owners until their screens are migrated into the shared shell.",
+            color = Muted, fontSize = 10.sp, lineHeight = 15.sp
+        )
     }
 }
 
 @Composable
-private fun SettingsPage(onOpenSettings: (String?) -> Unit, onOpenFeature: (String) -> Unit) {
+private fun ActivityPage(
+    onOpenTasks: () -> Unit,
+    onOpenAgents: () -> Unit,
+    onOpenSoulEngine: () -> Unit,
+    onOpenExtensions: () -> Unit,
+    onOpenMemory: () -> Unit,
+    onResumeTask: (String) -> Unit,
+    onOpenFeature: (String) -> Unit
+) {
+    var showHistory by remember { mutableStateOf(false) }
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 24.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp)
     ) {
-        PageHeading("Settings", "Choose one settings area at a time. Each shortcut opens its own section.")
-        Text("AI & MODELS", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("Providers & model selection", "Dedicated controls for API connections, chat model, vision model and fallback", Icons.Rounded.AutoAwesome) { onOpenSettings("providers") }
-        Text("VOICE & INTERACTION", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("Voice, wake word & speech", "Dedicated voice page for microphone, speech and live-call controls", Icons.Rounded.GraphicEq) { onOpenSettings("voice") }
-        ActionRow("Response style & character", "Dedicated character page for personality and response presentation", Icons.Rounded.SmartToy) { onOpenSettings("character") }
-        Text("MEMORY & LEARNING", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("Memory & routines", "Review saved memory, routines and learning controls", Icons.Rounded.Memory) { onOpenSettings("memory") }
-        ActionRow("Skill Studio", "Manage registered skills and reusable procedures", Icons.Rounded.AutoAwesome) { onOpenSettings("skills") }
-        ActionRow("Knowledge base", "Import and manage local reference documents", Icons.Rounded.Hub) { onOpenSettings("knowledge") }
-        Text("CONNECTED SERVICES", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("Integrations & MCP", "Telegram, MCP servers, connection checks and scopes", Icons.Rounded.Public) { onOpenSettings("integrations") }
-        Text("DEVICE & PRIVACY", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("Permissions & device access", "Accessibility, microphone, notifications, keyboard and location access", Icons.Rounded.Shield) { onOpenSettings("permissions") }
-        ActionRow("Orion health & updates", "Installed version, permission checks, diagnostics and release status", Icons.Rounded.Shield) { onOpenSettings("health") }
-        Text("AUTOMATION & LOCAL TOOLS", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("Screen recording", "Recording controls and saved screen-capture settings", Icons.Rounded.Settings) { onOpenSettings("recording") }
-        ActionRow("Browser & automation", "Browser handoff and assisted navigation settings", Icons.Rounded.Public) { onOpenSettings("browser") }
-        ActionRow("Phone tools & diagnostics", "Network Radar, Game Sentinel, files and local device utilities", Icons.Rounded.Tune) { onOpenSettings("tools") }
-        Text("SYSTEM", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("All settings & permissions", "Open the complete settings index and advanced configuration", Icons.Rounded.Settings) { onOpenSettings(null) }
+        PageHeading("Activity", "Follow Orion's work, review outcomes and manage the systems behind active objectives.")
+        OrionInterruptionBanner()
+        OrionActivityHubCard(onOpenAll = { showHistory = true })
+        ActionRow("Run history & evidence", "Search completed tasks, inspect tool steps and resume interrupted work", Icons.Rounded.History) {
+            showHistory = true
+        }
+        if (showHistory) OrionRunSheet(
+            onDismiss = { showHistory = false },
+            onResume = onResumeTask
+        )
+        Text("EXECUTION", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Tasks & workflows", "Open objectives, queued work, progress and recovery controls", Icons.Rounded.TaskAlt, onOpenTasks)
+        ActionRow("Specialist agents", "Review delegated work and open specialist workspaces", Icons.Rounded.SmartToy, onOpenAgents)
+        Text("SYSTEM HEALTH", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Soul Engine", "Inspect runtime readiness, lifecycle state and self-tests", Icons.Rounded.Hub, onOpenSoulEngine)
+        ActionRow("Chronos & Watcher", "Review background monitoring and scheduled objectives", Icons.Rounded.Bolt) {
+            onOpenFeature("watcher")
+        }
+        ActionRow("Proactive objectives", "Review briefings, schedules and proactive task controls", Icons.Rounded.Bolt) {
+            onOpenFeature("proactive")
+        }
+        ActionRow("Self-extension lab", "Review extension builds, sandbox checks and version history", Icons.Rounded.AutoAwesome, onOpenExtensions)
+        Text("CONTEXT & LEARNING", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Memory & learning", "Review remembered context and recorded lessons", Icons.Rounded.Memory, onOpenMemory)
+        Text(
+            "Execution history and evidence remain owned by their existing task and runtime services. This page is the unified entry point; it does not fabricate live activity.",
+            color = Muted, fontSize = 10.sp, lineHeight = 15.sp
+        )
+    }
+}
+
+@Composable
+private fun SettingsPage(onOpenSettings: (String?) -> Unit) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(13.dp)
+    ) {
+        PageHeading(
+            "Settings",
+            "Configure Orion's intelligence, voice, connected services and device access."
+        )
+        Text("AI & EXPERIENCE", color = Silver, fontSize = 10.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Providers & models", "Connections, model selection, vision and fallback", Icons.Rounded.AutoAwesome) {
+            onOpenSettings("providers")
+        }
+        ActionRow("Voice & speech", "Microphone, wake word, spoken replies and live voice", Icons.Rounded.GraphicEq) {
+            onOpenSettings("voice")
+        }
+        ActionRow("Character & response style", "Orion identity and response presentation", Icons.Rounded.SmartToy) {
+            onOpenSettings("character")
+        }
+        Text("CONNECTED SERVICES", color = Silver, fontSize = 10.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Integrations & MCP", "Telegram, connected services, tool scopes and server access", Icons.Rounded.Public) {
+            onOpenSettings("integrations")
+        }
+        ActionRow("Browser & automation", "Assisted browsing and automation preferences", Icons.Rounded.Public) {
+            onOpenSettings("browser")
+        }
+        Text("DEVICE & PRIVACY", color = Silver, fontSize = 10.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Permissions & device access", "Android permissions, accessibility and notification access", Icons.Rounded.Shield) {
+            onOpenSettings("permissions")
+        }
+        ActionRow("Screen recording", "Android-approved capture and recording access", Icons.Rounded.Settings) {
+            onOpenSettings("recording")
+        }
+        ActionRow("Phone tools & diagnostics", "Network, device utilities and local diagnostics", Icons.Rounded.Tune) {
+            onOpenSettings("tools")
+        }
+        Text("SYSTEM", color = Silver, fontSize = 10.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Orion health & updates", "Capability readiness, diagnostics and release status", Icons.Rounded.Shield) {
+            onOpenSettings("health")
+        }
+        ActionRow("Advanced settings index", "Open the complete settings directory", Icons.Rounded.Settings) {
+            onOpenSettings(null)
+        }
     }
 }
 
 @Composable
 private fun PageHeading(title: String, subtitle: String) {
     Column(Modifier.padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("ORION  /  STUDIO", color = Silver, fontSize = 10.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
+        Text("ORION  /  ${title.uppercase()}", color = Silver, fontSize = 10.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
         Text(title, color = Copy, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.5).sp)
         Text(subtitle, color = Muted, fontSize = 14.sp)
     }
@@ -532,11 +560,11 @@ private fun MiniTile(title: String, icon: androidx.compose.ui.graphics.vector.Im
 }
 
 @Composable
-private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
+private fun BottomDock(selected: String, onOpenChat: () -> Unit, onSelect: (String) -> Unit) {
     val items = listOf(
         Triple("Home", Icons.Rounded.Home, "Home"),
-        Triple("Chat", Icons.Rounded.ChatBubbleOutline, "Chat"),
-        Triple("Tools", Icons.Rounded.Widgets, "Tools"),
+        Triple("Workspace", Icons.Rounded.Widgets, "Workspace"),
+        Triple("Activity", Icons.Rounded.TaskAlt, "Activity"),
         Triple("Settings", Icons.Rounded.Settings, "Settings")
     )
     Row(
@@ -550,23 +578,30 @@ private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        items.take(2).forEach { (label, icon, _) ->
-            DockItem(label, icon, selected == label, Modifier.weight(1f)) { onSelect(label) }
+        DockItem(items[0].first, items[0].second, selected == items[0].first, Modifier.weight(1f)) {
+            onSelect(items[0].first)
+        }
+        DockItem(items[1].first, items[1].second, selected == items[1].first, Modifier.weight(1f)) {
+            onSelect(items[1].first)
         }
         Box(
-            Modifier.weight(1.12f).height(58.dp).clip(RoundedCornerShape(16.dp))
-                .background(PanelRaised)
-                .border(1.5.dp, Silver, RoundedCornerShape(16.dp))
-                .clickable { onSelect("Live") },
+            Modifier.weight(1.15f).height(58.dp).clip(RoundedCornerShape(16.dp))
+                .background(Silver)
+                .border(1.dp, Silver, RoundedCornerShape(16.dp))
+                .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onOpenChat)
+                .semantics { contentDescription = "Open central Orion chat"; role = androidx.compose.ui.semantics.Role.Button },
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Icon(Icons.Rounded.GraphicEq, null, tint = Color.White, modifier = Modifier.size(25.dp))
-                Text("LIVE", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Icon(Icons.Rounded.ChatBubbleOutline, null, tint = Ink, modifier = Modifier.size(23.dp))
+                Text("CHAT", color = Ink, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             }
         }
-        items.drop(2).forEach { (label, icon, _) ->
-            DockItem(label, icon, selected == label, Modifier.weight(1f)) { onSelect(label) }
+        DockItem(items[2].first, items[2].second, selected == items[2].first, Modifier.weight(1f)) {
+            onSelect(items[2].first)
+        }
+        DockItem(items[3].first, items[3].second, selected == items[3].first, Modifier.weight(1f)) {
+            onSelect(items[3].first)
         }
     }
 }
@@ -588,4 +623,3 @@ private fun DockItem(label: String, icon: androidx.compose.ui.graphics.vector.Im
         Text(label, color = tint, fontSize = 9.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
     }
 }
-
