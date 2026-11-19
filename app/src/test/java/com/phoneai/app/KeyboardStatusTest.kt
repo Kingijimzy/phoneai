@@ -5,6 +5,7 @@ import org.junit.Test
 
 class KeyboardStatusTest {
     private val pkg = "com.phoneai.app"
+    private val orionIme = "com.phoneai.app/com.phoneai.app.OrionKeyboardService"
 
     @Test fun enabledWhenListedAndCaseInsensitive() {
         assertTrue(KeyboardStatus.enabled(pkg) { listOf("com.other", "COM.PHONEAI.APP") })
@@ -24,5 +25,19 @@ class KeyboardStatusTest {
         assertFalse(KeyboardStatus.selected(pkg) { "" })
         assertFalse(KeyboardStatus.selected(pkg) { "com.other/.Ime" })
         assertFalse(KeyboardStatus.selected(pkg) { throw IllegalStateException("settings unavailable") })
+    }
+
+    @Test fun anImeIsUsableOnlyWhenSelectedAndEnabled() {
+        assertTrue(KeyboardStatus.usable(orionIme, listOf("com.other/.Ime", orionIme)))
+        // Android can report a selected IME that is no longer enabled; that must not be trusted.
+        assertFalse(KeyboardStatus.usable(orionIme, listOf("com.other/.Ime")))
+        assertFalse(KeyboardStatus.usable(orionIme, null))
+        assertFalse(KeyboardStatus.usable(orionIme, emptyList()))
+        assertFalse(KeyboardStatus.usable(null, listOf(orionIme)))
+        assertFalse(KeyboardStatus.usable("", listOf(orionIme)))
+    }
+
+    @Test fun enabledListLookupFailureIsUnknownNotUsable() {
+        assertFalse(KeyboardStatus.usable(orionIme, null))
     }
 }

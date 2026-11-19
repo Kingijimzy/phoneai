@@ -4,12 +4,14 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.inputmethodservice.InputMethodService
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.widget.LinearLayout
@@ -21,66 +23,106 @@ import android.widget.TextView
  * Privacy invariant: this IME only sends explicit key actions to the focused editor. It never
  * calls getTextBeforeCursor/getTextAfterCursor/getSelectedText/getExtractedText, never observes
  * typed content, and never sends keystrokes to Orion's AI providers.
+ *
+ * Agent text entry prefers AccessibilityNodeInfo.ACTION_SET_TEXT, which needs no keyboard switch,
+ * no system picker and no wait. The IME path remains as a fallback for fields that reject
+ * set-text, and it only runs when Orion's keyboard is genuinely selected and enabled.
  */
 class OrionKeyboardService : InputMethodService() {
     companion object {
-        private data class TypeRequest(
-            val text: String,
-            val targetPackage: String?,
-            val done: java.util.concurrent.CountDownLatch = java.util.concurrent.CountDownLatch(1),
-            @Volatile var result: String = "error: Orion keyboard did not accept the text request"
-        )
-
         @Volatile private var active: OrionKeyboardService? = null
-        @Volatile private var pending: TypeRequest? = null
 
         /**
-         * Sends an explicit agent-provided string through the active IME connection.
-         * It never reads text back from the editor. If Orion is not the active IME,
-         * it opens Android's system picker and waits for the user to select it.
+         * Enters agent-provided text into the focused field.
+         *
+         * Route 1 (preferred): accessibility ACTION_SET_TEXT — deterministic, instant, verifiable
+         * by reading the field back. Route 2: Orion's own InputConnection, used only when Orion is
+         * already the active, enabled IME. The old behaviour opened Android's keyboard picker and
+         * blocked for 25 seconds; when the owner never tapped the picker that produced the
+         * misleading "Orion Private Keyboard was not selected" failure on every attempt.
          */
         fun typeIntoFocusedField(context: android.content.Context, text: String, targetPackage: String?): String {
             OrionKeyboardPolicy.validateRequest(text)?.let { return it }
+
+            accessibilitySetText(text, targetPackage)?.let { return it }
+
             val service = active
-            val selectedIme = try {
-                android.provider.Settings.Secure.getString(
-                    context.contentResolver,
-                    android.provider.Settings.Secure.DEFAULT_INPUT_METHOD
-                )
-            } catch (_: Exception) { null }
             val ourIme = android.content.ComponentName(context, OrionKeyboardService::class.java)
                 .flattenToString()
+            val selectedIme = KeyboardStatus.selectedIme(context)
+            val orionEnabled = KeyboardStatus.usable(ourIme, KeyboardStatus.enabledImes(context))
+
             // Do not trust a stale InputConnection retained after Android switches to another IME.
-            if (service != null && selectedIme == ourIme && service.currentInputConnection != null) {
+            if (service != null && orionEnabled && selectedIme == ourIme && service.currentInputConnection != null) {
                 return service.commitAgentText(text, targetPackage)
             }
-            val request = TypeRequest(text, targetPackage)
-            synchronized(OrionKeyboardService::class.java) {
-                if (pending != null) return "error: another keyboard typing request is already waiting"
-                pending = request
+            if (!orionEnabled) {
+                return "error: this field rejected accessibility text entry and Orion Private Keyboard is not enabled in Android. Enable it once in Settings > System > Languages & input > On-screen keyboard, then retry. Nothing was typed."
             }
-            try {
-                val imm = context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
-                imm.showInputMethodPicker()
-                if (!request.done.await(25, java.util.concurrent.TimeUnit.SECONDS)) {
-                    synchronized(OrionKeyboardService::class.java) {
-                        if (pending === request) pending = null
-                    }
-                    return "error: Orion Private Keyboard was not selected in Android's keyboard picker. Select it and retry the typing action."
+            if (selectedIme != ourIme) {
+                runCatching {
+                    val imm = context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+                        as? android.view.inputmethod.InputMethodManager
+                    imm?.showInputMethodPicker()
                 }
-                return request.result
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                synchronized(OrionKeyboardService::class.java) {
-                    if (pending === request) pending = null
-                }
-                return "error: typing was interrupted before Orion Keyboard became active"
-            } catch (e: Exception) {
-                synchronized(OrionKeyboardService::class.java) {
-                    if (pending === request) pending = null
-                }
-                return "error: could not open the Android keyboard picker: ${e.javaClass.simpleName}"
+                return "error: this field rejected accessibility text entry and Orion Private Keyboard is enabled but not active. The keyboard picker was opened - select Orion Private Keyboard, then retry. Nothing was typed."
             }
+            return "error: Orion Private Keyboard is active but Android has no input connection to the focused field. Tap the field and retry. Nothing was typed."
+        }
+
+        /**
+         * Writes through the accessibility node, the same primitive device automation uses.
+         * Returns null when the field cannot be located or refuses the action, so the caller can
+         * fall back to the privacy keyboard instead of reporting a false success.
+         */
+        private fun accessibilitySetText(text: String, targetPackage: String?): String? {
+            val service = PhoneAiService.instance ?: return null
+            val root = runCatching { service.rootInActiveWindow }.getOrNull() ?: return null
+            val field = runCatching { root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()
+                ?: findEditable(root)
+                ?: return null
+            if (field.isPassword) return "error: refusing to type into a password field"
+            val fieldPackage = field.packageName?.toString()
+            if (!targetPackage.isNullOrBlank() && !fieldPackage.isNullOrBlank() && fieldPackage != targetPackage) {
+                return "error: focused editor changed before text was entered; the text was not typed"
+            }
+            val arguments = Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+            }
+            var accepted = runCatching {
+                field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+            }.getOrDefault(false)
+            if (!accepted) {
+                runCatching {
+                    if (!field.isFocused) field.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                }
+                runCatching { field.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
+                runCatching { Thread.sleep(60L) }
+                accepted = runCatching {
+                    field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+                }.getOrDefault(false)
+            }
+            if (!accepted) return null
+            runCatching { field.refresh() }
+            val current = runCatching { field.text?.toString() }.getOrNull()
+            return when {
+                current == null ->
+                    "typed via accessibility ACTION_SET_TEXT; the field does not expose its text, so the write is unverified"
+                current == text ->
+                    "typed via accessibility ACTION_SET_TEXT; verified by reading the focused field back"
+                else ->
+                    "error: the field accepted ACTION_SET_TEXT but its content does not match the requested text, so the write is unverified"
+            }
+        }
+
+        private fun findEditable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+            if (node.isEditable && node.isVisibleToUser) return node
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                val found = findEditable(child)
+                if (found != null) return found
+            }
+            return null
         }
 
         private fun isPasswordInput(info: EditorInfo?): Boolean {
@@ -98,12 +140,7 @@ class OrionKeyboardService : InputMethodService() {
     // the typing stream has been idle, rather than switching keyboards after every type call.
     private val imeRestoreHandler = Handler(Looper.getMainLooper())
     private val restorePreviousIme = Runnable {
-        val selectedIme = runCatching {
-            android.provider.Settings.Secure.getString(
-                contentResolver,
-                android.provider.Settings.Secure.DEFAULT_INPUT_METHOD
-            )
-        }.getOrNull()
+        val selectedIme = KeyboardStatus.selectedIme(this)
         val ourIme = android.content.ComponentName(this, OrionKeyboardService::class.java)
             .flattenToShortString()
         if (OrionKeyboardPolicy.shouldRestorePreviousIme(selectedIme, ourIme)) {
@@ -159,25 +196,7 @@ class OrionKeyboardService : InputMethodService() {
         super.onStartInputView(info, restarting)
         active = this
         imeRestoreHandler.removeCallbacks(restorePreviousIme)
-        val request = synchronized(OrionKeyboardService::class.java) { pending }
-        // Agent typing uses a 1×1 invisible IME view; the normal keyboard is not shown
-        // over the target app. Ordinary user keyboard sessions still use the full UI.
-        setInputView(if (request != null) buildAgentInputView() else buildKeyboard())
-        if (request != null) {
-            request.result = commitAgentText(request.text, request.targetPackage)
-            synchronized(OrionKeyboardService::class.java) {
-                if (pending === request) pending = null
-            }
-            request.done.countDown()
-        }
-    }
-
-    private fun buildAgentInputView(): View = View(this).apply {
-        layoutParams = ViewGroup.LayoutParams(1, 1)
-        visibility = View.INVISIBLE
-        isFocusable = false
-        isFocusableInTouchMode = false
-        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        setInputView(buildKeyboard())
     }
 
     private fun commitAgentText(text: String, targetPackage: String?): String {
