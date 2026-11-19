@@ -122,11 +122,18 @@ internal object OrionVoiceExecutionPolicy {
         OrionContextualIntentInterpreter.Kind.AMBIGUOUS_REFERENCE
     )
 
+    /**
+     * [toolsAvailable] comes from the measured execution envelope. When Orion can act at all, every spoken turn goes through the one
+     * tool-capable brain and the model decides whether the words are a request or just conversation; the word lists below are only
+     * the fallback for when no tool-capable provider is reachable.
+     */
     fun shouldRouteToCommand(
         command: String,
         recentTurns: List<Pair<String, String>>,
-        activeObjective: String
+        activeObjective: String,
+        toolsAvailable: Boolean = false
     ): Boolean =
+        toolsAvailable ||
         OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
             OrionContextualIntentInterpreter.resolve(command, recentTurns, activeObjective).kind in contextualActionKinds
 }
@@ -973,6 +980,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
             "For current facts, call the appropriate registered live-data or research tool directly and ground the answer in its returned evidence. Never emit an ACTION marker to hand work to another planner. "+
             "For code, scripts, files, tools and images, use registered native tools directly to create the artifact, save it where requested, execute and test when requested, inspect actual results, and report verified paths and outputs. Never emit an ACTION marker. "+
             "For phone actions (open apps, tap, send, search, inspect the screen, media control), call the exact registered native tool directly. Inspect its result and verify the outcome. Use the registered native tool directly. Android OS permissions and external authentication remain authoritative. Obtain owner approval at the exact operation boundary for private-data access, file writes/modifications, destructive deletion/wipe, and script/package installation or execution. Do not ask again after the exact operation was approved. Never emit an ACTION marker or route the request to a second planner. " +
+            voiceTurnNote() +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
             "\n\n" + ToolRegistry.promptSection(q, ToolGate.statusFor(svc)) + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + capabilityGap.let { if (it.isBlank()) "" else "\n\n" + it } + OrionCoordinator.summary().let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc), svc) + OrionExperience.requestBlock(svc, q).let { if (it.isBlank()) "" else "\n\n" + it } + OrionRules.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + OrionMemoryCompactor.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + OrionMase.block(svc) + "\n\n" + OrionIdentity.LOCK + (if (Prefs.voice(svc)) "\n\nVOICE: your words are spoken aloud as you write them. Open with one short, natural spoken line (what you are about to do or your immediate reaction) before any tool call, speak like a person (warm, dry humour when it fits, your own view), keep spoken parts plain sentences without markdown, and put code, tables and long data in tool calls or fenced blocks, which are never read out." else "") + "\n"
@@ -1362,10 +1370,13 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         talkNim.beginCommand()
         // Voice actions enter the same conversational brain and native-tool loop as typed chat.
         // Do not send voice requests through the legacy JSON-planner execution path.
+        val envelope = runCatching { OrionAdaptivePlan.assess(svc) }.getOrNull()
+        val toolsAvailable = envelope?.mode == OrionAdaptivePlan.Mode.FULL || envelope?.mode == OrionAdaptivePlan.Mode.REDUCED
         if (OrionVoiceExecutionPolicy.shouldRouteToCommand(
-                command, recentConversationTurns(), contextualActiveObjective()
+                command, recentConversationTurns(), contextualActiveObjective(), toolsAvailable
             )) {
-            runConversation(command)
+            voiceHeardTurn = true
+            try { runConversation(command) } finally { voiceHeardTurn = false }
             return
         }
         recordOwnerTurn(command, "standard voice")
@@ -1377,7 +1388,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             val prompt = OrionPersona.CORE + "\nYou are Orion in a hands-free voice conversation. " +
                 "This is conversation, not phone-command mode. Never execute, plan, or call tools for phone actions. " +
                 "Do not open apps, tap screens, browse websites, send messages, change settings, or perform transactions. " +
-                "If they clearly ask Orion to perform a phone action, explain briefly that hands-free conversation cannot execute it yet and that the main chat can handle it. Do not claim or imply that an action was routed or performed from this live-call path. The live-call path cannot execute actions; main chat applies the same native execution path and Android OS permissions. " +
+                "Actions are not reachable on this connection right now (" + (envelope?.let { OrionAdaptivePlan.render(it) } ?: "no execution envelope") + "). If they ask for something to be done, say plainly what is blocking it and that you will do it as soon as it clears; never say you are unable in general and never claim an action happened. " +
                 "Respond like a thoughtful human conversational partner: concise, direct, natural spoken language, usually 1-3 sentences. " +
                 "No markdown, lists, emoji, robotic disclaimers, or repetitive greetings. Ask a single useful follow-up only when needed. " +
                 OrionVoicePersona.INSTRUCTIONS + " " + OrionIdentity.LOCK + " " +
@@ -1435,6 +1446,12 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         }
         ui.say(safeAnswer)
     }
+
+    /** True while a turn that arrived by microphone runs through the full brain, so confirmation judgement can account for ambient speech. */
+    @Volatile private var voiceHeardTurn = false
+
+    private fun voiceTurnNote(): String = if (!voiceHeardTurn) "" else
+        "VOICE TURN: this was heard through the microphone, so it may include background speech or a half-sentence. Judge from meaning whether Kingi is actually asking you for something; if it is not for you, just answer naturally or stay quiet. Act decisively on clear requests. For an irreversible or outward action (sending, calling, paying, deleting) that was not clearly instructed, confirm it aloud in one short sentence first. "
 
     @Volatile
     var stopped = false

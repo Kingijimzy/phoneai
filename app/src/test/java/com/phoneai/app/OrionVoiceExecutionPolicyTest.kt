@@ -15,6 +15,11 @@ class OrionVoiceExecutionPolicyTest {
         assertFalse(OrionVoiceExecutionPolicy.shouldRouteToCommand("Tell me a short story", emptyList(), ""))
     }
 
+    @Test fun whenToolsAreReachableEverySpokenTurnGoesToTheOneBrain() {
+        assertTrue(OrionVoiceExecutionPolicy.shouldRouteToCommand("could you sort out my afternoon", emptyList(), "", toolsAvailable = true))
+        assertTrue(OrionVoiceExecutionPolicy.shouldRouteToCommand("how are you", emptyList(), "", toolsAvailable = true))
+    }
+
     @Test fun contextualVoiceFollowUpsContinueTheExistingObjective() {
         val turns = listOf(
             "user" to "Investigate the PhoneAI integration and repair the central task lifecycle",
