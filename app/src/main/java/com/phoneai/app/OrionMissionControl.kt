@@ -58,7 +58,7 @@ internal object OrionMissionControl {
         synchronized(lock) {
             val id = "m" + (++seq).toString(36) + now.toString(36).takeLast(4)
             var life = TaskLifecycle()
-            repeat(5) { life = life.advance() ?: life } // UNDERSTAND→PLAN→CHECK→AUTHORIZE→EXECUTE
+            repeat(4) { life = life.advance() ?: life } // UNDERSTAND→PLAN→CHECK→AUTHORIZE→EXECUTE
             val m = Mission(id, request.replace(Regex("\\s+"), " ").take(160), surface, parentId?.takeIf { missions.containsKey(it) }, life, null, mode, now)
             missions[id] = m
             trim()
