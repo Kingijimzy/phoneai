@@ -5,7 +5,7 @@ package com.phoneai.app
  * instead of waiting for the whole reply. Code fences are held back (never spoken); the first chunk is allowed to
  * break early at a clause so the first word arrives fast, later chunks end at sentence boundaries.
  */
-internal class OrionSpeechStreamer(private val clock: () -> Long = System::currentTimeMillis, private val maxSpokenChars: Int = 360) {
+internal class OrionSpeechStreamer(private val maxSpokenChars: Int = 360, private val clock: () -> Long = System::currentTimeMillis) {
     private val buf = StringBuilder()
     private var emitted = 0
     private var lastFeed = 0L
