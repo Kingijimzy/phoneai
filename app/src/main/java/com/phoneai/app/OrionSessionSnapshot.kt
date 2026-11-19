@@ -9,13 +9,19 @@ internal data class OrionSessionSnapshot(
     val sourceLoadDiagnostics: List<String>
 ) {
     fun render(tokenBudget: Int): String {
-        val safeSections = sections.filter { it.isNotBlank() }
+        val split = ContextRelevance.split(sections.filter { it.isNotBlank() }, request)
+        OrionBrain.rememberDeferred(split.deferred)
+        val safeSections = split.keep
         val packed = ContextWindowBudget.pack(safeSections, tokenBudget.coerceAtLeast(256))
         val receipt = buildString {
             appendLine("CENTRAL BRAIN SESSION SNAPSHOT")
             appendLine("session_id=${sessionId.ifBlank { "unavailable" }}; captured_at_ms=$capturedAtMillis; request_chars=${request.length}.")
             appendLine("source_loads=" + sourceLoadDiagnostics.joinToString("; ").take(1800))
             appendLine("sections_loaded=${packed.includedSections}; sections_omitted=${packed.omittedSections}; sections_truncated=${packed.truncatedSections}; estimated_tokens=${packed.estimatedTokens}; budget_tokens=$tokenBudget.")
+            if (split.deferred.isNotEmpty()) {
+                appendLine("not_pushed_because_unrelated_to_this_request=" + split.deferred.joinToString(" | ") { ContextRelevance.label(it) }.take(900) +
+                    ". Nothing is hidden: call brain {action:\"context\", name:\"<part of the label>\"} to read any of them.")
+            }
             if (packed.omittedSectionLabels.isNotEmpty()) {
                 appendLine("omitted_context_sections=" + packed.omittedSectionLabels.take(12).joinToString(" | "))
             }
