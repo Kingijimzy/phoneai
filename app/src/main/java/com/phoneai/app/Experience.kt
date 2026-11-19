@@ -95,12 +95,22 @@ internal object ExperiencePolicy {
     fun prune(list: List<Experience>, now: Long, max: Int = MAX): List<Experience> =
         if (list.size <= max) list else list.sortedByDescending { value(it, now) }.take(max).sortedByDescending { it.lastAt }
 
-    private fun stem(w: String): String = when {
-        w.length > 5 && w.endsWith("ing") -> w.dropLast(3)
-        w.length > 4 && w.endsWith("ed") -> w.dropLast(2)
-        w.length > 4 && w.endsWith("es") -> w.dropLast(2)
-        w.length > 3 && w.endsWith("s") && !w.endsWith("ss") -> w.dropLast(1)
-        else -> w
+    private fun stem(w: String): String {
+        val word = w.lowercase()
+        return when {
+            word.length > 5 && word.endsWith("ies") -> word.dropLast(3) + "y"
+            word.length > 5 && word.endsWith("ing") -> {
+                val root = word.dropLast(3)
+                if (root.length > 2 && root.last() == root[root.lastIndex - 1] &&
+                    root.last() !in "lsz") root.dropLast(1) else root
+            }
+            word.length > 5 && word.endsWith("ed") -> word.dropLast(2)
+            word.length > 5 && (word.endsWith("ches") || word.endsWith("shes") ||
+                word.endsWith("xes") || word.endsWith("zes")) -> word.dropLast(2)
+            // Most English plurals add only "s": messages -> message, not messag.
+            word.length > 4 && word.endsWith("s") && !word.endsWith("ss") -> word.dropLast(1)
+            else -> word
+        }
     }
 
     /**
