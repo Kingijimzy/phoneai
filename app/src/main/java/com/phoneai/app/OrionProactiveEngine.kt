@@ -142,11 +142,26 @@ internal object OrionProactiveEngine {
             )
         }
 
+        // 4f. Background work Orion started has finished: tell the owner without being asked.
+        OrionMissionControl.attention(now)?.let { m ->
+            val failed = m.outcome == "failed"
+            candidates += ProactiveItem(
+                kind = "mission",
+                title = m.request.take(60),
+                body = (if (failed) "The background job \"${m.request.take(60)}\" failed" else "The background job \"${m.request.take(60)}\" is finished") +
+                    (if (m.evidence.isNotBlank()) ": ${m.evidence.take(120)}" else ".") +
+                    (if (m.outcome == "unverified") " Not independently verified yet." else ""),
+                urgency = if (failed) 2 else 1
+            )
+        }
+
         // 5. Pick the single most urgent item (ties: earliest due).
         val best = candidates
             .sortedWith(compareByDescending<ProactiveItem> { it.urgency }
                 .thenBy { it.dueAtMillis ?: Long.MAX_VALUE })
             .firstOrNull() ?: return null
+
+        if (best.kind == "mission") OrionMissionControl.attention(now)?.let { OrionMissionControl.markAnnounced(it.id) }
 
         // 6. Record the interruption so throttling applies.
         Prefs.setLastProactiveSpokenAt(app, now)

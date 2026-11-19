@@ -55,8 +55,23 @@ internal object OrionCoordinator {
     }
 
     /** Run [block] as one admitted request from [surface]; returns null (and does not run it) when the brain is shut down. */
-    fun <T> run(c: Context, surface: Surface, text: String, block: () -> T): T? =
-        if (admit(c, surface, text)) holdAwake(c, block) else null
+    fun <T> run(c: Context, surface: Surface, text: String, block: () -> T): T? {
+        if (!admit(c, surface, text)) return null
+        val envelope = runCatching { OrionAdaptivePlan.assess(c) }.getOrNull()
+        // A mission is only a top-level one when it comes from a real surface; spawned work attaches under the objective that asked.
+        val mission = OrionMissionControl.begin(surface.name.lowercase(), text, parentId = OrionMissionControl.currentId(), mode = envelope?.mode?.name ?: "UNASSESSED")
+        val owner = OrionMissionControl.Owner("brain-" + surface.name.lowercase(), OrionMissionControl.OwnerKind.BRAIN)
+        OrionMissionControl.claim(mission.id, owner)
+        var ok = false
+        try {
+            val out = OrionMissionControl.within(mission.id) { holdAwake(c, block) }
+            ok = true
+            return out
+        } finally {
+            // The front door has no verifier of its own: finishing without evidence leaves the mission awaiting verification, never "done".
+            OrionMissionControl.finish(mission.id, ok, verified = false, evidence = if (ok) "reply produced; completion not independently verified" else "run ended with an error")
+        }
+    }
 
     /** Long jobs keep the CPU awake (bounded) so Doze cannot freeze a build, install or research run mid-way. */
     private fun <T> holdAwake(c: Context, block: () -> T): T {
@@ -70,6 +85,7 @@ internal object OrionCoordinator {
     fun summary(): String {
         val r = recent(20)
         if (r.isEmpty()) return ""
-        return "COORDINATOR (recent requests by surface): " + surfaceCounts(r).entries.joinToString { "${it.key.name.lowercase()}=${it.value}" }
+        return "COORDINATOR (recent requests by surface): " + surfaceCounts(r).entries.joinToString { "${it.key.name.lowercase()}=${it.value}" } +
+            OrionMissionControl.summary().let { if (it.isBlank()) "" else "\n$it" }
     }
 }
