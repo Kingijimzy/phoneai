@@ -181,7 +181,15 @@ internal class Nim internal constructor(private val ctx: Context, private val co
     @Volatile internal var tier: ModelRouter.Tier? = null
 
     private fun selectedModel(p: Provider, vision: Boolean): String {
-        tier?.let { t -> ModelRouter.modelFor(t, p.id, vision, Prefs.modelRouting(ctx) && Prefs.autoSwitch(ctx), Prefs.cachedModels(ctx, p.id).toSet())?.let { return it } }
+        tier?.let { t ->
+            val routingOn = Prefs.modelRouting(ctx) && Prefs.autoSwitch(ctx)
+            ModelRouter.modelFor(t, p.id, vision, routingOn, Prefs.cachedModels(ctx, p.id).toSet())?.let { return it }
+            // Every other provider: scale effort from its own catalogue relative to the model the owner selected.
+            if (routingOn && !vision && p.id != "nvidia") {
+                val owner = if (commandMode && Prefs.commandProviderId(ctx) == p.id) Prefs.commandModelId(ctx) ?: Prefs.model(ctx, p, false) else Prefs.model(ctx, p, false)
+                OrionDifficulty.pick(t, owner, Prefs.cachedModels(ctx, p.id))?.let { return it }
+            }
+        }
         if (commandMode && !vision && Prefs.commandProviderId(ctx) == p.id) {
             Prefs.commandModelId(ctx)?.let { return it }
         }

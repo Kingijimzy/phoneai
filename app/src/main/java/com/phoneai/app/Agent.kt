@@ -1067,6 +1067,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
         // which model reasons about it; the model decides whether to act. directActionRoute only guards the no-tools warning.
         val activeModel = commandNim
         activeModel.beginCommand()
+        // Effort follows difficulty on every provider (see OrionDifficulty); the owner's chosen model is the baseline.
+        activeModel.tier = runCatching {
+            OrionDifficulty.tierFor(command, correction = ExperiencePolicy.isCorrection(command), objectiveNodes = OrionObjectiveGraph.load(svc)?.nodes?.size ?: 0)
+        }.getOrNull()
         stopped = false
         setRequestScope(command)
         if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
