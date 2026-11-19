@@ -42,6 +42,8 @@ internal object OrionWorkers {
             "Do not ask questions; decide. If something truly needs the owner (deleting or wiping data, or a trade approval), skip that part and say so. " +
             "Your final reply is the report: what you did, what you found or built, where the files are, and what is left."
 
+    private fun state0(cancelled: Boolean, failure: String) = !cancelled && failure.isEmpty()
+
     fun runningCount(): Int = jobs.values.count { it.state == State.RUNNING }
 
     fun spawn(svc: PhoneAiService, objective: String, label: String = ""): String {
@@ -54,11 +56,16 @@ internal object OrionWorkers {
         val ui = WorkerUi(id)
         val agent = Agent(svc, ui, background = true)
         live[id] = agent
+        // One owner: this worker owns a child mission under the objective that spawned it, and cancelling that objective stops it.
+        val mission = OrionMissionControl.begin("worker", goal, mode = runCatching { OrionAdaptivePlan.assess(svc).mode.name }.getOrDefault("UNASSESSED"))
+        OrionMissionControl.claim(mission.id, OrionMissionControl.Owner(id, OrionMissionControl.OwnerKind.WORKER)) { agent.stop() }
         Thread({
             var failure = ""
             try { agent.run(prompt(name, goal)) } catch (e: Throwable) { failure = e.message ?: e.javaClass.simpleName }
             val cancelled = agent.stopped
             live.remove(id)
+            if (cancelled) OrionMissionControl.cancel(mission.id)
+            else OrionMissionControl.finish(mission.id, state0(cancelled, failure), verified = false, evidence = (if (failure.isNotEmpty()) "error: $failure" else ui.last))
             val prev = jobs[id] ?: return@Thread
             val state = when { cancelled -> State.CANCELLED; failure.isNotEmpty() -> State.FAILED; else -> State.DONE }
             val result = (if (failure.isNotEmpty()) "error: $failure\n" else "") + ui.last

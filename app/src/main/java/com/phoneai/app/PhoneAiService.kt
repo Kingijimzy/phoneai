@@ -2079,12 +2079,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             // an accidental tap, message, or other action.
             val explicitCommand = afterWake(t)?.takeIf { it.isNotBlank() }
             worker.execute {
+                val ack = OrionAcknowledge.arm { line -> say(line) }
                 try {
                     if (explicitCommand != null) OrionCoordinator.run(this, OrionCoordinator.Surface.VOICE, explicitCommand) { agent.run(explicitCommand) }
                     else OrionCoordinator.run(this, OrionCoordinator.Surface.VOICE, t) { agent.runLiveConversation(t) }
                 } catch (e: Exception) {
                     say("I couldn't reach the AI just now. Please try again.")
-                }
+                } finally { ack.cancel() }
                 main.post { finishRun() }
             }
             return
@@ -2462,6 +2463,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     // ---------------------------------------------------------------- AgentUi
 
     override fun say(raw: String) {
+        OrionAcknowledge.noteSpeech()
         // Never show the internal untrusted-data wrapper; keep only the assistant's own words.
         val full = OrionEvidenceText.strip(raw).ifBlank { raw }
         // Code belongs to the workspace: long blocks are saved there and the chat shows a compact card.

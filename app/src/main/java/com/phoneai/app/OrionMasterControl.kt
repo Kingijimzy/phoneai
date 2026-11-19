@@ -47,6 +47,7 @@ internal object OrionMasterControl {
         if (!saved) return false
 
         // Stop the central brain and every independently running Orion automation.
+        runCatching { OrionMissionControl.cancelAll() }
         runCatching { OrionUnifiedExecutionCoordinator.cancelAll(app, "orion_master_shutdown") }
         OrionRuntime(app).stop()
         runCatching {

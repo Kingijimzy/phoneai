@@ -175,6 +175,22 @@ object RouteMemoryStore {
         } catch (_: Exception) { false }
     }
 
+    /** Verified routes as (task label, ordered tools) for the muscle-memory selector. Empty when learning is off or unreadable. */
+    fun verifiedRoutes(c: Context): List<Pair<String, List<String>>> {
+        if (!Prefs.routeLearning(c)) return emptyList()
+        return synchronized(lock) {
+            try {
+                val routes = read(c)
+                (0 until routes.length()).mapNotNull { routes.optJSONObject(it) }
+                    .filter { it.optString("evidence") == "independently_verified_completed_task" }
+                    .map { r ->
+                        val names = r.optJSONArray("tools") ?: JSONArray()
+                        r.optString("task") to (0 until names.length()).map { names.optString(it) }.filter { it.isNotBlank() }
+                    }
+            } catch (_: Exception) { emptyList() }
+        }
+    }
+
     /** Return only relevant, decrypted task labels and tool names as planning hints. */
     fun promptBlock(c: Context, request: String?): String {
         if (!Prefs.routeLearning(c) || request.isNullOrBlank()) return ""

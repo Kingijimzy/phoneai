@@ -127,6 +127,7 @@ internal object OrionCentralBrain {
 
         // The brain observes the same registries the executor uses; names alone never imply
         // that a capability is enabled or that an external account is connected.
+        addObservedSection("execution_envelope") { OrionAdaptivePlan.render(OrionAdaptivePlan.assess(app)) + OrionMissionControl.summary().let { if (it.isBlank()) "" else "\n$it" } }
         addObservedSection("live_capability_registry") { OrionBrain.summary(OrionBrain.registry(app)) + "\n" + OrionProviderHealth.report(app).lineSequence().first() }
         val registered = observed("tool_registry", emptyList<String>()) { ToolRegistry.names().distinct().sorted() }
         val knownPacks = observed("capability_pack_catalog", emptyList<String>()) { AgentPolicy.packs.map { it.id }.sorted() }
@@ -337,6 +338,7 @@ internal object OrionCentralBrain {
                 }
             }
 
+        OrionMuscleMemory.block(app, contextQuery).takeIf { it.isNotBlank() }?.let { sections += it }
         runCatching { RouteMemoryStore.promptBlock(app, contextQuery) }
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
