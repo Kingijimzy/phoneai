@@ -15,7 +15,7 @@ internal object GeminiLivePolicy {
     const val SESSION_LIMIT_MS = 40 * 60 * 1000L
     const val MAX_RECONNECTS = 12
     const val ASK_ORION = "ask_orion"
-    const val MAX_TOOL_RESULT_CHARS = 700
+    const val MAX_TOOL_RESULT_CHARS = 1800
 
     /** "Live 03:12 · 24 min left today" shown during a call. */
     fun counterText(elapsedMs: Long, leftMs: Long): String {

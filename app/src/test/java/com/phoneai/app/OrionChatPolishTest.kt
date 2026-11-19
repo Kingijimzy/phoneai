@@ -31,8 +31,8 @@ class OrionChatPolishTest {
 
     @Test fun geminiOnlyGetsTheGistOfLongResults() {
         assertEquals("Done.", GeminiLivePolicy.clipToolResult("  "))
-        val clipped = GeminiLivePolicy.clipToolResult("word ".repeat(400))
-        assertTrue(clipped.length < 800 && clipped.contains("full details are in the chat"))
+        val clipped = GeminiLivePolicy.clipToolResult("word ".repeat(1000))
+        assertTrue(clipped.length < GeminiLivePolicy.MAX_TOOL_RESULT_CHARS + 60 && clipped.contains("full details are in the chat"))
         assertEquals("short", GeminiLivePolicy.clipToolResult("short"))
     }
 

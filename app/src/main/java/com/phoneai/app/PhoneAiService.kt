@@ -1080,6 +1080,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             }
             handsActive = false
             stopOfflineWakeDetector()
+            val aiLinesBefore = transcript.count { it.first == "ai" }
             appendTranscript("me", command)
             mainChatListener?.onMessage("me", command)
             mainChatListener?.onStatus("Tool request handed off from $source", currentMode())
@@ -1098,8 +1099,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     say("I couldn't complete that request. " + (e.message ?: e.javaClass.simpleName).take(180))
                 } finally {
                     activeRequestSource = previousSource
-                    val result = transcript.lastOrNull { it.first == "ai" }?.second
-                        ?: "The request finished without a final response. Check the task transcript."
+                    // The reply to THIS request: lines Orion added since it started, never an older turn's answer.
+                    val fresh = transcript.filter { it.first == "ai" }.drop(aiLinesBefore).joinToString("\n") { it.second }.trim()
+                    val result = fresh.ifBlank { "The request ran but produced no final statement; check the task transcript for what it did." }
                     main.post {
                         finishRun()
                         completion?.invoke(result)
