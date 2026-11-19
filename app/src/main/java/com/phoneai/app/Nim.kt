@@ -178,7 +178,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
     }
 
     /** Set by a caller that wants a lighter or heavier model for this one request (NVIDIA text only). */
-    @Volatile internal var tier: ModelRouter.Tier? = null
+    @Volatile override var tier: ModelRouter.Tier? = null
 
     private fun selectedModel(p: Provider, vision: Boolean): String {
         tier?.let { t ->
