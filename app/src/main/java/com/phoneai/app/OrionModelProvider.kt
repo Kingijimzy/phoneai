@@ -35,6 +35,11 @@ internal data class OrionModelTurn(
 )
 
 internal interface OrionModelProvider {
+    /** Per-turn reasoning tier. Wrappers must delegate this to the underlying model provider. */
+    var tier: ModelRouter.Tier?
+        get() = null
+        set(value) { /* Providers without adaptive model selection safely ignore the hint. */ }
+
     /** One bounded chat turn. Returns the assistant's reply text or throws AiException/RuntimeException. */
     fun chat(
         messages: JSONArray,

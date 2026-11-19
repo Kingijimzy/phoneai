@@ -23,6 +23,11 @@ internal class AccountAwareModelProvider(
     @Volatile private var activeAntigravity: LinuxCommandSession? = null
     @Volatile private var accountRequests = 0
 
+    // Preserve the caller's per-turn difficulty choice through this provider wrapper.
+    override var tier: ModelRouter.Tier?
+        get() = fallback.tier
+        set(value) { fallback.tier = value }
+
     private fun selected(vision: Boolean): Provider {
         if (commandMode && !vision) {
             Prefs.commandProviderId(app)?.let { Providers.find(it) }?.let { return it }

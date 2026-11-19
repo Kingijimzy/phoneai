@@ -25,7 +25,7 @@ data class Experience(
 
 /** Pure ranking/merge rules so the learning loop is unit-testable without Android. */
 internal object ExperiencePolicy {
-    const val MAX = 60
+    const val MAX = 400
     private const val DAY = 86_400_000L
 
     /** Only clean, successful task traces may reinforce reusable routines. */
@@ -44,7 +44,7 @@ internal object ExperiencePolicy {
         val unsafe = setOf("password", "passcode", "secret", "token", "apikey", "authorization", "bearer", "pin", "otp")
         return MemoryRanking.tokens(redacted)
             .filter { it.lowercase() !in unsafe && it.length <= 24 && !it.all(Char::isDigit) }
-            .take(8).sorted().joinToString(" ")
+            .take(14).sorted().joinToString(" ")
     }
 
     fun tipFor(tool: String, category: String): String = when (category) {
@@ -81,7 +81,52 @@ internal object ExperiencePolicy {
             out[i] = new.copy(count = old.count + 1, steps = new.steps.ifBlank { old.steps })
         } else out.add(new)
         out.sortByDescending { it.lastAt }
-        return out.take(MAX)
+        return prune(out, System.currentTimeMillis())
+    }
+
+    /** How much a lesson is worth keeping: corrections and resolved failures outrank one-off failures; reinforcement and recency add. */
+    fun value(e: Experience, now: Long): Double {
+        val kind = when (e.kind) { "correction" -> 3.0; "resolved_failure" -> 2.5; "worked" -> 2.0; else -> 1.0 }
+        val ageDays = ((now - e.lastAt) / DAY).coerceAtLeast(0)
+        return kind * (1.0 + (e.count - 1).coerceAtMost(9) * 0.3) / (1.0 + ageDays / 60.0)
+    }
+
+    /** Over the cap, the least valuable lessons go, not the oldest: an old correction beats a fresh trivial failure. */
+    fun prune(list: List<Experience>, now: Long, max: Int = MAX): List<Experience> =
+        if (list.size <= max) list else list.sortedByDescending { value(it, now) }.take(max).sortedByDescending { it.lastAt }
+
+    private fun stem(w: String): String {
+        val word = w.lowercase()
+        return when {
+            word.length > 5 && word.endsWith("ies") -> word.dropLast(3) + "y"
+            word.length > 5 && word.endsWith("ing") -> {
+                val root = word.dropLast(3)
+                if (root.length > 2 && root.last() == root[root.lastIndex - 1] &&
+                    root.last() !in "lsz") root.dropLast(1) else root
+            }
+            word.length > 5 && word.endsWith("ed") -> word.dropLast(2)
+            word.length > 5 && (word.endsWith("ches") || word.endsWith("shes") ||
+                word.endsWith("xes") || word.endsWith("zes")) -> word.dropLast(2)
+            // Most English plurals add only "s": messages -> message, not messag.
+            word.length > 4 && word.endsWith("s") && !word.endsWith("ss") -> word.dropLast(1)
+            else -> word
+        }
+    }
+
+    /**
+     * Recall similarity that does not collapse when the stored gist is longer than the new request: word forms are
+     * stemmed ("sending"/"sends"/"send") and an overlap measure lets a short request find a longer lesson.
+     */
+    fun recallSimilarity(stored: String, request: String): Double {
+        val a = MemoryRanking.tokens(stored).map(::stem).toSet()
+        val b = MemoryRanking.tokens(request).map(::stem).toSet()
+        if (a.isEmpty() || b.isEmpty()) return 0.0
+        val inter = a.intersect(b).size.toDouble()
+        if (inter == 0.0) return 0.0
+        val jaccard = inter / a.union(b).size
+        val overlap = inter / minOf(a.size, b.size)
+        val blended = 0.5 * jaccard + 0.5 * overlap * (if (inter >= 2 || minOf(a.size, b.size) <= 2) 1.0 else 0.6)
+        return maxOf(MemoryRanking.similarity(stored, request), blended)
     }
 
     /** similarity x recency x reinforcement; unrelated lessons stay out of the prompt. */
@@ -89,7 +134,7 @@ internal object ExperiencePolicy {
         val q = gist(request)
         if (q.isBlank()) return emptyList()
         return list.map { e ->
-            val sim = MemoryRanking.similarity(e.task, q)
+            val sim = recallSimilarity(e.task, q)
             val ageDays = ((now - e.lastAt) / DAY).coerceAtLeast(0)
             val recency = 1.0 / (1.0 + ageDays / 30.0)
             val reinforce = 1.0 + (e.count - 1).coerceAtMost(4) * 0.25
