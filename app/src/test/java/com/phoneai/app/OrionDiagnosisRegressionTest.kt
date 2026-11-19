@@ -18,7 +18,7 @@ class OrionDiagnosisRegressionTest {
     @Test fun handoffResultIsThisRunsReplyNotTheLastAiLine() {
         val svc = src("PhoneAiService.kt")
         assertTrue(svc.contains("aiLinesBefore"))
-        assertFalse(svc.contains("transcript.lastOrNull { it.first == \"ai\" }?.second"))
+        assertFalse(svc.contains("val result = transcript.lastOrNull { it.first == \"ai\" }"))
     }
 
     @Test fun handoffCarriesEnoughDetailToSpeakAFullAnswer() {
