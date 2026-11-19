@@ -18,7 +18,7 @@ class OrionSpeedAndSpeechTest {
     }
 
     @Test fun missingStageIsNotCountedAsZero() {
-        OrionSpeedTrace.begin(0); OrionSpeedTrace.end("m", 2_000)
+        OrionSpeedTrace.begin(1_000); OrionSpeedTrace.end("m", 3_000)
         assertEquals(-1L, OrionSpeedTrace.turns().single().firstAudioMs)
         assertTrue(OrionSpeedTrace.report().contains("first sound: median n/a"))
     }
