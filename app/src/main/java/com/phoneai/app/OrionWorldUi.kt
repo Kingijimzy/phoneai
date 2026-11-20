@@ -144,7 +144,7 @@ private fun OrionHud(w: org.json.JSONObject?, busy: Boolean, onClose: () -> Unit
                     Text(if (charging) "POWER · CHARGING" else "POWER", color = batteryTint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box(Modifier.weight(1f).height(14.dp).clip(RoundedCornerShape(4.dp)).border(1.dp, batteryTint, RoundedCornerShape(4.dp))) {
-                            Box(Modifier.fillMaxSize().padding(2.dp)) { Box(Modifier.fillMaxSize(((pct.coerceIn(0, 100)) / 100f).coerceAtLeast(0.02f).let { if (pct < 0) 0.02f else it }).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(batteryTint.copy(alpha = if (charging) 0.55f + 0.45f * pulse else 1f))) }
+                            Box(Modifier.fillMaxSize().padding(2.dp)) { Box(Modifier.fillMaxSize(((pct.coerceIn(0, 100)) / 100f).coerceAtLeast(0.02f).let { if (pct < 0) 0.02f else it }).clip(RoundedCornerShape(2.dp)).background(batteryTint.copy(alpha = if (charging) 0.55f + 0.45f * pulse else 1f))) }
                         }
                         Text(if (pct >= 0) "$pct%" else "?", color = OrionUiPalette.text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }

@@ -1341,7 +1341,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             if (OrionChatFlood.isTransient(e.message) && transientRetries < 3) {
                 // Fix it, don't report it: back off, let the next attempt pick another route, and carry on from the preserved state.
                 transientRetries++
-                Thread.sleep(OrionRules.delayMs(transientRetries, 0))
+                Thread.sleep(OrionRetryPolicy.delayMs(transientRetries, 0))
                 if (!stopped) { runConversationBody("Continue exactly where you left off; the connection dropped for a moment. Original request: " + command.take(400)); return }
             }
             ui.say("I couldn't reach the AI just now after retrying. " + OrionChatFlood.cleanError(e.message))
