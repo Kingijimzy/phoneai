@@ -1200,7 +1200,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                         args = args,
                         cancelled = { stopped },
                         isRegistered = { candidate -> nativeTools.any { it.name == candidate } && ToolRegistry.find(candidate) != null },
-                        execute = ::dispatchNativeTool
+                        execute = { toolName, toolArgs -> OrionToolGuard.annotate(toolName, toolArgs, dispatchNativeTool(toolName, toolArgs)) }
                     )
                     if (callbackToolReceipts.length() >= 12) callbackToolReceipts.remove(0)
                     callbackToolReceipts.put(JSONObject()
@@ -1277,7 +1277,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                     calls = turn.toolCalls,
                     cancelled = { stopped },
                     isRegistered = { name -> nativeTools.any { it.name == name } && ToolRegistry.find(name) != null },
-                    execute = ::dispatchNativeTool
+                    execute = { toolName, toolArgs -> OrionToolGuard.annotate(toolName, toolArgs, dispatchNativeTool(toolName, toolArgs)) }
                 )
                 val priorRoundFailed = OrionReflexion.roundFailed(lastRoundResults)
                 lastRoundResults = outcomes.map { it.content }
