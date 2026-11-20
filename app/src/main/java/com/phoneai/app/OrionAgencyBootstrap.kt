@@ -31,15 +31,21 @@ internal object OrionAgencyBootstrap {
             else -> raw
         }
 
-        if (goal.isNotBlank() && !OrionMissionLock.isBackgroundNoise(goal)) {
+        // Only real work becomes the standing mission. A greeting or "how are you" must not overwrite or resume it.
+        val worthy = isContinue || OrionObjectiveRelevance.isMissionWorthy(goal)
+        if (worthy && goal.isNotBlank() && !OrionMissionLock.isBackgroundNoise(goal)) {
             OrionMissionLock.setActive(context, goal)
         }
 
         val recoveryHint = OrionForcedRecovery.afterFailure(goal.ifBlank { raw }, "prior", "", 0)
         val extra = buildString {
             appendLine("AGENCY (Ultron-style):")
-            appendLine("- Active mission: ${OrionMissionLock.activeGoal(context).ifBlank { "(none)" }}")
-            appendLine("- Own this goal until done or the user cancels. Do not switch to trading/soul-watch.")
+            if (worthy) {
+                appendLine("- Active mission: ${OrionMissionLock.activeGoal(context).ifBlank { "(none)" }}")
+                appendLine("- Own this goal until done or the user cancels. Do not switch to trading/soul-watch.")
+            } else {
+                appendLine("- The owner's current message is conversational. Answer exactly what they said. Any older open mission is background only: do not resume, announce or act on it unless they ask.")
+            }
             appendLine("- On tool failure: change tool/method (e.g. ${recoveryHint.nextToolHint}). Do not only apologize.")
             appendLine("- Never invent objective ids. Unknown ids bind to the RUNNING/READY node.")
             appendLine("- Success requires a tool receipt that matches the user goal.")

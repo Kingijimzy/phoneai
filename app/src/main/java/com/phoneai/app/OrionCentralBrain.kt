@@ -129,7 +129,7 @@ internal object OrionCentralBrain {
         // The brain observes the same registries the executor uses; names alone never imply
         // that a capability is enabled or that an external account is connected.
         addObservedSection("self_facts") { OrionSelfFacts.block(app) }
-        addObservedSection("mission_evidence") { OrionMissionControl.evidence(OrionMissionLock.activeGoal(app)).let { e -> OrionWorkers.liveSummary().let { w -> if (w.isBlank()) e else (e + "\n" + w).trim() } } }
+        addObservedSection("mission_evidence") { OrionMissionControl.evidence(OrionMissionLock.goalFor(app, request), OrionMissionLock.activeGoal(app)).let { e -> OrionWorkers.liveSummary().let { w -> if (w.isBlank()) e else (e + "\n" + w).trim() } } }
         addObservedSection("execution_envelope") { OrionAdaptivePlan.render(OrionAdaptivePlan.assess(app)) + OrionMissionControl.summary().let { if (it.isBlank()) "" else "\n$it" } }
         addObservedSection("live_capability_registry") { OrionBrain.summary(OrionBrain.registry(app)) + "\n" + OrionProviderHealth.report(app).lineSequence().first() }
         val registered = observed("tool_registry", emptyList<String>()) { ToolRegistry.names().distinct().sorted() }
@@ -233,7 +233,7 @@ internal object OrionCentralBrain {
         sections += OrionEntityPhilosophy.stateBlock(
             OrionEntityPhilosophy.State(
                 currentIntent = continuity?.resolvedObjective?.takeIf { it.isNotBlank() } ?: request,
-                activeObjective = continuityObjective.ifBlank { savedSoulGoal },
+                activeObjective = continuityObjective.ifBlank { savedSoulGoal.takeIf { OrionObjectiveRelevance.related(it, request, 0L) }.orEmpty() },
                 registeredCapabilityCount = registered.size,
                 enabledSkillCount = enabledSkills.size,
                 memoryAvailable = recentTurns.isNotEmpty() ||

@@ -38,6 +38,12 @@ internal object OrionMissionLock {
     fun activeGoal(context: Context): String =
         load(context)?.takeIf { it.status == "active" || it.status == "paused" }?.goal.orEmpty()
 
+    /** The standing goal only when the current request concerns it; otherwise empty, so stale work never steers a new message. */
+    fun goalFor(context: Context, request: String, now: Long = System.currentTimeMillis()): String {
+        val m = load(context)?.takeIf { it.status == "active" || it.status == "paused" } ?: return ""
+        return if (OrionObjectiveRelevance.related(m.goal, request, now - m.updatedAt)) m.goal else ""
+    }
+
     fun markDone(context: Context) {
         val m = load(context) ?: return
         save(context, m.copy(status = "done", updatedAt = System.currentTimeMillis()))
