@@ -25,6 +25,13 @@ internal object OrionChatFlood {
         text.lineSequence().filterNot { l -> receipts.any { l.trim().startsWith(it, ignoreCase = true) } }
             .joinToString("\n").trim()
 
+    /** True for failures a retry or another route will usually cure: timeouts, 408/429/5xx, dropped connections. */
+    fun isTransient(message: String?): Boolean {
+        val m = message.orEmpty().lowercase()
+        if (Regex("\\b(408|425|429|500|502|503|504)\\b").containsMatchIn(m)) return true
+        return listOf("timed out", "timeout", "too slowly", "unable to resolve", "connection reset", "unexpected end of stream", "failed to connect", "connection abort", "rate limit", "overloaded").any { it in m }
+    }
+
     /** A provider's HTML error page becomes one short sentence; long bodies are trimmed. */
     fun cleanError(message: String?): String {
         val m = message.orEmpty()
@@ -33,6 +40,10 @@ internal object OrionChatFlood {
             val code = Regex("\\b([45]\\d\\d)\\b").find(m.substring(0, html.range.first))?.value
             val who = m.substringBefore(":").takeIf { it.length in 1..40 && !it.contains('<') }
             return (who?.let { "$it: " } ?: "") + "the provider returned an error page" + (code?.let { " (HTTP $it)" } ?: "") + ". It is probably down or unreachable; Orion will try another route."
+        }
+        if (isTransient(m) && m.contains('{')) {
+            val code = Regex("\\b([45]\\d\\d)\\b").find(m)?.value
+            return "the provider was too slow or busy" + (code?.let { " (HTTP $it)" } ?: "") + "."
         }
         return m.replace(Regex("\\s+"), " ").trim().take(400).ifEmpty { "Please try again." }
     }

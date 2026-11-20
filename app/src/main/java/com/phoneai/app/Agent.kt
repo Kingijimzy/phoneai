@@ -1022,7 +1022,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
         }
     }
 
-    fun runConversation(input: String) = withInteractionTrace { runConversationBody(input) }
+    @Volatile private var transientRetries = 0
+    fun runConversation(input: String) = withInteractionTrace { transientRetries = 0; runConversationBody(input) }
 
     /** Shared owner-turn bookkeeping for typed chat and action-capable voice turns. */
     private fun recordOwnerTurn(command: String, source: String) {
@@ -1337,7 +1338,13 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             if (toolRounds > 0) {
                 preserveToolTranscript("The model follow-up failed after tool execution. Review the recorded tool results before retrying; do not repeat non-idempotent actions without checking their outcome.")
             }
-            ui.say("I couldn't reach the AI just now. " + OrionChatFlood.cleanError(e.message))
+            if (OrionChatFlood.isTransient(e.message) && transientRetries < 3) {
+                // Fix it, don't report it: back off, let the next attempt pick another route, and carry on from the preserved state.
+                transientRetries++
+                Thread.sleep(OrionRules.delayMs(transientRetries, 0))
+                if (!stopped) { runConversationBody("Continue exactly where you left off; the connection dropped for a moment. Original request: " + command.take(400)); return }
+            }
+            ui.say("I couldn't reach the AI just now after retrying. " + OrionChatFlood.cleanError(e.message))
             return
         }
         if (stopped) return
