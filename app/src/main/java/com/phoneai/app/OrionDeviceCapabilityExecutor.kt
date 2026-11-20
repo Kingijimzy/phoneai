@@ -60,7 +60,8 @@ internal object OrionDeviceCapabilityExecutor {
             val mismatch = expectedPackageError(args, service)
             val id = args.optInt("id", -1)
             if (mismatch != null) mismatch
-            else if (id < 0 || service.nodeInfo(id) == null) "error: target ID is stale or missing. Run read_screen and choose a current ID."
+            else if ((id < 0 || service.nodeInfo(id) == null) && args.optString("text").isNotBlank()) tools.clickText(args.optString("text"))
+            else if (id < 0 || service.nodeInfo(id) == null) "error: target ID is stale or missing (IDs die after any app or window change). Retry with click_text using the label you can see, or click {text} , or run read_screen once and use a fresh ID."
             else service.clickId(id)
         }
         "click_text" -> expectedPackageError(args, service) ?: tools.clickText(args.optString("text"))

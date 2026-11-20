@@ -74,9 +74,27 @@ internal object OrionFactStore {
         // OrionFactExtractor emits the configured owner name as subject; normalize it
         // to the canonical owner node so "my ..." queries can retrieve the relationship.
         val subject = "user"
+        val replaced = supersede(c, b, d)
         val memory = MemoryStore.addOwnerConfirmed(c, "fact", "$subject — $b — $d")
             ?: return "error: owner fact could not be saved"
-        return "remembered: $a — $b — $d (memory #${memory.id})"
+        return "remembered: $a — $b — $d (memory #${memory.id})" + if (replaced > 0) "; replaced $replaced older conflicting fact(s)" else ""
+    }
+
+    private val multiValued = Regex("(?i)\\b(likes?|loves?|enjoys?|owns?|has|have|uses?|knows?|plays?|follows?|speaks?|friends?|built|wants?|reads?|watches?|listens?|visited|tried|hobby|hobbies|interests?|skills?)\\b")
+
+    /** Pure: would a new value for [predicate] replace an older one (single-valued) rather than sit beside it (a list)? */
+    internal fun isSingleValued(predicate: String): Boolean = predicate.isNotBlank() && !multiValued.containsMatchIn(predicate.replace('_', ' '))
+
+    /** The owner's newer statement is the truth: reject older approved facts with the same predicate and a different value. */
+    private fun supersede(c: Context, predicate: String, newObject: String): Int {
+        if (!isSingleValued(predicate)) return 0
+        val p = predicate.replace('_', ' ').trim()
+        return runCatching {
+            MemoryStore.all(c).filter { m ->
+                MemoryGovernancePolicy.canUseInPrompt(m.reviewStatus, m.sensitivity) &&
+                    GraphPolicy.extract(m.text).any { (a, rel, b) -> a == "user" && rel.replace('_', ' ').trim().equals(p, true) && !b.trim().equals(newObject.trim(), true) }
+            }.count { MemoryStore.setReviewStatus(c, it.id, "rejected") }
+        }.getOrDefault(0)
     }
 
     /** Query only approved facts from the canonical MemoryStore/SQLite graph. */
