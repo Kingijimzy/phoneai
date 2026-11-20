@@ -90,10 +90,11 @@ internal object OrionModelRegistry {
     }
 
     /** One native tool round: were the calls registered, with object arguments, and did they execute without failure. */
-    fun recordToolRound(c: Context, label: String, calls: Int, validArgs: Int, failed: Int, priorRoundFailed: Boolean) {
+    fun recordToolRound(c: Context, label: String, calls: Int, validArgs: Int, failed: Int, priorRoundFailed: Boolean, succeeded: Int = validArgs) {
         val (prov, model) = split(label) ?: return
         if (calls <= 0) return
-        record(c, prov, model, Dim.TOOL_CALLING, if (validArgs > 0) 1.0 else 0.0)
+        // Outcome-based: a call only counts as the right tool when it was registered, ran, and did not come back as a failure.
+        record(c, prov, model, Dim.TOOL_CALLING, succeeded.coerceIn(0, calls).toDouble() / calls)
         record(c, prov, model, Dim.STRUCTURED_ARGS, validArgs.toDouble() / calls)
         record(c, prov, model, Dim.MULTI_STEP, if (failed == 0) 1.0 else 0.0)
         if (priorRoundFailed) record(c, prov, model, Dim.ERROR_RECOVERY, if (failed == 0) 1.0 else 0.0)
