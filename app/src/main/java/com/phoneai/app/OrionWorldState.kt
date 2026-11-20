@@ -85,5 +85,7 @@ internal object OrionWorldState {
 
     /** The prompt section: the JSON itself, plus how to treat it. */
     fun section(c: Context): String =
-        "WORLD STATE (live JSON read from the device this turn; trust it over memory, and say so when a field is unreadable):\n" + json(c)
+        "WORLD STATE (live JSON read from the device this turn; trust it over memory, and say so when a field is unreadable):\n" + json(c) +
+            "\nROUTES (ranked from measured outcomes this session; pick the top route for the kind of work, switch to the next when one fails; never switch the owner's screen to recover):\n" +
+            runCatching { OrionStrategy.summary(build(c)) }.getOrDefault("unavailable")
 }

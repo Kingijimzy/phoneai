@@ -200,7 +200,7 @@ internal class LinuxRuntimeInstaller(
         val packageRecoveryRequired = packageMutation &&
             (result.cancelled || result.timedOut || result.exitCode in setOf(9, 137, 143))
         return if (result.cancelled) "error: Linux command cancelled; the guest process was terminated."
-        else if (result.timedOut) "error: Linux command timed out after ${boundedTimeoutMs} ms" +
+        else if (result.timedOut) "error: Linux command timed out after ${boundedTimeoutMs} ms. HOW TO FIX: run long work in the background (nohup sh -c '...' > out.log 2>&1 &), return at once, then poll with short commands (tail out.log); never sleep or block near the limit. Do not open another app or screen to recover." +
             if (packageMutation) ". The next Linux command will restore the pinned base rootfs before continuing." else ""
         else "exit=${result.exitCode}\n${result.output}" +
             if (packageRecoveryRequired) "\nPackage operation was interrupted; the next Linux command will restore the pinned base rootfs before continuing." else ""
