@@ -1007,10 +1007,17 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         fun attempt(p: Provider, hasBackup: Boolean): String {
             if (cancelled) throw RuntimeException("Stopped.")
             onStatus?.invoke("Using provider: ${p.label}...")
-            val answer = chatOne(p, messages, vision, maxTokens, temperature, hasBackup, fastResponse, delta)
+            val startedAt = System.currentTimeMillis()
+            var firstAt = 0L
+            val timedDelta: ((String) -> Unit)? = delta?.let { d -> { part -> if (firstAt == 0L) firstAt = System.currentTimeMillis(); d(part) } }
+            val answer = chatOne(p, messages, vision, maxTokens, temperature, hasBackup, fastResponse, timedDelta)
             lastSuccess[mode] = p.label + " / " + selectedModel(p, vision)
             lastFailure.remove(p.id)
             OrionProviderHealth.record(ctx, p.id, true, "")
+            if (!vision) {
+                if (firstAt > 0L) OrionModelRegistry.recordLatency(ctx, p.label, selectedModel(p, vision), firstAt - startedAt)
+                if (failures.isNotEmpty()) OrionModelRegistry.record(ctx, p.label, selectedModel(p, vision), OrionModelRegistry.Dim.ERROR_RECOVERY, 1.0)
+            }
             return answer
         }
         val order = listOf(primary) + backups
@@ -1026,6 +1033,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 val msg = (e.message ?: "Unknown provider error").take(220)
                 lastFailure[p.id] = msg
                 OrionProviderHealth.record(ctx, p.id, false, msg)
+                if (!vision) OrionModelRegistry.record(ctx, p.label, selectedModel(p, vision), OrionModelRegistry.Dim.ERROR_RECOVERY, 0.0)
                 failures.add(msg)
                 if (!ProviderFallbackPolicy.shouldTryBackup(e, Prefs.autoSwitch(ctx)) || i == order.size - 1) {
                     val tried = if (order.size > 1) " Tried ${i + 1} provider(s): ${order.take(i + 1).joinToString { it.label }}." else

@@ -1279,8 +1279,14 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                     isRegistered = { name -> nativeTools.any { it.name == name } && ToolRegistry.find(name) != null },
                     execute = ::dispatchNativeTool
                 )
+                val priorRoundFailed = OrionReflexion.roundFailed(lastRoundResults)
                 lastRoundResults = outcomes.map { it.content }
                 OrionLiveMetrics.onTools(outcomes.size, outcomes.count { OrionReflexion.looksFailed(it.content) })
+                runCatching {
+                    OrionModelRegistry.recordToolRound(svc, Nim.lastChatModel(), turn.toolCalls.size,
+                        outcomes.count { it.dispatched },
+                        outcomes.count { OrionReflexion.looksFailed(it.content) }, priorRoundFailed)
+                }
                 outcomes.forEach { outcome ->
                     ui.note(activityNote(outcome.call.name, outcome.call.arguments, outcome.content))
                     messages.put(JSONObject()
