@@ -6,13 +6,26 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OrionDelegatedContextPolicyTest {
-    @Test fun tradingWorkerGetsOnlyTradingStrategyAndJournalContext() {
+    /**
+     * The trading specialist must be able to read evidence-traced educator video notes,
+     * which live in the "project" memory category, and relevant user-document passages.
+     * Private personal categories stay closed: this is a widening of educational scope only.
+     */
+    @Test fun tradingWorkerGetsStrategyJournalAndEducationalProjectNotes() {
         val scope = OrionDelegatedContextPolicy.forAccess(OrionAgentDelegation.Access.TRADING_ANALYSIS)
         assertTrue(scope.includeTradingStrategyAndJournal)
-        assertTrue(scope.memoryCategories.isEmpty())
+        assertEquals(setOf("project"), scope.memoryCategories)
+        assertTrue(scope.includeKnowledgePassages)
         assertFalse(scope.includeAgentLessons)
         assertFalse(scope.includeTaskSummaries)
-        assertFalse(scope.includeKnowledgePassages)
+    }
+
+    /** Guard the privacy boundary: personal categories must never leak into trading analysis. */
+    @Test fun tradingWorkerNeverGetsPersonalMemoryCategories() {
+        val scope = OrionDelegatedContextPolicy.forAccess(OrionAgentDelegation.Access.TRADING_ANALYSIS)
+        listOf("fact", "preference", "decision", "conversation", "task").forEach {
+            assertFalse("$it must stay out of trading delegation", it in scope.memoryCategories)
+        }
     }
 
     @Test fun researchWorkerGetsFactsAndKnowledgeButNoTasksOrLessons() {
