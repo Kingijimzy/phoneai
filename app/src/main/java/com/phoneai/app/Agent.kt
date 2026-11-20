@@ -1177,10 +1177,14 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         }
 
         fun dispatchNativeTool(name: String, args: JSONObject): String {
+            // Predict before acting: a certain failure is skipped, a risk is attached to the result.
+            val forecast = runCatching { OrionForesight.assess(name, OrionWorldState.build(svc)) }.getOrNull()
+            if (forecast?.level == OrionForesight.Level.BLOCK) return "error: " + forecast.consequence
             val stepId = OrionRunLog.begin(name, args)
             OrionProgress.bind(stepId)
             return try {
                 dispatchNativeToolInner(name, args).also { OrionRunLog.finish(stepId, it, OrionReflexion.looksFailed(it)) }
+                    .let { r -> forecast?.let { OrionForesight.note(it) }?.takeIf { it.isNotBlank() }?.let { r + "\n" + it } ?: r }
             } catch (e: Throwable) {
                 OrionRunLog.finish(stepId, "error: ${e.message ?: e.javaClass.simpleName}", true)
                 throw e
@@ -1351,7 +1355,30 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             ui.say(explanation)
             return
         }
-        val safeAnswer = inOrionVoice(answer.takeIf { it.isNotBlank() }
+        // Uncertainty check: the model grades itself; below the threshold it must verify with a real lookup first.
+        val meta = OrionMetacognition.parse(answer)
+        var checkedAnswer = meta.text
+        var confidence = meta.confidence
+        var verifiedBy = ""
+        if (confidence != null && confidence < OrionMetacognition.VERIFY_BELOW && !stopped && OrionMetacognition.worthVerifying(command, meta.text)) {
+            ui.note("[METACOGNITION] Confidence ${confidence}% is below ${OrionMetacognition.VERIFY_BELOW}%; verifying with a web search before answering.")
+            val evidence = runCatching { dispatchNativeTool("live_web_search", JSONObject().put("query", command.take(200))) }.getOrDefault("")
+            if (evidence.isNotBlank() && !OrionReflexion.looksFailed(evidence) && !stopped) {
+                val check = JSONArray()
+                for (i in 0 until messages.length()) check.put(messages.get(i))
+                check.put(msg("assistant", meta.text))
+                check.put(msg("user", OrionMetacognition.revisionPrompt(evidence)))
+                val revised = runCatching { talkNim.chat(check, false, 2400, 0.2).trim() }.getOrDefault("")
+                if (revised.isNotBlank()) {
+                    val r = OrionMetacognition.parse(revised)
+                    if (r.text.isNotBlank()) checkedAnswer = r.text
+                    confidence = r.confidence ?: confidence
+                    verifiedBy = "web search"
+                }
+            }
+        }
+        OrionConfidence.record(confidence, verifiedBy)
+        val safeAnswer = inOrionVoice(checkedAnswer.takeIf { it.isNotBlank() }
             ?: "I'm here. What would you like to talk about?")
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", safeAnswer))
