@@ -45,7 +45,14 @@ internal object OrionAppUpdater {
     private fun Release.size() = sizeBytes
 
     private fun token(c: Context) = runCatching { OrionConnectionStore.tokenForConnector(c, "github") }.getOrDefault("")
-    fun installedTag(c: Context): String? = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("tag", null)
+    /** Build number baked into the APK by CI (versionName 1.0.N, the same N as the release tag build-N). */
+    internal fun tagFromVersionName(versionName: String?): String? =
+        Regex("^\\d+\\.\\d+\\.(\\d+)$").find(versionName.orEmpty())?.groupValues?.get(1)?.toLongOrNull()?.takeIf { it > 0 }?.let { "build-$it" }
+
+    fun installedTag(c: Context): String? {
+        val baked = runCatching { tagFromVersionName(c.packageManager.getPackageInfo(c.packageName, 0).versionName) }.getOrNull()
+        return baked ?: c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("tag", null)
+    }
 
     private fun getJson(c: Context, path: String): Pair<Int, String> = try {
         val conn = (URL("https://api.github.com$path").openConnection() as HttpURLConnection).apply {
