@@ -46,28 +46,30 @@ internal object OrionStreamText {
 internal fun OrionLiveStream(status: String, mode: OrbView.Mode, modifier: Modifier = Modifier) {
     var busy by remember { mutableStateOf(false) }
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    var expanded by remember { mutableStateOf(false) }
+    var sheet by remember { mutableStateOf(false) }
     var hud by remember { mutableStateOf(false) }
     var grade by remember { mutableStateOf(OrionConfidence.latest) }
     LaunchedEffect(Unit) { while (true) { busy = OrionEntityLoop.live?.let { it.endedAt == 0L } == true; now = System.currentTimeMillis(); grade = OrionConfidence.latest; kotlinx.coroutines.delay(700L) } }
     val steps = OrionRunLog.currentRun()
     val running = steps.lastOrNull { it.status == OrionRunLog.Status.RUNNING }
     val confidence = OrionConfidenceView.label(grade, now)
-    if (!busy && running == null && confidence == null) { OrionEnvironmentSheet(hud, false) { hud = false }; return }
+    if (!busy && running == null && confidence == null && steps.isEmpty()) { OrionEnvironmentSheet(hud, false) { hud = false }; return }
     val caret by rememberInfiniteTransition(label = "caret").animateFloat(0.15f, 1f, infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "c")
     Column(modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (busy) OrionStreamText.trail(steps).forEach { Text(it, color = OrionUiPalette.muted.copy(alpha = 0.6f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 40.dp)) }
-        Row(Modifier.fillMaxWidth().clickable(enabled = running != null) { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().clickable(enabled = steps.isNotEmpty()) { sheet = true }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OrionOrb(Modifier.size(32.dp).clickable { hud = true }, busy = busy, mode = mode)
             if (busy || running != null) {
                 val line = running?.let { OrionStreamText.nowLine(it) } ?: orionWorkingPhrase(status)
-                Text(line + if (caret > 0.5f) " ▍" else "", color = OrionUiPalette.secondaryText, fontSize = 12.sp, maxLines = if (expanded) 1 else 2, overflow = TextOverflow.Ellipsis,
+                Text(line + if (caret > 0.5f) " ▍" else "", color = OrionUiPalette.secondaryText, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     fontFamily = if (running != null) FontFamily.Monospace else FontFamily.Default, modifier = Modifier.weight(1f))
                 running?.let { Text("${((now - it.startedAt).coerceAtLeast(0L) / 1000)}s", color = OrionUiPalette.muted, fontSize = 10.sp) }
-            } else confidence?.let { Text(it, color = OrionUiPalette.muted, fontSize = 10.sp) }
+            } else {
+                if (steps.isNotEmpty()) Text(">_ " + (if (steps.size == 1) "Ran 1 command" else "Ran ${steps.size} commands") + "  ›", color = OrionUiPalette.secondaryText, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                confidence?.let { Text(it, color = OrionUiPalette.muted, fontSize = 10.sp) }
+            }
         }
-        if (expanded && running != null) Text(running.output.takeLast(900).ifBlank { running.detail }, color = OrionUiPalette.muted, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
-            modifier = Modifier.padding(start = 40.dp, top = 2.dp))
     }
+    if (sheet) OrionRunSheet { sheet = false }
     OrionEnvironmentSheet(hud, busy) { hud = false }
 }

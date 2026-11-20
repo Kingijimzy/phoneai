@@ -22,3 +22,24 @@ class OrionLiveStreamTest {
         assertTrue(t.none { it.contains("d") })
     }
 }
+
+class OrionRunSheetTest {
+    private fun step(args: String = "", detail: String = "", title: String = "Running a command", start: Long = 0L, end: Long = 0L) =
+        OrionRunLog.Step(1, "shell", title, detail, null, start, end, OrionRunLog.Status.DONE, "see https://example.com/page.", args)
+
+    @Test fun commandComesFromArgsThenDetailThenTitle() {
+        assertEquals("ls -la", OrionRunSheetText.commandOf(step(args = "{\"command\":\"ls -la\"}")))
+        assertEquals("cd /w", OrionRunSheetText.commandOf(step(detail = "cd /w")))
+        assertEquals("Running a command", OrionRunSheetText.commandOf(step()))
+    }
+    @Test fun headlineAndLinks() {
+        assertEquals("No steps yet", OrionRunSheetText.headline(emptyList()))
+        assertEquals("Ran 2 steps", OrionRunSheetText.headline(listOf(step(), step())))
+        assertTrue(OrionRunSheetText.links(step()).any { it.startsWith("https://example.com/page") })
+    }
+    @Test fun durationBarsAreRelativeToTheSlowestStep() {
+        val a = step(start = 0L, end = 10_000L); val b = step(start = 0L, end = 5_000L)
+        assertEquals(1f, OrionRunSheetText.share(a, listOf(a, b), 0L), 0.001f)
+        assertEquals(0.5f, OrionRunSheetText.share(b, listOf(a, b), 0L), 0.001f)
+    }
+}

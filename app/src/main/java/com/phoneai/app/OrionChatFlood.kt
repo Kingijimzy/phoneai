@@ -29,7 +29,7 @@ internal object OrionChatFlood {
     fun isTransient(message: String?): Boolean {
         val m = message.orEmpty().lowercase()
         if (Regex("\\b(408|425|429|500|502|503|504)\\b").containsMatchIn(m)) return true
-        return listOf("timed out", "timeout", "too slowly", "unable to resolve", "connection reset", "unexpected end of stream", "failed to connect", "connection abort", "rate limit", "overloaded").any { it in m }
+        return listOf("timed out", "timeout", "too slowly", "unable to resolve", "connection reset", "unexpected end of stream", "failed to connect", "connection abort", "rate limit", "overloaded", "cannot connect", "eofexception", "interrupted after partial text", "unexpected end").any { it in m }
     }
 
     /** A provider's HTML error page becomes one short sentence; long bodies are trimmed. */
