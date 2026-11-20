@@ -143,6 +143,12 @@ internal class OrionPythonCapabilityExecutor(
         else "error: could not archive active version $id; the existing extension remains unchanged"
     }
 
+    /** Tells the model exactly how to get past a policy rejection instead of leaving it to guess. */
+    private fun sandboxHint(runtime: String, summary: String): String =
+        if (runtime == "python" && summary.contains("polic", ignoreCase = true))
+            " HOW TO FIX: the restricted runtime forbids import os/sys/subprocess/socket/pathlib/shutil, requests/urllib/http, open(), input(), eval/exec. Remove those and take data as the input argument, OR re-create this extension with runtime \"python_full\" (real CPython: files, subprocess and network are allowed), then run extension_test again."
+        else ""
+
     private fun testDraft(args: JSONObject, confirm: (String) -> Boolean, stopped: () -> Boolean): String {
         val id = args.optString("id").trim()
         val extension = try { extensionStore.all().firstOrNull { it.id == id } } catch (_: Exception) { null }
@@ -158,7 +164,7 @@ internal class OrionPythonCapabilityExecutor(
         val testLabel = if (extension.runtime == "python_full") "FULL CPYTHON TEST" else "SANDBOX TEST"
         if (!report.passed) {
             testReceipts.remove(id, extension.sourceSha256)
-            return "error: $testLabel FAILED for $id: ${report.summary} Fix the source and test again; the extension is not enabled."
+            return "error: $testLabel FAILED for $id: ${report.summary} Fix the source and test again; the extension is not enabled.${sandboxHint(extension.runtime, report.summary)}"
         }
 
         if (!testReceipts.record(id, report)) {
