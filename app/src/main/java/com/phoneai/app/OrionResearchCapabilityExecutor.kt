@@ -25,15 +25,21 @@ internal object OrionResearchCapabilityExecutor {
         "web_search" -> LiveWebSearch.research(args.optString("query"), cancelled)
         "live_news" -> LiveNews.search(args.optString("query"))
         "live_web_search" -> LiveWebSearch.research(args.optString("query"), cancelled)
-        "fetch_url", "research_web" -> if (args.optString("url").isBlank() && args.optString("query").isNotBlank()) {
-            // Models often send a question to research_web. Search for it instead of failing.
-            LiveWebSearch.research(args.optString("query"), cancelled)
-        } else {
-            val result = BrowserResearch.fetch(args.optString("url"), cancelled)
+        "fetch_url", "research_web" -> {
+            val url = firstArg(args, "url", "link", "page", "href", "uri")
+            val query = firstArg(args, "query", "q", "topic", "question", "search", "text", "prompt")
+            if (url.isBlank() && query.isNotBlank()) {
+                // Models often send a question to research_web. Search for it instead of failing.
+                LiveWebSearch.research(query, cancelled)
+            } else if (url.isBlank()) {
+                "error: research_web needs {url} to read a page or {query} to search; neither was given."
+            } else {
+            val result = BrowserResearch.fetch(url, cancelled)
             val page = result.page
             if (page == null) "error: " + (result.error ?: "could not read webpage")
             else "SOURCE: " + page.sourceUrl + "\nTITLE: " + page.title +
                 "\nUNTRUSTED WEBPAGE CONTENT:\n" + page.text.take(3500)
+            }
         }
         "weather" -> WeatherService.current(args.optString("location"))
         "live_sports" -> LiveSports.answer(args.optString("query")) ?: LiveSports.explainEmpty(args.optString("query"))
@@ -50,4 +56,8 @@ internal object OrionResearchCapabilityExecutor {
         "bybit_public_ticker" -> tools.bybitPublicTicker(args.optString("symbol"))
         else -> "error: research executor does not implement '$tool'."
     }
+
+    /** Models spell the same argument many ways; take the first non-blank alias. */
+    internal fun firstArg(args: org.json.JSONObject, vararg names: String): String =
+        names.firstNotNullOfOrNull { n -> args.optString(n).trim().takeIf { it.isNotEmpty() } }.orEmpty()
 }

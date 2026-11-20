@@ -64,6 +64,7 @@ internal object OrionCoordinator {
         val owner = OrionMissionControl.Owner(ownerId ?: ("brain-" + surface.name.lowercase()), if (ownerId != null) OrionMissionControl.OwnerKind.WORKER else OrionMissionControl.OwnerKind.BRAIN)
         OrionMissionControl.claim(mission.id, owner, onCancel)
         OrionToolGuard.reset()
+        val failedBefore = OrionRunLog.currentRun().count { it.status == OrionRunLog.Status.FAILED }
         OrionEntityLoop.begin(surface.name.lowercase())
         OrionEntityLoop.mark(OrionEntityLoop.Stage.PLAN)
         var ok = false
@@ -77,6 +78,15 @@ internal object OrionCoordinator {
             ok = true
             return out
         } finally {
+            // A clean finished turn on the standing goal closes it, so it stops following the owner into unrelated chats.
+            // "Done" here means finished without a failed step; the mission evidence still says completion is unverified.
+            runCatching {
+                val failedNow = OrionRunLog.currentRun().count { it.status == OrionRunLog.Status.FAILED } > failedBefore
+                if (ok && !failedNow && surface.ownerInitiated) {
+                    val goal = OrionMissionLock.activeGoal(c)
+                    if (goal.isNotBlank() && OrionObjectiveRelevance.related(goal, text, 0L)) OrionMissionLock.markDone(c)
+                }
+            }
             OrionEntityLoop.mark(OrionEntityLoop.Stage.LEARN); OrionEntityLoop.mark(OrionEntityLoop.Stage.REPORT)
             OrionEntityLoop.end()
             // The front door has no verifier of its own: finishing without evidence leaves the mission awaiting verification, never "done".

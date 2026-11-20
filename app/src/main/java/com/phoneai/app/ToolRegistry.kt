@@ -56,7 +56,7 @@ internal object ToolRegistry {
         tool("validate_action", ToolAccess.READ, "validate_action {tool, id?, text?, x?, y?, allow_coordinates?}: local preflight before acting; click needs a current ID, click_text needs visible text, coordinate tools require finite non-negative coordinates, no suitable numbered target, and allow_coordinates=true; does not perform the action"),
         tool("verify_action", ToolAccess.READ, "verify_action {expected_text?, previous_text?, expect_change?}: locally inspect the current screen after an action; a changed screen alone does not prove overall completion"),
         tool("verify_send", ToolAccess.READ, "verify_send {contact, message}: verify exact contact, exact outgoing message, and visible sent/delivered/read status; only PASS confirms the send"),
-        tool("click", ToolAccess.WRITE, "click {id, expected_package?}: click an element from the latest read_screen snapshot only; target must still belong to the same visible app/window and be fresh (15s); hidden/password targets are refused; expected_package, when supplied, must match the foreground app; verify the resulting screen"),
+        tool("click", ToolAccess.WRITE, "click {id, text?, expected_package?}: text is the visible label to fall back on when the id has gone stale (always pass it); click an element from the latest read_screen snapshot only; target must still belong to the same visible app/window and be fresh (15s); hidden/password targets are refused; expected_package, when supplied, must match the foreground app; verify the resulting screen"),
         tool("click_text", ToolAccess.WRITE, "click_text {text, expected_package?}: click a visible, non-password element containing this text; expected_package, when supplied, must match the foreground app"),
         tool("wait_for", ToolAccess.READ, "wait_for {text, seconds}: wait until text appears on screen"),
         tool("tap", ToolAccess.WRITE, "tap {x,y,allow_coordinates:true,expected_package?}: raw touch in screen pixels; expected_package, when supplied, must match the current foreground app; use only when no suitable numbered target exists"),
@@ -445,6 +445,14 @@ internal object ToolRegistry {
             .toString()
     }
 
+    /** True when the tool is registered AND has a working executor, so a call to it can be dispatched safely. */
+    internal fun isImplemented(name: String): Boolean {
+        if (name == "capability_search" || name == "capability_load") return false
+        if (find(name) == null) return false
+        val route = OrionCapabilityAdapters.route(name) ?: return false
+        return OrionRuntimeCapabilityExecutor.supports(route.backend, name)
+    }
+
     /** Load one exact discovered capability without filling the provider declaration budget with an entire search page. */
     internal fun loadCapability(target: MutableList<ToolDefinition>, requestedName: String): String {
         val name = requestedName.trim()
@@ -461,7 +469,8 @@ internal object ToolRegistry {
         }
         return org.json.JSONObject().put("loaded", true).put("tool_name", name)
             .put("backend", route.backend.name.lowercase()).put("schema", definition.inputSchema)
-            .put("already_callable", alreadyCallable).toString()
+            .put("already_callable", alreadyCallable)
+            .put("how_to_call", "Call $name directly now with arguments matching the schema; it is dispatchable even if your tool list does not show it.").toString()
     }
 
     /** Names from the most recent assistant tool-call group, not the entire chat history. */

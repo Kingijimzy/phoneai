@@ -1243,9 +1243,12 @@ class Tools(
         val agent = AgentProfiles.resolveFor(svc, agentName)
             ?: return "error: unknown agent \"$agentName\". Available: " + AgentProfiles.everyone(svc).joinToString(", ") { it.id }
         if (task.isBlank()) return "error: task is required"
-        val parentTaskId = AgentCheckpointStore.evidenceTaskId(svc)
+        // A synchronous specialist call belongs to this turn. Parent it to the live checkpoint when one exists; a stale
+        // finished checkpoint used to make every ask_agent fail with "parent task was paused or stopped".
+        val liveParent = AgentCheckpointStore.liveTaskId(svc)
+        val parentTaskId = liveParent ?: ("turn-" + System.currentTimeMillis())
         val rootObjective = AgentCheckpointStore.pending(svc)?.optString("command")?.takeIf { it.isNotBlank() } ?: task
-        val parentCancelled = { AgentCheckpointStore.cancellationRequested(svc, parentTaskId) }
+        val parentCancelled = { liveParent != null && AgentCheckpointStore.cancellationRequested(svc, liveParent) }
         if (parentCancelled()) return "error: parent task was paused or stopped; no specialist was started."
         val manifest = OrionAgentDelegation.create(agent, parentTaskId, task, parentObjectiveId, rootObjective)
         if (!OrionAgentDelegation.begin(svc, manifest)) return "error: could not persist the specialist delegation record; no agent was started"

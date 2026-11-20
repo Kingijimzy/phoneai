@@ -68,6 +68,15 @@ object AgentCheckpointStore {
         readCheckpoint(c)?.optString("taskId")?.takeIf { it.isNotBlank() }
     }
 
+    /** The checkpoint task id only while that task is genuinely running; a finished or stale checkpoint is not a parent. */
+    fun liveTaskId(c: Context): String? = synchronized(lock) {
+        val cp = readCheckpoint(c) ?: return@synchronized null
+        val id = cp.optString("taskId").takeIf { it.isNotBlank() } ?: return@synchronized null
+        if (cp.optBoolean("stopRequested") || cp.optBoolean("pauseRequested")) return@synchronized null
+        if (cp.optString("status") !in setOf("running", "waiting_for_children")) return@synchronized null
+        id
+    }
+
     /** A specialist must stop accepting work when its exact parent checkpoint is paused/stopped. */
     fun cancellationRequested(c: Context, taskId: String?): Boolean {
         if (taskId.isNullOrBlank()) return false
