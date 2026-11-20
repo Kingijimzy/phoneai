@@ -102,7 +102,7 @@ internal object OrionQuickAccess {
             Tile("memories", "Memories in chat", Icons.Rounded.Memory, action = "memories"),
             Tile("usage", "Usage", Icons.Rounded.DataUsage, action = "token_usage"),
             Tile("alerts", "Alerts", Icons.Rounded.Notifications, action = "alerts"),
-            Tile("notify", "Notification access", Icons.Rounded.Notifications, action = "notifications"),
+            Tile("notify", "Notifications", Icons.Rounded.Notifications, page = "notifications"),
             Tile("feedback", "Feedback", Icons.Rounded.Feedback, action = "feedback")
         )),
         Group("SYSTEM", listOf(
