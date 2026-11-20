@@ -62,6 +62,7 @@ internal object OrionCoordinator {
         val mission = OrionMissionControl.begin(surface.name.lowercase(), text, parentId = OrionMissionControl.currentId(), mode = envelope?.mode?.name ?: "UNASSESSED")
         val owner = OrionMissionControl.Owner("brain-" + surface.name.lowercase(), OrionMissionControl.OwnerKind.BRAIN)
         OrionMissionControl.claim(mission.id, owner)
+        OrionToolGuard.reset()
         OrionEntityLoop.begin(surface.name.lowercase())
         OrionEntityLoop.mark(OrionEntityLoop.Stage.PLAN)
         var ok = false

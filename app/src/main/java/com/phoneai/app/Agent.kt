@@ -1376,88 +1376,16 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         talkNim.beginCommand()
         // Voice actions enter the same conversational brain and native-tool loop as typed chat.
         // Do not send voice requests through the legacy JSON-planner execution path.
-        val envelope = runCatching { OrionAdaptivePlan.assess(svc) }.getOrNull()
-        val toolsAvailable = envelope?.mode == OrionAdaptivePlan.Mode.FULL || envelope?.mode == OrionAdaptivePlan.Mode.REDUCED
-        if (OrionVoiceExecutionPolicy.shouldRouteToCommand(
-                command, recentConversationTurns(), contextualActiveObjective(), toolsAvailable
-            )) {
-            voiceHeardTurn = true
-            try { runConversation(command) } finally { voiceHeardTurn = false }
-            return
-        }
-        recordOwnerTurn(command, "standard voice")
-        stopped = false
-        researchCancelled.set(false)
-        talkNim.resume()
-        if (liveHistory.length() == 0) {
-            val name = Prefs.userName(svc).ifBlank { "friend" }
-            val prompt = OrionPersona.CORE + "\nYou are Orion in a hands-free voice conversation. " +
-                "This is conversation, not phone-command mode. Never execute, plan, or call tools for phone actions. " +
-                "Do not open apps, tap screens, browse websites, send messages, change settings, or perform transactions. " +
-                "Actions are not reachable on this connection right now (" + (envelope?.let { OrionAdaptivePlan.render(it) } ?: "no execution envelope") + "). If they ask for something to be done, say plainly what is blocking it and that you will do it as soon as it clears; never say you are unable in general and never claim an action happened. " +
-                "Respond like a thoughtful human conversational partner: concise, direct, natural spoken language, usually 1-3 sentences. " +
-                "No markdown, lists, emoji, robotic disclaimers, or repetitive greetings. Ask a single useful follow-up only when needed. " +
-                OrionVoicePersona.INSTRUCTIONS + " " + OrionIdentity.LOCK + " " +
-                "Never pretend an action happened. User name: $name. " +
-                CharacterProfile.systemInstruction(Prefs.characterProfile(svc), svc) +
-                "\n\n" + OrionSessionContextProvider.forLiveVoice(svc, command) +
-                "\n\nLIVE VOICE BOUNDARY: this path is conversation-only. The executive context informs continuity and factual context but does not expose or authorize tools, phone actions, shell commands, external writes, or background execution. If the user requests an action, explain that the main chat can execute it; do not claim it was routed or performed."
-            liveHistory.put(msg("system", prompt))
-            // Rehydrate recent typed/voice turns from the provider-neutral SQLite transcript.
-            ConversationContextPolicy.recent(ChatHistoryStore.load(svc), maxTurns = 24, maxChars = 8_000)
-                .forEach { (role, content) -> liveHistory.put(msg(role, content)) }
-        }
-        liveHistory.put(msg("user", command))
-        while (liveHistory.length() > 26) liveHistory.remove(1)
-        val answer = try {
-            talkNim.chat(liveHistory, false, 180, 0.55, onDelta = { delta ->
-                if (!stopped && delta.isNotEmpty()) ui.stream(delta)
-            }).trim()
-        } catch (e: Exception) {
-            ""
-        }
-        if (stopped) return
-        if (HermesRepetitionGuard.isRunawayRepetition(answer)) {
-            ui.say("The voice response repeated itself, so I discarded it. Please try again.")
-            return
-        }
-        val safeAnswer = inOrionVoice(answer.takeIf { it.isNotBlank() && !it.uppercase().startsWith("ACTION") }
-            ?: "I couldn't get a response just now. Please try saying that once more.")
-        liveHistory.put(msg("assistant", safeAnswer))
-        while (liveHistory.length() > 9) liveHistory.remove(1)
-        reflectOnExchange(command)
-        // Voice conversation shares the same durable episodic memory as typed chat.
-        // The raw audio is not stored; only the recognized text and final reply are indexed.
-        runCatching {
-            val transcript = ChatHistoryStore.load(svc).toMutableList()
-            if (transcript.takeLast(2) != listOf("me" to command, "ai" to safeAnswer)) {
-                transcript += "me" to command
-                transcript += "ai" to safeAnswer
-                ChatHistoryStore.save(svc, transcript)
-            }
-            if (OrionSensorConsent.read(svc, OrionSensorScope.MICROPHONE).active()) {
-                val session = ChatHistoryStore.activeSessionId(svc)
-                listOf(command to "user", safeAnswer to "assistant").forEach { (text, role) ->
-                    OrionMultimodalEvidenceStore.record(
-                        svc, session,
-                        modality = OrionMultimodalEvidenceStore.Modality.AUDIO_TRANSCRIPT,
-                        source = "standard_voice_final_transcript",
-                        digest = java.security.MessageDigest.getInstance("SHA-256")
-                            .digest(text.toByteArray(Charsets.UTF_8))
-                            .joinToString("") { "%02x".format(it) },
-                        summary = "$role voice transcript is available in the shared conversation history; raw audio was not stored."
-                    )
-                }
-            }
-        }
-        ui.say(safeAnswer)
+        // Every voice turn is a normal turn of the one brain: same context, tools, mission and evidence as typed chat.
+        voiceHeardTurn = true
+        try { runConversation(command) } finally { voiceHeardTurn = false }
     }
 
     /** True while a turn that arrived by microphone runs through the full brain, so confirmation judgement can account for ambient speech. */
     @Volatile private var voiceHeardTurn = false
 
     private fun voiceTurnNote(): String = if (!voiceHeardTurn) "" else
-        "VOICE TURN: this was heard through the microphone, so it may include background speech or a half-sentence. Judge from meaning whether Kingi is actually asking you for something; if it is not for you, just answer naturally or stay quiet. Act decisively on clear requests. For an irreversible or outward action (sending, calling, paying, deleting) that was not clearly instructed, confirm it aloud in one short sentence first. "
+        "VOICE TURN: this was heard through the microphone, so it may include background speech or a half-sentence. Judge from meaning whether Kingi is actually asking you for something; if it is not for you, just answer naturally or stay quiet. Act decisively on clear requests. Speak in one to three short natural sentences with no markdown or lists; keep long detail in chat. For an irreversible or outward action (sending, calling, paying, deleting) that was not clearly instructed, confirm it aloud in one short sentence first. "
 
     @Volatile
     var stopped = false

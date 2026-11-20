@@ -72,7 +72,7 @@ internal object OrionNativeToolDispatcher {
                     } catch (failure: Exception) {
                         "error: ${failure.message ?: failure.javaClass.simpleName}"
                     }
-                    Outcome(call, result.take(MAX_RESULT_CHARS), true)
+                    Outcome(call, OrionToolGuard.annotate(call.name, args, result).take(MAX_RESULT_CHARS), true)
                 }
             }
             outcomes += outcome
