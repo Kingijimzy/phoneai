@@ -89,7 +89,7 @@ internal fun laneIcon(l: OrionActivityHub.Lane): ImageVector = when (l) {
     OrionActivityHub.Lane.OTHER -> Icons.Rounded.MoreHoriz
 }
 
-private fun targetLabel(t: OrionActivityHub.Target): String = when (t) {
+internal fun targetLabel(t: OrionActivityHub.Target): String = when (t) {
     is OrionActivityHub.Target.Studio -> "Code Studio · " + (t.file?.substringAfterLast('/') ?: t.page)
     is OrionActivityHub.Target.Url -> OrionActivityHub.shortUrl(t.url)
     is OrionActivityHub.Target.Page -> OrionPages.find(t.id)?.title ?: t.id

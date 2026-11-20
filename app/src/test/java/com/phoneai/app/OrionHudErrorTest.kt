@@ -16,3 +16,10 @@ class OrionHudErrorTest {
         assertFalse(OrionChatFlood.isTransient("rejected the key (401). Make a new key"))
     }
 }
+
+class OrionConnectionDropTest {
+    @Test fun eofAndCannotConnectAndPartialTextAreTransient() {
+        assertTrue(OrionChatFlood.isTransient("deepseek 100m: cannot connect (EOFException). Check internet."))
+        assertTrue(OrionChatFlood.isTransient("The response was interrupted after partial text. Orion stopped provider fallback"))
+    }
+}

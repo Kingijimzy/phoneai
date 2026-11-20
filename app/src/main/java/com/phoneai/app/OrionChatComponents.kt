@@ -325,6 +325,8 @@ private fun OrionCompactCodeCard(block: OrionMessageBlock.Code) {
 
 @Composable
 private fun OrionCompactTerminalCard(block: OrionMessageBlock.Terminal) {
+    // Commands live in the Orion Computer sheet (tap the live line); the conversation stays clean.
+    if (!block.state.equals("failed", true) && (block.exitCode == null || block.exitCode == 0)) return
     var expanded by remember(block.command, block.state, block.exitCode) { mutableStateOf(false) }
     val failed = block.state.equals("failed", true) || (block.exitCode != null && block.exitCode != 0)
     val accent = if (failed) OrionUiPalette.danger else if (block.state.equals("running", true)) OrionUiPalette.warning else OrionUiPalette.success
