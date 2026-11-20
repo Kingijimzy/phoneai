@@ -757,6 +757,7 @@ internal fun OrionComposeChatScreen(
                         }
                     }
                 }
+                item(key = "orion-live-run") { OrionLiveRunCard() }
                 item(key = "orion-interruptions") { OrionInterruptionBanner() }
                 // One live summary per task, updated in place; steps open their source.
                 item(key = "orion-activity-hub") { OrionActivityHubCard(onOpenAll = { showRunSheet = true }, events = activityEvents) }

@@ -1183,7 +1183,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 val messages = JSONArray()
                     .put(JSONObject().put("role", "system").put("content", visualSystem))
                     .put(JSONObject().put("role", "user").put("content", content))
-                val reply = Nim(this).chat(messages, true, 520, 0.2).trim()
+                val reply = (OrionCoordinator.run(this, OrionCoordinator.Surface.CHAT, "image analysis: " + question.take(80)) { Nim(this).chat(messages, true, 520, 0.2).trim() }
+                    ?: "Orion is shut down, so I did not analyse the images.")
                 main.post {
                     mainChatListener?.onMessage("ai", if (reply.isBlank()) "I could not get a useful answer from those images. Please try again." else reply)
                     mainChatListener?.onStatus("Image analysis complete", OrbView.Mode.IDLE)
