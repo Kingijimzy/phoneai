@@ -12,10 +12,12 @@ internal object OrionDelegatedContextPolicy {
 
     fun forAccess(access: OrionAgentDelegation.Access): Scope = when (access) {
         OrionAgentDelegation.Access.TRADING_ANALYSIS -> Scope(
-            memoryCategories = emptySet(),
+            // Project-category memory holds evidence-traced educator video knowledge.
+            // Private personal facts stay excluded: only reviewed educational notes pass.
+            memoryCategories = setOf("project"),
             includeAgentLessons = false,
             includeTaskSummaries = false,
-            includeKnowledgePassages = false,
+            includeKnowledgePassages = true,
             includeTradingStrategyAndJournal = true
         )
         OrionAgentDelegation.Access.READ_ONLY_RESEARCH -> Scope(
