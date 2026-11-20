@@ -23,7 +23,7 @@ internal object OrionSpeedTrace {
         if (start == 0L) return
         when (stage) {
             "context" -> if (contextAt == 0L) contextAt = now
-            "token" -> if (tokenAt == 0L) tokenAt = now
+            "token" -> { OrionEntityLoop.mark(OrionEntityLoop.Stage.REASON); if (tokenAt == 0L) tokenAt = now }
             "audio" -> if (audioAt == 0L) audioAt = now
         }
     }

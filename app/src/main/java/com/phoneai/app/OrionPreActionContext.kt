@@ -24,7 +24,7 @@ internal object OrionPreActionContext {
         val tools = runCatching { ToolRegistry.names().size }.getOrDefault(0)
         bits += "packs=$packsOn tools=$tools"
 
-        runCatching { OrionCentralBrain.contextFor(app, command) }.onSuccess {
+        runCatching { OrionTurnContext.text(app, command) }.onSuccess {
             if (it.isNotBlank()) bits += "brain_context_ok" else blockers += "central_brain_empty"
         }.onFailure {
             blockers += "central_brain_unavailable"

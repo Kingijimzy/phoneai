@@ -226,6 +226,7 @@ internal object OrionBrain {
         "missions" -> OrionMissionControl.report()
         "speed" -> OrionSpeedTrace.report()
         "facts" -> OrionSelfFacts.block(c)
+        "loop" -> OrionEntityLoop.report()
         "plan" -> OrionAdaptivePlan.render(OrionAdaptivePlan.assess(c))
         "providers" -> OrionProviderHealth.report(c)
         "selftest" -> OrionProviderHealth.selfTest(c)
@@ -235,6 +236,6 @@ internal object OrionBrain {
         "chronos" -> OrionChronos.status(c)
         "dream" -> dream(c, force = true).ifBlank { "Nothing to consolidate yet." }
         "status" -> summary(registry(c)) + "\n" + OrionProviderHealth.report(c) + "\n" + OrionCerebro.status(c) + "\n" + OrionPrometheus.status(c) + "\n" + OrionChronos.status(c) + "\nRecent actions:\n" + whyReport(c, 5)
-        else -> "error: action must be status, capabilities, check, providers, selftest, why, dream, graph, cerebro, prometheus, chronos, context, missions, plan, speed or facts."
+        else -> "error: action must be status, capabilities, check, providers, selftest, why, dream, graph, cerebro, prometheus, chronos, context, missions, plan, speed, facts or loop."
     }
 }

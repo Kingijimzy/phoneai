@@ -62,12 +62,16 @@ internal object OrionCoordinator {
         val mission = OrionMissionControl.begin(surface.name.lowercase(), text, parentId = OrionMissionControl.currentId(), mode = envelope?.mode?.name ?: "UNASSESSED")
         val owner = OrionMissionControl.Owner("brain-" + surface.name.lowercase(), OrionMissionControl.OwnerKind.BRAIN)
         OrionMissionControl.claim(mission.id, owner)
+        OrionEntityLoop.begin(surface.name.lowercase())
+        OrionEntityLoop.mark(OrionEntityLoop.Stage.PLAN)
         var ok = false
         try {
-            val out = OrionMissionControl.within(mission.id) { holdAwake(c, block) }
+            val out = OrionMissionControl.within(mission.id) { OrionEntityLoop.mark(OrionEntityLoop.Stage.ACT); holdAwake(c, block) }
             ok = true
             return out
         } finally {
+            OrionEntityLoop.mark(OrionEntityLoop.Stage.LEARN); OrionEntityLoop.mark(OrionEntityLoop.Stage.REPORT)
+            OrionEntityLoop.end()
             // The front door has no verifier of its own: finishing without evidence leaves the mission awaiting verification, never "done".
             OrionMissionControl.finish(mission.id, ok, verified = false, evidence = if (ok) "reply produced; completion not independently verified" else "run ended with an error")
         }
