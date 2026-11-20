@@ -189,6 +189,119 @@ internal object OrionMediaTools {
         } catch (e: Exception) { "error: OCR failed: ${e.message}".take(200) }
     }
 
+    /**
+     * Chart-reading prompt. The OBSERVED/INFERRED split is enforced in the contract so a
+     * vision model can never launder an inference (from the educator's speech or prior
+     * knowledge) into a claim about what is literally visible in the frame.
+     */
+    const val DEFAULT_CHART_PROMPT = """You are reading ONE trading chart frame from an educational video.
+Return STRICT JSON only, no prose, with exactly these keys:
+{
+  "observed": {
+    "instrument": string|null,
+    "timeframe": string|null,
+    "price_axis_low": number|null,
+    "price_axis_high": number|null,
+    "trend": "up"|"down"|"range"|null,
+    "swing_highs": [number],
+    "swing_lows": [number],
+    "market_structure_notes": [string],
+    "liquidity": [string],
+    "fvg": [string],
+    "order_blocks": [string],
+    "bos": [string],
+    "choch": [string],
+    "visible_prices": [number],
+    "annotations": [string],
+    "onimage_text": [string]
+  },
+  "inferred": {
+    "notes": [string]
+  },
+  "uncertainty": {
+    "confidence": 0-100,
+    "cannot_determine": [string]
+  }
+}
+RULES:
+- "observed" may contain ONLY things literally visible in the image. Never guess a price.
+- Anything you conclude rather than see goes in "inferred".
+- If the price axis or timeframe is not readable, put it in "cannot_determine" and use null.
+- If this is not a chart at all, set instrument null, confidence low, and say so in cannot_determine."""
+
+    /**
+     * Vision-model reading of a workspace IMAGE FILE (never a screen capture).
+     *
+     * Reuses the same multimodal wire format as the chat path:
+     *   content = [ {type:text}, {type:image_url, image_url:{url:"data:image/jpeg;base64,..."}} ]
+     * sent through the configured vision provider via OrionModelProvider.chat(vision = true).
+     *
+     * Image readability is preserved: we never downscale below the source unless it is
+     * larger than 1568px on the long edge, and JPEG quality stays high so chart text survives.
+     * Returns a structured JSON envelope that separates OBSERVED from INFERRED.
+     */
+    fun analyzeImage(
+        c: Context,
+        ref: String,
+        prompt: String,
+        provider: OrionModelProvider
+    ): String {
+        val (name, bytes) = open(c, ref) ?: return "error: could not open image '$ref'."
+        val bmp = try {
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        } catch (_: Throwable) { null } ?: return "error: '$name' is not a decodable image"
+
+        // Preserve legibility: only scale when genuinely oversized.
+        val maxEdge = 1568  // provider-safe edge for chart text; do not shrink further
+        val longest = maxOf(bmp.width, bmp.height)
+        val wasResized = longest > maxEdge
+        val scaled = if (wasResized) {
+            val ratio = maxEdge.toDouble() / longest
+            Bitmap.createScaledBitmap(
+                bmp,
+                (bmp.width * ratio).toInt().coerceAtLeast(1),
+                (bmp.height * ratio).toInt().coerceAtLeast(1),
+                true
+            )
+        } else bmp
+
+        val srcW = bmp.width
+        val srcH = bmp.height
+        val outW = scaled.width
+        val outH = scaled.height
+        val out = ByteArrayOutputStream()
+        scaled.compress(Bitmap.CompressFormat.JPEG, 92, out)
+        val b64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+        if (scaled !== bmp) scaled.recycle()
+        bmp.recycle()
+
+        val messages = org.json.JSONArray().put(
+            JSONObject().put("role", "user").put(
+                "content", org.json.JSONArray()
+                    .put(JSONObject().put("type", "text").put("text", prompt))
+                    .put(
+                        JSONObject().put("type", "image_url")
+                            .put("image_url", JSONObject().put("url", "data:image/jpeg;base64," + b64))
+                    )
+            )
+        )
+
+        val reply = try {
+            provider.chat(messages, true, 900, 0.1)
+        } catch (e: Exception) {
+            return "error: vision request failed: " + (e.message ?: e.javaClass.simpleName).take(240)
+        }
+        if (reply.isBlank()) return "error: vision provider returned an empty reply for $name"
+
+        val env = JSONObject()
+        env.put("file", name)
+        env.put("source_pixels", "$srcW x $srcH")
+        env.put("sent_pixels", "$outW x $outH")
+        env.put("resized", wasResized)
+        env.put("vision_model_reply", reply.take(6000))
+        return env.toString()
+    }
+
     /** Text-to-image through the chat provider's OpenAI-style /images/generations endpoint. */
     fun generateImage(c: Context, prompt: String, model: String, size: String): String {
         if (prompt.isBlank()) return "error: image_generate needs a prompt"
