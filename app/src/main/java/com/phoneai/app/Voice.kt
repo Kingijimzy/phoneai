@@ -567,7 +567,9 @@ class Voice(private val ctx: Context) {
             AudioFormat.CHANNEL_OUT_MONO,
             AudioFormat.ENCODING_PCM_FLOAT
         )
-        val bufferBytes = maxOf(minimum, sampleRate * 2)
+        // Float PCM is 4 bytes a frame. Six seconds of buffer lets synthesis of the next sentence run well ahead of playback,
+        // so there is no audible gap between lines (the old half-second buffer made every long sentence wait for synthesis).
+        val bufferBytes = maxOf(minimum, sampleRate * 4 * 6)
         val created = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
