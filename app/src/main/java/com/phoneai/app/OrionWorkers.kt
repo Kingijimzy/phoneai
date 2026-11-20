@@ -77,6 +77,25 @@ internal object OrionWorkers {
         return "Worker $id \"$name\" started in the background (running ${runningCount()}/$MAX_PARALLEL). Keep going; read it with worker_result {id:\"$id\"}. It reports to Telegram when done."
     }
 
+    /** Pure: one objective per non-blank line (leading bullets/numbers stripped), capped. */
+    internal fun splitObjectives(text: String, cap: Int = MAX_PARALLEL): List<String> =
+        text.lines().map { it.trim().replace(Regex("^([-*\\u2022]|\\d+[.)])\\s*"), "") }.filter { it.length >= 8 }.take(cap)
+
+    /** Fan out several independent objectives at once; each becomes its own worker with its own child mission. */
+    fun spawnMany(svc: PhoneAiService, objectives: String): String {
+        val parts = splitObjectives(objectives)
+        if (parts.isEmpty()) return "error: objectives needs one concrete objective per line."
+        return parts.joinToString("\n") { spawn(svc, it) }
+    }
+
+    /** One line for the shared context so the brain always knows its own workforce without a tool call. */
+    fun liveSummary(): String {
+        val running = jobs.values.filter { it.state == State.RUNNING }
+        val done = jobs.values.count { it.state == State.DONE }
+        if (running.isEmpty() && done == 0) return ""
+        return "WORKERS: ${running.size}/$MAX_PARALLEL running" + (if (running.isNotEmpty()) " (" + running.joinToString("; ") { "${it.id} ${it.label.take(30)} ${it.steps} steps" } + ")" else "") + ", $done finished. Collect with worker_result."
+    }
+
     fun list(c: Context): String {
         load(c)
         val all = jobs.values.sortedByDescending { it.startedAt }
@@ -86,8 +105,17 @@ internal object OrionWorkers {
         }
     }
 
-    fun result(c: Context, id: String): String {
+    /** Fan in: id "all" returns every recent worker; [waitSeconds] blocks (bounded) until the asked workers finish. */
+    fun result(c: Context, id: String, waitSeconds: Int = 0): String {
         load(c)
+        val deadline = System.currentTimeMillis() + waitSeconds.coerceIn(0, 120) * 1000L
+        fun pending() = if (id.trim().equals("all", true)) jobs.values.any { it.state == State.RUNNING } else jobs[id.trim()]?.state == State.RUNNING
+        while (pending() && System.currentTimeMillis() < deadline) { try { Thread.sleep(2_000) } catch (_: InterruptedException) { break } }
+        if (id.trim().equals("all", true)) {
+            val all = jobs.values.sortedByDescending { it.startedAt }.take(MAX_PARALLEL * 2)
+            if (all.isEmpty()) return "No workers yet."
+            return all.joinToString("\n\n") { result(c, it.id) }
+        }
         val j = jobs[id.trim()] ?: return "error: no worker '$id'. worker_list shows them."
         return when (j.state) {
             State.RUNNING -> "Worker ${j.id} \"${j.label}\" is still running (${j.steps} steps, ${seconds(j)}s)."

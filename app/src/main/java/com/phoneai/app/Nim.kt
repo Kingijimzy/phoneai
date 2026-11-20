@@ -999,6 +999,11 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         val backups = if (Prefs.autoSwitch(ctx)) {
             Providers.all
                 .filter { it.id != primary.id && usable(it) && (cooldown[it.id] ?: 0L) <= now }
+                .let { list ->
+                    // Best route first: backups with the lowest measured first-token latency go ahead of unmeasured ones.
+                    val profiles = OrionModelRegistry.allProfiles(ctx)
+                    list.sortedBy { OrionModelRegistry.firstTokenFor(profiles, it.label, selectedModel(it, vision)) ?: Double.MAX_VALUE }
+                }
                 .take(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS)
         } else emptyList()
         val mode = if (vision) "vision" else "chat"

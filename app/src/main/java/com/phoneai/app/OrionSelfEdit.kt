@@ -53,6 +53,15 @@ internal object OrionSelfEdit {
         return when { bad.isNotEmpty() -> "CI failed: " + bad.joinToString(); pending > 0 -> "CI still running ($pending pending)"; else -> "OK" }
     }
 
+    /** Runs the patch through the real Python sandbox. Returns the error only when Python itself reported a syntax problem. */
+    private fun pythonSyntaxError(c: Context, content: String): String? {
+        val svc = c as? PhoneAiService ?: return null
+        val encoded = Base64.getEncoder().encodeToString(content.toByteArray(Charsets.UTF_8))
+        val out = runCatching { Tools(svc).pythonExec("import ast, base64\nast.parse(base64.b64decode('$encoded').decode('utf-8'))\nprint('SYNTAX_OK')") }.getOrNull() ?: return null
+        if (out.contains("SYNTAX_OK")) return null
+        return if (out.contains("SyntaxError") || out.contains("IndentationError")) out.lineSequence().firstOrNull { it.contains("Error") }.orEmpty().take(160) else null
+    }
+
     fun repoOk(repo: String) = Regex("[A-Za-z0-9_.-]{1,60}/[A-Za-z0-9_.-]{1,100}").matches(repo) && repo.split("/").none { it.all { ch -> ch == '.' } }
 
     /** Branch names are used inside URL paths, so reject anything GitHub would not accept and normalise the shape. */
@@ -169,6 +178,7 @@ internal object OrionSelfEdit {
                 if (protectedPath(path)) return "error: the trading desk is off limits to self-editing."
                 val content = a.optString("content")
                 patchProblems(path, content).takeIf { it.isNotEmpty() }?.let { return "error: patch refused, " + it.joinToString("; ") + "." }
+                if (path.endsWith(".py")) pythonSyntaxError(c, content)?.let { return "error: patch refused, Python syntax check failed: $it" }
                 val message = a.optString("message").ifBlank { "Orion self-edit: $path" }
                 ensureBranch(c, repo, requestedBranch, base)?.let { return it }
                 val (gc, gt) = call(c, "GET", "/repos/$repo/contents/$path?ref=${enc(requestedBranch)}")
