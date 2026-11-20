@@ -465,7 +465,9 @@ internal fun isCompactExecutionNote(item: OrionChatLine): Boolean {
     if (item.kind != "note") return false
     val text = item.text
     // Every task lifecycle note is shown by the single progress card and step strip, not as its own card.
-    if (text.startsWith("[TASK:")) return true
+    if (text.startsWith("[TASK:") && !text.startsWith("[TASK:WARNING]")) return true
+    // Routine "you asked for this, continuing" warnings are noise in the conversation; real warnings stay visible.
+    if (text.startsWith("[TASK:WARNING]") && listOf("Orion is continuing because you requested execution", "is dispatched").any { it in text }) return true
     return listOf(
         "[TASK:RUNNING]", "[TASK:OUTPUT]", "[TASK:APPROVAL]", "[TASK:RECOVER]",
         "[TASK:FAILED]", "[TASK:COMPLETE]", "[TASK:CANCELLED]", "[TASK:INTERRUPTED]",
