@@ -228,6 +228,7 @@ internal object OrionBrain {
         "facts" -> OrionSelfFacts.block(c)
         "loop" -> OrionEntityLoop.report()
         "world" -> OrionWorldState.pretty(c)
+        "strategy" -> "Ranked routes (measured):\n" + OrionStrategy.summary(OrionWorldState.build(c))
         "foresight" -> a.optString("name").trim().let { n ->
             if (n.isBlank()) "Predictions vs outcomes:\n" + OrionForesight.calibration()
             else OrionForesight.assess(n, OrionWorldState.build(c)).let { f -> if (f.level == OrionForesight.Level.OK) "No risk foreseen for $n right now." else "${f.level.name}: ${f.consequence}" }
@@ -250,6 +251,6 @@ internal object OrionBrain {
         "chronos" -> OrionChronos.status(c)
         "dream" -> dream(c, force = true).ifBlank { "Nothing to consolidate yet." }
         "status" -> summary(registry(c)) + "\n" + OrionProviderHealth.report(c) + "\n" + OrionCerebro.status(c) + "\n" + OrionPrometheus.status(c) + "\n" + OrionChronos.status(c) + "\nRecent actions:\n" + whyReport(c, 5)
-        else -> "error: action must be status, capabilities, check, providers, selftest, why, dream, graph, cerebro, prometheus, chronos, context, missions, plan, speed, facts, loop, models, evaluate, errors, platform, world or foresight."
+        else -> "error: action must be status, capabilities, check, providers, selftest, why, dream, graph, cerebro, prometheus, chronos, context, missions, plan, speed, facts, loop, models, evaluate, errors, platform, world, foresight or strategy."
     }
 }

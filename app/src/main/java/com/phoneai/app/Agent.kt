@@ -1183,8 +1183,9 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             if (forecast?.level == OrionForesight.Level.BLOCK) return "error: " + forecast.consequence
             val stepId = OrionRunLog.begin(name, args)
             OrionProgress.bind(stepId)
+            val t0 = System.currentTimeMillis()
             return try {
-                dispatchNativeToolInner(name, args).also { OrionRunLog.finish(stepId, it, OrionReflexion.looksFailed(it)); OrionForesight.record(svc, name, forecast?.level ?: OrionForesight.Level.OK, it) }
+                dispatchNativeToolInner(name, args).also { OrionRunLog.finish(stepId, it, OrionReflexion.looksFailed(it)); OrionForesight.record(svc, name, forecast?.level ?: OrionForesight.Level.OK, it, System.currentTimeMillis() - t0) }
                     .let { r -> forecast?.let { OrionForesight.note(it) }?.takeIf { it.isNotBlank() }?.let { r + "\n" + it } ?: r }
             } catch (e: Throwable) {
                 OrionRunLog.finish(stepId, "error: ${e.message ?: e.javaClass.simpleName}", true)

@@ -28,10 +28,10 @@ internal object OrionForesight {
     /** Pure: [world] is the OrionWorldState JSON; [request] is the owner's current request ("" for background work). */
     fun assess(tool: String, world: JSONObject, request: String = ""): Forecast {
         if (tool in switchesScreen && !ownerWantsScreenChange(request))
-            return Forecast(Level.BLOCK, "$tool would switch the owner's screen or open another app, and they did not ask to be taken anywhere. Solve it silently: read_screen/look to inspect, research_web for information, dev_shell or the platform tools to fix, ask_agent for help. Only report the blocker if it truly needs the owner.")
+            return Forecast(Level.BLOCK, "$tool would switch the owner's screen or open another app, and they did not ask to be taken anywhere. Solve it silently: read_screen/look to inspect, research_web for information, dev_shell or the platform tools to fix, ask_agent for help. Only report the blocker if it truly needs the owner." + (OrionStrategy.nextBest(tool, world)?.let { " $it" } ?: ""))
         val network = world.optString("network", "")
         if (tool in needsNetwork && network == "offline")
-            return Forecast(Level.BLOCK, "the phone is offline, so $tool cannot reach its service. Skipped to save a timeout; use an offline route or retry when the network is back.")
+            return Forecast(Level.BLOCK, "the phone is offline, so $tool cannot reach its service. Skipped to save a timeout; use an offline route or retry when the network is back." + (OrionStrategy.nextBest(tool, world)?.let { " $it" } ?: ""))
         val battery = world.optJSONObject("battery")
         val pct = battery?.optInt("percent", 100) ?: 100
         val charging = battery?.optBoolean("charging", true) ?: true
@@ -50,7 +50,7 @@ internal object OrionForesight {
     fun note(f: Forecast): String = if (f.level == Level.OK) "" else "[foresight] " + f.consequence
 
     /** Does the actual result match what was predicted? Surprises become lessons, and calibration is visible. */
-    internal data class Tally(var ok: Int = 0, var failed: Int = 0, var warned: Int = 0, var warnedAndFailed: Int = 0, var surprises: Int = 0)
+    internal data class Tally(var totalMs: Long = 0, var ok: Int = 0, var failed: Int = 0, var warned: Int = 0, var warnedAndFailed: Int = 0, var surprises: Int = 0)
     private val ledger = java.util.concurrent.ConcurrentHashMap<String, Tally>()
 
     /** Pure core: returns a lesson when an OK-forecast tool failed (a wrong prediction), else null. */
@@ -67,7 +67,10 @@ internal object OrionForesight {
         return null
     }
 
-    fun record(c: android.content.Context, tool: String, forecast: Level, result: String) {
+    fun stats(): Map<String, Triple<Int, Int, Long>> = ledger.mapValues { Triple(it.value.ok, it.value.failed, it.value.totalMs) }
+
+    fun record(c: android.content.Context, tool: String, forecast: Level, result: String, ms: Long = 0L) {
+        ledger.getOrPut(tool) { Tally() }.let { synchronized(it) { it.totalMs += ms } }
         val failed = OrionReflexion.looksFailed(result)
         compare(tool, forecast, failed, result.lineSequence().firstOrNull().orEmpty())?.let { runCatching { OrionLessons.learn(c, it) } }
     }
