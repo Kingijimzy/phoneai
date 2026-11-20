@@ -1,6 +1,13 @@
 package com.phoneai.app
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -88,8 +95,12 @@ internal fun OrionRunSheet(onClose: () -> Unit) {
     val step = steps.getOrNull(index)
     val pulse by rememberInfiniteTransition(label = "sheet").animateFloat(0.3f, 1f, infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "p")
     val metrics = OrionLiveMetrics.state
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+    val scan by rememberInfiniteTransition(label = "scan").animateFloat(0f, 1f, infiniteRepeatable(tween(1600)), label = "scan")
 
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        AnimatedVisibility(shown, enter = slideInVertically(tween(340)) { it / 2 } + fadeIn(tween(300))) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.86f).clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)).background(OrionUiPalette.panel)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OrionOrb(Modifier.size(40.dp), busy = metrics.active)
@@ -114,12 +125,14 @@ internal fun OrionRunSheet(onClose: () -> Unit) {
             }
             Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 14.dp)) {
                 if (step == null) Text("Nothing has run yet. Ask Orion to do something and watch it work here.", color = OrionUiPalette.muted, fontSize = 13.sp)
-                else if (!timeline) {
+                else if (!timeline) Crossfade(targetState = index, animationSpec = tween(220), label = "step") { idx ->
+                    val st = steps.getOrNull(idx) ?: step
                     Column(Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(Terminal).border(1.dp, OrionUiPalette.border, RoundedCornerShape(14.dp)).verticalScroll(rememberScrollState()).padding(14.dp)) {
-                        Text("$ " + OrionRunSheetText.commandOf(step), color = Color(0xFFEDEDED), fontSize = 12.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-                        Text(step.output.ifBlank { if (step.status == OrionRunLog.Status.RUNNING) "running…" else "(no output)" }.takeLast(6000), color = Phosphor, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                        if (st.status == OrionRunLog.Status.RUNNING) Box(Modifier.fillMaxWidth(0.25f).height(2.dp).graphicsLayer { translationX = scan * size.width * 4f; alpha = 0.8f }.background(Cyan))
+                        Text("$ " + OrionRunSheetText.commandOf(st), color = Color(0xFFEDEDED), fontSize = 12.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                        Text(st.output.ifBlank { if (st.status == OrionRunLog.Status.RUNNING) "running…" else "(no output)" }.takeLast(6000) + if (st.status == OrionRunLog.Status.RUNNING && pulse > 0.6f) " ▍" else "", color = Phosphor, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
                             modifier = Modifier.padding(top = 8.dp))
-                        OrionRunSheetText.links(step).forEach { url ->
+                        OrionRunSheetText.links(st).forEach { url ->
                             Text(url, color = Cyan, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.clickable { openActivityTarget(context, OrionActivityHub.Target.Url(url)) }.padding(top = 6.dp))
                         }
                     }
@@ -128,9 +141,9 @@ internal fun OrionRunSheet(onClose: () -> Unit) {
                         steps.forEachIndexed { i, s ->
                             val tone = when (s.status) { OrionRunLog.Status.RUNNING -> Cyan; OrionRunLog.Status.DONE -> Phosphor; OrionRunLog.Status.FAILED -> OrionUiPalette.danger }
                             val lane = OrionActivityHub.lane(s)
-                            Row(Modifier.fillMaxWidth().clickable { picked = i; timeline = false }.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(Modifier.fillMaxWidth().animateContentSize(tween(250)).clickable { picked = i; timeline = false }.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Box(Modifier.size(26.dp).clip(CircleShape).border(1.dp, tone.copy(alpha = if (s.status == OrionRunLog.Status.RUNNING) pulse else 0.7f), CircleShape), contentAlignment = Alignment.Center) {
+                                    Box(Modifier.size(26.dp).graphicsLayer { val k = if (s.status == OrionRunLog.Status.RUNNING) 0.9f + 0.15f * pulse else 1f; scaleX = k; scaleY = k }.clip(CircleShape).border(1.dp, tone.copy(alpha = if (s.status == OrionRunLog.Status.RUNNING) pulse else 0.7f), CircleShape), contentAlignment = Alignment.Center) {
                                         Text(lane.glyph, color = tone, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                     }
                                     if (i < steps.size - 1) Box(Modifier.width(1.dp).height(22.dp).background(OrionUiPalette.border))
@@ -140,7 +153,7 @@ internal fun OrionRunSheet(onClose: () -> Unit) {
                                     Text(OrionRunSheetText.commandOf(s), color = OrionUiPalette.muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Box(Modifier.weight(1f).height(3.dp).clip(RoundedCornerShape(2.dp)).background(OrionUiPalette.raised)) {
-                                            Box(Modifier.fillMaxHeight().fillMaxWidth(OrionRunSheetText.share(s, steps, now)).background(tone.copy(alpha = 0.8f)))
+                                            Box(Modifier.fillMaxHeight().fillMaxWidth(animateFloatAsState(OrionRunSheetText.share(s, steps, now), tween(500), label = "bar").value).background(tone.copy(alpha = 0.8f)))
                                         }
                                         Text("${lane.label.lowercase()} · ${OrionRunSheetText.seconds(s, now)}s", color = OrionUiPalette.muted, fontSize = 9.sp)
                                     }
@@ -171,6 +184,7 @@ internal fun OrionRunSheet(onClose: () -> Unit) {
                     }
                 }
             }
+        }
         }
     }
 }
