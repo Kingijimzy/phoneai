@@ -85,9 +85,10 @@ internal object OrionRuntimeCapabilityExecutor {
             "open_page" -> OrionPages.open(service, args.optString("page").ifBlank { args.optString("name") })
             "devspace" -> OrionDevspace.run(service, args)
             "studio" -> OrionStudio.run(service, args)
-            "spawn_worker" -> OrionWorkers.spawn(service, args.optString("objective").ifBlank { args.optString("task") }, args.optString("label"))
+            "spawn_worker" -> if (args.optString("objectives").isNotBlank()) OrionWorkers.spawnMany(service, args.optString("objectives"))
+                else OrionWorkers.spawn(service, args.optString("objective").ifBlank { args.optString("task") }, args.optString("label"))
             "worker_list" -> OrionWorkers.list(service)
-            "worker_result" -> OrionWorkers.result(service, args.optString("id"))
+            "worker_result" -> OrionWorkers.result(service, args.optString("id"), args.optInt("wait_seconds", 0))
             "worker_cancel" -> OrionWorkers.cancel(args.optString("id"))
             "platform_selftest" -> OrionSelfTest.run(service, tools, pythonExecutor, stopped)
             else -> null
