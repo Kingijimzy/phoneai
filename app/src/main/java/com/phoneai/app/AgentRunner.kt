@@ -197,8 +197,13 @@ object AgentRunner {
                 OrionMemoryLifecycle.isActive(c, memory.id)
         }
         val selected = MemoryRanking.selectCategories(safe, allowedCategories, userText, limit = 6, relevantLimit = 4)
-        if (selected.isEmpty()) return "(no shareable fact memories match this request)"
-        return selected.joinToString("\n") { "[${it.id}] (fact) " + AgentPrivacyFilter.safeCommand(it.text).take(240) }
+        if (selected.isEmpty()) return "(no shareable memory matches this request)"
+        return selected.joinToString("\n") { memory ->
+            // Educational project notes must keep their educator/video/timestamp attribution,
+            // so they get a larger budget than ordinary facts. Personal categories stay at 240.
+            val budget = if (memory.category == "project") 900 else 240
+            "[${memory.id}] (${memory.category}) " + AgentPrivacyFilter.safeCommand(memory.text).take(budget)
+        }
     }
 
     internal fun systemPrompt(c: Context, agent: AgentProfile, userText: String, delegation: OrionAgentDelegation.Manifest? = null): String {
