@@ -56,29 +56,13 @@ internal object OrionConfidenceView {
     }
 }
 
-/** "Environment" pill (tap to see the exact WorldState JSON Orion is given) and the confidence meter for the latest answer. */
+/** The HUD sheet: live world state while open. The orb in the live stream opens it. */
 @Composable
-internal fun OrionWorldBar(modifier: Modifier = Modifier) {
+internal fun OrionEnvironmentSheet(open: Boolean, busy: Boolean, onClose: () -> Unit) {
     val context = LocalContext.current
-    var open by remember { mutableStateOf(false) }
-    var grade by remember { mutableStateOf(OrionConfidence.latest) }
     var world by remember { mutableStateOf<org.json.JSONObject?>(null) }
-    var busy by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { while (true) { grade = OrionConfidence.latest; busy = OrionEntityLoop.live?.let { it.endedAt == 0L } == true; kotlinx.coroutines.delay(1000L) } }
     LaunchedEffect(open) { while (open) { world = kotlin.runCatching { OrionWorldState.build(context) }.getOrNull(); kotlinx.coroutines.delay(2000L) } }
-    Row(modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        OrionOrb(Modifier.size(34.dp).clickable { open = true }, busy = busy)
-        Text("ENVIRONMENT", color = OrionUiPalette.secondaryText, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
-            modifier = Modifier.clip(RoundedCornerShape(10.dp)).border(1.dp, OrionUiPalette.border, RoundedCornerShape(10.dp))
-                .clickable { open = true }.padding(horizontal = 9.dp, vertical = 5.dp))
-        OrionConfidenceView.label(grade, System.currentTimeMillis())?.let { label ->
-            val pct = grade?.percent ?: 0
-            val color = if (pct >= OrionMetacognition.VERIFY_BELOW) OrionUiPalette.success else OrionUiPalette.warning
-            Box(Modifier.size(8.dp).clip(CircleShape).background(color))
-            Text(label, color = OrionUiPalette.secondaryText, fontSize = 10.sp, maxLines = 1)
-        }
-    }
-    if (open) Dialog(onDismissRequest = { open = false }) { OrionHud(world, busy) { open = false } }
+    if (open) Dialog(onDismissRequest = onClose) { OrionHud(world, busy, onClose) }
 }
 
 private val HudCyan = Color(0xFF6FD6E8)

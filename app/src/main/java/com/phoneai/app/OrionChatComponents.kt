@@ -328,11 +328,7 @@ private fun OrionCompactTerminalCard(block: OrionMessageBlock.Terminal) {
     var expanded by remember(block.command, block.state, block.exitCode) { mutableStateOf(false) }
     val failed = block.state.equals("failed", true) || (block.exitCode != null && block.exitCode != 0)
     val accent = if (failed) OrionUiPalette.danger else if (block.state.equals("running", true)) OrionUiPalette.warning else OrionUiPalette.success
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(OrionUiPalette.background)
-            .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(10.dp)).padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)
-    ) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically) {
             Text(if (failed) "✕" else if (block.state.equals("running", true)) "…" else "✓", color = accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Text("  " + (block.command.ifBlank { "command" }), color = ChatCopy, fontSize = 11.sp,

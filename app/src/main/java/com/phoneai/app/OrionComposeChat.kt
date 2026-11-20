@@ -465,7 +465,7 @@ internal fun isCompactExecutionNote(item: OrionChatLine): Boolean {
     if (item.kind != "note") return false
     val text = item.text
     // Every task lifecycle note is shown by the single progress card and step strip, not as its own card.
-    if (text.startsWith("[TASK:") && !text.startsWith("[TASK:WARNING]")) return true
+    if (text.startsWith("[TASK:")) return true
     return listOf(
         "[TASK:RUNNING]", "[TASK:OUTPUT]", "[TASK:APPROVAL]", "[TASK:RECOVER]",
         "[TASK:FAILED]", "[TASK:COMPLETE]", "[TASK:CANCELLED]", "[TASK:INTERRUPTED]",
@@ -711,7 +711,6 @@ internal fun OrionComposeChatScreen(
             OrionStatusPill(pillText, live = busy || effectiveOrbMode != OrbView.Mode.IDLE, onMic = onVoice, onEnd = { if (busy) onStop() else onVoice() })
             Spacer(Modifier.height(8.dp))
         } else {
-            OrionLiveMetricsBar()
             val visibleLines = OrionChatFlood.fold(lines.filterNot(::isCompactExecutionNote))
             Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
@@ -757,19 +756,10 @@ internal fun OrionComposeChatScreen(
                         }
                     }
                 }
-                item(key = "orion-world-bar") { OrionWorldBar() }
-                item(key = "orion-live-run") { OrionLiveRunCard() }
-                item(key = "orion-interruptions") { OrionInterruptionBanner() }
-                // One live summary per task, updated in place; steps open their source.
-                item(key = "orion-activity-hub") { OrionActivityHubCard(onOpenAll = { showRunSheet = true }, events = activityEvents) }
+                // One living line instead of cards: the conversation is the surface, execution streams under it.
+                item(key = "orion-live-stream") { OrionLiveStream(displayStatus, effectiveOrbMode) }
                 // Task progress is represented by the single Activity Hub card above.
                 // Do not append a second copy of the latest activity event to the transcript.
-                val assistantAlreadyStreaming = lines.lastOrNull()?.let {
-                    it.kind == "ai" && it.text.isNotBlank()
-                } == true
-                if (busy && !assistantAlreadyStreaming) {
-                    item(key = "orion-thinking-indicator") { ThinkingIndicator(displayStatus, effectiveOrbMode) }
-                }
             }
             androidx.compose.animation.AnimatedVisibility(
                 visible = showJumpToBottom,
