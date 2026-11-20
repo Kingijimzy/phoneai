@@ -5,8 +5,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+private typealias D = OrionModelRegistry.Dim
+
 class OrionModelRegistryTest {
-    private val D = OrionModelRegistry.Dim
 
     @Test fun foldIsRunningMeanAndBounded() {
         var s: OrionModelRegistry.Stat? = null
