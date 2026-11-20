@@ -72,6 +72,17 @@ internal object OrionModelRegistry {
         profiles.mapNotNull { (k, p) -> p[dim]?.takeIf { it.n >= minSamples }?.let { k to it.mean } }
             .let { list -> if (dim == Dim.FIRST_TOKEN) list.minByOrNull { it.second } else list.maxByOrNull { it.second } }?.first
 
+    /** Measured quality for one model, or null below [minSamples] total quality samples. */
+    fun qualityFor(profiles: Map<String, Map<Dim, Stat>>, provider: String, model: String, minSamples: Int = 3): Double? {
+        val p = profiles[key(provider, model)] ?: return null
+        val q = p.filterKeys { it != Dim.FIRST_TOKEN }
+        if (q.values.sumOf { it.n } < minSamples) return null
+        return quality(p)
+    }
+
+    fun firstTokenFor(profiles: Map<String, Map<Dim, Stat>>, provider: String, model: String, minSamples: Int = 3): Double? =
+        profiles[key(provider, model)]?.get(Dim.FIRST_TOKEN)?.takeIf { it.n >= minSamples }?.mean
+
     // ---- passive measurement from real turns ----
 
     fun recordLatency(c: Context, provider: String, model: String, ms: Long) {

@@ -187,7 +187,10 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             // Every other provider: scale effort from its own catalogue relative to the model the owner selected.
             if (routingOn && !vision && p.id != "nvidia") {
                 val owner = if (commandMode && Prefs.commandProviderId(ctx) == p.id) Prefs.commandModelId(ctx) ?: Prefs.model(ctx, p, false) else Prefs.model(ctx, p, false)
-                OrionDifficulty.pick(t, owner, Prefs.cachedModels(ctx, p.id))?.let { return it }
+                val profiles = OrionModelRegistry.allProfiles(ctx)
+                OrionDifficulty.pick(t, owner, Prefs.cachedModels(ctx, p.id),
+                    { m -> OrionModelRegistry.qualityFor(profiles, p.label, m) },
+                    { m -> OrionModelRegistry.firstTokenFor(profiles, p.label, m) })?.let { return it }
             }
         }
         if (commandMode && !vision && Prefs.commandProviderId(ctx) == p.id) {

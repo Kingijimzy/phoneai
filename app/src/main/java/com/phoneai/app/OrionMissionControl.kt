@@ -172,6 +172,20 @@ internal object OrionMissionControl {
         return roots.joinToString("\n") { r -> (listOf(line(r, 0)) + children(r.id).map { line(it, 1) }).joinToString("\n") }
     }
 
+    /** Pure rendering: the current objective plus the last finished mission's evidence, so every context carries what is true now. */
+    internal fun evidenceBlock(goal: String, activeList: List<Mission>, all: Collection<Mission>): String {
+        val last = all.filter { !it.active && it.endedAt > 0L }.maxByOrNull { it.endedAt }
+        if (goal.isBlank() && activeList.isEmpty() && last == null) return ""
+        return buildString {
+            append("MISSION AND EVIDENCE (one task identity: the mission id; objective and evidence follow it)\n")
+            if (goal.isNotBlank()) append("Objective: ").append(goal.take(160)).append('\n')
+            activeList.take(3).forEach { append("Active ${it.id} (${it.lifecycle.phase.name.lowercase()}, ${it.surface}): ").append(it.request.take(80)).append('\n') }
+            if (last != null) append("Last finished ${last.id}: ").append(last.outcome.ifBlank { "ended" }).append(" — evidence: ").append(last.evidence.ifBlank { "none recorded" }.take(160))
+        }.trim()
+    }
+
+    fun evidence(goal: String): String = evidenceBlock(goal, active(), missions.values)
+
     fun summary(): String {
         val a = active()
         if (a.isEmpty()) return ""
