@@ -101,6 +101,38 @@ internal object OrionSelfEdit {
         return fail(cc, ct)
     }
 
+    /**
+     * One call runs the whole sequence: validate, write to a branch, open the PR, wait for CI, merge only if green.
+     * Every step is reported so a failure says exactly where it stopped.
+     */
+    private fun patchLoop(c: Context, a: JSONObject, repo: String, path: String, base: String, branch: String): String {
+        val log = StringBuilder()
+        fun step(s: String) { log.append(s).append('\n') }
+        val w = run(c, JSONObject(a.toString()).put("action", "write"))
+        step("1 write: " + w.take(160))
+        if (w.startsWith("error")) return log.toString().trim()
+        val pr = run(c, JSONObject(a.toString()).put("action", "pr"))
+        step("2 pr: " + pr.take(160))
+        val number = Regex("#(\\d+)").find(pr)?.groupValues?.get(1)?.toIntOrNull()
+            ?: run {
+                val (code, text) = call(c, "GET", "/repos/$repo/pulls?head=${enc(repo.substringBefore('/') + ":" + branch)}&state=open")
+                if (code in 200..299) runCatching { JSONArray(text).optJSONObject(0)?.optInt("number") }.getOrNull()?.takeIf { it > 0 } else null
+            } ?: return log.append("stopped: no pull request number found.").toString()
+        val deadline = System.currentTimeMillis() + a.optInt("wait_seconds", 480).coerceIn(30, 540) * 1000L
+        var verdict = "no checks have run yet"
+        while (System.currentTimeMillis() < deadline) {
+            val (code, text) = call(c, "GET", "/repos/$repo/commits/${enc(branch)}/check-runs")
+            verdict = if (code in 200..299) ciVerdict(text) else "could not read CI"
+            if (verdict == "OK" || verdict.startsWith("CI failed")) break
+            try { Thread.sleep(15_000) } catch (_: InterruptedException) { break }
+        }
+        step("3 ci: $verdict")
+        if (verdict != "OK") return log.append(if (verdict.startsWith("CI failed")) "stopped: fix the code and run patch again; nothing was merged." else "stopped: CI had not finished; run action=merge number=$number later.").toString()
+        val merged = run(c, JSONObject().put("action", "merge").put("number", number).put("repo", repo))
+        step("4 merge: " + merged.take(160))
+        return log.toString().trim()
+    }
+
     fun run(c: Context, a: JSONObject): String {
         val repo = a.optString("repo").ifBlank { DEFAULT_REPO }
         if (!repoOk(repo)) return "error: repo must look like owner/name"
@@ -178,7 +210,10 @@ internal object OrionSelfEdit {
                 val (code, text) = call(c, "PUT", "/repos/$repo/pulls/$n/merge", JSONObject().put("merge_method", "merge"))
                 if (code in 200..299) "merged PR #$n" else fail(code, text)
             }
-            else -> "error: action must be read, search, write, pr, status or merge"
+            "update_check" -> OrionAppUpdater.check(c)
+            "update_install" -> OrionAppUpdater.install(c)
+            "patch" -> patchLoop(c, a, repo, path, base, requestedBranch)
+            else -> "error: action must be read, search, write, pr, status, merge, patch, update_check or update_install"
         }
     }
 }

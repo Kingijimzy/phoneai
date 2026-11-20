@@ -227,6 +227,10 @@ internal object OrionBrain {
         "speed" -> OrionSpeedTrace.report()
         "facts" -> OrionSelfFacts.block(c)
         "loop" -> OrionEntityLoop.report()
+        "errors" -> OrionActivityHub.interruptions(OrionRunLog.currentRun()).takeLast(8).let { list ->
+            if (list.isEmpty()) "No failures in the current run." else "FAILURES IN THIS RUN (read internally; fix the cause with tools, do not navigate the app to look):\n" +
+                list.joinToString("\n") { "- ${it.tool}: ${it.title} :: " + OrionActivityHub.cleanOutput(it.output).take(300).replace('\n', ' ') }
+        }
         "models" -> OrionModelRegistry.report(c)
         "evaluate" -> OrionModelRegistry.evaluate(c)
         "plan" -> OrionAdaptivePlan.render(OrionAdaptivePlan.assess(c))
@@ -238,6 +242,6 @@ internal object OrionBrain {
         "chronos" -> OrionChronos.status(c)
         "dream" -> dream(c, force = true).ifBlank { "Nothing to consolidate yet." }
         "status" -> summary(registry(c)) + "\n" + OrionProviderHealth.report(c) + "\n" + OrionCerebro.status(c) + "\n" + OrionPrometheus.status(c) + "\n" + OrionChronos.status(c) + "\nRecent actions:\n" + whyReport(c, 5)
-        else -> "error: action must be status, capabilities, check, providers, selftest, why, dream, graph, cerebro, prometheus, chronos, context, missions, plan, speed, facts, loop, models or evaluate."
+        else -> "error: action must be status, capabilities, check, providers, selftest, why, dream, graph, cerebro, prometheus, chronos, context, missions, plan, speed, facts, loop, models, evaluate or errors."
     }
 }
