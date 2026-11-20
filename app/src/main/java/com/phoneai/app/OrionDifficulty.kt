@@ -64,8 +64,25 @@ internal object OrionDifficulty {
     private const val MARGIN = 8.0
 
     /** A catalogue model for this tier, or null to keep [current]. Only chat-capable ids from [catalogue] are ever returned. */
-    fun pick(tier: ModelRouter.Tier, current: String, catalogue: List<String>): String? {
+    fun pick(tier: ModelRouter.Tier, current: String, catalogue: List<String>,
+             quality: (String) -> Double? = { null }, firstTokenMs: (String) -> Double? = { null }): String? {
         if (tier == ModelRouter.Tier.CHAT) return null
+        // Measured evidence outranks guessing from the model name whenever the registry has it.
+        val usableNow = catalogue.filter { ProviderModelCapabilityPolicy.isChatCapable(it) }.distinct()
+        if (tier == ModelRouter.Tier.DEEP) {
+            val measured = usableNow.mapNotNull { m -> quality(m)?.let { m to it } }
+            val best = measured.maxByOrNull { it.second }
+            val cur = quality(current)
+            if (best != null && best.first != current && (cur == null || best.second >= cur + 0.05)) return best.first
+            if (best != null && cur != null) return null
+        }
+        if (tier == ModelRouter.Tier.FAST) {
+            val measured = usableNow.mapNotNull { m -> firstTokenMs(m)?.let { m to it } }
+            val best = measured.minByOrNull { it.second }
+            val cur = firstTokenMs(current)
+            if (best != null && best.first != current && (cur == null || best.second <= cur * 0.8)) return best.first
+            if (best != null && cur != null) return null
+        }
         val usable = catalogue.filter { ProviderModelCapabilityPolicy.isChatCapable(it) }.distinct()
         if (usable.isEmpty()) return null
         val base = power(current)

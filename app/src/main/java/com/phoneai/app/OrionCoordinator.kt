@@ -66,7 +66,11 @@ internal object OrionCoordinator {
         OrionEntityLoop.mark(OrionEntityLoop.Stage.PLAN)
         var ok = false
         try {
-            val out = OrionMissionControl.within(mission.id) { OrionEntityLoop.mark(OrionEntityLoop.Stage.ACT); holdAwake(c, block) }
+            val out = OrionMissionControl.within(mission.id) {
+                // Retrieve before act: assemble the one shared context first; the turn then reuses this snapshot.
+                if (text.isNotBlank()) runCatching { OrionTurnContext.snapshot(c, text) }
+                OrionEntityLoop.mark(OrionEntityLoop.Stage.ACT); holdAwake(c, block)
+            }
             ok = true
             return out
         } finally {
