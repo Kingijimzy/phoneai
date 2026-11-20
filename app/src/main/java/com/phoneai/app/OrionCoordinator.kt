@@ -68,8 +68,9 @@ internal object OrionCoordinator {
         try {
             val out = OrionMissionControl.within(mission.id) {
                 // Retrieve before act: assemble the one shared context first; the turn then reuses this snapshot.
-                if (text.isNotBlank()) runCatching { OrionTurnContext.snapshot(c, text) }
-                OrionEntityLoop.mark(OrionEntityLoop.Stage.ACT); holdAwake(c, block)
+                OrionTurnContext.withTurn(c, text.ifBlank { "turn" }) {
+                    OrionEntityLoop.mark(OrionEntityLoop.Stage.ACT); holdAwake(c, block)
+                }
             }
             ok = true
             return out

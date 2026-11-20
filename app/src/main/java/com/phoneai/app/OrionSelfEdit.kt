@@ -28,6 +28,31 @@ internal object OrionSelfEdit {
         return PROTECTED.any { p.contains(it) }
     }
 
+    /** Reasons a proposed file body must not be committed. Catches the usual model mistakes: truncation and placeholders. */
+    fun patchProblems(path: String, content: String): List<String> {
+        val out = mutableListOf<String>()
+        if (content.isBlank()) out += "content is empty"
+        if (Regex("(?i)(//|#|/\\*)\\s*\\.\\.\\.\\s*(rest of|existing|remaining|unchanged|other)").containsMatchIn(content) ||
+            Regex("(?i)(rest of (the )?(file|code)|existing code) (here|unchanged|remains)").containsMatchIn(content))
+            out += "content contains a placeholder instead of the real code (write the whole file)"
+        if (path.endsWith(".kt") && content.isNotBlank() && !Regex("(?m)^package\\s+[\\w.]+").containsMatchIn(content)) out += "Kotlin file has no package line"
+        if (path.endsWith(".json") && content.isNotBlank() && runCatching { org.json.JSONTokener(content).nextValue() }.isFailure) out += "not valid JSON"
+        return out
+    }
+
+    /** Merge gate: only a PR whose every check finished green may be merged. Pure over the check-runs payload. */
+    fun ciVerdict(checkRunsJson: String): String {
+        val runs = runCatching { JSONObject(checkRunsJson).optJSONArray("check_runs") }.getOrNull() ?: return "no CI result readable"
+        if (runs.length() == 0) return "no checks have run yet"
+        var pending = 0; val bad = mutableListOf<String>()
+        for (i in 0 until runs.length()) {
+            val r = runs.getJSONObject(i)
+            if (r.optString("status") != "completed") pending++
+            else if (r.optString("conclusion") !in setOf("success", "neutral", "skipped")) bad += r.optString("name") + ":" + r.optString("conclusion")
+        }
+        return when { bad.isNotEmpty() -> "CI failed: " + bad.joinToString(); pending > 0 -> "CI still running ($pending pending)"; else -> "OK" }
+    }
+
     fun repoOk(repo: String) = Regex("[A-Za-z0-9_.-]{1,60}/[A-Za-z0-9_.-]{1,100}").matches(repo) && repo.split("/").none { it.all { ch -> ch == '.' } }
 
     /** Branch names are used inside URL paths, so reject anything GitHub would not accept and normalise the shape. */
@@ -111,6 +136,7 @@ internal object OrionSelfEdit {
                 if (path.isBlank()) return "error: path required"
                 if (protectedPath(path)) return "error: the trading desk is off limits to self-editing."
                 val content = a.optString("content")
+                patchProblems(path, content).takeIf { it.isNotEmpty() }?.let { return "error: patch refused, " + it.joinToString("; ") + "." }
                 val message = a.optString("message").ifBlank { "Orion self-edit: $path" }
                 ensureBranch(c, repo, requestedBranch, base)?.let { return it }
                 val (gc, gt) = call(c, "GET", "/repos/$repo/contents/$path?ref=${enc(requestedBranch)}")
@@ -141,6 +167,14 @@ internal object OrionSelfEdit {
             }
             "merge" -> {
                 val n = a.optInt("number", 0).takeIf { it > 0 } ?: return "error: PR number required"
+                // Test gate: the compiler and test suite run in CI, so a merge needs a fully green head.
+                val (pc, pt) = call(c, "GET", "/repos/$repo/pulls/$n")
+                if (pc !in 200..299) return fail(pc, pt)
+                val sha = JSONObject(pt).optJSONObject("head")?.optString("sha").orEmpty()
+                val (cc, ct) = call(c, "GET", "/repos/$repo/commits/$sha/check-runs")
+                if (cc !in 200..299) return fail(cc, ct)
+                val verdict = ciVerdict(ct)
+                if (verdict != "OK") return "not merged: $verdict. Fix the branch or wait, then merge again."
                 val (code, text) = call(c, "PUT", "/repos/$repo/pulls/$n/merge", JSONObject().put("merge_method", "merge"))
                 if (code in 200..299) "merged PR #$n" else fail(code, text)
             }

@@ -1285,7 +1285,8 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 runCatching {
                     OrionModelRegistry.recordToolRound(svc, Nim.lastChatModel(), turn.toolCalls.size,
                         outcomes.count { it.dispatched },
-                        outcomes.count { OrionReflexion.looksFailed(it.content) }, priorRoundFailed)
+                        outcomes.count { OrionReflexion.looksFailed(it.content) }, priorRoundFailed,
+                        outcomes.count { it.dispatched && !OrionReflexion.looksFailed(it.content) })
                 }
                 outcomes.forEach { outcome ->
                     ui.note(activityNote(outcome.call.name, outcome.call.arguments, outcome.content))

@@ -31,7 +31,15 @@ internal object OrionTurnContext {
         return fresh
     }
 
-    fun text(context: Context, request: String): String = snapshot(context, request).text
+    private val turn = ThreadLocal<Snapshot?>()
+
+    /** Pin the turn's one snapshot on this thread so every later caller in the turn reuses it, whatever wording it passes. */
+    fun <T> withTurn(context: Context, request: String, block: () -> T): T {
+        turn.set(runCatching { snapshot(context, request) }.getOrNull())
+        try { return block() } finally { turn.set(null) }
+    }
+
+    fun text(context: Context, request: String): String = turn.get()?.text ?: snapshot(context, request).text
 
     internal fun resetForTest() { last = null; builds = 0 }
 }
