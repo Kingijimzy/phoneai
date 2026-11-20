@@ -229,7 +229,7 @@ internal object OrionBrain {
         "loop" -> OrionEntityLoop.report()
         "world" -> OrionWorldState.pretty(c)
         "foresight" -> a.optString("name").trim().let { n ->
-            if (n.isBlank()) "error: foresight needs name = the tool you are about to run."
+            if (n.isBlank()) "Predictions vs outcomes:\n" + OrionForesight.calibration()
             else OrionForesight.assess(n, OrionWorldState.build(c)).let { f -> if (f.level == OrionForesight.Level.OK) "No risk foreseen for $n right now." else "${f.level.name}: ${f.consequence}" }
         }
         "platform" -> listOf(OrionMissionControl.report(), OrionWorkers.list(c), OrionProviderHealth.report(c), OrionSpeedTrace.report(), OrionEntityLoop.report(),

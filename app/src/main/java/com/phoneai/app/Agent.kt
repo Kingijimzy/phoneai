@@ -1179,12 +1179,12 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
 
         fun dispatchNativeTool(name: String, args: JSONObject): String {
             // Predict before acting: a certain failure is skipped, a risk is attached to the result.
-            val forecast = runCatching { OrionForesight.assess(name, OrionWorldState.build(svc)) }.getOrNull()
+            val forecast = runCatching { OrionForesight.assess(name, OrionWorldState.build(svc), command) }.getOrNull()
             if (forecast?.level == OrionForesight.Level.BLOCK) return "error: " + forecast.consequence
             val stepId = OrionRunLog.begin(name, args)
             OrionProgress.bind(stepId)
             return try {
-                dispatchNativeToolInner(name, args).also { OrionRunLog.finish(stepId, it, OrionReflexion.looksFailed(it)) }
+                dispatchNativeToolInner(name, args).also { OrionRunLog.finish(stepId, it, OrionReflexion.looksFailed(it)); OrionForesight.record(svc, name, forecast?.level ?: OrionForesight.Level.OK, it) }
                     .let { r -> forecast?.let { OrionForesight.note(it) }?.takeIf { it.isNotBlank() }?.let { r + "\n" + it } ?: r }
             } catch (e: Throwable) {
                 OrionRunLog.finish(stepId, "error: ${e.message ?: e.javaClass.simpleName}", true)
