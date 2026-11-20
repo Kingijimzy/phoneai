@@ -14,18 +14,26 @@ internal object OrionEntityLoop {
         val missing: List<Stage> get() = Stage.values().filterNot { it in reached }
     }
 
+    /** The latest turn on any surface, readable from the UI thread for the live card. */
+    data class Live(val surface: String, val reached: Set<Stage>, val startedAt: Long, val endedAt: Long = 0L)
+    @Volatile var live: Live? = null
+        private set
+
     private val lock = Any()
     private val done = ArrayDeque<Turn>()
     private val active = ThreadLocal<MutableSet<Stage>?>()
     private val ordered = ThreadLocal<MutableList<Stage>?>()
     private val surfaceOf = ThreadLocal<String?>()
 
-    fun begin(surface: String) { active.set(mutableSetOf(Stage.OBSERVE)); ordered.set(mutableListOf(Stage.OBSERVE)); surfaceOf.set(surface) }
-    fun mark(stage: Stage) { if (active.get()?.add(stage) == true) ordered.get()?.add(stage) }
+    fun begin(surface: String) { active.set(mutableSetOf(Stage.OBSERVE)); ordered.set(mutableListOf(Stage.OBSERVE)); surfaceOf.set(surface); live = Live(surface, setOf(Stage.OBSERVE), System.currentTimeMillis()) }
+    fun mark(stage: Stage) {
+        if (active.get()?.add(stage) == true) { ordered.get()?.add(stage); live = live?.let { it.copy(reached = it.reached + stage) } }
+    }
 
     fun end(): Turn? {
         val reached = active.get() ?: return null
         val t = Turn(surfaceOf.get() ?: "?", reached.toSet(), ordered.get()?.toList().orEmpty())
+        live = live?.copy(endedAt = System.currentTimeMillis())
         active.set(null); ordered.set(null); surfaceOf.set(null)
         synchronized(lock) { done.addLast(t); while (done.size > 100) done.removeFirst() }
         return t

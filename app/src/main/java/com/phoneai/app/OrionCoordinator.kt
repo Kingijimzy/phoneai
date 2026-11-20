@@ -11,7 +11,7 @@ import android.content.Context
  */
 internal object OrionCoordinator {
     enum class Surface(val ownerInitiated: Boolean) {
-        CHAT(true), COMMAND(true), VOICE(true), SPECIALIST(true), TRADING(true), AUTONOMY(false), INITIATIVE(false)
+        CHAT(true), COMMAND(true), VOICE(true), SPECIALIST(true), TRADING(true), AUTONOMY(false), INITIATIVE(false), WORKER(false)
     }
     data class Entry(val at: Long, val surface: Surface, val summary: String, val admitted: Boolean)
 
@@ -55,13 +55,14 @@ internal object OrionCoordinator {
     }
 
     /** Run [block] as one admitted request from [surface]; returns null (and does not run it) when the brain is shut down. */
-    fun <T> run(c: Context, surface: Surface, text: String, block: () -> T): T? {
+    fun <T> run(c: Context, surface: Surface, text: String, ownerId: String? = null, onCancel: (() -> Unit)? = null,
+                evidence: (() -> String)? = null, block: () -> T): T? {
         if (!admit(c, surface, text)) return null
         val envelope = runCatching { OrionAdaptivePlan.assess(c) }.getOrNull()
         // A mission is only a top-level one when it comes from a real surface; spawned work attaches under the objective that asked.
         val mission = OrionMissionControl.begin(surface.name.lowercase(), text, parentId = OrionMissionControl.currentId(), mode = envelope?.mode?.name ?: "UNASSESSED")
-        val owner = OrionMissionControl.Owner("brain-" + surface.name.lowercase(), OrionMissionControl.OwnerKind.BRAIN)
-        OrionMissionControl.claim(mission.id, owner)
+        val owner = OrionMissionControl.Owner(ownerId ?: ("brain-" + surface.name.lowercase()), if (ownerId != null) OrionMissionControl.OwnerKind.WORKER else OrionMissionControl.OwnerKind.BRAIN)
+        OrionMissionControl.claim(mission.id, owner, onCancel)
         OrionToolGuard.reset()
         OrionEntityLoop.begin(surface.name.lowercase())
         OrionEntityLoop.mark(OrionEntityLoop.Stage.PLAN)
@@ -79,7 +80,7 @@ internal object OrionCoordinator {
             OrionEntityLoop.mark(OrionEntityLoop.Stage.LEARN); OrionEntityLoop.mark(OrionEntityLoop.Stage.REPORT)
             OrionEntityLoop.end()
             // The front door has no verifier of its own: finishing without evidence leaves the mission awaiting verification, never "done".
-            OrionMissionControl.finish(mission.id, ok, verified = false, evidence = if (ok) "reply produced; completion not independently verified" else "run ended with an error")
+            OrionMissionControl.finish(mission.id, ok, verified = false, evidence = runCatching { evidence?.invoke() }.getOrNull()?.takeIf { it.isNotBlank() } ?: if (ok) "reply produced; completion not independently verified" else "run ended with an error")
         }
     }
 

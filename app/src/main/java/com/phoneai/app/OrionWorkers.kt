@@ -44,6 +44,8 @@ internal object OrionWorkers {
 
     private fun state0(cancelled: Boolean, failure: String) = !cancelled && failure.isEmpty()
 
+    fun running(): List<Job> = jobs.values.filter { it.state == State.RUNNING }.sortedBy { it.startedAt }
+
     fun runningCount(): Int = jobs.values.count { it.state == State.RUNNING }
 
     fun spawn(svc: PhoneAiService, objective: String, label: String = ""): String {
@@ -56,16 +58,18 @@ internal object OrionWorkers {
         val ui = WorkerUi(id)
         val agent = Agent(svc, ui, background = true)
         live[id] = agent
-        // One owner: this worker owns a child mission under the objective that spawned it, and cancelling that objective stops it.
-        val mission = OrionMissionControl.begin("worker", goal, mode = runCatching { OrionAdaptivePlan.assess(svc).mode.name }.getOrDefault("UNASSESSED"))
-        OrionMissionControl.claim(mission.id, OrionMissionControl.Owner(id, OrionMissionControl.OwnerKind.WORKER)) { agent.stop() }
         Thread({
             var failure = ""
-            try { agent.run(prompt(name, goal)) } catch (e: Throwable) { failure = e.message ?: e.javaClass.simpleName }
+            // Same front door as every surface: one mission (child of the objective that asked), one owner, one loop trace.
+            val ran = try {
+                OrionCoordinator.run(svc, OrionCoordinator.Surface.WORKER, goal, ownerId = id, onCancel = { agent.stop() },
+                    evidence = { if (agent.stopped) "cancelled before finishing" else if (failure.isNotEmpty()) "error: $failure" else ui.last }) {
+                    try { agent.run(prompt(name, goal)) } catch (e: Throwable) { failure = e.message ?: e.javaClass.simpleName }
+                }
+            } catch (e: Throwable) { failure = e.message ?: e.javaClass.simpleName; Unit }
+            if (ran == null && failure.isEmpty()) failure = "Orion is shut down."
             val cancelled = agent.stopped
             live.remove(id)
-            if (cancelled) OrionMissionControl.cancel(mission.id)
-            else OrionMissionControl.finish(mission.id, state0(cancelled, failure), verified = false, evidence = (if (failure.isNotEmpty()) "error: $failure" else ui.last))
             val prev = jobs[id] ?: return@Thread
             val state = when { cancelled -> State.CANCELLED; failure.isNotEmpty() -> State.FAILED; else -> State.DONE }
             val result = (if (failure.isNotEmpty()) "error: $failure\n" else "") + ui.last
