@@ -18,8 +18,17 @@ internal object OrionForesight {
     private val heavy = setOf("dev_shell", "spawn_worker", "self_edit", "extension_test", "image_generate")
     private val irreversible = setOf("delete_file", "wipe", "send_message", "whatsapp_send", "sms_send", "place_trade", "bybit_order", "uninstall_app")
 
-    /** Pure: [world] is the OrionWorldState JSON. */
-    fun assess(tool: String, world: JSONObject): Forecast {
+    /** Tools that pull the owner's screen into another app or page. Orion solves problems silently instead. */
+    internal val switchesScreen = setOf("open_app", "open_deep_link", "whatsapp_compose", "open_file", "open_page", "system_intent", "open_url")
+    private val openIntent = Regex("\\b(open|launch|start|go to|take me|show me|navigate|switch to|bring up|pull up|call|dial|text|message|whatsapp|play|watch|play me)\\b", RegexOption.IGNORE_CASE)
+
+    /** Pure: the owner asked, in this request, to be taken somewhere. Background work, retries and error recovery never count. */
+    fun ownerWantsScreenChange(request: String): Boolean = openIntent.containsMatchIn(request)
+
+    /** Pure: [world] is the OrionWorldState JSON; [request] is the owner's current request ("" for background work). */
+    fun assess(tool: String, world: JSONObject, request: String = ""): Forecast {
+        if (tool in switchesScreen && !ownerWantsScreenChange(request))
+            return Forecast(Level.BLOCK, "$tool would switch the owner's screen or open another app, and they did not ask to be taken anywhere. Solve it silently: read_screen/look to inspect, research_web for information, dev_shell or the platform tools to fix, ask_agent for help. Only report the blocker if it truly needs the owner.")
         val network = world.optString("network", "")
         if (tool in needsNetwork && network == "offline")
             return Forecast(Level.BLOCK, "the phone is offline, so $tool cannot reach its service. Skipped to save a timeout; use an offline route or retry when the network is back.")
@@ -39,4 +48,33 @@ internal object OrionForesight {
     }
 
     fun note(f: Forecast): String = if (f.level == Level.OK) "" else "[foresight] " + f.consequence
+
+    /** Does the actual result match what was predicted? Surprises become lessons, and calibration is visible. */
+    internal data class Tally(var ok: Int = 0, var failed: Int = 0, var warned: Int = 0, var warnedAndFailed: Int = 0, var surprises: Int = 0)
+    private val ledger = java.util.concurrent.ConcurrentHashMap<String, Tally>()
+
+    /** Pure core: returns a lesson when an OK-forecast tool failed (a wrong prediction), else null. */
+    internal fun compare(tool: String, forecast: Level, failed: Boolean, resultHead: String): String? {
+        val t = ledger.getOrPut(tool) { Tally() }
+        synchronized(t) {
+            if (failed) t.failed++ else t.ok++
+            if (forecast == Level.WARN) { t.warned++; if (failed) t.warnedAndFailed++ }
+            if (forecast == Level.OK && failed) {
+                t.surprises++
+                return if (t.surprises == 2) "Foresight missed: $tool failed twice with no warning (${resultHead.take(80)}). Check its preconditions before calling it." else null
+            }
+        }
+        return null
+    }
+
+    fun record(c: android.content.Context, tool: String, forecast: Level, result: String) {
+        val failed = OrionReflexion.looksFailed(result)
+        compare(tool, forecast, failed, result.lineSequence().firstOrNull().orEmpty())?.let { runCatching { OrionLessons.learn(c, it) } }
+    }
+
+    fun calibration(): String {
+        val rows = ledger.entries.filter { it.value.ok + it.value.failed >= 2 }.sortedByDescending { it.value.surprises }.take(6)
+        if (rows.isEmpty()) return "No predictions compared with outcomes yet this session."
+        return rows.joinToString("\n") { (k, v) -> "$k: ${v.ok} ok, ${v.failed} failed, ${v.surprises} unforeseen failures" }
+    }
 }
