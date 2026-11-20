@@ -69,6 +69,7 @@ class OrionChatUiStateTest {
         assertTrue(isCompactExecutionNote(OrionChatLine(1, "note", "[TASK:RUNNING]\\nRunning python_exec")))
         assertTrue(isCompactExecutionNote(OrionChatLine(2, "note", "[TOOL_RESULT:FAILED]\\npython_exec")))
         assertFalse(isCompactExecutionNote(OrionChatLine(3, "note", "[TASK:WARNING]\\nApproval configuration needs review")))
+        assertTrue(isCompactExecutionNote(OrionChatLine(5, "note", "[TASK:WARNING]\\nWARNING: may modify data. Orion is continuing because you requested execution.")))
         assertFalse(isCompactExecutionNote(OrionChatLine(4, "ai", "I am working on it")))
     }
 }
