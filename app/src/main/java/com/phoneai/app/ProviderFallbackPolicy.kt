@@ -20,9 +20,17 @@ internal object ProviderFallbackPolicy {
         402, 404, 408, 410, 413, 422, 425, 429, 500, 502, 503, 504
     )
 
+    internal fun isHostLevelConnectFailure(message: String): Boolean {
+        val m = message.lowercase()
+        return m.contains("cannot connect (") && listOf("unknownhost", "eofexception", "connectexception", "sockettimeout", "sslhandshake", "noroutetohost", "connectionreset").any { it in m }
+    }
+
     fun shouldTryBackup(error: Throwable, autoSwitchEnabled: Boolean = true): Boolean {
         if (!autoSwitchEnabled || error is InterruptedException) return false
         val message = error.message.orEmpty().lowercase()
+        // One provider's host failing (DNS, dropped socket, refused or timed-out connect) costs no quota and says nothing about the others.
+        // Rotating is exactly right; a job must not die because a single endpoint is unreachable.
+        if (isHostLevelConnectFailure(message)) return true
         if (message == "stopped." ||
             message.startsWith("stopped before sending") ||
             message.contains("identical http failures") ||
