@@ -63,7 +63,7 @@ internal fun openActivityTarget(c: Context, t: OrionActivityHub.Target) {
         val activity = generateSequence(c) { (it as? android.content.ContextWrapper)?.baseContext }
             .filterIsInstance<MainChatActivity>().firstOrNull()
         when (t) {
-            is OrionActivityHub.Target.Studio -> c.startActivity(Intent(c, StudioActivity::class.java)
+            is OrionActivityHub.Target.Studio -> c.startActivity(Intent(c, CodeSpaceActivity::class.java)
                 .putExtra("page", if (t.page == "files") "editor" else t.page).also { i -> t.file?.let { i.putExtra("file", it) } }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             is OrionActivityHub.Target.Url -> {
                 if (activity != null) activity.openBrowserFromActivity(t.url)

@@ -11,12 +11,14 @@ internal object OrionMetacognition {
 
     private val tag = Regex("(?im)^[ \\t]*\\[?[ \\t]*confidence[ \\t]*[:=][ \\t]*(\\d{1,3})[ \\t]*%?[ \\t]*\\]?[ \\t]*\\.?[ \\t]*$")
 
+    private val inlineTag = Regex("(?i)[ \\t]*\\[[ \\t]*confidence[ \\t]*[:=][ \\t]*(\\d{1,3})[ \\t]*%?[ \\t]*\\]")
+
     /** Pull the confidence line off the reply (last one wins) and return the clean text. */
     fun parse(answer: String): Result {
-        val matches = tag.findAll(answer).toList()
+        val matches = (tag.findAll(answer) + inlineTag.findAll(answer)).sortedBy { it.range.first }.toList()
         if (matches.isEmpty()) return Result(answer.trim(), null)
         val pct = matches.last().groupValues[1].toIntOrNull()?.takeIf { it in 1..100 }
-        return Result(answer.replace(tag, "").replace(Regex("\n{3,}"), "\n\n").trim(), pct)
+        return Result(answer.replace(tag, "").replace(inlineTag, "").replace(Regex("\n{3,}"), "\n\n").trim(), pct)
     }
 
     /** Checking a greeting or a one-liner against the web is waste; check answers that assert something. */

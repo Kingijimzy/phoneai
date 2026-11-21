@@ -58,7 +58,7 @@ internal object OrionQuickCheck {
             val conn = URL("https://example.com").openConnection() as HttpURLConnection
             conn.connectTimeout = 4000; conn.readTimeout = 4000; conn.requestMethod = "HEAD"
             val code = conn.responseCode; conn.disconnect()
-            (if (code in 200..399) Level.PASS else Level.WARN) to "reached the internet (HTTP $code)"
+            (if (code in 100..599) Level.PASS else Level.WARN) to "reached the internet (HTTP $code)"
         }
         rows += probe("Senses", "voice") {
             val neural = Prefs.neuralVoice(c) && NeuralVoiceInstaller.isInstalled(c)
