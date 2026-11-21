@@ -7,7 +7,7 @@ import java.io.IOException
 
 class ProviderFallbackPolicyTest {
     @Test fun backupCountRemainsBounded() {
-        assertTrue(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS == 2)
+        assertTrue(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS == 4)
     }
 
     @Test fun rotatesForRateLimitsTimeoutsAndRecoverableProviderFailures() {

@@ -798,6 +798,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
             )
         }
         if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) {
+            verifiedResult += OrionDeadEnds.note(currentTask.ifBlank { "task" }, tool, verifiedResult)
             // Failure is not a reason to blindly repeat or immediately abandon the task.
             // Re-read the live UI once so the next planning turn can distinguish a failed
             // action from a delayed/partially completed action. Never treat the snapshot
