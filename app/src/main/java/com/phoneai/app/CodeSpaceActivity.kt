@@ -250,7 +250,6 @@ class CodeSpaceActivity : ComponentActivity() {
                 ToolButton(Icons.Rounded.CreateNewFolder, "New folder", { asking = "folder"; name = "" })
                 ToolButton(Icons.Rounded.Extension, "Plugins", onPlugins)
                 ToolButton(Icons.Rounded.Terminal, "Terminal", onTerminal)
-                ToolButton(Icons.Rounded.Tune, "Studio tools", { startActivity(Intent(this@CodeSpaceActivity, StudioActivity::class.java)) })
             }
             if (tabs.isNotEmpty()) {
                 Row(
