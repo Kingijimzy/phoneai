@@ -187,8 +187,8 @@ internal object IrreversibleActionConfirmationPolicy {
     /** Deleting a throwaway clone or temp file is routine housekeeping, not a data-loss risk, so it does not need the owner's approval. */
     internal fun withoutScratchCleanup(command: String): String =
         command
-            .replace(Regex("""cd\s+(?:/tmp|\$TMPDIR|/workspace/tmp)\s*&&\s*rm\s+-[a-zA-Z]+\s+[A-Za-z0-9._-]+(?:\s*&&)?"""), " ")
-            .replace(Regex("""rm\s+-[a-zA-Z]+\s+(?:/tmp/|\$TMPDIR/|/workspace/tmp/)[A-Za-z0-9._/-]+"""), " ")
+            .replace(Regex("""cd\s+(?:/tmp|/workspace/tmp)\s*&&\s*rm\s+-[a-zA-Z]+\s+[A-Za-z0-9._-]+(?:\s*&&)?"""), " ")
+            .replace(Regex("""rm\s+-[a-zA-Z]+\s+(?:/tmp/|/workspace/tmp/)[A-Za-z0-9._/-]+"""), " ")
     private val destructivePython = Regex(
         """(?is)\b(?:os\.(?:remove|unlink|rmdir)|shutil\.rmtree|pathlib\.Path\([^)]*\)\s*\.\s*(?:unlink|rmdir))\s*\("""
     )
