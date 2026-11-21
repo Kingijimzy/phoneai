@@ -469,6 +469,7 @@ internal fun isCompactExecutionNote(item: OrionChatLine): Boolean {
     if (text.startsWith("[TASK:") && !text.startsWith("[TASK:WARNING]")) return true
     if (item.kind != "me" && text.length < 600 && text.contains("this command may modify or erase important data")) return true
     // Routine "you asked for this, continuing" warnings are noise in the conversation; real warnings stay visible.
+    if (text.startsWith("[CAPABILITIES]")) return true
     if (text.startsWith("[TASK:WARNING]") && listOf("Orion is continuing because you requested execution", "is dispatched").any { it in text }) return true
     return listOf(
         "[TASK:RUNNING]", "[TASK:OUTPUT]", "[TASK:APPROVAL]", "[TASK:RECOVER]",
