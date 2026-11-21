@@ -28,6 +28,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -153,8 +155,43 @@ private fun OrionHud(w: org.json.JSONObject?, busy: Boolean, onClose: () -> Unit
                     repeat(3 - row.size) { Box(Modifier.weight(1f)) }
                 }
             }
+            OrionSelfTestPanel()
             val unread = w?.optJSONArray("unreadable")
             if (unread != null && unread.length() > 0) Text("Cannot read: " + (0 until unread.length()).joinToString { unread.optString(it) }, color = OrionUiPalette.warning, fontSize = 10.sp)
+        }
+    }
+}
+
+/** One tap runs the whole health check; results land row by row with their own colour. */
+@Composable
+private fun OrionSelfTestPanel() {
+    val context = LocalContext.current
+    var rows by remember { mutableStateOf<List<OrionQuickCheck.Row>?>(null) }
+    var running by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val pulse by rememberInfiniteTransition(label = "stp").animateFloat(0.4f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "p")
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(OrionUiPalette.raised).border(1.dp, HudCyan.copy(alpha = if (running) pulse else 0.45f), RoundedCornerShape(12.dp))
+            .clickable(enabled = !running) {
+                running = true; rows = null
+                scope.launch { rows = withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { OrionQuickCheck.run(context) }.getOrDefault(emptyList()) }; running = false }
+            }.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            HudGlyph("mission", HudCyan, if (running) pulse else 1f)
+            Column(Modifier.weight(1f)) {
+                Text(if (running) "CHECKING EVERYTHING…" else "RUN SELF-TEST", color = HudCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                Text(rows?.let { OrionQuickCheck.summary(it) } ?: "providers, voice, vision, memory, phone access, connected platforms", color = OrionUiPalette.text, fontSize = 11.sp)
+            }
+        }
+        rows?.forEachIndexed { i, r ->
+            var seen by remember(r) { mutableStateOf(false) }
+            LaunchedEffect(r) { kotlinx.coroutines.delay(60L * i); seen = true }
+            androidx.compose.animation.AnimatedVisibility(seen, enter = androidx.compose.animation.fadeIn(tween(260)) + androidx.compose.animation.slideInVertically(tween(260)) { it / 2 }) {
+                val tone = when (r.level) { OrionQuickCheck.Level.PASS -> OrionUiPalette.success; OrionQuickCheck.Level.WARN -> OrionUiPalette.warning; OrionQuickCheck.Level.FAIL -> OrionUiPalette.danger }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+                    Box(Modifier.padding(top = 4.dp).size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(tone))
+                    Column { Text(r.group.uppercase() + " · " + r.name, color = tone, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp); Text(r.note, color = OrionUiPalette.secondaryText, fontSize = 11.sp) }
+                }
+            }
         }
     }
 }

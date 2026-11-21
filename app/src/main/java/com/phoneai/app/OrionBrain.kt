@@ -244,7 +244,7 @@ internal object OrionBrain {
         "evaluate" -> OrionModelRegistry.evaluate(c)
         "plan" -> OrionAdaptivePlan.render(OrionAdaptivePlan.assess(c))
         "providers" -> OrionProviderHealth.report(c)
-        "selftest" -> OrionProviderHealth.selfTest(c)
+        "selftest" -> OrionProviderHealth.selfTest(c) + "\n\n" + OrionQuickCheck.render(OrionQuickCheck.run(c))
         "graph" -> graphReport(c)
         "cerebro" -> OrionCerebro.status(c)
         "prometheus" -> OrionPrometheus.status(c)
