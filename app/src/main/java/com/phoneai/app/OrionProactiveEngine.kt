@@ -34,7 +34,8 @@ internal object OrionProactiveEngine {
     /** Evaluate everything and return at most one item to speak, or null. */
     fun evaluate(
         context: Context,
-        now: Long = System.currentTimeMillis()
+        now: Long = System.currentTimeMillis(),
+        commitInterruption: Boolean = true
     ): ProactiveItem? {
         val app = context.applicationContext
 
@@ -161,13 +162,18 @@ internal object OrionProactiveEngine {
                 .thenBy { it.dueAtMillis ?: Long.MAX_VALUE })
             .firstOrNull() ?: return null
 
-        if (best.kind == "mission") OrionMissionControl.attention(now)?.let { OrionMissionControl.markAnnounced(it.id) }
+        // Context assembly is only a preview, not proof that the owner was interrupted.
+        // Callers must commit only when the item is actually delivered to the owner.
+        if (commitInterruption) markDelivered(app, best, now)
+        return best
+    }
 
-        // 6. Record the interruption so throttling applies.
+    /** Commit throttle/announcement state only after the selected item was actually delivered. */
+    fun markDelivered(context: Context, item: ProactiveItem, now: Long = System.currentTimeMillis()) {
+        val app = context.applicationContext
+        if (item.kind == "mission") OrionMissionControl.attention(now)?.let { OrionMissionControl.markAnnounced(it.id) }
         Prefs.setLastProactiveSpokenAt(app, now)
         recordSpoken(app, now)
-
-        return best
     }
 
     /** Format a millisecond delta as a short human string. */
