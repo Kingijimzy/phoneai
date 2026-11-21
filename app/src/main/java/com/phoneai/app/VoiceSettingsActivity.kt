@@ -147,6 +147,12 @@ class VoiceSettingsActivity : Activity() {
             addSwitch(this, "Lower pitch on Android fallback only", Prefs.deepVoice(this@VoiceSettingsActivity)) {
                 Prefs.setDeepVoice(this@VoiceSettingsActivity, it)
             }
+            addSwitch(this, "Gemini voice in chat (online, uses your Gemini key)", Prefs.geminiChatVoice(this@VoiceSettingsActivity)) {
+                Prefs.setGeminiChatVoice(this@VoiceSettingsActivity, it)
+                Toast.makeText(this@VoiceSettingsActivity,
+                    if (it) "Chat replies are sent to Google to be spoken. The local voice is used if Gemini is unreachable." else "Chat replies stay on the local voice.",
+                    Toast.LENGTH_LONG).show()
+            }
             addSwitch(this, "Offline-only voice output", Prefs.offlineVoiceOnly(this@VoiceSettingsActivity)) {
                 Prefs.setOfflineVoiceOnly(this@VoiceSettingsActivity, it)
                 Toast.makeText(
