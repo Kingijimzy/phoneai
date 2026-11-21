@@ -22,4 +22,8 @@ class OrionJobLedgerTest {
         assertEquals(job.objective, back.objective); assertEquals(3, back.steps.size)
     }
     @Test fun badIndexIsRejected() = assertTrue(OrionJobLedger.mark(job, 9, OrionJobLedger.State.VERIFIED, "something real").second.startsWith("error"))
+    @Test fun openJobReportsWhatIsUnverified() {
+        val text = OrionJobLedger.format(job)
+        assertTrue(text.contains("3 step(s) still open")); assertTrue(text.contains("do not report as done"))
+    }
 }
