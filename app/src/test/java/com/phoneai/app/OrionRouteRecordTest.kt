@@ -13,7 +13,7 @@ class OrionRouteRecordTest {
     }
     @Test fun clearingATempCloneNeedsNoApproval() {
         val cmd = "cd /tmp && rm -rf trader-orion && (git clone --depth 50 https://github.com/Kingijimzy/trader-orion.git 2>&1 | tail -20)"
-        assertFalse(Agent.destructiveAction("shell", org.json.JSONObject().put("command", cmd)) != null)
-        assertNotNull(Agent.destructiveAction("shell", org.json.JSONObject().put("command", "rm -rf /sdcard/DCIM")))
+        assertFalse(IrreversibleActionConfirmationPolicy.destructiveAction("shell", org.json.JSONObject().put("command", cmd)) != null)
+        assertNotNull(IrreversibleActionConfirmationPolicy.destructiveAction("shell", org.json.JSONObject().put("command", "rm -rf /sdcard/DCIM")))
     }
 }
