@@ -20,7 +20,8 @@ internal object OrionProactiveGate {
         val dueFollowUps: Int,
         val newCapabilities: Int,
         val untestedCapabilities: Int,
-        val unpromptedToday: Int
+        val unpromptedToday: Int,
+        val calendarSoon: Int = 0
     )
     data class Decision(val open: Boolean, val score: Double, val reason: String)
 
@@ -34,7 +35,7 @@ internal object OrionProactiveGate {
         if (s.minutesSinceOwnerActive < 2.0) return Decision(false, 0.0, "Kingi is active right now")
         val value = s.dueFollowUps * 1.2 + s.openFollowUps.coerceAtMost(3) * 0.2 +
             s.brokenTools.coerceAtMost(3) * 0.6 + s.newCapabilities.coerceAtMost(3) * 0.5 +
-            s.untestedCapabilities.coerceAtMost(10) * 0.05 + (s.hoursSinceLastInitiative / 24.0).coerceAtMost(0.5) +
+            s.untestedCapabilities.coerceAtMost(10) * 0.05 + s.calendarSoon.coerceAtMost(2) * 1.2 + (s.hoursSinceLastInitiative / 24.0).coerceAtMost(0.5) +
             // Curiosity: even with nothing queued, Orion studies, practises and builds after a few idle hours.
             ((s.hoursSinceLastInitiative - 2.0) / 4.0).coerceIn(0.0, 1.0)
         // Quiet hours: only urgent value may start unprompted work.
@@ -62,7 +63,8 @@ internal object OrionProactiveGate {
             dueFollowUps = followUps.count { (it.dueAt ?: Long.MAX_VALUE) <= now },
             newCapabilities = awareness.added.size + awareness.removed.size,
             untestedCapabilities = awareness.untested.size,
-            unpromptedToday = if (p.getLong("initiative_day", -1) == day) p.getInt("initiative_count", 0) else 0
+            unpromptedToday = if (p.getLong("initiative_day", -1) == day) p.getInt("initiative_count", 0) else 0,
+            calendarSoon = runCatching { OrionCalendarMonitor.upcoming(c, 3, now).count { it.minutesFromNow in 1..180 } }.getOrDefault(0)
         )
     }
 

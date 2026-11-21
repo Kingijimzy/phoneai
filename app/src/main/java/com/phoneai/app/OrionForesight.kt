@@ -52,6 +52,34 @@ internal object OrionForesight {
     /** Does the actual result match what was predicted? Surprises become lessons, and calibration is visible. */
     internal data class Tally(var totalMs: Long = 0, var ok: Int = 0, var failed: Int = 0, var warned: Int = 0, var warnedAndFailed: Int = 0, var surprises: Int = 0)
     private val ledger = java.util.concurrent.ConcurrentHashMap<String, Tally>()
+    @Volatile private var loaded = false
+    @Volatile private var lastSaved = 0L
+
+    /** Predictions and outcomes survive process death, so routing and calibration keep learning across sessions. */
+    internal fun serialize(): String = org.json.JSONObject().also { o ->
+        ledger.forEach { (k, v) -> synchronized(v) { o.put(k, org.json.JSONArray(listOf(v.totalMs, v.ok, v.failed, v.warned, v.warnedAndFailed, v.surprises))) } }
+    }.toString()
+
+    internal fun restore(json: String) {
+        runCatching {
+            val o = org.json.JSONObject(json)
+            o.keys().forEach { k -> val a = o.getJSONArray(k)
+                ledger.getOrPut(k) { Tally() }.let { t -> synchronized(t) { t.totalMs += a.optLong(0); t.ok += a.optInt(1); t.failed += a.optInt(2); t.warned += a.optInt(3); t.warnedAndFailed += a.optInt(4); t.surprises += a.optInt(5) } } }
+        }
+    }
+
+    private fun ensureLoaded(c: android.content.Context) {
+        if (loaded) return
+        synchronized(this) { if (loaded) return; loaded = true
+            c.applicationContext.getSharedPreferences("orion_foresight", android.content.Context.MODE_PRIVATE).getString("ledger", null)?.let { restore(it) } }
+    }
+
+    private fun save(c: android.content.Context, force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && now - lastSaved < 5_000) return
+        lastSaved = now
+        c.applicationContext.getSharedPreferences("orion_foresight", android.content.Context.MODE_PRIVATE).edit().putString("ledger", serialize()).apply()
+    }
 
     /** Pure core: returns a lesson when an OK-forecast tool failed (a wrong prediction), else null. */
     internal fun compare(tool: String, forecast: Level, failed: Boolean, resultHead: String): String? {
@@ -70,9 +98,11 @@ internal object OrionForesight {
     fun stats(): Map<String, Triple<Int, Int, Long>> = ledger.mapValues { Triple(it.value.ok, it.value.failed, it.value.totalMs) }
 
     fun record(c: android.content.Context, tool: String, forecast: Level, result: String, ms: Long = 0L) {
+        ensureLoaded(c)
         ledger.getOrPut(tool) { Tally() }.let { synchronized(it) { it.totalMs += ms } }
         val failed = OrionReflexion.looksFailed(result)
         compare(tool, forecast, failed, result.lineSequence().firstOrNull().orEmpty())?.let { runCatching { OrionLessons.learn(c, it) } }
+        runCatching { save(c) }
     }
 
     fun calibration(): String {

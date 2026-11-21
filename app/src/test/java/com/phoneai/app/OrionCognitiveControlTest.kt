@@ -25,4 +25,16 @@ class OrionCognitiveControlTest {
         assertNotNull(OrionForesight.compare("zz_tool", OrionForesight.Level.OK, true, "error: boom"))
         assertTrue(OrionForesight.calibration().contains("zz_tool"))
     }
+    @Test fun foresightLedgerRoundTripsThroughStorage() {
+        OrionForesight.compare("zz_probe_tool", OrionForesight.Level.OK, true, "boom")
+        val saved = OrionForesight.serialize()
+        assertTrue(saved.contains("zz_probe_tool"))
+        val before = OrionForesight.stats()["zz_probe_tool"]!!.second
+        OrionForesight.restore(saved)
+        assertEquals(before * 2, OrionForesight.stats()["zz_probe_tool"]!!.second)
+    }
+    @Test fun upcomingEventsAloneCanOpenTheProactiveGate() {
+        val s = OrionProactiveGate.Signals(5.0, 14, 30.0, 80, false, 0, 0, 0, 0, 0, 0, calendarSoon = 1)
+        assertTrue(OrionProactiveGate.decide(s).open)
+    }
 }

@@ -124,10 +124,20 @@ object OrionLivingLoop {
      * and queues a follow-up so Orion raises it with the owner instead of failing silently again.
      * Returns what it noticed (empty when all is well). Never throws.
      */
+    /** Anticipation: an event on the owner's calendar in the next three hours becomes prepared work, once, before he asks. */
+    internal fun prepareForEvents(c: Context, now: Long): String {
+        val soon = runCatching { OrionCalendarMonitor.upcoming(c, 3, now).filter { it.minutesFromNow in 1..180 } }.getOrDefault(emptyList())
+        val have = runCatching { OrionFollowUpStore.pending(c).map { it.text } }.getOrDefault(emptyList())
+        val fresh = soon.filter { e -> have.none { it.contains(e.title.take(40)) } }.take(2)
+        fresh.forEach { e -> OrionFollowUpStore.add(c, "Prepare for '${e.title.take(60)}' starting in ${e.minutesFromNow} minutes: find what it needs from my notes, messages and memory, and have a two-line brief ready to give Kingi before it starts.", e.startsAtMillis - 20 * 60_000L) }
+        return if (fresh.isEmpty()) "" else "Preparing for " + fresh.joinToString { it.title.take(40) }
+    }
+
     fun tick(c: Context, now: Long = System.currentTimeMillis()): String = runCatching {
         OrionBrain.dream(c, now).takeIf { it.isNotBlank() }?.let { OrionLessons.learn(c, it, now) }
+        val prepared = prepareForEvents(c, now)
         val broken = OrionSelfModel.degraded(c).filter { !it.flagged }
-        if (broken.isEmpty()) return@runCatching ""
+        if (broken.isEmpty()) return@runCatching prepared
         broken.forEach { h ->
             OrionLessons.learn(c, "${h.tool} failed ${h.consecutive} times in a row (${h.lastReason}); try a different route before using it again.", now)
             OrionFollowUpStore.add(c, "Self-repair: '${h.tool}' keeps failing (${h.lastReason}). Diagnose it. If it is a bug in your own code: self_edit read, write the patch, prove the logic in python_exec, open a PR, wait for CI, merge. Otherwise build a replacement with extension_create. Tell Kingi what you changed.".take(400), dueAt = now)
