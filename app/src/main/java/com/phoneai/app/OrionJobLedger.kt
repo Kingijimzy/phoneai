@@ -52,6 +52,16 @@ internal object OrionJobLedger {
         c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply { if (job == null) remove("job") else putString("job", toJson(job)) }.apply()
     }
 
+    /** An unfinished job is never silently dropped: queue one resume follow-up (once) so the proactive loop carries it on without the owner. */
+    fun resumeNote(c: Context): String {
+        val job = current(c) ?: return ""
+        if (job.finished) return ""
+        val tag = "Resume job: " + job.objective.take(60)
+        val have = runCatching { OrionFollowUpStore.pending(c).any { it.text.startsWith(tag) } }.getOrDefault(true)
+        if (!have) runCatching { OrionFollowUpStore.add(c, tag + ". Next open step: " + job.open.first().text + ". Continue it, verify with evidence, mark it, then report.") }
+        return "\n\nJob still open: ${job.open.size} of ${job.steps.size} steps unverified. I will keep going on it and report when it is finished."
+    }
+
     /** brain {action:"job", op: start|step|status|close, objective, steps[], index, state, evidence} */
     fun run(c: Context, a: JSONObject): String = when (a.optString("op").ifBlank { "status" }) {
         "start" -> {

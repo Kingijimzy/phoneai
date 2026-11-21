@@ -1395,6 +1395,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             }
         }
         OrionConfidence.record(confidence, verifiedBy)
+        if (checkedAnswer.isNotBlank()) checkedAnswer += runCatching { OrionJobLedger.resumeNote(svc) }.getOrDefault("")
         val safeAnswer = inOrionVoice(checkedAnswer.takeIf { it.isNotBlank() }
             ?: "I'm here. What would you like to talk about?")
         chatHist.put(msg("user", command))
