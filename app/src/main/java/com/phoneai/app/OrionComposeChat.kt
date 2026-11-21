@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -747,10 +748,25 @@ internal fun OrionComposeChatScreen(
                 val inlineArtifactIds = lines.flatMap { line ->
                     line.content.blocks.filterIsInstance<OrionMessageBlock.GeneratedFile>().map { it.artifactId }
                 }.toSet()
+                // Pictures come back after you leave and return: the stored copies are shown unless this session already shows them inline.
+                val pictures = if (lines.any { it.imageUri != null }) emptyList() else attachments.filter { OrionChatAttachmentPolicy.isImage(it) }.distinctBy { it.sha256.ifBlank { it.id } }
+                if (pictures.isNotEmpty()) {
+                    item(key = "orion-chat-pictures") {
+                        val ctx = androidx.compose.ui.platform.LocalContext.current
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("PICTURES IN THIS CHAT · ${pictures.size}", color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .9.sp)
+                            Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                pictures.forEach { a ->
+                                    ImageThumbnail(Uri.fromFile(OrionChatAttachmentStore.file(ctx, a)), Modifier.size(width = 168.dp, height = 168.dp).clip(RoundedCornerShape(14.dp)).clickable { onOpenAttachment(a) })
+                                }
+                            }
+                        }
+                    }
+                }
                 val unattached = OrionChatAttachmentPolicy.listed(attachments, inlineArtifactIds)
                 if (unattached.isNotEmpty()) {
                     item(key = "orion-chat-attachments") {
-                        var showFiles by rememberSaveable { mutableStateOf(false) }
+                        var showFiles by rememberSaveable { mutableStateOf(true) }
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(Modifier.clip(RoundedCornerShape(14.dp)).clickable { showFiles = !showFiles }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text("FILES IN THIS CHAT · ${unattached.size}", color = OrionUiPalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .9.sp)

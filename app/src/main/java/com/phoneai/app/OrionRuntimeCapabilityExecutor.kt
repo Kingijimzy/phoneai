@@ -51,7 +51,7 @@ internal object OrionRuntimeCapabilityExecutor {
         validateAction: (JSONObject) -> String = { "error: action validation callback unavailable" },
         verifyAction: (JSONObject) -> String = { "error: action verification callback unavailable" },
         verifySend: (JSONObject) -> String = { "error: send verification callback unavailable" },
-        look: (String) -> String = { "error: screen interpretation callback unavailable" },
+        look: (String, String) -> String = { _, _ -> "error: screen interpretation callback unavailable" },
         play: (String, Int) -> String = { _, _ -> "error: game-control callback unavailable" },
         readScreen: () -> String = { service.readScreen() },
         githubAccountRead: (String) -> String = { "error: GitHub account reader callback unavailable" },

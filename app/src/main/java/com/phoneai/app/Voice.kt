@@ -591,6 +591,9 @@ class Voice(private val ctx: Context) {
             created.release()
             throw IllegalStateException("Android could not open audio output for the neural voice.")
         }
+        // The streaming start threshold defaults to the whole buffer on Android 12+: with a 6 s buffer nothing is heard
+        // until 6 s of audio is queued, so short replies stayed silent. Start after a quarter second instead.
+        if (Build.VERSION.SDK_INT >= 31) runCatching { created.setStartThresholdInFrames((sampleRate / 4).coerceAtLeast(1)) }
         neuralTrack = created
         neuralTrackSampleRate = sampleRate
         neuralFramesWritten = 0L
