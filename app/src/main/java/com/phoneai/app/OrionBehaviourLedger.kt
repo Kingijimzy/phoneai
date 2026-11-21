@@ -95,7 +95,7 @@ internal object OrionBehaviourLedger {
         val events = recent(context, limit)
         if (events.isEmpty()) return "BEHAVIOUR LEDGER: no recorded events yet."
         return buildString {
-            append("BEHAVIOUR LEDGER (verified records only; unverified is not success):")
+            append("BEHAVIOUR LEDGER (recorded outcomes; unverified is not success):")
             events.forEach { event ->
                 append("\\n- ").append(event.category).append("/")
                     .append(event.surface).append(" [").append(event.outcome).append("]: ")
