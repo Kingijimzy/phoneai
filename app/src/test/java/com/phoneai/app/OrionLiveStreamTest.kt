@@ -51,6 +51,6 @@ class OrionOneStudioTest {
     }
     @Test fun everyActivityLaneAndStageHasItsOwnColour() {
         assertEquals(OrionActivityHub.Lane.values().size, OrionActivityHub.Lane.values().map { orionLaneColor(it) }.toSet().size)
-        assertEquals(OrionEntityLoop.Stage.values().size - 1, OrionEntityLoop.Stage.values().map { orionStageColor(it) }.toSet().size)
+        assertEquals(OrionEntityLoop.Stage.values().size, OrionEntityLoop.Stage.values().map { orionStageColor(it) }.toSet().size)
     }
 }
