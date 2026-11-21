@@ -105,6 +105,19 @@ internal object OrionForesight {
         runCatching { save(c) }
     }
 
+    /** Measured route record for tool choice: what has worked on this phone, and what keeps failing. Learned from outcomes, not written as rules. */
+    fun routeRecord(): String {
+        val rows = ledger.entries.map { Triple(it.key, it.value.ok, it.value.failed) }.filter { it.second + it.third >= 3 }
+        val proven = rows.filter { it.third * 5 <= it.second + it.third }.sortedByDescending { it.second }.take(6)
+        val poor = rows.filter { it.third >= 2 && it.third * 2 >= it.second + it.third }.sortedByDescending { it.third }.take(6)
+        if (proven.isEmpty() && poor.isEmpty()) return ""
+        return buildString {
+            append("ROUTE RECORD (measured on this phone; prefer proven routes, avoid unreliable ones unless nothing else fits):\n")
+            if (proven.isNotEmpty()) append("PROVEN: ").append(proven.joinToString(", ") { "${it.first} ${it.second}/${it.second + it.third}" }).append('\n')
+            if (poor.isNotEmpty()) append("UNRELIABLE: ").append(poor.joinToString(", ") { "${it.first} ${it.second}/${it.second + it.third}" }).append('\n')
+        }.trim()
+    }
+
     fun calibration(): String {
         val rows = ledger.entries.filter { it.value.ok + it.value.failed >= 2 }.sortedByDescending { it.value.surprises }.take(6)
         if (rows.isEmpty()) return "No predictions compared with outcomes yet this session."

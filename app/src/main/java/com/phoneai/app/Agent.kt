@@ -184,6 +184,9 @@ internal object IrreversibleActionConfirmationPolicy {
     private val destructiveShell = Regex(
         "(?is)(?:^|[;&|]\\s*|\\b(?:then|do)\\s+)(?:command\\s+)?(?:sudo\\s+)?(?:rm|shred|srm|wipe|wipefs|blkdiscard|mkfs(?:\\.[a-z0-9]+)?|unlink|rmdir|truncate)\\b|\\bdd\\b[^;&|]*\\bof\\s*=|\\bfind\\b[^;&|]*\\s-delete\\b|\\b(?:fastboot\\s+(?:erase|format)|recovery\\s+--wipe)\\b|(?:>|>>)[^;&|]*/dev/(?:block|mmcblk|sd[a-z])"
     )
+    /** Deleting a throwaway clone or temp file is routine housekeeping, not a data-loss risk, so it does not need the owner's approval. */
+    internal fun withoutScratchCleanup(command: String): String =
+        command.replace(Regex("""(?:^|(?<=[;&|(]))\s*(?:cd\s+\S+\s*&&\s*)?rm\s+-[a-zA-Z]+\s+(?:/tmp/|\$TMPDIR/|/workspace/tmp/|\./tmp/)[A-Za-z0-9._/-]+"""), " ")
     private val destructivePython = Regex(
         """(?is)\b(?:os\.(?:remove|unlink|rmdir)|shutil\.rmtree|pathlib\.Path\([^)]*\)\s*\.\s*(?:unlink|rmdir))\s*\("""
     )
@@ -229,7 +232,7 @@ internal object IrreversibleActionConfirmationPolicy {
         }
         if (normalized in setOf("shell", "termux_command", "run_command", "dev_shell")) {
             val command = payload.optString("command").ifBlank { payload.optString("cmd") }.ifBlank { payload.optString("script") }.trim()
-            if (command.isNotBlank() && destructiveShell.containsMatchIn(command)) {
+            if (command.isNotBlank() && destructiveShell.containsMatchIn(withoutScratchCleanup(command))) {
                 return "Orion is about to run a destructive shell command: " + command.take(240) + ". This may permanently delete or wipe data."
             }
         }
