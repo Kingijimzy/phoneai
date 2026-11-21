@@ -139,8 +139,8 @@ internal fun OrionRunSheet(onClose: () -> Unit) {
                 } else {
                     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                         steps.forEachIndexed { i, s ->
-                            val tone = when (s.status) { OrionRunLog.Status.RUNNING -> Cyan; OrionRunLog.Status.DONE -> Phosphor; OrionRunLog.Status.FAILED -> OrionUiPalette.danger }
                             val lane = OrionActivityHub.lane(s)
+                            val tone = if (s.status == OrionRunLog.Status.FAILED) OrionUiPalette.danger else orionLaneColor(lane)
                             Row(Modifier.fillMaxWidth().animateContentSize(tween(250)).clickable { picked = i; timeline = false }.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Box(Modifier.size(26.dp).graphicsLayer { val k = if (s.status == OrionRunLog.Status.RUNNING) 0.9f + 0.15f * pulse else 1f; scaleX = k; scaleY = k }.clip(CircleShape).border(1.dp, tone.copy(alpha = if (s.status == OrionRunLog.Status.RUNNING) pulse else 0.7f), CircleShape), contentAlignment = Alignment.Center) {

@@ -139,8 +139,8 @@ class MainActivity : ComponentActivity() {
             "soul_engine" -> { destination = SoulEngineActivity::class.java; intent = Intent(this, destination) }
             "watcher" -> { destination = SoulWatcherActivity::class.java; intent = Intent(this, destination) }
             "extensions" -> { destination = SelfExtensionLabActivity::class.java; intent = Intent(this, destination) }
-            "terminal" -> { destination = TerminalActivity::class.java; intent = Intent(this, destination) }
-            "workspace" -> { destination = WorkspaceShellActivity::class.java; intent = Intent(this, destination) }
+            "terminal" -> { destination = StudioActivity::class.java; intent = Intent(this, destination).putExtra("page", "terminal") }
+            "workspace" -> { destination = StudioActivity::class.java; intent = Intent(this, destination).putExtra("page", "editor") }
             "cloud_coding" -> { destination = CursorCloudAgentActivity::class.java; intent = Intent(this, destination) }
             "capabilities" -> { destination = CapabilityBoardActivity::class.java; intent = Intent(this, destination) }
             "capability_report" -> { destination = OrionCapabilityReportActivity::class.java; intent = Intent(this, destination) }

@@ -8,14 +8,14 @@ import android.content.Intent
  * (open_page tool) and the owner can reach from the command palette. Nothing here is a separate app.
  */
 internal object OrionPages {
-    data class Page(val id: String, val title: String, val about: String, val cls: Class<*>, val keywords: String = "")
+    data class Page(val id: String, val title: String, val about: String, val cls: Class<*>, val keywords: String = "", val startPage: String? = null)
 
     val all: List<Page> = listOf(
         Page("chat", "Chat (home)", "The conversation with Orion", MainChatActivity::class.java, "home talk"),
         Page("live", "Live call", "Hands-free voice conversation", LiveConversationActivity::class.java, "voice call talk"),
-        Page("studio", "Code Studio", "Editor, files, terminal, Git, build, runtime", CodeSpaceActivity::class.java, "code ide lsp git debug build registry plugins mcp marketplace"),
-        Page("terminal", "Terminal", "Linux shell and sandbox", TerminalActivity::class.java, "shell linux bash proot"),
-        Page("workspace", "Workspace", "Files and projects Orion builds", WorkspaceShellActivity::class.java, "files code project"),
+        Page("studio", "Code Studio", "Editor, files, terminal, Git, build, runtime", StudioActivity::class.java, "code ide lsp git debug build registry plugins mcp marketplace"),
+        Page("terminal", "Terminal", "Linux shell and sandbox", StudioActivity::class.java, "shell linux bash proot", "terminal"),
+        Page("workspace", "Workspace", "Files and projects Orion builds", StudioActivity::class.java, "files code project", "editor"),
         Page("browser", "Browser", "Orion's built-in browser", BrowserActivity::class.java, "web internet"),
         Page("tasks", "Tasks", "Objectives, missions and goals", TaskCenterActivity::class.java, "todo missions goals"),
         Page("agents", "Specialists", "Sub-agents and specialists", AgentsActivity::class.java, "agent subagent coder"),
@@ -56,7 +56,7 @@ internal object OrionPages {
     fun open(c: Context, name: String?): String {
         val page = find(name) ?: return "error: unknown page '${name.orEmpty()}'. Pages:\n" + list()
         return try {
-            c.startActivity(Intent(c, page.cls).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            c.startActivity(Intent(c, page.cls).also { i -> page.startPage?.let { i.putExtra("page", it) } }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             "Opened ${page.title}."
         } catch (e: Exception) {
             "error: could not open ${page.title} (${e.javaClass.simpleName})"

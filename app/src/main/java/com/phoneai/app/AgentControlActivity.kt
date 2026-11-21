@@ -78,7 +78,7 @@ class AgentControlActivity : Activity() {
         addButton("CONFIGURE PROACTIVE BRIEFING") { startActivity(Intent(this, ProactiveActivity::class.java)) }
         gamingStatus = addText("", 12f, Theme.MUTED, false, 4)
         addButton("OPEN GAMING & HOBBY COACH") { startActivity(Intent(this, GamingCoachActivity::class.java)) }
-        addButton("OPEN WORKSPACE TERMINAL") { startActivity(Intent(this, WorkspaceShellActivity::class.java)) }
+        addButton("OPEN WORKSPACE TERMINAL") { startActivity(Intent(this, StudioActivity::class.java).putExtra("page", "terminal")) }
         addButton("RUN SELF-TEST", true) { runSelfTest() }
         addButton("Open Android accessibility settings") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
 
