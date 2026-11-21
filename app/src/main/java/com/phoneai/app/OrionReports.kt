@@ -25,8 +25,11 @@ internal object OrionReports {
     fun report(c: Context, kind: String, text: String) {
         runCatching {
             if (!shouldReport(text)) return
-            if (!TelegramBridge.isConfigured(c)) return
-            TelegramBridge.send(c, format(kind, text))
+            val message = format(kind, text)
+            // Keep the report visible in the app even when Telegram is not connected.
+            runCatching { SoulEngineState.recordLesson(c, "owner_report", message, "reported") }
+            OrionBehaviourLedger.record(c, "owner_report", kind, text, "reported", "Persisted to the local behaviour ledger")
+            if (TelegramBridge.isConfigured(c)) TelegramBridge.send(c, message)
         }
     }
 }
