@@ -14,7 +14,7 @@ package com.phoneai.app
  */
 internal object ProviderFallbackPolicy {
     /** Maximum backup providers considered after the selected primary. */
-    const val MAX_BACKUP_PROVIDERS = 2
+    const val MAX_BACKUP_PROVIDERS = 4
 
     private val recoverableHttpStatuses = setOf(
         402, 404, 408, 410, 413, 422, 425, 429, 500, 502, 503, 504

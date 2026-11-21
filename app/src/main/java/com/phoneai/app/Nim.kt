@@ -22,6 +22,9 @@ internal class Nim internal constructor(private val ctx: Context, private val co
     companion object {
         /** provider id -> time (ms) until which it is skipped (rate limited or bad key) */
         val cooldown = ConcurrentHashMap<String, Long>()
+        /** Providers that failed for a lasting reason (no credit, bad key, no chat model). Skipped for a while instead of being retried on every request. */
+        val deadUntil = ConcurrentHashMap<String, Long>()
+        fun markDead(id: String, minutes: Long) { deadUntil[id] = System.currentTimeMillis() + minutes * 60_000L }
 
         /** provider id -> times of requests in the last minute (so we slow down BEFORE a limit is hit) */
         private val hits = ConcurrentHashMap<String, java.util.concurrent.ConcurrentLinkedDeque<Long>>()
@@ -998,7 +1001,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
         // command budget is the hard cap across model discovery, retries, and provider fallback.
         val backups = if (Prefs.autoSwitch(ctx)) {
             Providers.all
-                .filter { it.id != primary.id && usable(it) && (cooldown[it.id] ?: 0L) <= now }
+                .filter { it.id != primary.id && usable(it) && (cooldown[it.id] ?: 0L) <= now && (deadUntil[it.id] ?: 0L) <= now }
                 .let { list ->
                     // Best route first: backups with the lowest measured first-token latency go ahead of unmeasured ones.
                     val profiles = OrionModelRegistry.allProfiles(ctx)
@@ -1028,7 +1031,8 @@ internal class Nim internal constructor(private val ctx: Context, private val co
             }
             return answer
         }
-        val order = listOf(primary) + backups
+        // A provider known to be out of credit or without a chat model goes last: working routes answer first.
+        val order = if ((deadUntil[primary.id] ?: 0L) > now && backups.isNotEmpty()) backups + primary else listOf(primary) + backups
         for ((i, p) in order.withIndex()) {
             try {
                 return attempt(p, i < order.size - 1)
@@ -1217,7 +1221,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                     504
                 )
             }
-            if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
+            if (keyBad(r)) { markDead(p.id, 30); throw AiException("${p.label}: key rejected (${r.code}). Save a new key.") }
             if (r.code == 413) {
                 lastHttpStatus = 413
                 if (payloadRecoveryDepth < 3) {
@@ -1275,7 +1279,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                 cooldown[p.id] = System.currentTimeMillis() + wait.coerceIn(8, 60) * 1000L
                 throw AiException("${p.label}: rate limit reached (429); waited/retried when the provider supplied a short delay. ${if (hasBackup) "Trying another eligible provider." else "Retry after about ${wait.coerceIn(8, 60)} seconds or add another provider."}", 429)
             }
-            if (r.code == 402) throw AiException("${p.label}: out of credit (402).")
+            if (r.code == 402) { markDead(p.id, 30); throw AiException("${p.label}: out of credit (402).") }
             val modelProblem = r.code == 404 || r.code == 410 || r.code == 422 ||
                 (r.code == 400 && r.body.isNotEmpty())
             if (modelProblem) {
@@ -1301,6 +1305,7 @@ internal class Nim internal constructor(private val ctx: Context, private val co
                     // Show what the provider actually said, so a wrong model name or bad parameter is visible instead of guessed at.
                     val said = OrionChatFlood.cleanError(r.body).take(220).takeUnless { r.body.isBlank() }.orEmpty()
                     val why = if (said.isNotEmpty()) " Provider said: $said." else ""
+                    if (ProviderModelCapabilityPolicy.isEndpointMismatch(r.body)) markDead(p.id, 10)
                     val fix = " Open the model picker and choose a model this provider lists (\"$model\" may not exist there)."
                     throw AiException(
                         if (Prefs.autoSwitch(ctx)) "${p.label}: selected model $model returned HTTP ${r.code}; no eligible alternate model was available.$why$fix"
