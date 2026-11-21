@@ -32,7 +32,7 @@ internal object OrionDeviceCapabilityExecutor {
         validateAction: (JSONObject) -> String,
         verifyAction: (JSONObject) -> String,
         verifySend: (JSONObject) -> String,
-        look: (String) -> String,
+        look: (String, String) -> String,
         play: (String, Int) -> String,
         readScreen: () -> String,
         runRoutine: (String, String) -> String = { _, _ -> "error: saved routine replay callback unavailable" }
@@ -103,7 +103,7 @@ internal object OrionDeviceCapabilityExecutor {
         "scroll" -> expectedPackageError(args, service) ?: service.scroll(args.optString("direction", "down"))
         "type" -> expectedPackageError(args, service) ?: service.typeText(args.optString("text"))
         "key" -> service.key(args.optString("name"))
-        "look" -> look(args.optString("question", "Describe what is on the screen."))
+        "look" -> look(args.optString("question", "Describe what is on the screen."), args.optString("path").ifBlank { args.optString("image") })
         "play" -> play(args.optString("goal"), args.optInt("steps", 20))
         "routine_run" -> runRoutine("run", args.optString("name"))
         "routine_resume" -> runRoutine("resume", args.optString("name"))

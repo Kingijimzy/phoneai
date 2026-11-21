@@ -57,6 +57,21 @@ internal object OrionStreamText {
         val out = step.output.lineSequence().map { it.trim() }.filter { it.isNotBlank() && !it.startsWith("$ ") }.lastOrNull()
         return (out ?: step.detail.ifBlank { step.title }).replace(Regex("\\s+"), " ").take(140)
     }
+    /** What Orion is doing in plain words, driven by the stage it has really reached; a specific runtime status wins over the generic ones. */
+    fun thinkingPhrase(reached: Set<OrionEntityLoop.Stage>, status: String): String {
+        val generic = status.isBlank() || status.equals("Thinking", true) || status.startsWith("Thinking") || status.equals("Working...", true) || status.equals("Ready", true)
+        if (!generic) return status.removeSuffix("…").removeSuffix("...").take(80)
+        return when (OrionEntityLoop.Stage.values().lastOrNull { it in reached }) {
+            null, OrionEntityLoop.Stage.OBSERVE -> "Reading the situation"
+            OrionEntityLoop.Stage.RECALL -> "Recalling what matters"
+            OrionEntityLoop.Stage.REASON -> "Working it out"
+            OrionEntityLoop.Stage.PLAN -> "Choosing the best route"
+            OrionEntityLoop.Stage.ACT -> "Doing it"
+            OrionEntityLoop.Stage.VERIFY -> "Checking the result"
+            OrionEntityLoop.Stage.LEARN -> "Keeping what I learned"
+            OrionEntityLoop.Stage.REPORT -> "Putting it into words"
+        }
+    }
     fun trail(steps: List<OrionRunLog.Step>): List<String> =
         steps.filter { it.status != OrionRunLog.Status.RUNNING }.takeLast(2).map { (if (it.status == OrionRunLog.Status.FAILED) "retrying after: " else "") + it.title.take(60) }
 }
@@ -85,38 +100,16 @@ internal fun orionStageColor(stage: OrionEntityLoop.Stage): Color = when (stage)
     OrionEntityLoop.Stage.REPORT -> Color(0xFFB8CDBD)
 }
 
-/** The thinking loop made visible: eight nodes that fill as the turn moves, a pulse running toward the current one. */
+/** Grok/Claude-style thinking line: the words shimmer with a light sweeping through them, and they change as the stage changes. */
 @Composable
-internal fun OrionStageRibbon(reached: Set<OrionEntityLoop.Stage>, modifier: Modifier = Modifier) {
-    val t by rememberInfiniteTransition(label = "ribbon").animateFloat(0f, 1f, infiniteRepeatable(tween(1500, easing = LinearEasing)), label = "flow")
-    val stages = OrionEntityLoop.Stage.values()
-    val current = stages.lastOrNull { it in reached } ?: OrionEntityLoop.Stage.OBSERVE
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        stages.forEachIndexed { i, st ->
-            val on = st in reached; val c = orionStageColor(st); val isNow = st == current
-            Box(Modifier.size(10.dp).graphicsLayer { val k = if (isNow) 1f + 0.35f * kotlin.math.sin(t * 6.2832f) else 1f; scaleX = k; scaleY = k }
-                .clip(CircleShape).background(if (on) c else Color.Transparent).border(1.dp, c.copy(alpha = if (on) 1f else 0.35f), CircleShape))
-            if (i < stages.size - 1) {
-                val next = stages[i + 1] in reached
-                Box(Modifier.weight(1f).height(2.dp).padding(horizontal = 2.dp)) {
-                    Box(Modifier.fillMaxWidth().height(2.dp).background(OrionUiPalette.border))
-                    if (on) Box(Modifier.fillMaxWidth().height(2.dp).background(c.copy(alpha = if (next) 0.9f else 0.45f)))
-                    if (on && !next) Box(Modifier.fillMaxWidth(0.3f).height(2.dp).graphicsLayer { translationX = t * size.width * 3f }.background(c))
-                }
-            }
-        }
-    }
-}
-
-/** Reasoning wave: bars that breathe out of phase, so "thinking" is a living thing rather than a word. */
-@Composable
-internal fun OrionThinkingWave(tint: Color, modifier: Modifier = Modifier) {
-    val t by rememberInfiniteTransition(label = "wave").animateFloat(0f, 1f, infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "w")
-    Canvas(modifier.size(width = 54.dp, height = 22.dp)) {
-        val n = 9; val gap = size.width / n
-        for (i in 0 until n) {
-            val h = size.height * (0.25f + 0.7f * (0.5f + 0.5f * kotlin.math.sin((t + i * 0.11f) * 6.2832f)))
-            drawLine(tint.copy(alpha = 0.55f + 0.45f * (h / size.height)), Offset(gap * (i + 0.5f), (size.height - h) / 2), Offset(gap * (i + 0.5f), (size.height + h) / 2), strokeWidth = gap * 0.5f, cap = StrokeCap.Round)
+internal fun OrionThinkingText(text: String, tint: Color, modifier: Modifier = Modifier) {
+    val sweep by rememberInfiniteTransition(label = "shimmer").animateFloat(-200f, 600f, infiniteRepeatable(tween(1700, easing = LinearEasing)), label = "x")
+    val brush = androidx.compose.ui.graphics.Brush.linearGradient(
+        listOf(OrionUiPalette.muted, tint, OrionUiPalette.text, tint, OrionUiPalette.muted),
+        start = Offset(sweep - 160f, 0f), end = Offset(sweep + 160f, 0f))
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Crossfade(text, animationSpec = tween(350), label = "think") { shown ->
+            Text(shown, style = androidx.compose.ui.text.TextStyle(brush = brush, fontSize = 14.sp, fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -157,17 +150,14 @@ internal fun OrionLiveStream(status: String, mode: OrbView.Mode, modifier: Modif
     val caret by rememberInfiniteTransition(label = "caret").animateFloat(0.15f, 1f, infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "c")
     Column(modifier.fillMaxWidth().animateContentSize(tween(240)).padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (busy) {
-            OrionStageRibbon(reached, Modifier.padding(start = 40.dp, end = 6.dp, bottom = 4.dp))
             OrionStreamText.trail(steps).forEach { Crossfade(it, animationSpec = tween(300), label = "trail") { t -> Text(t, color = OrionUiPalette.muted.copy(alpha = 0.6f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 40.dp)) } }
         }
         Row(Modifier.fillMaxWidth().clickable(enabled = steps.isNotEmpty()) { sheet = true }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OrionOrb(Modifier.size(32.dp).clickable { hud = true }, busy = busy, mode = mode)
             if (busy || running != null) {
                 if (running != null) OrionActivityGlyph(OrionActivityHub.lane(running), true)
-                else OrionThinkingWave(orionStageColor(reached.lastOrNull() ?: OrionEntityLoop.Stage.OBSERVE))
-                val line = running?.let { OrionStreamText.nowLine(it) } ?: orionWorkingPhrase(status)
-                Crossfade(line, animationSpec = tween(260), label = "now", modifier = Modifier.weight(1f)) { shownLine -> Text(shownLine + if (caret > 0.5f) " ▍" else "", color = OrionUiPalette.secondaryText, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    fontFamily = if (running != null) FontFamily.Monospace else FontFamily.Default) }
+                if (running != null) Crossfade(OrionStreamText.nowLine(running), animationSpec = tween(260), label = "now", modifier = Modifier.weight(1f)) { shownLine -> Text(shownLine + if (caret > 0.5f) " ▍" else "", color = OrionUiPalette.secondaryText, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, fontFamily = FontFamily.Monospace) }
+                else OrionThinkingText(OrionStreamText.thinkingPhrase(reached, status), orionStageColor(reached.lastOrNull() ?: OrionEntityLoop.Stage.OBSERVE), Modifier.weight(1f))
                 running?.let { Text("${((now - it.startedAt).coerceAtLeast(0L) / 1000)}s", color = OrionUiPalette.muted, fontSize = 10.sp) }
             } else {
                 if (steps.isNotEmpty()) Text(">_ " + (if (steps.size == 1) "Ran 1 command" else "Ran ${steps.size} commands") + "  ›", color = OrionUiPalette.secondaryText, fontSize = 12.sp, modifier = Modifier.weight(1f))

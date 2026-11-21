@@ -54,3 +54,14 @@ class OrionOneStudioTest {
         assertEquals(OrionEntityLoop.Stage.values().size, OrionEntityLoop.Stage.values().map { orionStageColor(it) }.toSet().size)
     }
 }
+
+class OrionThinkingPhraseTest {
+    @Test fun phraseFollowsTheRealStage() {
+        assertEquals("Reading the situation", OrionStreamText.thinkingPhrase(emptySet(), "Thinking"))
+        assertEquals("Working it out", OrionStreamText.thinkingPhrase(setOf(OrionEntityLoop.Stage.OBSERVE, OrionEntityLoop.Stage.RECALL, OrionEntityLoop.Stage.REASON), "Working..."))
+        assertEquals("Checking the result", OrionStreamText.thinkingPhrase(setOf(OrionEntityLoop.Stage.OBSERVE, OrionEntityLoop.Stage.VERIFY), ""))
+    }
+    @Test fun aSpecificStatusBeatsTheGenericPhrase() {
+        assertEquals("Reading the calendar", OrionStreamText.thinkingPhrase(setOf(OrionEntityLoop.Stage.REASON), "Reading the calendar…"))
+    }
+}
