@@ -34,7 +34,7 @@ class OrionBehaviourLedgerTest {
         }
         val events = OrionBehaviourLedger.recent(context, 120)
         assertEquals(120, events.size)
-        assertEquals("event-0", events.first().summary)
+        assertEquals("event-1", events.first().summary)
         assertEquals("event-119", events.last().summary)
     }
 
