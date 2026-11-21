@@ -78,6 +78,7 @@ internal fun SoulEngineComposeScreen(
     status: String,
     metrics: String,
     selfTest: String,
+    behaviourReport: String,
     goal: String,
     mode: SoulEngineState.Mode,
     onSaveGoal: (String, SoulEngineState.Mode) -> Unit,
@@ -247,6 +248,16 @@ internal fun SoulEngineComposeScreen(
                             Text("SELF-TEST", color = EngineMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                             Text(selfTest, color = EngineSilver, fontSize = 11.sp, lineHeight = 16.sp)
                         }
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SectionTitle("RECENT BEHAVIOUR REPORT", "Observed activity · recorded outcomes · evidence")
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(EnginePanel)
+                            .border(1.dp, EngineLine, RoundedCornerShape(18.dp)).padding(14.dp)
+                    ) {
+                        Text(behaviourReport.ifBlank { "No behaviour report recorded yet." }, color = EngineSilver, fontSize = 11.sp, lineHeight = 17.sp)
                     }
                 }
 
