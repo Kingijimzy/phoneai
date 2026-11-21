@@ -1,6 +1,14 @@
 package com.phoneai.app
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -55,14 +63,14 @@ internal fun OrionLiveStream(status: String, mode: OrbView.Mode, modifier: Modif
     val confidence = OrionConfidenceView.label(grade, now)
     if (!busy && running == null && confidence == null && steps.isEmpty()) { OrionEnvironmentSheet(hud, false) { hud = false }; return }
     val caret by rememberInfiniteTransition(label = "caret").animateFloat(0.15f, 1f, infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "c")
-    Column(modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        if (busy) OrionStreamText.trail(steps).forEach { Text(it, color = OrionUiPalette.muted.copy(alpha = 0.6f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 40.dp)) }
+    Column(modifier.fillMaxWidth().animateContentSize(tween(240)).padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (busy) OrionStreamText.trail(steps).forEach { Crossfade(it, animationSpec = tween(300), label = "trail") { t -> Text(t, color = OrionUiPalette.muted.copy(alpha = 0.6f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 40.dp)) } }
         Row(Modifier.fillMaxWidth().clickable(enabled = steps.isNotEmpty()) { sheet = true }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OrionOrb(Modifier.size(32.dp).clickable { hud = true }, busy = busy, mode = mode)
             if (busy || running != null) {
                 val line = running?.let { OrionStreamText.nowLine(it) } ?: orionWorkingPhrase(status)
-                Text(line + if (caret > 0.5f) " ▍" else "", color = OrionUiPalette.secondaryText, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    fontFamily = if (running != null) FontFamily.Monospace else FontFamily.Default, modifier = Modifier.weight(1f))
+                Crossfade(line, animationSpec = tween(260), label = "now", modifier = Modifier.weight(1f)) { shownLine -> Text(shownLine + if (caret > 0.5f) " ▍" else "", color = OrionUiPalette.secondaryText, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    fontFamily = if (running != null) FontFamily.Monospace else FontFamily.Default) }
                 running?.let { Text("${((now - it.startedAt).coerceAtLeast(0L) / 1000)}s", color = OrionUiPalette.muted, fontSize = 10.sp) }
             } else {
                 if (steps.isNotEmpty()) Text(">_ " + (if (steps.size == 1) "Ran 1 command" else "Ran ${steps.size} commands") + "  ›", color = OrionUiPalette.secondaryText, fontSize = 12.sp, modifier = Modifier.weight(1f))
