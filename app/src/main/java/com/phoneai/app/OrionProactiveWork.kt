@@ -54,7 +54,7 @@ internal class OrionProactiveWorker(
                 if (watcher.limitations.isNotEmpty()) add("Limitations: ${watcher.limitations.joinToString()}")
                 if (watcher.nextStep.isNotBlank()) add("Next: ${watcher.nextStep}")
             }
-            val behaviourReport = reportParts.joinToString("\\n")
+            val behaviourReport = reportParts.joinToString("\n")
             OrionBehaviourLedger.record(applicationContext, "background_observation", "worker", behaviourReport,
                 if (watcher.status == "ready") "observed" else watcher.status,
                 "This heartbeat performs bounded local checks; it does not claim that queued goals were executed.")
