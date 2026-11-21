@@ -3,6 +3,7 @@ package com.phoneai.app
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 /**
  * Dev Agent — an integrated development specialist operating under the Central Brain.
@@ -23,9 +24,21 @@ internal class OrionDevAgent(
 ) {
     private val workspace = OrionPythonWorkspace(context)
 
+    /**
+     * The stored active project is only a path prefix when its folder actually exists.
+     * A deleted, renamed or never-created selection must never make every file operation
+     * fail: fall back to the workspace root instead.
+     */
+    private fun activeProjectOrBlank(): String {
+        val active = OrionProjectContext.get(context.applicationContext).trim().trim('/')
+        if (active.isBlank()) return ""
+        val root = runCatching { ShellRunner.workspace(context.applicationContext) }.getOrNull() ?: return active
+        return if (File(root, active).isDirectory) active else ""
+    }
+
     /** Resolve agent file operations against the same active project shown by Studio. */
     private fun projectPath(path: String): String {
-        val active = OrionProjectContext.get(context.applicationContext).trim().trim('/')
+        val active = activeProjectOrBlank()
         val relative = path.trim().trim('/')
         if (active.isBlank() || relative == active || relative.startsWith("$active/")) return relative
         return if (relative.isBlank()) active else "$active/$relative"
@@ -185,7 +198,8 @@ internal class OrionDevAgent(
         val warning = ShellPolicy.warning(command)
         // Dev builds and tests belong in the same Alpine workspace used by CPython,
         // not Android's minimal /system/bin/sh environment.
-        val activeProject = OrionProjectContext.get(context.applicationContext).trim().trim('/')
+        // A stale active project falls back to the workspace root instead of blocking the command.
+        val activeProject = activeProjectOrBlank()
         val projectDir = if (activeProject.isBlank()) "/workspace" else if (OrionStudio.validPath(activeProject)) "/workspace/$activeProject" else null
         if (projectDir == null) return DevResult(action = "run_shell_command", blocker = "active project path is invalid; command was not executed.", summary = "No shell command was executed.")
         val result = shellRunner(context.applicationContext, "cd \"$projectDir\" && $command", OrionUbuntu.where(context.applicationContext))
@@ -267,7 +281,8 @@ internal class OrionDevAgent(
      * and what remains to be done. This is the Dev Agent's honest status report.
      */
     fun projectSummary(): DevResult {
-        val listing = workspace.list(OrionProjectContext.get(context.applicationContext))
+        val activeProject = activeProjectOrBlank()
+        val listing = if (activeProject.isBlank()) workspace.list() else workspace.list(activeProject)
         val fileCount = if (listing.startsWith("error:")) 0 else listing.lines().filter { it.isNotEmpty() }.size
         val backupCount = workspace.backupCount()
         val trashCount = workspace.trashCount()
