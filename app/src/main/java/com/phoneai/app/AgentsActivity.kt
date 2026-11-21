@@ -67,7 +67,7 @@ class AgentsActivity : Activity() {
             setLineSpacing(dp(2).toFloat(), 1f)
         })
 
-        val agents = AgentProfiles.all
+        val agents = AgentProfiles.everyone(this)
         val learnedTotal = agents.sumOf { AgentLessons.list(this, it.id).size }
         val summary = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -76,7 +76,7 @@ class AgentsActivity : Activity() {
             background = surface(Theme.PANEL, 12)
         }
         val summaryText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        summaryText.addView(label("${agents.size} SPECIALISTS", 11f, Theme.SILVER, true))
+        summaryText.addView(label("${agents.size} SPECIALISTS  ·  ${OrionMissionControl.active().size} ACTIVE JOBS", 11f, Theme.SILVER, true))
         summaryText.addView(label("$learnedTotal saved learning notes across your agents", 11f, Theme.MUTED).apply {
             setPadding(0, dp(4), 0, 0)
         })
@@ -126,6 +126,7 @@ class AgentsActivity : Activity() {
             }
             val details = buildList {
                 if (agent.acceptsImages) add("IMAGE READY")
+                if (OrionTeam.isCustom(this@AgentsActivity, agent.id)) add("CUSTOM")
                 add(if (learned == 0) "NO SAVED LESSONS" else "$learned LEARNED")
             }.joinToString("   ·   ")
             status.addView(label(details, 9f, Theme.SILVER, true))

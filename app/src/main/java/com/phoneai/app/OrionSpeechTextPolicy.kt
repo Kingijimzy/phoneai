@@ -54,6 +54,24 @@ internal object OrionSpeechTextPolicy {
             .take(12_000)
     }
 
+    private val hash = Regex("(?i)\\b(?:sha-?\\d*[: ]*)?[0-9a-f]{12,}(?:\u2026|\\.\\.\\.)?")
+    private val path = Regex("(?<![\\w])/?(?:[\\w.-]+/){2,}[\\w.-]*")
+    private val clock = Regex("\\b\\d{1,2}:\\d{2}:\\d{2}\\b")
+    private val numberRun = Regex("(?:[-+]?\\d[\\d,]*\\.?\\d*%?[ ,;]+){4,}")
+
+    /** What is worth saying aloud: tables, hashes, paths, timestamps and number runs stay on screen; the voice keeps the point. */
+    fun spoken(input: String, maxSentences: Int = 5, maxChars: Int = 700): String {
+        val withoutTables = input.lineSequence().filterNot { it.trim().startsWith("|") }.joinToString("\n")
+        var t = prepare(withoutTables)
+        t = hash.replace(t, " "); t = path.replace(t, "the file"); t = clock.replace(t, " "); t = numberRun.replace(t, " ")
+        t = t.replace(Regex("\\s+"), " ").replace(Regex("\\s+([,.;:!?])"), "$1").trim()
+        val sentences = Regex("(?<=[.!?])\\s+").split(t).filter { it.isNotBlank() }
+        var out = sentences.take(maxSentences).joinToString(" ")
+        var cut = sentences.size > maxSentences
+        if (out.length > maxChars) { out = out.take(maxChars).substringBeforeLast(' ').trimEnd(',', ';', ':'); cut = true }
+        return if (cut) "$out The rest is on screen." else out
+    }
+
     private fun isStructuredPayload(text: String): Boolean {
         val value = text.trim()
         if (value.length < 2) return false

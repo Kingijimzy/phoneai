@@ -1385,6 +1385,15 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 }
             }
         }
+        if (!stopped && OrionSelfReview.worthReviewing(command, checkedAnswer)) {
+            ui.note("[REVIEW] Checking the work against the request before handing it over.")
+            val review = JSONArray().put(msg("user", OrionSelfReview.prompt(command, checkedAnswer)))
+            val verdict = runCatching { OrionSelfReview.parse(talkNim.chat(review, false, 2800, 0.1), checkedAnswer) }.getOrNull()
+            if (verdict != null && !verdict.ok) {
+                val fixed = OrionMetacognition.parse(verdict.text)
+                if (fixed.text.isNotBlank()) { checkedAnswer = fixed.text; verifiedBy = "self-review" }
+            }
+        }
         OrionConfidence.record(confidence, verifiedBy)
         val safeAnswer = inOrionVoice(checkedAnswer.takeIf { it.isNotBlank() }
             ?: "I'm here. What would you like to talk about?")

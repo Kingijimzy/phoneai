@@ -186,7 +186,7 @@ class Voice(private val ctx: Context) {
         callback?.let { cb -> main.post { cb() } }
     }
 
-    private fun clean(s: String): String = OrionSpeechTextPolicy.prepare(s)
+    private fun clean(s: String): String = OrionSpeechTextPolicy.spoken(s)
 
     /** Split long replies on sentence boundaries, preserving conversational flow. */
     /** Keep split logic isolated so queue boundaries can be tested without a TTS engine. */

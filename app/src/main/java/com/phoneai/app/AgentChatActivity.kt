@@ -444,7 +444,7 @@ class AgentChatActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        agent = AgentProfiles.find(intent.getStringExtra(EXTRA_AGENT)) ?: AgentProfiles.all.first()
+        agent = intent.getStringExtra(EXTRA_AGENT).let { id -> AgentProfiles.find(id) ?: AgentProfiles.custom(this).firstOrNull { it.id.equals(id?.trim(), true) } } ?: AgentProfiles.all.first()
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Theme.BG) }
 
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(18), statusBarPad(), dp(14), dp(8)) }
