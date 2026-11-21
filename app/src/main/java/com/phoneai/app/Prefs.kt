@@ -464,6 +464,9 @@ object Prefs {
 
     /** Prevent text-to-speech from using a voice that requires a network service. */
     fun offlineVoiceOnly(c: Context): Boolean = sp(c).getBoolean("offline_voice_only", true)
+    /** Opt-in: speak chat replies with Gemini's voice (online). Off by default; local voice remains the fallback. */
+    fun geminiChatVoice(c: Context): Boolean = sp(c).getBoolean("gemini_chat_voice", false)
+    fun setGeminiChatVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("gemini_chat_voice", v).apply()
     fun setOfflineVoiceOnly(c: Context, v: Boolean) = sp(c).edit().putBoolean("offline_voice_only", v).apply()
 
     /** Enable model-aware routing for assistant requests. */

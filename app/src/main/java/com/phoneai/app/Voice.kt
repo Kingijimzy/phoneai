@@ -218,6 +218,11 @@ class Voice(private val ctx: Context) {
             return
         }
 
+        if (OrionGeminiVoice.available(ctx)) {
+            speakGemini(chunks, onDone)
+            return
+        }
+
         // The installed Kokoro voice is British English. Other phone languages
         // retain Android TTS rather than being read with an inappropriate English model.
         if (Prefs.neuralVoice(ctx) &&
@@ -465,6 +470,48 @@ class Voice(private val ctx: Context) {
                     // This covers a playback-drain failure after every sentence was generated.
                     for (index in completedBeforeFallback until chunks.size) finished(ids[index])
                 }
+            } finally {
+                abandonNeuralAudioFocus()
+            }
+        }
+    }
+
+    /** Gemini's voice for chat replies. Plays through the shared track; on any failure the rest is spoken by the local voice. */
+    private fun speakGemini(chunks: List<String>, onDone: (() -> Unit)?) {
+        val token = playbackGeneration.get()
+        val ids = chunks.mapIndexed { index, _ -> "g" + System.nanoTime() + "_" + index }
+        ids.forEach { pendingIds.add(it) }
+        if (onDone != null) callbacks[ids.last()] = onDone
+        if (pending.getAndAdd(chunks.size) == 0) {
+            main.post { if (token == playbackGeneration.get() && pending.get() > 0) onSpeaking?.invoke(true) }
+        }
+        neuralWorker.execute {
+            var track: AudioTrack? = null
+            var next = 0
+            try {
+                requestNeuralAudioFocus()
+                for (index in chunks.indices) {
+                    if (token != playbackGeneration.get()) return@execute
+                    val samples = OrionGeminiVoice.synthesize(ctx, chunks[index]) ?: break
+                    val out = track ?: obtainNeuralTrack(OrionGeminiVoice.SAMPLE_RATE).also { track = it }
+                    if (!writeNeuralSamples(out, samples, token)) return@execute
+                    next = index + 1
+                    if (index < chunks.lastIndex) finished(ids[index])
+                }
+                val active = track
+                if (active != null) awaitNeuralPlayback(active, neuralFramesWritten, token)
+                if (token != playbackGeneration.get()) return@execute
+                if (next >= chunks.size) { finished(ids.last()); return@execute }
+                // Gemini stopped answering partway: the local voice finishes the reply, so Orion is never silent.
+                val completion = callbacks.remove(ids.last())
+                val rest = chunks.subList(next, chunks.size)
+                if (Prefs.neuralVoice(ctx) && Locale.getDefault().language == "en" && NeuralVoiceInstaller.isInstalled(ctx)) speakNeural(rest, completion) else speakWithAndroidTts(rest, completion)
+                for (index in next until chunks.size) finished(ids[index])
+            } catch (error: Throwable) {
+                if (token != playbackGeneration.get()) return@execute
+                val completion = callbacks.remove(ids.last())
+                speakWithAndroidTts(chunks.subList(next.coerceIn(0, chunks.size), chunks.size), completion)
+                for (index in next until chunks.size) finished(ids[index])
             } finally {
                 abandonNeuralAudioFocus()
             }

@@ -16,7 +16,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 
-/** Optional short-lived, quota-visible Gemini Live conversation. Never exposes phone-control tools. */
+/** Optional short-lived, quota-visible Gemini Live conversation. Voice is the ears and mouth; real work goes through ask_orion to Orion's one agent and tool registry. */
 internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, PhoneAiService.MainChatListener {
     private lateinit var visual: LiveCallVisualView
     private lateinit var statusView: TextView
