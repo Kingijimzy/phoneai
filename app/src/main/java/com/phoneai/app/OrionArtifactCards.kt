@@ -36,8 +36,8 @@ internal object OrionArtifactCards {
     /** Opens the space a card belongs to. */
     fun open(c: android.content.Context, card: Card) {
         val intent = when (card.kind) {
-            Kind.CODE -> android.content.Intent(c, CodeSpaceActivity::class.java).putExtra("snippet", card.target).putExtra("lang", card.extra)
-            Kind.FILE -> android.content.Intent(c, CodeSpaceActivity::class.java).putExtra("file", card.target)
+            Kind.CODE -> android.content.Intent(c, StudioActivity::class.java).putExtra("snippet", card.target).putExtra("lang", card.extra)
+            Kind.FILE -> android.content.Intent(c, StudioActivity::class.java).putExtra("file", card.target)
             Kind.PREVIEW -> android.content.Intent(c, BrowserActivity::class.java).putExtra(BrowserActivity.EXTRA_URL, card.target)
         }
         runCatching { c.startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }

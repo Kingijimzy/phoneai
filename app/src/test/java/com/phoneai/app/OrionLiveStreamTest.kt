@@ -43,3 +43,14 @@ class OrionRunSheetTest {
         assertEquals(0.5f, OrionRunSheetText.share(b, listOf(a, b), 0L), 0.001f)
     }
 }
+
+class OrionOneStudioTest {
+    @Test fun everyCodePageOpensTheSingleStudioHost() {
+        listOf("studio", "terminal", "workspace").forEach { assertEquals(StudioActivity::class.java, OrionPages.find(it)?.cls) }
+        assertEquals("terminal", OrionPages.find("terminal")?.startPage)
+    }
+    @Test fun everyActivityLaneAndStageHasItsOwnColour() {
+        assertEquals(OrionActivityHub.Lane.values().size, OrionActivityHub.Lane.values().map { orionLaneColor(it) }.toSet().size)
+        assertEquals(OrionEntityLoop.Stage.values().size, OrionEntityLoop.Stage.values().map { orionStageColor(it) }.toSet().size)
+    }
+}
