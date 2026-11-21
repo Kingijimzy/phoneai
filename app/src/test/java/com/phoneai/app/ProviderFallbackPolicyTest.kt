@@ -58,4 +58,13 @@ class ProviderFallbackPolicyTest {
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 503", 503), false))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 413", 413), false))
     }
+
+    @Test fun oneHostFailingRotatesToTheNextProvider() {
+        val dns = RuntimeException("deepseek 100m: cannot connect (UnknownHostException). Check internet.")
+        val eof = RuntimeException("deepseek 100m: cannot connect (EOFException). Check internet.")
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(dns))
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(eof))
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(dns, false))
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(RuntimeException("Stopped.")))
+    }
 }

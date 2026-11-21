@@ -46,6 +46,16 @@ internal object OrionQuickCheck {
     }
 
     /** Runs every probe that needs only a Context. Blocking (network probes): call off the main thread. */
+    /** Every setting that quietly stops Orion from doing something, said plainly with the fix. */
+    fun switchRows(c: Context): List<Row> = buildList {
+        if (Prefs.offlineMode(c)) add(Row("Switches", "offline mode", Level.FAIL, "ON: cloud models are blocked. Turn it off in Settings to think online."))
+        if (Prefs.failFastOffline(c)) add(Row("Switches", "fail fast offline", Level.WARN, "ON: with no network Orion stops at once instead of waiting."))
+        if (Prefs.offlineVoiceOnly(c)) add(Row("Switches", "offline-only voice", Level.WARN, "ON: no network voice, and silence if no local voice is installed."))
+        if (!Prefs.geminiChatVoice(c)) add(Row("Switches", "Gemini voice", Level.WARN, "off: chat replies use the local voice. Voice settings has the switch."))
+        if (!Prefs.neuralVoice(c)) add(Row("Switches", "neural voice", Level.WARN, "off: chat replies use the plain Android voice."))
+        if (isEmpty()) add(Row("Switches", "switches", Level.PASS, "nothing is quietly blocking Orion"))
+    }
+
     fun run(c: Context): List<Row> {
         val rows = ArrayList<Row>()
         val configured = Providers.all.filter { Prefs.hasKey(c, it.id) || it.noKey }
@@ -72,6 +82,7 @@ internal object OrionQuickCheck {
             val n = MemoryStore.all(c).size
             if (n > 0) Level.PASS to "$n memories stored" else Level.WARN to "memory is empty; Orion knows nothing about you yet"
         }
+        rows += switchRows(c)
         rows += probe("Phone", "accessibility") {
             val on = Settings.Secure.getString(c.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)?.split(':')?.any { it.substringBefore('/').equals(c.packageName, true) } == true
             if (on) Level.PASS to "screen reading and taps are on" else Level.WARN to "off: Orion cannot read or tap the screen"
