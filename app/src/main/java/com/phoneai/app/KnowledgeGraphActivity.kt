@@ -72,24 +72,35 @@ class KnowledgeGraphActivity : Activity() {
         host.addView(actions, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         query.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { render() }
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { host.removeCallbacks(searchRun); host.postDelayed(searchRun, 180) }
             override fun afterTextChanged(s: Editable?) {}
         })
         render()
     }
 
+    private var gen = 0
+    private val searchRun = Runnable { render() }
+
     private fun render() {
         if (!::host.isInitialized) return
-        val facts = runCatching { KnowledgeGraph.all(this) }.getOrDefault(emptyList())
-        count.text = facts.size.toString() + " saved relationship(s) · local storage"
+        val g = ++gen
+        val q = if (::query.isInitialized) query.text?.toString()?.trim().orEmpty() else ""
+        Thread {
+            runCatching {
+                val facts = runCatching { KnowledgeGraph.all(this) }.getOrDefault(emptyList())
+                val visible = if (q.isBlank()) facts.sortedByDescending { it.lastAt }.take(40) else GraphPolicy.related(facts, q, 40)
+                runOnUiThread { if (g == gen && !isFinishing) draw(facts.size, visible) }
+            }
+        }.start()
+    }
+
+    private fun draw(total: Int, visible: List<GraphFact>) {
+        count.text = total.toString() + " saved relationship(s) · local storage"
         // Keep the first four fixed controls and replace only the result cards.
         while (host.childCount > 6) host.removeViewAt(6)
-        val q = if (::query.isInitialized) query.text?.toString()?.trim().orEmpty() else ""
-        val visible = if (q.isBlank()) facts.sortedByDescending { it.lastAt }.take(100)
-            else GraphPolicy.related(facts, q, 50)
         if (visible.isEmpty()) {
             host.addView(panel().apply {
-                addView(label(if (facts.isEmpty()) "Your graph is empty" else "No matching relationships", 15f, Theme.TEXT, true))
+                addView(label(if (total == 0) "Your graph is empty" else "No matching relationships", 15f, Theme.TEXT, true))
                 addView(label("Use Teach graph to add a statement. Orion stores only facts that pass its local extraction rules.", 12f, Theme.MUTED))
             })
         } else {
@@ -99,6 +110,7 @@ class KnowledgeGraphActivity : Activity() {
                     addView(label(fact.rel.uppercase(), 10f, Theme.TEXT_SECONDARY, true))
                     addView(label(fact.b, 16f, Theme.TEXT, true))
                     addView(label("Observed " + fact.count + " time(s)", 10f, Theme.MUTED))
+                    alpha = 0f; animate().alpha(1f).setDuration(200).start()
                 })
             }
         }

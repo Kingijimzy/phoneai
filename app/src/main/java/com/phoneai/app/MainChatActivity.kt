@@ -625,7 +625,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     composeChatTitle.value = "Orion"
                     getSharedPreferences("orion_chat_history", MODE_PRIVATE).edit().remove("active_title").apply()
                 }.show()
-            "terminal" -> startActivity(Intent(this, StudioActivity::class.java).putExtra("page", "terminal"))
+            "terminal" -> startActivity(Intent(this, CodeSpaceActivity::class.java).putExtra("page", "terminal"))
             "browser" -> startActivity(Intent(this, BrowserActivity::class.java))
             "chat_files" -> {
                 val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {

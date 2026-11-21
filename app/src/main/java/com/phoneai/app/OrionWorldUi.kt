@@ -86,6 +86,7 @@ private fun HudGlyph(kind: String, tint: Color, pulse: Float, modifier: Modifier
                 drawLine(tint, Offset(w * 0.15f, w * 0.5f), Offset(w * 0.85f, w * 0.5f), sw); drawLine(tint, Offset(w * 0.5f, w * 0.15f), Offset(w * 0.5f, w * 0.85f), sw) }
             "network" -> { for (i in 1..3) drawArc(tint.copy(alpha = 0.3f + 0.2f * i), 225f, 90f, false, Offset(c.x - w * 0.14f * i, w * 0.9f - w * 0.28f * i), Size(w * 0.28f * i, w * 0.28f * i), style = Stroke(sw)) }
             "mission" -> { drawCircle(tint, w * 0.4f, c, style = Stroke(sw)); drawCircle(tint, w * 0.22f, c, style = Stroke(sw)); drawCircle(tint.copy(alpha = 0.5f + 0.5f * pulse), w * 0.07f, c) }
+            "power" -> { drawArc(tint, -60f, 300f, false, Offset(w * 0.16f, w * 0.2f), Size(w * 0.68f, w * 0.68f), style = Stroke(sw, cap = StrokeCap.Round)); drawLine(tint, Offset(c.x, w * 0.08f), Offset(c.x, w * 0.5f), sw, StrokeCap.Round) }
             else -> drawCircle(tint, w * 0.3f, c, style = Stroke(sw))
         }
     }
@@ -156,6 +157,7 @@ private fun OrionHud(w: org.json.JSONObject?, busy: Boolean, onClose: () -> Unit
                 }
             }
             OrionSelfTestPanel()
+            OrionPowerPanel()
             val unread = w?.optJSONArray("unreadable")
             if (unread != null && unread.length() > 0) Text("Cannot read: " + (0 until unread.length()).joinToString { unread.optString(it) }, color = OrionUiPalette.warning, fontSize = 10.sp)
         }
@@ -192,6 +194,37 @@ private fun OrionSelfTestPanel() {
                     Column { Text(r.group.uppercase() + " · " + r.name, color = tone, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp); Text(r.note, color = OrionUiPalette.secondaryText, fontSize = 11.sp) }
                 }
             }
+        }
+    }
+}
+
+/** Stops the whole platform: brain, missions, workers, voice, listeners, services, then the process. Two taps so it cannot happen by accident. */
+@Composable
+private fun OrionPowerPanel() {
+    val context = LocalContext.current
+    var armed by remember { mutableStateOf(false) }
+    var done by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    LaunchedEffect(armed) { if (armed && !done) { kotlinx.coroutines.delay(4000); armed = false } }
+    val tone = OrionUiPalette.danger
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (armed) tone.copy(alpha = 0.22f) else OrionUiPalette.raised).border(1.dp, tone.copy(alpha = if (armed) 1f else 0.5f), RoundedCornerShape(12.dp))
+        .clickable(enabled = !done) {
+            if (!armed) { armed = true; return@clickable }
+            done = true
+            scope.launch {
+                withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching { OrionMasterControl.shutdown(context) }
+                    kotlinx.coroutines.delay(600)
+                }
+                runCatching { (generateSequence(context) { (it as? android.content.ContextWrapper)?.baseContext }.filterIsInstance<android.app.Activity>().firstOrNull())?.finishAffinity() }
+                kotlinx.coroutines.delay(400)
+                android.os.Process.killProcess(android.os.Process.myPid())
+            }
+        }.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        HudGlyph("power", tone, 1f)
+        Column(Modifier.weight(1f)) {
+            Text(if (done) "SHUTTING DOWN…" else if (armed) "TAP AGAIN TO SHUT DOWN" else "SHUT DOWN PLATFORM", color = tone, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+            Text("Stops the brain, agents, missions, voice, listeners and background services. Open Orion again to restart.", color = OrionUiPalette.text, fontSize = 11.sp)
         }
     }
 }

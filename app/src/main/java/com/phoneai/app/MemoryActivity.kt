@@ -59,24 +59,40 @@ class MemoryActivity : Activity() {
         scroll.addView(page); root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         search.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { query = s?.toString().orEmpty(); render() }
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { query = s?.toString().orEmpty(); limit = 30; page.removeCallbacks(searchRun); page.postDelayed(searchRun, 180) }
             override fun afterTextChanged(s: android.text.Editable?) {}
         })
         setContentView(root); render()
     }
     override fun onResume() { super.onResume(); if (::page.isInitialized) render() }
+    private val searchRun = Runnable { render() }
+    private var gen = 0
+    private var limit = 30
     private fun render() {
+        val g = ++gen; val q = query
+        Thread {
+            runCatching {
+                val everything = MemoryStore.all(this)
+                val list = if (q.isBlank()) everything.sortedByDescending { it.updated } else MemoryStore.search(this, q)
+                val snap = runCatching { OrionKnowledgeGraph.snapshot(this) }.getOrElse { OrionKnowledgeGraph.Snapshot(0, 0, 0, 0, emptyList(), emptyList()) }
+                val approved = everything.count { MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) && OrionMemoryLifecycle.isActive(this, it.id) }
+                val graphText = if (q.isNotBlank()) runCatching { KnowledgeGraph.promptBlock(this, q) }.getOrDefault("") else ""
+                val expiry = HashMap<Int, Long>().also { m -> list.take(limit).forEach { m[it.id] = OrionMemoryLifecycle.expiryFor(this, it.id) } }
+                runOnUiThread { if (g == gen && !isFinishing) draw(list, everything.size, snap, approved, graphText, expiry) }
+            }
+        }.start()
+    }
+    private fun draw(all: List<Memory>, total: Int, snapshot: OrionKnowledgeGraph.Snapshot, approved: Int, graphText: String, expiry: Map<Int, Long>) {
         page.removeAllViews()
-        val all = if (query.isBlank()) MemoryStore.all(this).sortedByDescending { it.updated } else MemoryStore.search(this, query)
-        count.text = "${MemoryStore.all(this).size} saved memories · stored only in Orion's app data"
-        renderKnowledgeGraph()
+        count.text = "$total saved memories · stored only in Orion's app data"
+        renderKnowledgeGraph(snapshot, approved, graphText)
         if (all.isEmpty()) {
             val empty = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(20), dp(28), dp(20), dp(28)); background = panel() }
             empty.addView(text(if (query.isBlank()) "Nothing saved yet" else "No matching memories", 18f, Theme.TEXT, true).apply { gravity = Gravity.CENTER })
             empty.addView(text("Use ＋ Add to save something Orion should remember.", 13f, Theme.MUTED).apply { gravity = Gravity.CENTER; setPadding(0, dp(8), 0, 0) })
             page.addView(empty, LinearLayout.LayoutParams(-1, -2)); return
         }
-        all.forEach { memory ->
+        all.take(limit).forEach { memory ->
             val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(13), dp(14), dp(13)); background = panel() }
             val meta = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             meta.addView(text(memory.category.uppercase(Locale.ROOT), 10f, Theme.TEXT_SECONDARY, true), LinearLayout.LayoutParams(0, -2, 1f))
@@ -87,10 +103,10 @@ class MemoryActivity : Activity() {
                 if (memory.sensitivity == "sensitive") "  ·  SENSITIVE (excluded from AI context)" else "",
                 10f, if (memory.reviewStatus == "pending" || memory.sensitivity == "sensitive") Theme.WARN else Theme.MUTED)
                 .apply { setPadding(0, 0, 0, dp(9)) })
-            val expiry = OrionMemoryLifecycle.expiryFor(this, memory.id)
-            if (expiry > 0L) {
+            val exp = expiry[memory.id] ?: OrionMemoryLifecycle.expiryFor(this, memory.id)
+            if (exp > 0L) {
                 card.addView(text(
-                    "EXPIRES: " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(expiry)),
+                    "EXPIRES: " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(exp)),
                     10f, Theme.TEXT_SECONDARY
                 ).apply { setPadding(0, 0, 0, dp(8)) })
             }
@@ -137,18 +153,12 @@ class MemoryActivity : Activity() {
             page.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
             card.alpha = 0f; card.translationY = dp(6).toFloat(); card.animate().alpha(1f).translationY(0f).setDuration(220).start()
         }
+        if (all.size > limit) page.addView(button("Show more (${all.size - limit} left)") { limit += 30; render() }, LinearLayout.LayoutParams(-1, -2))
     }
 
 
     /** Visible health and relationship view for the same SQLite graph used by automatic recall. */
-    private fun renderKnowledgeGraph() {
-        val snapshot = runCatching { OrionKnowledgeGraph.snapshot(this) }.getOrElse {
-            OrionKnowledgeGraph.Snapshot(0, 0, 0, 0, emptyList(), emptyList())
-        }
-        val approved = MemoryStore.all(this).count {
-            MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) &&
-                OrionMemoryLifecycle.isActive(this, it.id)
-        }
+    private fun renderKnowledgeGraph(snapshot: OrionKnowledgeGraph.Snapshot, approved: Int, graphText: String) {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(13), dp(14), dp(13))
@@ -163,9 +173,6 @@ class MemoryActivity : Activity() {
             "${snapshot.indexedMemories} / $approved approved memories indexed  ·  ${snapshot.entities} entities  ·  ${snapshot.relationships} facts  ·  ${snapshot.terms} search terms",
             11f, Theme.TEXT_SECONDARY
         ).apply { setPadding(0, dp(8), 0, dp(9)) })
-        val graphText = if (query.isNotBlank()) {
-            runCatching { KnowledgeGraph.promptBlock(this, query) }.getOrDefault("")
-        } else ""
         val visibleFacts = graphText.lineSequence().filter { it.isNotBlank() }.take(5).toList()
             .ifEmpty { snapshot.recentFacts.take(5) }
         if (visibleFacts.isNotEmpty()) {

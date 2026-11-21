@@ -525,7 +525,7 @@ class SettingsActivity : Activity() {
         val updateStatus = text("Installed version: $installedVersion\nUpdate status: not checked yet", 12f, Theme.MUTED)
         updateStatus.typeface = Typeface.MONOSPACE
         add(updateCard, updateStatus, 8)
-        add(updateCard, button("Orion Terminal (shell + Termux)", false) { startActivity(android.content.Intent(this, StudioActivity::class.java).putExtra("page", "terminal")) }, 8)
+        add(updateCard, button("Orion Terminal (shell + Termux)", false) { startActivity(android.content.Intent(this, CodeSpaceActivity::class.java).putExtra("page", "terminal")) }, 8)
         add(updateCard, button("Capability board (connect GitHub / Gmail)", false) { startActivity(android.content.Intent(this, CapabilityBoardActivity::class.java)) }, 8)
         add(updateCard, button("Run Orion self-test", true) {
             Toast.makeText(this, "Testing… this takes a few seconds.", Toast.LENGTH_SHORT).show()

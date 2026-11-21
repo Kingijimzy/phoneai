@@ -408,7 +408,7 @@ p.kill()
         val p = page.ifBlank { "editor" }
         if (p !in valid) return "error: pages are ${valid.joinToString(", ")}."
         return runCatching {
-            c.startActivity(android.content.Intent(c, StudioActivity::class.java).putExtra("page", p).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            c.startActivity(android.content.Intent(c, CodeSpaceActivity::class.java).putExtra("page", p).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
             "Opened Code Studio · $p."
         }.getOrElse { "error: could not open Code Studio (${it.javaClass.simpleName})" }
     }

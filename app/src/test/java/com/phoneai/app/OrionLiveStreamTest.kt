@@ -46,7 +46,7 @@ class OrionRunSheetTest {
 
 class OrionOneStudioTest {
     @Test fun everyCodePageOpensTheSingleStudioHost() {
-        listOf("studio", "terminal", "workspace").forEach { assertEquals(StudioActivity::class.java, OrionPages.find(it)?.cls) }
+        listOf("studio", "terminal", "workspace").forEach { assertEquals(CodeSpaceActivity::class.java, OrionPages.find(it)?.cls) }
         assertEquals("terminal", OrionPages.find("terminal")?.startPage)
     }
     @Test fun everyActivityLaneAndStageHasItsOwnColour() {

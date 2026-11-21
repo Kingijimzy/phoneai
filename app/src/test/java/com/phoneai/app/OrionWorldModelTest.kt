@@ -53,4 +53,9 @@ class OrionWorldModelTest {
         assertEquals("92% sure · checked by web search", OrionConfidenceView.label(g, 2_000L))
         assertNull(OrionConfidenceView.label(g, 1_000L + 31 * 60 * 1000L))
     }
+    @Test fun inlineConfidenceTagIsStrippedFromVisibleText() {
+        val r = OrionMetacognition.parse("Do you mean the pipeline? [confidence: 62]")
+        assertEquals(62, r.confidence)
+        assertEquals("Do you mean the pipeline?", r.text)
+    }
 }
