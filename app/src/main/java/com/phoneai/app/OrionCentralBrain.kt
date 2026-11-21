@@ -120,7 +120,7 @@ internal object OrionCentralBrain {
         addObservedSection("behaviour_ledger") { OrionBehaviourLedger.summary(app, 8) }
         addObservedSection("chronos_awareness") { OrionChronosAwareness.summary(app) }
         addObservedSection("proactive_awareness") {
-            val item = OrionProactiveEngine.evaluate(app)
+            val item = OrionProactiveEngine.evaluate(app, commitInterruption = false)
             if (item == null) null else
                 "PROACTIVE AWARENESS (one item at most, throttled and quiet-period gated): ${item.kind} — ${item.body}"
         }
