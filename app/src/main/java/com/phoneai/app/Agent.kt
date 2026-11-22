@@ -971,7 +971,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
         // chat surface. Native tool definitions and dispatcher preflight remain authoritative.
         val central = runCatching { OrionTurnContext.text(svc, q) }.getOrDefault("")
         OrionSpeedTrace.mark("context")
-        return OrionPersona.CORE + "\n" + OrionPersona.OPERATING + "\n" +
+        return OrionPersona.CORE + "\n" + OrionPersona.CHARACTER + "\n" + OrionPersona.OPERATING + "\n" +
             voiceTurnNote() +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
@@ -1152,7 +1152,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 .mapNotNull { ToolRegistry.find(it) }
                 .take(skillToolBudget)
         }.orEmpty()
-        val nativeTools = (baseNativeTools + skillNativeTools)
+        val nativeTools = (baseNativeTools + skillNativeTools + OrionForgedTools.definitions(svc))
             .distinctBy { it.name }
             .take(128)
             .toMutableList()
@@ -1169,7 +1169,8 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             result
         }
 
-        fun dispatchNativeTool(name: String, args: JSONObject): String {
+        fun dispatchNativeTool(calledName: String, calledArgs: JSONObject): String {
+            val (name, args) = OrionForgedTools.rewrite(calledName, calledArgs)
             // Predict before acting: a certain failure is skipped, a risk is attached to the result.
             val forecast = runCatching { OrionForesight.assess(name, OrionWorldState.build(svc), command) }.getOrNull()
             // Foresight advises; it never vetoes. A wrong prediction used to stop a tool the owner needed.
