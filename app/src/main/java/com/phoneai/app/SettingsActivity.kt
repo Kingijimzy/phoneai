@@ -626,7 +626,7 @@ class SettingsActivity : Activity() {
         add(s2, chatBtn, 8)
         visionBtn = button("", false) { providerDialog(true) }
         add(s2, visionBtn, 8)
-        switchRow(s2, "Auto-switch on recoverable provider errors (up to 2 backups)", Prefs.autoSwitch(this)) { Prefs.setAutoSwitch(this, it) }
+        switchRow(s2, "Multiple models (off = single model for everything)", Prefs.autoSwitch(this)) { Prefs.setAutoSwitch(this, it) }
         switchRow(s2, "Conserve API quota (fewer retries; recommended)", Prefs.quotaSaver(this)) {
             Prefs.setQuotaSaver(this, it)
         }
