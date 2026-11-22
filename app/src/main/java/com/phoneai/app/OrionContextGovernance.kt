@@ -139,7 +139,7 @@ internal object OrionProviderContextPolicy {
             m.contains("deepseek-v3") -> 64_000
             m.contains("llama-3.3") -> 128_000
             p == "local" -> 8_192
-            else -> 16_384
+            else -> 32_768
         }
         val output = when {
             m.contains("gemini") || m.startsWith("claude-") -> 8_192
@@ -193,12 +193,21 @@ internal object OrionProviderContextPolicy {
         return tokens + 12
     }
 
+    /** Head plus tail: identity sits at the start and tool/result rules at the end, so a small model keeps both. */
+    internal fun headAndTail(text: String, maxChars: Int): String {
+        if (text.length <= maxChars) return text
+        val mark = "\n[...middle trimmed to fit this model's context...]\n"
+        val room = (maxChars - mark.length).coerceAtLeast(0)
+        val head = room * 55 / 100
+        return text.take(head) + mark + text.takeLast(room - head)
+    }
+
     private fun clipped(item: JSONObject, maxTokens: Int): JSONObject {
         val copy = JSONObject(item.toString())
         val content = copy.opt("content")
         val maxChars = maxTokens.coerceAtLeast(1) * 4
         when (content) {
-            is String -> copy.put("content", content.take(maxChars))
+            is String -> copy.put("content", if (item.optString("role") in setOf("system", "developer")) headAndTail(content, maxChars) else content.take(maxChars))
             is JSONArray -> {
                 val out = JSONArray()
                 var remaining = maxTokens
