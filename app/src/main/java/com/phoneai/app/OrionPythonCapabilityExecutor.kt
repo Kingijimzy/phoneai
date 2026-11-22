@@ -44,6 +44,7 @@ internal class OrionPythonCapabilityExecutor(
             "extension_auto_activation" -> setExtensionAutoActivation(args)
             "extension_history" -> extensionHistory(args)
             "extension_rollback" -> rollbackExtension(args)
+            "extension_forge" -> forge(args, confirm, stopped)
             "extension_create" -> createDraft(args)
             "extension_update" -> updateDraft(args)
             "extension_test" -> testDraft(args, confirm, stopped)
@@ -105,6 +106,36 @@ internal class OrionPythonCapabilityExecutor(
         } else {
             "error: extension draft was not saved; check for duplicate IDs, invalid source, or unreadable storage"
         }
+    }
+
+    /** Ultron-style forge: write, test, enable and first-run a new tool in one call. */
+    private fun forge(args: JSONObject, confirm: (String) -> Boolean, stopped: () -> Boolean): String {
+        val id = args.optString("id").trim()
+        val saved = createDraft(args)
+        if (saved.startsWith("error")) return saved
+        val extension = try { extensionStore.all().firstOrNull { it.id == id } } catch (_: Exception) { null }
+            ?: return "error: forge could not read back the saved draft $id"
+        val input = args.optJSONObject("input") ?: JSONObject()
+        val hasTests = args.optJSONArray("tests")?.length()?.let { it > 0 } == true
+        if (hasTests) {
+            val tested = testDraft(args, confirm, stopped)
+            if (tested.startsWith("error")) return "FORGE STOPPED at test. $tested"
+        } else {
+            if (stopped()) return "error: task stopped before the forge run."
+            val reply = extensionSandbox.execute(extension, input, emptySet())
+            if (!reply.optBoolean("ok", false)) {
+                return "FORGE STOPPED: the first run of $id failed: " + reply.optString("error").take(300) +
+                    " Fix the source and call extension_forge again with the same id."
+            }
+            val report = ExtensionTestReport(true, extension.sourceSha256, "first run succeeded on the given input")
+            if (!testReceipts.record(id, report)) return "error: first run worked but its receipt could not be saved; $id stays disabled"
+            if (ExtensionAutonomySettings.autoActivationEnabled(context)) activateVerifiedVersion(extension, report, approved = false)
+        }
+        if (runCatching { extensionStore.enabled(id) }.getOrNull() == null) {
+            return "Forged $id and it passed, but it is not enabled because the owner turned auto-activation off. Call extension_enable to turn it on."
+        }
+        runCatching { OrionLessons.learn(context, "Forged tool '$id' (${extension.displayName}): ${extension.description.take(100)}. Reuse it via extension_run before building anything similar.") }
+        return "FORGED and enabled $id. " + runExtension(JSONObject().put("id", id).put("input", input), stopped)
     }
 
     private fun updateDraft(args: JSONObject): String {
@@ -269,7 +300,7 @@ internal class OrionPythonCapabilityExecutor(
         fun requiresExplicitApproval(tool: String): Boolean = false
 
         private val supportedTools = setOf(
-            "python_exec", "workspace_list", "extension_list", "extension_policy", "extension_auto_activation", "extension_create", "extension_update", "extension_test",
+            "python_exec", "workspace_list", "extension_list", "extension_policy", "extension_auto_activation", "extension_forge", "extension_create", "extension_update", "extension_test",
             "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback"
         )
         fun supports(tool: String): Boolean = tool in supportedTools

@@ -195,6 +195,9 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
     // resolution. Use the Google-hosted Maven Central mirror to avoid shared-runner
     // rate limits on Maven Central hostnames.
     systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2")
+    // Isolate Robolectric test classes so a leaked worker thread cannot keep the entire suite alive.
+    // This preserves every test while recycling the JVM after each class.
+    forkEvery = 1
     testLogging {
         events = setOf(
             org.gradle.api.tasks.testing.logging.TestLogEvent.FAILED,
