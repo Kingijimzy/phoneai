@@ -369,6 +369,41 @@ internal object ToolRegistry {
         "trash_list", "backup_list", "undo_last", "model_status", "self_diagnose", "repair_apply"
     )
 
+    /** The few tools a model always sees. Everything else is found by fit, proven record, or capability_load. */
+    private val focusedCore = listOf(
+        "capability_search", "capability_load", "ask_user", "recall", "remember", "brain",
+        "live_web_search", "workspace_read", "workspace_write", "python_exec", "shell",
+        "read_screen", "open_app", "click_text", "type"
+    )
+
+    internal const val FOCUSED_LIMIT = 28
+
+    /**
+     * Small, adaptive tool surface for one turn: the core, the tools that best fit this request
+     * (ranked by contract match and measured reliability), tools that have worked for this owner
+     * before, and the previous tool-call group. A small surface is what lets weak and unfamiliar
+     * models choose correctly; anything missing is one capability_load away, and every
+     * implemented tool still dispatches.
+     */
+    fun focusedToolsFor(
+        request: String?,
+        priorToolNames: Set<String> = emptySet(),
+        stats: Map<String, Triple<Int, Int, Long>> = OrionForesight.stats(),
+        limit: Int = FOCUSED_LIMIT
+    ): List<ToolDefinition> {
+        val selected = LinkedHashSet<String>()
+        fun add(names: Iterable<String>) {
+            names.forEach { if (selected.size < limit && it in byName) selected += it }
+        }
+        add(focusedCore)
+        add(priorToolNames)
+        if (!request.isNullOrBlank()) add(OrionToolRouter.rank(request, all, stats, k = 8).map { it.tool })
+        // Evolves with use: tools with a clean record of at least 3 successes stay in reach.
+        add(stats.filter { (_, v) -> v.first >= 3 && v.second * 4 <= v.first }
+            .entries.sortedByDescending { it.value.first }.map { it.key }.take(6))
+        return all.filter { it.name in selected }
+    }
+
     fun nativeToolsFor(
         request: String?,
         priorToolNames: Set<String> = emptySet(),
