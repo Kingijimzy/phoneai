@@ -128,4 +128,22 @@ class OrionContextGovernanceTest {
         assertEquals("continue safely", packed.optJSONObject(packed.length() - 1)?.optString("content"))
     }
 
+
+    @Test fun clippedSystemPromptKeepsIdentityAndToolRules() {
+        val text = "IDENTITY-START " + "filler ".repeat(4000) + " TOOL-RULES-END"
+        val messages = JSONArray()
+            .put(JSONObject().put("role", "system").put("content", text))
+            .put(JSONObject().put("role", "user").put("content", "hi"))
+        val caps = OrionModelCapabilities(4_096, 512, false, false, false, false)
+        val packed = OrionProviderContextPolicy.fitMessages(messages, caps, 256)
+        val sys = packed.optJSONObject(0)?.optString("content").orEmpty()
+        assertTrue(sys.contains("IDENTITY-START"))
+        assertTrue(sys.contains("TOOL-RULES-END"))
+        assertTrue(sys.length < text.length)
+    }
+
+    @Test fun unknownModelGetsRoomForTheFullExecutiveContext() {
+        val caps = OrionProviderContextPolicy.capabilities("custom_x", "some-new-model")
+        assertTrue(caps.contextTokens >= 32_768)
+    }
 }
