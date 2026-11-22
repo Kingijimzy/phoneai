@@ -2047,7 +2047,14 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 }
             }
         }
-        return accountResult
+        val hint = when {
+            accountResult.contains("401") || accountResult.contains("bad credentials", true) ->
+                "\nGITHUB TOKEN REJECTED: the saved token is invalid or expired. Searching the web will not fix it. Tell Kingi to reconnect GitHub, and continue with anything that does not need the account."
+            accountResult.contains("404") ->
+                "\nGITHUB 404 on the account route: the path is wrong, or the repo is private and the saved token lacks access to it. Check the owner/repo spelling with /user/repos once; if it is still 404, report that and stop. Do not switch to web search or browser pages."
+            else -> ""
+        }
+        return accountResult + hint
     }
 
     /**
