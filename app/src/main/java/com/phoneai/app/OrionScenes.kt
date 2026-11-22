@@ -31,10 +31,16 @@ internal object OrionScenes {
             "SCENE tired: he is worn down. Keep it short and warm, no status dump. Say one honest line about what is actually fixable, take one concrete step yourself, and offer rest or the single easiest next thing.")
     )
 
+    /** Owner edits, pushed in by OrionMindStore.sync. */
+    @Volatile var disabled: Set<String> = emptySet()
+    @Volatile var briefOverrides: Map<String, String> = emptyMap()
+
+    fun all(): List<Scene> = scenes
+
     fun detect(request: String?): Scene? =
-        request?.takeIf { it.isNotBlank() }?.let { r -> scenes.firstOrNull { it.trigger.containsMatchIn(r) } }
+        request?.takeIf { it.isNotBlank() }?.let { r -> scenes.firstOrNull { it.id !in disabled && it.trigger.containsMatchIn(r) } }
 
     fun toolsFor(request: String?): List<String> = detect(request)?.tools.orEmpty()
 
-    fun brief(request: String?): String = detect(request)?.brief.orEmpty()
+    fun brief(request: String?): String = detect(request)?.let { briefOverrides[it.id] ?: it.brief }.orEmpty()
 }
