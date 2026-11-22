@@ -239,4 +239,31 @@ class PythonToolArgumentsTest {
         assertNull(PythonToolArguments.source(JSONObject().put("script", "")))
     }
 
+
+    private fun forge(extra: JSONObject.() -> Unit = {}) = executor.execute(
+        "extension_forge",
+        JSONObject().put("id", "forged_helper").put("name", "Forged helper").put("source", "RESULT = INPUT")
+            .put("description", "made in one step").put("input", JSONObject().put("x", 1)).apply(extra),
+        { true }, { false }
+    ).orEmpty()
+
+    @Test fun forgeSavesTestsEnablesAndRunsInOneCall() {
+        val result = forge()
+        assertTrue(result, result.startsWith("FORGED and enabled forged_helper"))
+        assertTrue(result.contains("EXTENSION RESULT"))
+        val again = executor.execute("extension_run", JSONObject().put("id", "forged_helper"), { true }, { false }).orEmpty()
+        assertTrue(again, again.startsWith("EXTENSION RESULT"))
+    }
+
+    @Test fun forgeWithAutoActivationOffSaysHowToEnable() {
+        ExtensionAutonomySettings.setAutoActivationEnabled(context, false)
+        val result = forge()
+        assertTrue(result, result.contains("extension_enable"))
+        assertFalse(result.startsWith("FORGED and enabled"))
+    }
+
+    @Test fun forgeRejectsBadIdentityWithoutSaving() {
+        val result = executor.execute("extension_forge", JSONObject().put("id", "X").put("name", "n").put("source", "RESULT = 1"), { true }, { false }).orEmpty()
+        assertTrue(result.startsWith("error:"))
+    }
 }
