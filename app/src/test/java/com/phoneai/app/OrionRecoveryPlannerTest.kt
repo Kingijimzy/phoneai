@@ -90,4 +90,16 @@ class OrionRecoveryPlannerTest {
         assertEquals(listOf("research_web", "fetch_url"), selected)
     }
 
+    @Test fun githubNotFoundDoesNotDriftIntoSearchOrScreens() {
+        val all = setOf("github_public", "fetch_url", "live_web_search", "research_web", "read_screen", "wait_for", "list_apps")
+        assertTrue(OrionRecoveryPlanner.selectAlternatives("github_account_read", "error: GitHub returned 404 Not Found", all).isEmpty())
+        assertTrue(OrionRecoveryPlanner.selectAlternatives("github_account_read", "error: 401 Bad credentials", all).isEmpty())
+    }
+
+    @Test fun unrecognisedDataToolFailureNeverOffersScreenTools() {
+        val all = setOf("read_screen", "verify_action", "wait_for", "lookup_app", "list_apps")
+        assertTrue(OrionRecoveryPlanner.selectAlternatives("workspace_read", "error: odd failure", all).isEmpty())
+        assertTrue(OrionRecoveryPlanner.selectAlternatives("gmail_list_messages", "error: odd failure", all).isEmpty())
+        assertEquals(listOf("read_screen", "verify_action"), OrionRecoveryPlanner.selectAlternatives("click", "error: odd failure", all, limit = 2))
+    }
 }

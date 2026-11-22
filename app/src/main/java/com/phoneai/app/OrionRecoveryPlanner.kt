@@ -31,6 +31,11 @@ internal object OrionRecoveryPlanner {
      * This is a shortlist for the next planner turn, not dispatch authorization.
      * Safety/approval denials produce no alternative; uncertain outcomes prefer read-only inspection.
      */
+    private val deviceTools = setOf("click", "click_text", "type", "key", "scroll", "open_app", "read_screen", "wait_for",
+        "verify_action", "validate_action", "lookup_app", "list_apps", "settings", "open_url")
+
+    internal fun isDeviceTool(tool: String): Boolean = tool in deviceTools || tool.startsWith("browser_")
+
     fun selectAlternatives(
         failedTool: String,
         result: String,
@@ -47,6 +52,11 @@ internal object OrionRecoveryPlanner {
         val preferred = when {
             failedTool == "github_account_read" && listOf("path is not allowed", "endpoint is not allowed", "allowlist", "unsupported endpoint").any(text::contains) ->
                 listOf("github_public", "fetch_url", "live_web_search", "research_web")
+            // A rejected or missing account resource is a credential/target fact. Web search or screens cannot fix it,
+            // so offer nothing and let the dead-end guidance tell the owner exactly what is needed.
+            failedTool in setOf("github_account_read", "github_public") &&
+                listOf("404", "401", "403", "not found", "bad credentials", "unauthorized", "forbidden", "token").any(text::contains) ->
+                emptyList()
             listOf("target not found", "ambiguous", "stale", "invalid target").any(text::contains) ->
                 listOf("read_screen", "wait_for", "click_text", "validate_action")
             (listOf("provider", "network", "http 5", "503", "429", "rate limit").any(text::contains) ||
@@ -67,7 +77,10 @@ internal object OrionRecoveryPlanner {
             listOf("permission", "accessibility", "not enabled", "setup").any(text::contains) ->
                 listOf("read_screen", "list_apps")
 
-            else -> listOf("read_screen", "verify_action", "wait_for", "lookup_app", "list_apps")
+            // Screen tools only make sense after a screen/device action failed. A data, file or service tool that
+            // failed for an unrecognised reason must not push Orion into opening pages.
+            isDeviceTool(failedTool) -> listOf("read_screen", "verify_action", "wait_for", "lookup_app", "list_apps")
+            else -> emptyList()
         }
         return preferred.asSequence()
             .filter { it != failedTool }
