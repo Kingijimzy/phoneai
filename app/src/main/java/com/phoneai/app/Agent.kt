@@ -975,7 +975,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
             voiceTurnNote() +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
-            "\n\n" + ToolRegistry.promptSection(q, ToolGate.statusFor(svc)) + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + capabilityGap.let { if (it.isBlank()) "" else "\n\n" + it } + OrionCoordinator.summary().let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc), svc) + OrionExperience.requestBlock(svc, q).let { if (it.isBlank()) "" else "\n\n" + it } + OrionRules.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + OrionMemoryCompactor.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + OrionMase.block(svc) + "\n\n" + OrionIdentity.LOCK + (if (Prefs.voice(svc)) "\n\nVOICE: your words are spoken aloud as you write them. Open with one short, natural spoken line (what you are about to do or your immediate reaction) before any tool call, speak like a person (warm, dry humour when it fits, your own view), keep spoken parts plain sentences without markdown, and put code, tables and long data in tool calls or fenced blocks, which are never read out." else "") + "\n"
+            "\n\n" + ToolRegistry.leanPromptSection(q, ToolGate.statusFor(svc)) + OrionWorkspaceMatrix.promptBlock(OrionWorkspaceMatrix.current(svc)).let { if (it.isBlank()) "" else "\n\n" + it } + capabilityGap.let { if (it.isBlank()) "" else "\n\n" + it } + OrionCoordinator.summary().let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc), svc) + OrionExperience.requestBlock(svc, q).let { if (it.isBlank()) "" else "\n\n" + it } + OrionRules.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + OrionMemoryCompactor.promptBlock(svc).let { if (it.isBlank()) "" else "\n\n" + it } + "\n\n" + OrionMase.block(svc) + "\n\n" + OrionIdentity.LOCK + (if (Prefs.voice(svc)) "\n\nVOICE: your words are spoken aloud as you write them. Open with one short, natural spoken line (what you are about to do or your immediate reaction) before any tool call, speak like a person (warm, dry humour when it fits, your own view), keep spoken parts plain sentences without markdown, and put code, tables and long data in tool calls or fenced blocks, which are never read out." else "") + "\n"
     }
 
     /**
@@ -1172,7 +1172,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         fun dispatchNativeTool(name: String, args: JSONObject): String {
             // Predict before acting: a certain failure is skipped, a risk is attached to the result.
             val forecast = runCatching { OrionForesight.assess(name, OrionWorldState.build(svc), command) }.getOrNull()
-            if (forecast?.level == OrionForesight.Level.BLOCK) return "error: " + forecast.consequence
+            // Foresight advises; it never vetoes. A wrong prediction used to stop a tool the owner needed.
             val stepId = OrionRunLog.begin(name, args)
             OrionProgress.bind(stepId)
             val t0 = System.currentTimeMillis()
@@ -1375,15 +1375,6 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                     confidence = r.confidence ?: confidence
                     verifiedBy = "web search"
                 }
-            }
-        }
-        if (!stopped && OrionSelfReview.worthReviewing(command, checkedAnswer)) {
-            ui.note("[REVIEW] Checking the work against the request before handing it over.")
-            val review = JSONArray().put(msg("user", OrionSelfReview.prompt(command, checkedAnswer)))
-            val verdict = runCatching { OrionSelfReview.parse(talkNim.chat(review, false, 2800, 0.1), checkedAnswer) }.getOrNull()
-            if (verdict != null && !verdict.ok) {
-                val fixed = OrionMetacognition.parse(verdict.text)
-                if (fixed.text.isNotBlank()) { checkedAnswer = fixed.text; verifiedBy = "self-review" }
             }
         }
         OrionConfidence.record(confidence, verifiedBy)

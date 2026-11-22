@@ -33,3 +33,22 @@ class FocusedToolsTest {
         assertEquals(names.size, names.distinct().size)
     }
 }
+
+class LeanPromptTest {
+    @Test fun leanPromptDoesNotRepeatToolSchemas() {
+        val lean = ToolRegistry.leanPromptSection("write a Python calculator", "")
+        val full = ToolRegistry.promptSection("write a Python calculator")
+        assertTrue(lean.length < full.length / 3)
+        assertTrue(lean.contains("capability_search"))
+        assertTrue(lean.contains("PYTHON AUTHORING RULE"))
+        assertFalse(lean.contains("- python_exec"))
+    }
+
+    @Test fun foresightOnlyAdvises() {
+        val world = org.json.JSONObject().put("network", "offline")
+        // still predicts the problem, but the agent no longer returns an error instead of running the tool
+        assertEquals(OrionForesight.Level.BLOCK, OrionForesight.assess("live_web_search", world, "latest news").level)
+        assertFalse(java.io.File("src/main/java/com/phoneai/app/Agent.kt").takeIf { it.exists() }?.readText().orEmpty()
+            .contains("if (forecast?.level == OrionForesight.Level.BLOCK) return"))
+    }
+}
