@@ -169,7 +169,7 @@ class ModelSettingsActivity : Activity() {
 
         card(root, "ROUTING & COST CONTROL") {
             autoSwitch = Switch(this@ModelSettingsActivity).apply {
-                text = "Auto-switch on recoverable provider errors"
+                text = "Multiple models (off = one model for everything)"
                 textSize = 13f
                 setTextColor(Theme.TEXT)
                 thumbTintList = android.content.res.ColorStateList.valueOf(Theme.SILVER)
@@ -181,7 +181,7 @@ class ModelSettingsActivity : Activity() {
                 }
             }
             addView(autoSwitch)
-            addView(label("Uses up to two configured backups for timeouts, rate limits and temporary service failures. Authentication, billing, safety blocks and cancellation stop instead of silently switching.", 11f, Theme.MUTED))
+            addView(label("ON: backups take over for timeouts, rate limits and outages, and routing may pick a model per task. OFF: single-model mode, so the model you selected handles everything with one steady tool setup and never switches mid-task; if it fails you see the error.", 11f, Theme.MUTED))
             paidSwitch = Switch(this@ModelSettingsActivity).apply {
                 text = "Allow paid or metered providers"
                 textSize = 13f

@@ -393,9 +393,12 @@ object Prefs {
     fun setModel(c: Context, p: Provider, vision: Boolean, m: String) =
         sp(c).edit().putString((if (vision) "vm_" else "tm_") + p.id, m).apply()
 
-    /** Failover is always on: a busy or erroring selected model must never strand the owner. */
-    fun autoSwitch(c: Context): Boolean = true
-    fun setAutoSwitch(c: Context, v: Boolean) = sp(c).edit().putBoolean("autoswitch", v).apply()
+    /**
+     * Multi-model routing (default on): a failing model falls over to a backup. Turn it off for single-model mode:
+     * one model for everything, one tool schema, no switching mid-task. A fresh key so old stored values cannot disable failover silently.
+     */
+    fun autoSwitch(c: Context): Boolean = sp(c).getBoolean("multi_model", true)
+    fun setAutoSwitch(c: Context, v: Boolean) = sp(c).edit().putBoolean("multi_model", v).apply()
 
     /** Defaults on to avoid burning free-tier quota through repeated provider/model fallbacks. */
     fun quotaSaver(c: Context): Boolean = sp(c).getBoolean("quota_saver", true)

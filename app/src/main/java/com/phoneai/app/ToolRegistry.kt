@@ -398,6 +398,7 @@ internal object ToolRegistry {
         }
         add(focusedCore)
         add(priorToolNames)
+        add(OrionScenes.toolsFor(request))
         if (!request.isNullOrBlank()) add(OrionToolRouter.rank(request, all, stats, k = 8).map { it.tool })
         // Evolves with use: tools with a clean record of at least 3 successes stay in reach.
         add(stats.filter { (_, v) -> v.first >= 3 && v.second * 4 <= v.first }
