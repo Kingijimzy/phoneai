@@ -24,6 +24,7 @@ internal object OrionPages {
         Page("memory", "Memory", "What Orion remembers", MemoryActivity::class.java, "remember"),
         Page("knowledge", "Knowledge graph", "People, projects, facts", KnowledgeGraphActivity::class.java, "graph"),
         Page("soul", "Soul engine", "Orion's drives and state", SoulEngineActivity::class.java, "mind drives"),
+        Page("mind", "Orion's mind", "Character, scenes, your rules, live prompt", OrionMindActivity::class.java, "edit character prompt scenes rules hidden"),
         Page("proactive", "Proactive", "What Orion does on its own", ProactiveActivity::class.java, "autonomy initiative"),
         Page("models", "Models", "Providers and models", ModelSettingsActivity::class.java, "llm gemini deepseek"),
         Page("voice", "Voice settings", "Voice, speed, barge-in", VoiceSettingsActivity::class.java, "tts kokoro"),

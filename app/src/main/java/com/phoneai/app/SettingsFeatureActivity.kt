@@ -127,6 +127,9 @@ class SettingsFeatureActivity : Activity() {
                 card("Voice and speech", "Configure spoken replies, offline speech, wake word, neural voice and Gemini Live.", "Open voice settings") {
                     startActivity(Intent(this, VoiceSettingsActivity::class.java))
                 }
+                card("Orion's mind: see and edit everything", "Read the live prompt he runs on, edit his character, set your own standing rules, and switch or reword each mood scene.", "Open Orion's mind") {
+                    startActivity(Intent(this, OrionMindActivity::class.java))
+                }
                 card("Orion identity and philosophy", "Review Orion's consistent identity, entity principles and approved languages.", "Open identity settings") {
                     startActivity(Intent(this, CharacterSettingsActivity::class.java))
                 }

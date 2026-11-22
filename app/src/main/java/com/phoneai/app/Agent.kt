@@ -971,7 +971,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
         // chat surface. Native tool definitions and dispatcher preflight remain authoritative.
         val central = runCatching { OrionTurnContext.text(svc, q) }.getOrDefault("")
         OrionSpeedTrace.mark("context")
-        return OrionPersona.CORE + "\n" + OrionPersona.CHARACTER + "\n" + OrionPersona.OPERATING + "\n" +
+        return OrionPersona.CORE + "\n" + OrionMindStore.character(svc) + "\n" + OrionMindStore.rulesBlock(svc) + OrionPersona.OPERATING + "\n" +
             voiceTurnNote() +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
             ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
@@ -1140,6 +1140,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         val streamWatch = HermesRepetitionGuard.RunawayStreamWatch()
         // Carry forward only the latest tool-call group; old tasks must not crowd out current intent.
         val priorNativeToolNames = ToolRegistry.recentToolNames(chatHist)
+        OrionMindStore.sync(svc)
         val baseNativeTools = ToolRegistry.focusedToolsFor(command, priorNativeToolNames)
         // An explicitly invoked skill may grant a narrow tool set outside the ordinary
         // request-ranked window. Expose those exact registered tools; preflightTool still
