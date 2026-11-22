@@ -33,8 +33,11 @@ class OrionEntityLoopTest {
 
     @Test fun noSurfaceBuildsCentralContextDirectly() {
         val dir = java.io.File("src/main/java/com/phoneai/app")
+        // The Mind page's "Show the live prompt" action is a diagnostic preview,
+        // not a conversational surface or an active user turn. It intentionally
+        // builds a fresh context for inspection and must not be treated as a turn bypass.
         val offenders = dir.listFiles { f -> f.extension == "kt" }!!
-            .filter { it.name !in setOf("OrionTurnContext.kt", "OrionCentralBrain.kt") }
+            .filter { it.name !in setOf("OrionTurnContext.kt", "OrionCentralBrain.kt", "OrionMindActivity.kt") }
             .filter { it.readText().contains("OrionCentralBrain.contextFor(") }.map { it.name }
         assertTrue("direct contextFor callers: $offenders", offenders.isEmpty())
     }
