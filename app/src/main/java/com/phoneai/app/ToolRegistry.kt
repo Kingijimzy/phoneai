@@ -537,6 +537,20 @@ internal object ToolRegistry {
 
     fun promptSection(): String = promptSection(all, emptyList(), "", null, allRules = true)
 
+    /**
+     * What the prompt carries once native tool schemas are sent: no repeated tool signatures, only the names of
+     * tools that are not in this turn's surface (loadable with capability_load), the status line, and the
+     * guidance rules that match the request.
+     */
+    fun guidanceSection(request: String?, status: String = "", surface: Collection<String> = emptySet()): String = buildString {
+        val rest = all.map { it.name }.filterNot { it in surface }
+        if (rest.isNotEmpty()) append("More tools, load with capability_load before use: ").append(rest.joinToString(", ")).append("\n")
+        if (status.isNotBlank()) append("\n").append(status).append("\n")
+        append("\nTool-use guidance:\n")
+        guidanceRules.filter { (trigger, _) -> trigger == null || (request != null && trigger.containsMatchIn(request)) }
+            .forEach { (_, text) -> append(text).append('\n') }
+    }
+
     private val guidanceRules: List<Pair<Regex?, String>> = listOf(
         Regex("(?i)screen|tap|click|point|circle|sketch|annotate|underline|arrow|box|scroll|explain") to "- SCREEN TARGET RULE: choose an ID from the latest read_screen. Use point_at to indicate a target, sketch_screen with shape=circle to circle it, or arrow/underline/box to annotate it; for image-only objects, use look to identify screenshot-pixel x/y and call sketch_screen with coordinates. Multiple point_at/sketch_screen calls accumulate in one explanation (up to 12 visible annotations), and each disappears on its own timeout. Scrolling or changing apps clears stale annotations. Use click {id} only when the owner asks Orion to activate it.",
         Regex("(?i)open|play|search|youtube|launch|app|music|video") to "- LOW-LATENCY PHONE ACTION RULE: prefer a direct registered capability over simulating a human workflow. For 'open YouTube and search for X', use play_media with the exact query and YouTube app when supported; do not open the app and then spend multiple read_screen/click/type calls reproducing its search box. For an exact visible label already supplied by the user or returned by the latest screen read, use click_text directly; do not take another screenshot first. Batch independent read-only calls in one turn. Group consecutive safe actions only when the next target is already known, and verify once at the end or after a meaningful state change. Do not batch across an uncertain target or a meaningful state transition; Do not treat generic risk notices as blanket denial. exact-operation owner approval and Android OS permission gates are mandatory and must block dispatch until satisfied.",
