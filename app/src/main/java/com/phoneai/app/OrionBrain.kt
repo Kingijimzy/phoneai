@@ -229,6 +229,7 @@ internal object OrionBrain {
         "loop" -> OrionEntityLoop.report()
         "world" -> OrionWorldState.pretty(c)
         "job" -> OrionJobLedger.run(c, a)
+        "diagnostics" -> OrionDiagnostics.report()
         "strategy" -> "Ranked routes (measured):\n" + OrionStrategy.summary(OrionWorldState.build(c))
         "foresight" -> a.optString("name").trim().let { n ->
             if (n.isBlank()) "Predictions vs outcomes:\n" + OrionForesight.calibration()
