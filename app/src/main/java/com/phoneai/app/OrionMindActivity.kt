@@ -148,6 +148,6 @@ class OrionMindActivity : Activity() {
         OrionMindStore.rulesBlock(this@OrionMindActivity).takeIf { it.isNotBlank() }?.let { append(it).append("\n") }
         append("OPERATING FACTS\n").append(OrionPersona.OPERATING).append("\n\n")
         append("LIVE CONTEXT FOR A PLAIN HELLO (what the central brain adds)\n")
-        append(OrionTurnContext.text(this@OrionMindActivity, "hello"))
+        append(OrionCentralBrain.contextFor(this@OrionMindActivity, "hello"))
     }
 }
