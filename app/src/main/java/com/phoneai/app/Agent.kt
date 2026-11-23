@@ -372,7 +372,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
     /** Every entry point (chat, command, resume) must set the scope, or a stale one blocks real tools. */
     private fun setRequestScope(command: String) {
         val scope = TaskScopePolicy.scopeFor(command, lastActionScope, System.currentTimeMillis() - lastActionScopeAt)
-        activeRequestScope = scope; OrionSituation.noteOwnerMessage(); runCatching { OrionCorrections.learn(svc, command) }
+        activeRequestScope = scope; OrionSituation.noteOwnerMessage(); runCatching { OrionCorrections.learn(svc, command) }; runCatching { OrionRhythm.record(svc, command) }; calledThisCommand.clear()
         if (TaskScopePolicy.modeFor(scope) != TaskMode.CHAT) { lastActionScope = scope; lastActionScopeAt = System.currentTimeMillis() }
     }
     // Last locally perceived screen, used for post-action comparison without another model call.
@@ -1141,6 +1141,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
 
         fun dispatchNativeTool(calledName: String, calledArgs: JSONObject): String {
             val (name, args) = OrionForgedTools.rewrite(calledName, calledArgs)
+            calledThisCommand += name; calledThisCommand += calledName
             // Predict before acting: a certain failure is skipped, a risk is attached to the result.
             val forecast = runCatching { OrionForesight.assess(name, OrionWorldState.build(svc), command) }.getOrNull()
             // Foresight advises; it never vetoes. A wrong prediction used to stop a tool the owner needed.
@@ -1208,6 +1209,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         var toolRounds = 0
         var reflections = 0
         var autoNudges = 0
+        var claimNudges = 0
         val retryCoach = OrionRetryCoach()
         var lastRoundResults: List<String> = emptyList()
         fun preserveToolTranscript(note: String) {
@@ -1283,6 +1285,14 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                         messages.put(msg("user", OrionAutoContinue.PROMPT))
                         turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
                     }
+                    if (turn.toolCalls.isEmpty() && turn.toolCallingAvailable && claimNudges < 1) {
+                        OrionClaimCheck.unbacked(turn.text, calledThisCommand.toList())?.let { claim ->
+                            claimNudges++
+                            messages.put(msg("assistant", turn.text))
+                            messages.put(msg("user", OrionClaimCheck.prompt(claim)))
+                            turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
+                        }
+                    }
                     if (!turn.toolCallingAvailable) {
                         preserveToolTranscript("The provider lost native tool capability after partial execution. Inspect completed tool results before continuing; do not repeat side effects.")
                         ui.say("The selected model stopped supporting Orion tool calls after partial execution. I preserved the completed results; no further actions were dispatched.")
@@ -1356,6 +1366,8 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         }
         OrionConfidence.record(confidence, verifiedBy)
         if (checkedAnswer.isNotBlank()) checkedAnswer += runCatching { OrionJobLedger.resumeNote(svc) }.getOrDefault("")
+        val called = calledThisCommand.toList()
+        if (checkedAnswer.isNotBlank()) checkedAnswer = OrionClaimCheck.annotate(OrionHonesty.scrub(checkedAnswer, called.map { it.lowercase() }.toSet()), called)
         val safeAnswer = inOrionVoice(checkedAnswer.takeIf { it.isNotBlank() }
             ?: "I'm here. What would you like to talk about?")
         chatHist.put(msg("user", command))
@@ -1391,6 +1403,9 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
 
     private fun voiceTurnNote(): String = if (!voiceHeardTurn) "" else
         "VOICE TURN: this was heard through the microphone, so it may include background speech or a half-sentence. Judge from meaning whether Kingi is actually asking you for something; if it is not for you, just answer naturally or stay quiet. Act decisively on clear requests. Speak in one to three short natural sentences with no markdown or lists; keep long detail in chat. For an irreversible or outward action (sending, calling, paying, deleting) that was not clearly instructed, confirm it aloud in one short sentence first. "
+
+    /** Tools that actually ran for the current command; claims are checked against it. */
+    private val calledThisCommand: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
 
     @Volatile
     var stopped = false

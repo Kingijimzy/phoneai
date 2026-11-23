@@ -236,6 +236,7 @@ internal object OrionBrain {
         "scene_remove" -> OrionMindStore.removeCustomScene(c, a.optString("id"))
         "note" -> OrionMindStore.addSelfNote(c, a.optString("text"))
         "self" -> OrionSelf.describe(c)
+        "world", "world_learn", "world_forget" -> OrionWorldview.run(c, a)
         "strategy" -> "Ranked routes (measured):\n" + OrionStrategy.summary(OrionWorldState.build(c))
         "foresight" -> a.optString("name").trim().let { n ->
             if (n.isBlank()) "Predictions vs outcomes:\n" + OrionForesight.calibration()
