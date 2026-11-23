@@ -258,11 +258,20 @@ class Voice(private val ctx: Context) {
             speakNeural(chunks.map { it.text }, onDone, chunks.map { it.speed }, chunks.map { it.pauseAfterMs })
             return
         }
-        speak(chunks.joinToString(" ") { it.text }, onDone)
+        // Joining the planned sentences back into one string before speaking threw away every pause
+        // OrionSpokenLine.plan computed: splitForSpeech only splits on raw length, so a short composed
+        // line (almost always under its limit) went out as one TTS utterance with no gap between
+        // sentences at all — it sounded like the whole reply dumped out at once instead of someone talking.
+        if (Prefs.offlineVoiceOnly(ctx) && voiceList().none { !it.features.contains("networkTts") }) {
+            main.post { onProblem?.invoke("Orion cannot speak offline because no installed local voice is available. Install voice data in Android Text-to-speech settings, or turn off Offline-only voice.") }
+            onDone?.invoke()
+            return
+        }
+        speakWithAndroidTts(chunks.map { it.text }, onDone, chunks.map { it.pauseAfterMs })
     }
 
     /** Compatibility path if Kokoro is not installed or native initialization fails. */
-    private fun speakWithAndroidTts(chunks: List<String>, onDone: (() -> Unit)?) {
+    private fun speakWithAndroidTts(chunks: List<String>, onDone: (() -> Unit)?, pausesMs: List<Int>? = null) {
         // Kokoro-engine failure must not bypass the explicit no-network-TTS preference.
         // Report the missing local voice instead of silently dropping the assistant reply.
         if (Prefs.offlineVoiceOnly(ctx) && voiceList().none { !it.features.contains("networkTts") }) {
@@ -294,10 +303,14 @@ class Voice(private val ctx: Context) {
         engine.setPitch(if (Prefs.deepVoice(ctx)) 0.92f else 1.0f)
         for ((idx, part) in chunks.withIndex()) {
             if (idx > 0) {
+                // An explicit per-sentence plan (speakLine) carries real breathing room between
+                // sentences; without one, estimate it from how the previous sentence ended so a
+                // plain speak() call still sounds like someone talking, not one run-on utterance.
                 val previous = chunks[idx - 1]
-                val pauseMs = if (previous.endsWith("?") || previous.endsWith("!")) 210L
+                val pauseMs = pausesMs?.getOrNull(idx - 1)?.toLong()
+                    ?: if (previous.endsWith("?") || previous.endsWith("!")) 210L
                     else if (previous.endsWith(".")) 170L else 90L
-                engine.playSilentUtterance(pauseMs, TextToSpeech.QUEUE_ADD, "pause_" + System.nanoTime())
+                if (pauseMs > 0) engine.playSilentUtterance(pauseMs, TextToSpeech.QUEUE_ADD, "pause_" + System.nanoTime())
             }
             val id = "u" + System.nanoTime()
             if (onDone != null && idx == chunks.lastIndex) callbacks[id] = onDone
