@@ -37,7 +37,7 @@ class AgentHooksTest {
  @Test fun onlyDestructiveDataOperationsRequireConfirmation(){
   assertFalse(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","restart")))
   assertTrue(AgentHooks.requiresConfirmation("task_delete",JSONObject().put("id","task-1")))
-  assertTrue(AgentHooks.requiresConfirmation("workspace_delete",JSONObject().put("path","Downloads/report.txt")))
+  assertFalse("journaled delete acts first, undo after",AgentHooks.requiresConfirmation("workspace_delete",JSONObject().put("path","Downloads/report.txt")))
   assertTrue(AgentHooks.requiresConfirmation("shell",JSONObject().put("command","rm -rf /sdcard/old")))
  }
  @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.recordVerified("open_app","WhatsApp opened\\nLOCAL VERIFY PASS: target app is visible");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
