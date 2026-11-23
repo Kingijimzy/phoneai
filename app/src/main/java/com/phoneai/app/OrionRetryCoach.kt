@@ -6,12 +6,29 @@ package com.phoneai.app
  */
 internal class OrionRetryCoach {
     private val streak = HashMap<String, Int>()
+    private var discoveryStreak = 0
 
     fun after(tool: String, failed: Boolean): String {
         if (!failed) { streak[tool] = 0; return "" }
         val n = (streak[tool] ?: 0) + 1
         streak[tool] = n
         return if (n == 3 || n == 6) "\nCOACH: $tool has failed $n times in a row. Do not call it again the same way. ${advice(tool)}" else ""
+    }
+
+    /**
+     * capability_search/capability_load succeed every time (they only ever return "found" or "loaded"), so the
+     * ordinary failure streak never fires even when the model is stuck discovering the same tool over and over
+     * instead of calling it, or re-discovering it "wrong route" style turn after turn. This tracks that separately.
+     */
+    fun discovery(tool: String): String {
+        if (tool == "capability_search" || tool == "capability_load") {
+            discoveryStreak++
+            return if (discoveryStreak == 4)
+                "\nCOACH: that is $discoveryStreak capability_search/capability_load calls in a row with no real tool run between them. You already have what you need from the last result — call the exact loaded tool_name now with real arguments, or if none of them fit, say plainly what you cannot do here rather than searching again."
+            else ""
+        }
+        discoveryStreak = 0
+        return ""
     }
 
     companion object {

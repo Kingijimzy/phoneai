@@ -1260,7 +1260,8 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 }
                 outcomes.forEach { outcome ->
                     ui.note(activityNote(outcome.call.name, outcome.call.arguments, outcome.content))
-                    val coached = outcome.content + retryCoach.after(outcome.call.name, OrionReflexion.looksFailed(outcome.content))
+                    val coached = outcome.content + retryCoach.after(outcome.call.name, OrionReflexion.looksFailed(outcome.content)) +
+                        retryCoach.discovery(outcome.call.name)
                     messages.put(JSONObject()
                         .put("role", "tool")
                         .put("tool_call_id", outcome.call.id)
