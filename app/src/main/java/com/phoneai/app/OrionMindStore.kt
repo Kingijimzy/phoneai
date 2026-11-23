@@ -31,8 +31,8 @@ internal object OrionMindStore {
     }
 
     /** The block the system prompt carries for the owner's own rules; empty when none. */
-    fun rulesBlock(c: Context): String = ownerRules(c).trim().takeIf { it.isNotEmpty() }
-        ?.let { "OWNER'S OWN RULES (his words, highest priority after safety):\n$it\n" }.orEmpty()
+    fun rulesBlock(c: Context): String = (ownerRules(c).trim().takeIf { it.isNotEmpty() }
+        ?.let { "OWNER'S OWN RULES (his words, highest priority after safety):\n$it\n" }.orEmpty()) + OrionCorrections.block(c)
 
     /** Pushes the stored scene choices into the detector, which stays pure and context-free. */
     fun sync(c: Context) {

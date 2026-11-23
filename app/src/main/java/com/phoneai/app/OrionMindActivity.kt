@@ -87,6 +87,12 @@ class OrionMindActivity : Activity() {
             })
         }
 
+        card("LEARNED FROM YOUR CORRECTIONS", "When you correct him (\"no, shorter\", \"don't open the browser\") he keeps it here, in your words. Edit or clear any line.") {
+            val box = editor(OrionCorrections.learned(this@OrionMindActivity).joinToString("\n"), 5, "Nothing learned yet.")
+            gap(this, box)
+            gap(this, button("Save") { OrionCorrections.setLearned(this@OrionMindActivity, box.text.toString()); toast("Saved") })
+        }
+
         card("CHARACTER", "Who he is and how he sounds: philosophy, manner and worked examples. Reset restores the built-in version.") {
             val box = editor(OrionMindStore.character(this@OrionMindActivity), 12)
             gap(this, box)
