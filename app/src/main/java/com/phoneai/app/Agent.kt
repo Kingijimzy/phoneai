@@ -100,18 +100,6 @@ internal object OrionCommandIntentPolicy {
  * Voice is an interaction surface, not a reduced-capability assistant.
  * Action-shaped utterances enter the same guarded command/task lifecycle as chat.
  */
-internal object OrionProgressCuePolicy {
-    private val potentiallySlowTools = setOf(
-        "browser_open", "browser_search", "browser_click", "browser_type",
-        "python", "python_exec", "dev_python", "dev_shell", "shell", "terminal", "read_screen",
-        "routine_run", "routine_resume", "image_generate", "web_search",
-        "github_search", "github_clone", "file_download", "play_media"
-    )
-
-    fun shouldAnnounce(toolNames: List<String>): Boolean =
-        toolNames.any { it.lowercase() in potentiallySlowTools }
-}
-
 internal object OrionVoiceExecutionPolicy {
     private val contextualActionKinds = setOf(
         OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP,
@@ -1236,15 +1224,9 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 ui.say("This selected model can chat, but its current connection does not expose Orion's native tools. No action was dispatched. Switch to a native-tool-capable provider or connect the account tool bridge.")
                 return
             }
-            var progressCueSent = false
-            val narrator = OrionNarrator.Tracker()
             while (turn.toolCalls.isNotEmpty() && !stopped && toolRounds < OrionNativeToolDispatcher.MAX_ROUNDS_PER_COMMAND) {
-                if (!progressCueSent && OrionProgressCuePolicy.shouldAnnounce(turn.toolCalls.map { it.name })) {
-                    ui.progress("I'm working through that now.")
-                    progressCueSent = true
-                }
                 toolRounds++
-                turn.toolCalls.firstNotNullOfOrNull { narrator.next(it.name, it.arguments) }?.let { ui.narrate(it) }
+                turn.toolCalls.firstOrNull()?.let { ui.narrate(OrionVoice.line(turn.text, it.name, it.arguments)) }
                 val callEnvelope = JSONArray()
                 turn.toolCalls.forEach { call ->
                     callEnvelope.put(JSONObject()
@@ -1289,7 +1271,6 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                             OrionReflexion.roundFailed(lastRoundResults), reflections, true)) {
                         // Reflexion: diagnose and retry on a different route instead of stopping at a failure.
                         reflections++
-                        ui.narrate("That route failed, so I'm diagnosing it and trying a different one.")
                         messages.put(msg("assistant", turn.text.ifBlank { "The last tool round failed." }))
                         messages.put(msg("user", OrionReflexion.prompt(reflections, lastRoundResults)))
                         lastRoundResults = emptyList()

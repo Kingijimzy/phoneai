@@ -93,6 +93,12 @@ class OrionMindActivity : Activity() {
             gap(this, button("Save") { OrionCorrections.setLearned(this@OrionMindActivity, box.text.toString()); toast("Saved") })
         }
 
+        card("HE WROTE THESE", "Standing notes Orion wrote for himself. He adds them with brain note; edit or clear any line. Scenes he creates appear under Mood scenes.") {
+            val box = editor(OrionMindStore.selfNotes(this@OrionMindActivity), 4, "Nothing yet.")
+            gap(this, box)
+            gap(this, button("Save") { OrionMindStore.setSelfNotes(this@OrionMindActivity, box.text.toString()); toast("Saved") })
+        }
+
         card("CHARACTER", "Who he is and how he sounds: philosophy, manner and worked examples. Reset restores the built-in version.") {
             val box = editor(OrionMindStore.character(this@OrionMindActivity), 12)
             gap(this, box)
