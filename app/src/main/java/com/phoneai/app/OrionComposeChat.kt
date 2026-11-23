@@ -627,8 +627,9 @@ internal fun OrionComposeChatScreen(
     LaunchedEffect(lines.isNotEmpty()) {
         if (openedAtBottom || lines.isEmpty()) return@LaunchedEffect
         openedAtBottom = true
-        val count = kotlinx.coroutines.flow.first(androidx.compose.runtime.snapshotFlow { listState.layoutInfo.totalItemsCount }) { it > 0 }
-        listState.scrollToItem(count - 1)
+        androidx.compose.runtime.snapshotFlow { listState.layoutInfo.totalItemsCount }.collect { count ->
+            if (count > 0) { listState.scrollToItem(count - 1); throw kotlinx.coroutines.CancellationException("positioned") }
+        }
     }
     LaunchedEffect(lines.lastOrNull()?.id, (lines.lastOrNull()?.text?.length ?: 0) / 120) {
         // Only follow new content when the reader is already near the end. Use the LazyColumn's
