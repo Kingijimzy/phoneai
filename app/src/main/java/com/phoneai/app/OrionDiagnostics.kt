@@ -17,7 +17,7 @@ internal object OrionDiagnostics {
         steps.takeLast(25).forEach { s ->
             append("- ").append(s.tool).append(" | ").append(s.status.name).append(" | ")
                 .append(OrionRunLog.durationLabel(OrionRunLog.durationMs(s, now)))
-            if (s.status == OrionRunLog.Status.FAILED) append(" | ").append(s.output.lineSequence().firstOrNull().orEmpty().take(160))
+            if (s.status == OrionRunLog.Status.FAILED) append(" | ").append(OrionFailureNotes.meaningful(s.output).take(160))
             append('\n')
         }
         append(OrionRunAudit.section(steps, now))
@@ -27,6 +27,10 @@ internal object OrionDiagnostics {
             .entries.sortedWith(compareByDescending<Map.Entry<String, Triple<Int, Int, Long>>> { it.value.second }.thenBy { it.key })
             .take(25)
         if (rows.isEmpty()) append("- nothing measured yet\n")
-        rows.forEach { append("- ").append(it.key).append(": ").append(it.value.first).append('/').append(it.value.second).append('\n') }
+        rows.forEach {
+            append("- ").append(it.key).append(": ").append(it.value.first).append('/').append(it.value.second)
+            if (it.value.second > 0) OrionFailureNotes.last(it.key)?.let { why -> append("  last error: ").append(why) }
+            append('\n')
+        }
     }
 }

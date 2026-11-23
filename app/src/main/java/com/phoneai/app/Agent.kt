@@ -1162,6 +1162,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             return try {
                 dispatchNativeToolInner(name, args).also { OrionRunLog.finish(stepId, it, OrionReflexion.looksFailed(it)); OrionForesight.record(svc, if (OrionForgedTools.isForged(calledName)) calledName else name, forecast?.level ?: OrionForesight.Level.OK, it, System.currentTimeMillis() - t0) }
                     .also { r -> runCatching { OrionActionLedger.afterCall(svc, calledName, name, args, r) } }
+                    .also { r -> if (OrionReflexion.looksFailed(r)) runCatching { OrionFailureNotes.record(svc, name, r) } }
                     .let { r -> r + OrionKilledScript.hint(name, r) }
                     .let { r -> forecast?.let { OrionForesight.note(it) }?.takeIf { it.isNotBlank() }?.let { r + "\n" + it } ?: r }
             } catch (e: Throwable) {
@@ -1218,6 +1219,8 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         val toolTranscriptStart = messages.length()
         var toolRounds = 0
         var reflections = 0
+        var autoNudges = 0
+        val retryCoach = OrionRetryCoach()
         var lastRoundResults: List<String> = emptyList()
         fun preserveToolTranscript(note: String) {
             if (messages.length() <= toolTranscriptStart) return
@@ -1273,11 +1276,12 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 }
                 outcomes.forEach { outcome ->
                     ui.note(activityNote(outcome.call.name, outcome.call.arguments, outcome.content))
+                    val coached = outcome.content + retryCoach.after(outcome.call.name, OrionReflexion.looksFailed(outcome.content))
                     messages.put(JSONObject()
                         .put("role", "tool")
                         .put("tool_call_id", outcome.call.id)
                         .put("name", outcome.call.name)
-                        .put("content", outcome.content))
+                        .put("content", coached))
                 }
                 if (!stopped) {
                     turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
@@ -1289,6 +1293,13 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                         messages.put(msg("assistant", turn.text.ifBlank { "The last tool round failed." }))
                         messages.put(msg("user", OrionReflexion.prompt(reflections, lastRoundResults)))
                         lastRoundResults = emptyList()
+                        turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
+                    }
+                    if (turn.toolCalls.isEmpty() && turn.toolCallingAvailable && OrionAutoContinue.shouldContinue(turn.text, toolRounds, autoNudges)) {
+                        // He promised a next step and stopped: make him do it instead of waiting for "Continue".
+                        autoNudges++
+                        messages.put(msg("assistant", turn.text))
+                        messages.put(msg("user", OrionAutoContinue.PROMPT))
                         turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
                     }
                     if (!turn.toolCallingAvailable) {
