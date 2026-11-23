@@ -3,6 +3,7 @@ package com.phoneai.app
 import android.app.Activity
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -123,6 +124,30 @@ class OrionMindActivity : Activity() {
                 }, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(6) })
                 gap(this, row)
             }
+        }
+
+        card("SPEED", "One model for everything is the fastest, like Ultron. Turn it on and Orion stops switching to backup models.") {
+            val single = Switch(this@OrionMindActivity).apply {
+                text = "Single fast model (no switching)"
+                textSize = 13f
+                setTextColor(Theme.TEXT)
+                isChecked = !Prefs.autoSwitch(this@OrionMindActivity)
+                setOnCheckedChangeListener { _, v -> Prefs.setAutoSwitch(this@OrionMindActivity, !v) }
+            }
+            addView(single)
+        }
+
+        card("RUN LOG", "What Orion actually did, with problems found (loops, wandering, slow steps) and what to forge next. Share it so a failure can be fixed from evidence.") {
+            gap(this, button("Export run log") {
+                thread(name = "orion-run-export") {
+                    val text = runCatching { OrionDiagnostics.report() }.getOrElse { "Could not build the log: ${it.message}" }
+                    ui.post {
+                        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text)
+                        }, "Share run log"))
+                    }
+                }
+            })
         }
 
         card("WHAT HE SEES EVERY TURN", "Read-only. The exact pieces behind each reply, so nothing is hidden.") {
