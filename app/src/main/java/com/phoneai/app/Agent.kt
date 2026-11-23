@@ -308,6 +308,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
             }
             if (file != null) return "[IMAGE]\n${file.absolutePath}\n${args.optString("prompt").take(120)}"
         }
+        OrionPreviewNote.build(svc.filesDir, tool, args, failed)?.let { return it }
         if (tool in setOf("python_exec", "dev_python", "dev_shell", "termux_command", "dev_write", "workspace_write", "dev_read", "workspace_read", "show_file")) {
             val head: String
             val code: String
@@ -1159,7 +1160,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             OrionProgress.bind(stepId)
             val t0 = System.currentTimeMillis()
             return try {
-                dispatchNativeToolInner(name, args).also { OrionRunLog.finish(stepId, it, OrionReflexion.looksFailed(it)); OrionForesight.record(svc, name, forecast?.level ?: OrionForesight.Level.OK, it, System.currentTimeMillis() - t0) }
+                dispatchNativeToolInner(name, args).also { OrionRunLog.finish(stepId, it, OrionReflexion.looksFailed(it)); OrionForesight.record(svc, if (OrionForgedTools.isForged(calledName)) calledName else name, forecast?.level ?: OrionForesight.Level.OK, it, System.currentTimeMillis() - t0) }
                     .let { r -> forecast?.let { OrionForesight.note(it) }?.takeIf { it.isNotBlank() }?.let { r + "\n" + it } ?: r }
             } catch (e: Throwable) {
                 OrionRunLog.finish(stepId, "error: ${e.message ?: e.javaClass.simpleName}", true)

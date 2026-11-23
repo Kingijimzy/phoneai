@@ -63,6 +63,8 @@ data class OrionMessageContent(
                         )))
                     raw.startsWith("[TOOL:") || raw.startsWith("[TOOL_RESULT:") ->
                         return OrionMessageContent(blocks = listOf(OrionMessageBlock.ToolResult(raw)))
+                    raw.startsWith("[PREVIEW]") ->
+                        return OrionMessageContent(blocks = listOf(OrionMessageBlock.Preview(raw)))
                     raw.startsWith("[IMAGE]") ->
                         return OrionMessageContent(blocks = listOf(OrionMessageBlock.Image(raw)))
                 }
@@ -92,6 +94,7 @@ data class OrionMessageContent(
             "tool_result" -> OrionMessageBlock.ToolResult(json.optString("summary"))
             "research" -> OrionMessageBlock.Research(json.optString("summary"), json.optJSONArray("sources").toStringList())
             "image" -> OrionMessageBlock.Image(json.optString("legacyPayload"))
+            "preview" -> OrionMessageBlock.Preview(json.optString("legacyPayload"))
             else -> null
         }
     }
@@ -119,6 +122,8 @@ sealed interface OrionMessageBlock {
     data class ToolResult(val summary: String) : OrionMessageBlock
     data class Research(val summary: String, val sources: List<String>) : OrionMessageBlock
     data class Image(val legacyPayload: String) : OrionMessageBlock
+    /** A page Orion built, shown running in the chat. Payload: "[PREVIEW]\n<absolute path>\n<title>". */
+    data class Preview(val legacyPayload: String) : OrionMessageBlock
 }
 
 private fun OrionMessageBlock.toJsonObject(): JSONObject = JSONObject().apply {
@@ -144,6 +149,7 @@ private fun OrionMessageBlock.toJsonObject(): JSONObject = JSONObject().apply {
         is OrionMessageBlock.ToolResult -> put("type", "tool_result").put("summary", summary)
         is OrionMessageBlock.Research -> put("type", "research").put("summary", summary).put("sources", JSONArray(sources))
         is OrionMessageBlock.Image -> put("type", "image").put("legacyPayload", legacyPayload)
+        is OrionMessageBlock.Preview -> put("type", "preview").put("legacyPayload", legacyPayload)
     }
 }
 

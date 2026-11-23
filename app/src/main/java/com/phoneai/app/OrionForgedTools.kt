@@ -14,6 +14,7 @@ internal object OrionForgedTools {
     fun definitions(context: Context): List<ToolDefinition> = runCatching {
         SelfExtendingExtensionStore(context).all()
             .filter { it.enabled && it.verified && it.sourceSha256 == SelfExtendingExtensionPolicy.sha256(it.source) }
+            .filterNot { isRetired(PREFIX + it.id, OrionForesight.stats()) }
             .take(MAX_EXPOSED)
             .map { definition(it.id, it.description) }
     }.getOrDefault(emptyList())
@@ -22,6 +23,14 @@ internal object OrionForgedTools {
         val summary = description.replace('\n', ' ').take(180).ifBlank { "tool Orion built for himself" }
         return ToolDefinition(PREFIX + id, "$PREFIX$id {input?: json object}: $summary (a tool you forged; pass INPUT, read RESULT)", summary, ToolAccess.WRITE)
     }
+
+    /**
+     * Natural selection for forged tools: one that has failed three times and never worked drops out of
+     * the tool list, so Orion stops reaching for it and forges a better one. Forging the same id again
+     * does not resurrect it until its record is cleared, so he picks a new name or fixes the cause.
+     */
+    fun isRetired(name: String, stats: Map<String, Triple<Int, Int, Long>>): Boolean =
+        stats[name]?.let { (ok, failed, _) -> failed >= 3 && ok == 0 } ?: false
 
     fun isForged(name: String) = name.startsWith(PREFIX) && name.length > PREFIX.length
 
