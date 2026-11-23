@@ -276,7 +276,7 @@ private fun OrionStructuredBlockCard(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(OrionUiPalette.panel).padding(10.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Box(Modifier.size(7.dp).clip(CircleShape).background(OrionUiPalette.secondaryText))
+            TaskGlyph(OrionTaskMotion.kindForPhase(block.phase))
             Text(orionWorkingPhrase(block.phase), color = OrionUiPalette.secondaryText, fontSize = 11.sp)
         }
         is OrionMessageBlock.ToolResult -> Text(block.summary, color = ChatCopy, fontSize = 12.sp, lineHeight = 18.sp)
@@ -444,6 +444,7 @@ internal fun ChatBubble(
             ) {
                 if ((note && !bare) || framed) {
                     Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable(enabled = collapsible) { openBlock = !openBlock }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        if ((primaryBlock as? OrionMessageBlock.Terminal)?.state == "running") TaskGlyph(OrionTaskMotion.Kind.CODE)
                         Text(
                             when (primaryBlock) {
                                 is OrionMessageBlock.Approval -> "APPROVAL REQUIRED"
@@ -1079,6 +1080,42 @@ internal fun ImageResultCard(raw: String) {
     }
 }
 
+
+/** A small living glyph per kind of work: typing bars, ripples, a scan line, memory pulse, orbit, equalizer, breathing. */
+@Composable
+internal fun TaskGlyph(kind: OrionTaskMotion.Kind, modifier: Modifier = Modifier) {
+    val t = rememberInfiniteTransition(label = "task-glyph")
+    val phase by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1400), RepeatMode.Restart), label = "phase")
+    val accent = ChatMint
+    androidx.compose.foundation.Canvas(modifier.size(18.dp)) {
+        val w = size.width; val h = size.height; val c = androidx.compose.ui.geometry.Offset(w / 2, h / 2)
+        fun wave(i: Int, n: Int) = kotlin.math.abs(kotlin.math.sin((phase + i.toFloat() / n) * Math.PI.toFloat()))
+        when (kind) {
+            OrionTaskMotion.Kind.CODE -> for (i in 0 until 3) {            // typing bars of different lengths
+                val len = w * (0.35f + 0.55f * wave(i, 3))
+                drawRect(accent, androidx.compose.ui.geometry.Offset(1f, h * (0.2f + i * 0.28f)), androidx.compose.ui.geometry.Size(len, h * 0.14f))
+            }
+            OrionTaskMotion.Kind.WEB -> for (i in 0 until 2) {             // ripples leaving the centre
+                val p = (phase + i * 0.5f) % 1f
+                drawCircle(accent.copy(alpha = 1f - p), radius = (w / 2) * p, center = c, style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+            }
+            OrionTaskMotion.Kind.DEVICE -> {                               // scan line over a screen frame
+                drawRect(accent.copy(alpha = 0.5f), androidx.compose.ui.geometry.Offset(w * 0.2f, 1f), androidx.compose.ui.geometry.Size(w * 0.6f, h - 2f), style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+                drawRect(accent, androidx.compose.ui.geometry.Offset(w * 0.2f, 1f + (h - 4f) * phase), androidx.compose.ui.geometry.Size(w * 0.6f, 2f))
+            }
+            OrionTaskMotion.Kind.MEMORY -> drawCircle(accent.copy(alpha = 0.35f + 0.65f * wave(0, 1)), radius = w * (0.18f + 0.22f * wave(0, 1)), center = c)
+            OrionTaskMotion.Kind.LINK -> for (i in 0 until 3) {            // dots orbiting a core
+                val a = (phase + i / 3f) * 2 * Math.PI.toFloat()
+                drawCircle(accent, 2.2f, androidx.compose.ui.geometry.Offset(c.x + (w * 0.36f) * kotlin.math.cos(a), c.y + (h * 0.36f) * kotlin.math.sin(a)))
+            }
+            OrionTaskMotion.Kind.MUSIC -> for (i in 0 until 4) {           // equalizer
+                val bar = h * (0.2f + 0.7f * wave(i, 4))
+                drawRect(accent, androidx.compose.ui.geometry.Offset(1f + i * (w / 4.2f), h - bar), androidx.compose.ui.geometry.Size(w / 6f, bar))
+            }
+            OrionTaskMotion.Kind.THINK -> drawCircle(accent.copy(alpha = 0.5f), radius = w * (0.2f + 0.2f * wave(0, 1)), center = c)
+        }
+    }
+}
 
 /** A page Orion built, running inside the chat. The file is read here and rendered with no file or network access. */
 @Composable

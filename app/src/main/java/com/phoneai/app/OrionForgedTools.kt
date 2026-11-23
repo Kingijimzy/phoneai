@@ -14,7 +14,8 @@ internal object OrionForgedTools {
     fun definitions(context: Context): List<ToolDefinition> = runCatching {
         SelfExtendingExtensionStore(context).all()
             .filter { it.enabled && it.verified && it.sourceSha256 == SelfExtendingExtensionPolicy.sha256(it.source) }
-            .filterNot { isRetired(PREFIX + it.id, OrionForesight.stats()) }
+            .filterNot { OrionActionLedger.isRetired(context, it.id) }
+            .sortedByDescending { OrionActionLedger.sinceForge(context, it.id).first }
             .take(MAX_EXPOSED)
             .map { definition(it.id, it.description) }
     }.getOrDefault(emptyList())
