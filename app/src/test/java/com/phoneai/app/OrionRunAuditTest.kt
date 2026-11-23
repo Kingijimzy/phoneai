@@ -56,7 +56,7 @@ class OrionEvolutionTest {
 
 class OrionNudgeAndSceneTest {
     @Test fun failingToolsGetASelfFixNudgeAndHealthyOnesGetNone() {
-        assertTrue(OrionEvolution.nudge(mapOf("weather" to Triple(0, 4, 10L))).contains("extension_forge"))
+        assertTrue(OrionEvolution.nudge(mapOf("ext_weather" to Triple(0, 4, 10L))).contains("extension_forge"))
         assertEquals("", OrionEvolution.nudge(mapOf("recall" to Triple(9, 0, 10L))))
     }
 

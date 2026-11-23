@@ -229,7 +229,7 @@ internal object OrionBrain {
         "loop" -> OrionEntityLoop.report()
         "world" -> OrionWorldState.pretty(c)
         "job" -> OrionJobLedger.run(c, a)
-        "diagnostics" -> OrionDiagnostics.report()
+        "diagnostics" -> { OrionFailureNotes.load(c); OrionDiagnostics.report() }
         "evolve" -> OrionEvolution.report(OrionForesight.stats()) + OrionActionLedger.judgementReport(c).let { if (it.isBlank()) "" else "\nFORGED FIXES SINCE THEIR LAST FORGE:\n$it" }
         "ledger", "judge", "vault" -> OrionActionLedger.run(c, a)
         "strategy" -> "Ranked routes (measured):\n" + OrionStrategy.summary(OrionWorldState.build(c))
