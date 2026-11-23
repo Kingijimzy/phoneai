@@ -79,6 +79,27 @@ class OrionConnectedTest {
         assertEquals("nothing recorded yet".length > 0, true)
     }
 
+    @Test fun waitingStatusSaysWhatItIsWaitingOnInsteadOfBareWarning() {
+        val approval = OrionActivityEvent("e1", "t1", OrionActivityKind.APPROVAL, OrionActivityStatus.WAITING,
+            "Confirm deleting 3 workspace files", "", 0L)
+        assertEquals("CONFIRM DELETING 3 WORKSPACE FILES", companionStatusForEvent(approval))
+        val blank = OrionActivityEvent("e2", "t1", OrionActivityKind.APPROVAL, OrionActivityStatus.WAITING, "", "", 0L)
+        assertEquals("WARNING", companionStatusForEvent(blank))
+        val failed = OrionActivityEvent("e3", "t1", OrionActivityKind.ERROR, OrionActivityStatus.FAILED, "push rejected", "", 0L)
+        assertEquals("ERROR: push rejected", companionStatusForEvent(failed))
+    }
+
+    @Test fun repeatedCapabilityDiscoveryWithNoRealToolGetsCoached() {
+        val coach = OrionRetryCoach()
+        assertEquals("", coach.discovery("capability_search"))
+        assertEquals("", coach.discovery("capability_load"))
+        assertEquals("", coach.discovery("capability_search"))
+        val nudged = coach.discovery("capability_load")
+        assertTrue(nudged.contains("COACH"))
+        assertEquals("", coach.discovery("shell"))
+        assertEquals("", coach.discovery("capability_search"))
+    }
+
     @Test fun brainActionsReachTheNewStores() {
         assertTrue(OrionWorldview.run(c, JSONObject().put("action", "world_learn").put("text", "Kingi lives in Lagos, UTC+1.").put("source", "Kingi").put("days", 3650)).startsWith("ok"))
         assertTrue(OrionWorldview.run(c, JSONObject().put("action", "world")).contains("Lagos"))

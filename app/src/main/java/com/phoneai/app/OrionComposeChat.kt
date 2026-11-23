@@ -620,6 +620,16 @@ internal fun OrionComposeChatScreen(
             layout.totalItemsCount > 0 && layout.totalItemsCount - 1 - lastVisible > 2
         }.collect { showJumpToBottom = it }
     }
+    // Opening a conversation must land on its end, not its start. The transcript can populate before the
+    // LazyColumn has measured anything, so totalItemsCount is briefly 0 and a single attempt lands nowhere;
+    // wait for a real layout before jumping, once, the first time this screen has lines to show.
+    var openedAtBottom by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(lines.isNotEmpty()) {
+        if (openedAtBottom || lines.isEmpty()) return@LaunchedEffect
+        openedAtBottom = true
+        val count = kotlinx.coroutines.flow.first(androidx.compose.runtime.snapshotFlow { listState.layoutInfo.totalItemsCount }) { it > 0 }
+        listState.scrollToItem(count - 1)
+    }
     LaunchedEffect(lines.lastOrNull()?.id, (lines.lastOrNull()?.text?.length ?: 0) / 120) {
         // Only follow new content when the reader is already near the end. Use the LazyColumn's
         // actual item count because task/attachment cards are additional list items.

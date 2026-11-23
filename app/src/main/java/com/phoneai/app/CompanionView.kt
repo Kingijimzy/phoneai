@@ -63,8 +63,9 @@ internal fun companionStatusForEvent(event: OrionActivityEvent): String? = when 
         CompanionView.Activity.THINKING -> "THINKING"
         else -> null
     }
-    OrionActivityStatus.WAITING -> "WARNING"
-    OrionActivityStatus.FAILED -> "ERROR"
+    // A bare "WARNING" told Kingi nothing he didn't already see; say what Orion is actually waiting on.
+    OrionActivityStatus.WAITING -> event.title.ifBlank { "WARNING" }.uppercase()
+    OrionActivityStatus.FAILED -> "ERROR: " + event.title.ifBlank { "action failed" }
     OrionActivityStatus.CANCELLED -> "STOPPED"
     OrionActivityStatus.INTERRUPTED -> "PAUSED"
     OrionActivityStatus.SUCCEEDED -> null
