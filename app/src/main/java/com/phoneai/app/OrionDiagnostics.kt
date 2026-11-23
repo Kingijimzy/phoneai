@@ -20,6 +20,8 @@ internal object OrionDiagnostics {
             if (s.status == OrionRunLog.Status.FAILED) append(" | ").append(s.output.lineSequence().firstOrNull().orEmpty().take(160))
             append('\n')
         }
+        append(OrionRunAudit.section(steps, now))
+        append("\n").append(OrionEvolution.report(stats)).append("\n")
         append("\nMEASURED RECORD (tool: ok/failed, worst first)\n")
         val rows = stats.filter { it.value.first + it.value.second > 0 }
             .entries.sortedWith(compareByDescending<Map.Entry<String, Triple<Int, Int, Long>>> { it.value.second }.thenBy { it.key })
