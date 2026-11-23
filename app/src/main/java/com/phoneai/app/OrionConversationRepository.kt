@@ -396,7 +396,7 @@ class OrionConversationRepository private constructor(context: Context) :
 
     private fun clean(turns: List<Pair<String, String>>) =
         turns.filter { (kind, text) -> (kind == "me" || kind == "ai") && text.isNotBlank() }
-            .takeLast(MAX_TURNS).map { it.first to it.second.take(6000) }
+            .takeLast(MAX_TURNS).map { it.first to it.second.take(MAX_TEXT) }
 
     @Synchronized
     fun migrateLegacy(context: Context) {
@@ -500,7 +500,7 @@ class OrionConversationRepository private constructor(context: Context) :
     @Synchronized
     fun saveActiveStructured(context: Context, lines: List<OrionChatLine>) {
         val persisted = lines.filter { (it.kind == "me" || it.kind == "ai") && it.text.isNotBlank() }
-            .takeLast(MAX_TURNS).map { it.copy(text = it.text.take(6000)) }
+            .takeLast(MAX_TURNS).map { it.copy(text = it.text.take(MAX_TEXT)) }
         val previous = loadActiveStructured(context)
         val merged = persisted.mapIndexed { index, line ->
             val old = previous.getOrNull(index)
@@ -555,7 +555,7 @@ class OrionConversationRepository private constructor(context: Context) :
     fun archiveAndClearStructured(context: Context, lines: List<OrionChatLine>) {
         val sessionId = activeSessionId(context)
         val persisted = lines.filter { (it.kind == "me" || it.kind == "ai") && it.text.isNotBlank() }
-            .takeLast(MAX_TURNS).map { it.copy(text = it.text.take(6000)) }
+            .takeLast(MAX_TURNS).map { it.copy(text = it.text.take(MAX_TEXT)) }
         val previous = loadActiveStructured(context)
         val merged = persisted.mapIndexed { index, line ->
             val old = previous.getOrNull(index)
@@ -730,7 +730,7 @@ class OrionConversationRepository private constructor(context: Context) :
     private fun insertMessage(db: SQLiteDatabase, sessionId: String, role: String, content: String, createdAt: Long, order: Int, messageId: String = UUID.randomUUID().toString()) {
         db.insert("messages", null, ContentValues().apply {
             put("id", messageId); put("session_id", sessionId); put("role", role)
-            put("content", content.take(6000)); put("created_at", createdAt); put("sort_order", order)
+            put("content", content.take(MAX_TEXT)); put("created_at", createdAt); put("sort_order", order)
         })
     }
 
@@ -782,7 +782,7 @@ class OrionConversationRepository private constructor(context: Context) :
             (0 until arr.length()).mapNotNull { i ->
                 val o = arr.optJSONObject(i) ?: return@mapNotNull null
                 val role = o.optString("kind")
-                val content = o.optString("text").take(6000)
+                val content = o.optString("text").take(MAX_TEXT)
                 if ((role == "me" || role == "ai") && content.isNotBlank()) role to content else null
             }.takeLast(MAX_TURNS)
         } catch (_: Exception) { emptyList() }
@@ -801,7 +801,8 @@ class OrionConversationRepository private constructor(context: Context) :
         private const val ARCHIVE_KEY = "archived_chats"
         private const val ACTIVE_ID = "active_session_id"
         private const val MIGRATED = "sqlite_sessions_migrated_v1"
-        private const val MAX_TURNS = 80
+        private const val MAX_TURNS = 400
+        private const val MAX_TEXT = 60_000
         private const val MAX_CHATS = 100
         @Volatile private var instance: OrionConversationRepository? = null
 
