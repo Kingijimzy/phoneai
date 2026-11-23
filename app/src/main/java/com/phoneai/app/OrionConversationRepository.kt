@@ -395,7 +395,7 @@ class OrionConversationRepository private constructor(context: Context) :
     }
 
     private fun clean(turns: List<Pair<String, String>>) =
-        turns.filter { (kind, text) -> (kind == "me" || kind == "ai") && text.isNotBlank() }
+        turns.filter { (kind, text) -> persistable(kind, text) }
             .takeLast(MAX_TURNS).map { it.first to it.second.take(MAX_TEXT) }
 
     @Synchronized
@@ -499,7 +499,7 @@ class OrionConversationRepository private constructor(context: Context) :
 
     @Synchronized
     fun saveActiveStructured(context: Context, lines: List<OrionChatLine>) {
-        val persisted = lines.filter { (it.kind == "me" || it.kind == "ai") && it.text.isNotBlank() }
+        val persisted = lines.filter { persistable(it.kind, it.text) }
             .takeLast(MAX_TURNS).map { it.copy(text = it.text.take(MAX_TEXT)) }
         val previous = loadActiveStructured(context)
         val merged = persisted.mapIndexed { index, line ->
@@ -554,7 +554,7 @@ class OrionConversationRepository private constructor(context: Context) :
     @Synchronized
     fun archiveAndClearStructured(context: Context, lines: List<OrionChatLine>) {
         val sessionId = activeSessionId(context)
-        val persisted = lines.filter { (it.kind == "me" || it.kind == "ai") && it.text.isNotBlank() }
+        val persisted = lines.filter { persistable(it.kind, it.text) }
             .takeLast(MAX_TURNS).map { it.copy(text = it.text.take(MAX_TEXT)) }
         val previous = loadActiveStructured(context)
         val merged = persisted.mapIndexed { index, line ->
@@ -796,6 +796,11 @@ class OrionConversationRepository private constructor(context: Context) :
         db.rawQuery("SELECT 1 FROM sessions WHERE id=? LIMIT 1", arrayOf(id)).use { it.moveToFirst() }
 
     companion object {
+        /** Messages, plus the result cards Orion made (previews, images, shell runs) so they survive closing the app. */
+        internal fun persistable(kind: String, text: String): Boolean =
+            text.isNotBlank() && (kind == "me" || kind == "ai" ||
+                (kind == "note" && (text.startsWith("[PREVIEW]") || text.startsWith("[IMAGE]") || text.startsWith("[SHELL:"))))
+
         private const val PREFS = "orion_chat_history"
         private const val ACTIVE_KEY = "active_transcript"
         private const val ARCHIVE_KEY = "archived_chats"
