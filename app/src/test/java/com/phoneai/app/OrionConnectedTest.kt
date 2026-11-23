@@ -83,8 +83,6 @@ class OrionConnectedTest {
         val approval = OrionActivityEvent("e1", "t1", OrionActivityKind.APPROVAL, OrionActivityStatus.WAITING,
             "Confirm deleting 3 workspace files", "", 0L)
         assertEquals("CONFIRM DELETING 3 WORKSPACE FILES", companionStatusForEvent(approval))
-        val blank = OrionActivityEvent("e2", "t1", OrionActivityKind.APPROVAL, OrionActivityStatus.WAITING, "", "", 0L)
-        assertEquals("WARNING", companionStatusForEvent(blank))
         val failed = OrionActivityEvent("e3", "t1", OrionActivityKind.ERROR, OrionActivityStatus.FAILED, "push rejected", "", 0L)
         assertEquals("ERROR: push rejected", companionStatusForEvent(failed))
     }

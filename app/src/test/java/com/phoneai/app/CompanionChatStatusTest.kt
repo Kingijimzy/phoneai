@@ -20,10 +20,12 @@ class CompanionChatStatusTest {
             companionActivityForEvent(event(OrionActivityKind.TOOL, "Opening app")))
         assertEquals(CompanionView.Activity.RUNNING,
             companionActivityForEvent(event(OrionActivityKind.DELEGATION, "Worker started")))
+        // A bare "WARNING" told Kingi nothing he didn't already see from the orb alone; it now carries
+        // what Orion is actually waiting on or what failed.
         val warning = event(OrionActivityKind.APPROVAL, "Risk notice", status = OrionActivityStatus.WAITING)
-        assertEquals("WARNING", companionStatusForEvent(warning))
+        assertEquals("RISK NOTICE", companionStatusForEvent(warning))
         assertEquals(CompanionView.Activity.THINKING, companionActivityForEvent(warning))
-        assertEquals("ERROR", companionStatusForEvent(event(OrionActivityKind.ERROR, "Failed", status = OrionActivityStatus.FAILED)))
+        assertEquals("ERROR: Failed", companionStatusForEvent(event(OrionActivityKind.ERROR, "Failed", status = OrionActivityStatus.FAILED)))
     }
 
     @Test fun mapsChatRuntimeStatesToCompanionAnimation() {
