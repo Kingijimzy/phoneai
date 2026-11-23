@@ -131,6 +131,7 @@ internal object OrionCentralBrain {
         addObservedSection("self_facts") { OrionSelfFacts.block(app) }
         addObservedSection("world_state") { OrionWorldState.section(app) + "\n" + OrionMetacognition.INSTRUCTION }
         addObservedSection("scene") { OrionScenes.brief(request) }
+        addObservedSection("self") { OrionSelf.section(app) }
         addObservedSection("situation") { OrionSituation.section(app) }
         addObservedSection("past_actions") { OrionActionLedger.section(app, request) }
         addObservedSection("evolution") { OrionEvolution.nudge(OrionForesight.stats()) }

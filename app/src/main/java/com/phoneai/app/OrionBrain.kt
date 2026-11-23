@@ -232,6 +232,10 @@ internal object OrionBrain {
         "diagnostics" -> { OrionFailureNotes.load(c); OrionDiagnostics.report() }
         "evolve" -> OrionEvolution.report(OrionForesight.stats()) + OrionActionLedger.judgementReport(c).let { if (it.isBlank()) "" else "\nFORGED FIXES SINCE THEIR LAST FORGE:\n$it" }
         "ledger", "judge", "vault" -> OrionActionLedger.run(c, a)
+        "scene_add" -> OrionMindStore.addCustomScene(c, a.optString("id"), a.optString("words"), a.optString("tools"), a.optString("brief"))
+        "scene_remove" -> OrionMindStore.removeCustomScene(c, a.optString("id"))
+        "note" -> OrionMindStore.addSelfNote(c, a.optString("text"))
+        "self" -> OrionSelf.describe(c)
         "strategy" -> "Ranked routes (measured):\n" + OrionStrategy.summary(OrionWorldState.build(c))
         "foresight" -> a.optString("name").trim().let { n ->
             if (n.isBlank()) "Predictions vs outcomes:\n" + OrionForesight.calibration()

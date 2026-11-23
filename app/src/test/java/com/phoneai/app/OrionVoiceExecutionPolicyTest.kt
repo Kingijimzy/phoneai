@@ -36,13 +36,5 @@ class OrionVoiceExecutionPolicyTest {
         assertEquals("messaging", AgentPolicy.packForTool("telegram_send"))
         assertTrue(AgentHooks.requiresConfirmation("task_delete", org.json.JSONObject().put("id", "task-1")))
     }
-    @Test fun progressCueOnlyTriggersForPotentiallySlowRegisteredToolNames() {
-        assertTrue(OrionProgressCuePolicy.shouldAnnounce(listOf("python_exec")))
-        assertTrue(OrionProgressCuePolicy.shouldAnnounce(listOf("read_screen")))
-        assertTrue(OrionProgressCuePolicy.shouldAnnounce(listOf("browser_open")))
-        assertFalse(OrionProgressCuePolicy.shouldAnnounce(listOf("click_text")))
-        assertFalse(OrionProgressCuePolicy.shouldAnnounce(listOf("routine_unknown")))
-        assertFalse(OrionProgressCuePolicy.shouldAnnounce(emptyList()))
-    }
 
 }

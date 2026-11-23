@@ -937,20 +937,8 @@ private fun TaskActivityCard(raw: String) {
 
 internal fun orionWorkingPhrase(status: String): String {
     val value = status.lowercase()
-    return when {
-        listOf("recover", "retry", "fallback", "rerout").any { it in value } -> "Recovering and choosing another route"
-        listOf("approval", "permission", "awaiting owner", "waiting for you").any { it in value } -> "Waiting for your approval"
-        listOf("error", "failed", "blocked", "paused").any { it in value } -> "Investigating what went wrong"
-        listOf("fix", "repair", "patch", "correct").any { it in value } -> "Fixing the issue"
-        listOf("verif", "validat", "test", "check").any { it in value } -> "Verifying that the result works"
-        listOf("debug", "diagnos", "inspect", "trace").any { it in value } -> "Investigating the problem"
-        listOf("terminal", "command", "execut", "running", " run", "tool").any { it in value } -> "Executing the next step"
-        listOf("search", "research", "browser", "look up", "find").any { it in value } -> "Finding the information needed"
-        listOf("code", "build", "develop", "implement", "write").any { it in value } -> "Building the solution"
-        listOf("plan", "think", "reason", "analyz", "decid", "route").any { it in value } -> "Thinking through the best approach"
-        listOf("solv", "tackl", "work", "act", "objective", "task").any { it in value } -> "Working through the objective"
-        else -> "Working through the next step"
-    }
+    return if (listOf("approval", "permission", "awaiting owner", "waiting for you").any { it in value }) "Waiting for your approval"
+    else OrionVoice.status(status)
 }
 
 internal fun orionModeForStatus(status: String, current: OrbView.Mode): OrbView.Mode {

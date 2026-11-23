@@ -6,13 +6,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OrionChatUiStateTest {
-    @Test fun workPhasesUseClearHumanProgressLanguage() {
-        assertEquals("Thinking through the best approach", orionWorkingPhrase("Planning objective"))
-        assertEquals("Fixing the issue", orionWorkingPhrase("Repairing implementation"))
-        assertEquals("Verifying that the result works", orionWorkingPhrase("Running verification"))
-        assertEquals("Finding the information needed", orionWorkingPhrase("Researching documentation"))
-        assertEquals("Recovering and choosing another route", orionWorkingPhrase("Retrying after timeout"))
+    @Test fun workStatusIsTheRealStatusNotAStockPhrase() {
+        assertEquals("Running verification", orionWorkingPhrase("running verification"))
         assertEquals("Waiting for your approval", orionWorkingPhrase("Approval pending"))
+        assertEquals("…", orionWorkingPhrase("  "))
     }
 
     @Test fun statusMapsToDistinctOrbStatesWithoutOverridingLiveRuntimeState() {

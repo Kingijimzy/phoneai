@@ -39,10 +39,25 @@ internal object OrionScenes {
     @Volatile var disabled: Set<String> = emptySet()
     @Volatile var briefOverrides: Map<String, String> = emptyMap()
 
-    fun all(): List<Scene> = scenes
+    /** Scenes Orion (or Kingi) created at runtime; stored by OrionMindStore, editable on the mind page. */
+    @Volatile var custom: List<Scene> = emptyList()
+
+    fun builtInIds(): Set<String> = scenes.map { it.id }.toSet()
+
+    fun all(): List<Scene> = scenes + custom.filter { c -> scenes.none { it.id == c.id } }
 
     fun detect(request: String?): Scene? =
-        request?.takeIf { it.isNotBlank() }?.let { r -> scenes.firstOrNull { it.id !in disabled && it.trigger.containsMatchIn(r) } }
+        request?.takeIf { it.isNotBlank() }?.let { r -> all().firstOrNull { it.id !in disabled && it.trigger.containsMatchIn(r) } }
+
+    /** Builds a scene from plain words: "feel like reading, reading time" -> a trigger that matches any of them. */
+    fun makeScene(id: String, words: String, tools: String, brief: String): Scene? {
+        val cleanId = id.trim().lowercase().replace(Regex("[^a-z0-9_]"), "_").take(24)
+        val phrases = words.split(',', ';').map { it.trim() }.filter { it.length in 3..40 }.take(8)
+        if (cleanId.isBlank() || phrases.isEmpty() || brief.isBlank()) return null
+        val trigger = Regex("(?i)\\b(" + phrases.joinToString("|") { Regex.escape(it) } + ")\\b")
+        val toolList = tools.split(',', ' ').map { it.trim() }.filter { it.isNotEmpty() && ToolRegistry.find(it) != null }.take(10)
+        return Scene(cleanId, trigger, toolList, brief.trim().take(600))
+    }
 
     fun toolsFor(request: String?): List<String> = detect(request)?.tools.orEmpty()
 
