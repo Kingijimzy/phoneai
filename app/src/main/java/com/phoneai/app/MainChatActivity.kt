@@ -1858,7 +1858,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         // Save what is on screen, including a reply still streaming, so closing the app never loses it.
         runCatching {
             val lines = composeLines.toList()
-            val savable = lines.count { (it.kind == "me" || it.kind == "ai") && it.text.isNotBlank() }
+            val savable = lines.count { OrionConversationRepository.persistable(it.kind, it.text) }
             if (savable > 0 && savable >= ChatHistoryStore.load(this).size) ChatHistoryStore.saveStructured(this, lines)
         }
         attachedService?.detachMainChat(this)

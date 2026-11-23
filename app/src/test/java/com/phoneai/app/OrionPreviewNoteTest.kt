@@ -49,3 +49,15 @@ class ForgedToolSelectionTest {
         assertEquals(false, OrionForgedTools.isRetired("ext_unknown", stats))
     }
 }
+
+class CardPersistenceTest {
+    @Test fun resultCardsAreKeptButChatterNotesAreNot() {
+        val p = { k: String, t: String -> OrionConversationRepository.persistable(k, t) }
+        assertTrue(p("me", "hi") && p("ai", "yo"))
+        assertTrue(p("note", "[PREVIEW]\n/x/a.html\na"))
+        assertTrue(p("note", "[IMAGE]\n/x/a.png\ncap"))
+        assertTrue(p("note", "[SHELL:RESULT]\n\$ ls"))
+        assertEquals(false, p("note", "thinking about it"))
+        assertEquals(false, p("ai", "  "))
+    }
+}
