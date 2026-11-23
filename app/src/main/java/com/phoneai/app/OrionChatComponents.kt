@@ -288,6 +288,7 @@ private fun OrionStructuredBlockCard(
             }
         }
         is OrionMessageBlock.Image -> ImageResultCard(block.legacyPayload)
+        is OrionMessageBlock.Preview -> PagePreviewCard(block.legacyPayload)
     }
 }
 
@@ -381,7 +382,7 @@ internal fun ChatBubble(
     var openBlock by remember(item.id) { mutableStateOf(false) }
     // Only things that need attention stay boxed (approvals, files, images, diagrams, notes); ordinary replies flow as plain text.
     val framed = !mine && replyType != OrionReplyType.NORMAL && (replyType == OrionReplyType.DIAGRAM ||
-        primaryBlock is OrionMessageBlock.Approval || primaryBlock is OrionMessageBlock.GeneratedFile || primaryBlock is OrionMessageBlock.Image)
+        primaryBlock is OrionMessageBlock.Approval || primaryBlock is OrionMessageBlock.GeneratedFile || primaryBlock is OrionMessageBlock.Image || primaryBlock is OrionMessageBlock.Preview)
     // Terminal runs are already a one-line chip; they get no second frame, header or ORION tag.
     val bare = note && item.content.blocks.isNotEmpty() && item.content.blocks.all { it is OrionMessageBlock.Terminal }
     val collapsible = !mine && (framed || (note && !bare && !item.text.startsWith("[")))
@@ -453,6 +454,7 @@ internal fun ChatBubble(
                                 is OrionMessageBlock.Research -> "RESEARCH"
                                 is OrionMessageBlock.Thinking -> "WORK STATUS"
                                 is OrionMessageBlock.Image -> "IMAGE RESULT"
+                                is OrionMessageBlock.Preview -> "LIVE PREVIEW"
                                 is OrionMessageBlock.Code -> "CODE OUTPUT"
                                 else -> when (replyType) {
                                     OrionReplyType.RESEARCH -> "RESEARCH"
@@ -1077,6 +1079,42 @@ internal fun ImageResultCard(raw: String) {
     }
 }
 
+
+/** A page Orion built, running inside the chat. The file is read here and rendered with no file or network access. */
+@Composable
+internal fun PagePreviewCard(raw: String) {
+    val lines = raw.lines()
+    val path = lines.getOrNull(1).orEmpty()
+    val title = lines.getOrNull(2).orEmpty().ifBlank { path.substringAfterLast('/') }
+    val html by produceState<String?>(initialValue = null, path) {
+        value = withContext(Dispatchers.IO) {
+            runCatching { java.io.File(path).takeIf { it.isFile && it.length() <= 600_000 }?.readText() }.getOrNull()
+        }
+    }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(OrionUiPalette.panel).border(1.dp, OrionUiPalette.border, RoundedCornerShape(18.dp))) {
+        val page = html
+        if (page == null) {
+            Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                Text("Preview unavailable: ${path.substringAfterLast('/')}", color = ChatMuted, fontSize = 12.sp)
+            }
+        } else {
+            AndroidView(
+                modifier = Modifier.fillMaxWidth().height(320.dp),
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        settings.javaScriptEnabled = true
+                        settings.allowFileAccess = false
+                        settings.allowContentAccess = false
+                        settings.blockNetworkLoads = true
+                        webViewClient = WebViewClient()
+                        loadDataWithBaseURL(null, page, "text/html", "utf-8", null)
+                    }
+                }
+            )
+        }
+        Text(title, color = ChatMuted, fontSize = 11.sp, modifier = Modifier.padding(10.dp))
+    }
+}
 
 /** Renders a durable SQLite activity receipt without inferring its state from free-form text. */
 @Composable
