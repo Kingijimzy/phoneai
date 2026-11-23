@@ -36,8 +36,11 @@ class IrreversibleActionConfirmationPolicyTest {
             "shell", JSONObject().put("command", "printf hello > /workspace/note.txt")))
         assertNotNull(IrreversibleActionConfirmationPolicy.ownerApprovalDescription(
             "shell", JSONObject().put("command", "rm -rf /sdcard/Downloads/old")))
+        assertNull("journaled deletes act first and can be undone",
+            IrreversibleActionConfirmationPolicy.ownerApprovalDescription(
+                "workspace_delete", JSONObject().put("path", "Downloads/report.txt")))
         assertNotNull(IrreversibleActionConfirmationPolicy.ownerApprovalDescription(
-            "workspace_delete", JSONObject().put("path", "Downloads/report.txt")))
+            "trash_empty", JSONObject()))
     }
 
     @Test fun explicitDeleteAndWipeRequestsAreClassifiedButNegationsAreNot() {
