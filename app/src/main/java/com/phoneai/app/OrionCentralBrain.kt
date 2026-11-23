@@ -131,6 +131,7 @@ internal object OrionCentralBrain {
         addObservedSection("self_facts") { OrionSelfFacts.block(app) }
         addObservedSection("world_state") { OrionWorldState.section(app) + "\n" + OrionMetacognition.INSTRUCTION }
         addObservedSection("scene") { OrionScenes.brief(request) }
+        addObservedSection("situation") { OrionSituation.section(app) }
         addObservedSection("evolution") { OrionEvolution.nudge(OrionForesight.stats()) }
         addObservedSection("tool_routes") { OrionToolRouter.summary(request) }
         addObservedSection("mission_evidence") { OrionMissionControl.evidence(OrionMissionLock.goalFor(app, request), OrionMissionLock.activeGoal(app)).let { e -> OrionWorkers.liveSummary().let { w -> if (w.isBlank()) e else (e + "\n" + w).trim() } } }

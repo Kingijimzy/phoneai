@@ -384,7 +384,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
     /** Every entry point (chat, command, resume) must set the scope, or a stale one blocks real tools. */
     private fun setRequestScope(command: String) {
         val scope = TaskScopePolicy.scopeFor(command, lastActionScope, System.currentTimeMillis() - lastActionScopeAt)
-        activeRequestScope = scope
+        activeRequestScope = scope; OrionSituation.noteOwnerMessage()
         if (TaskScopePolicy.modeFor(scope) != TaskMode.CHAT) { lastActionScope = scope; lastActionScopeAt = System.currentTimeMillis() }
     }
     // Last locally perceived screen, used for post-action comparison without another model call.
@@ -1161,6 +1161,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             val t0 = System.currentTimeMillis()
             return try {
                 dispatchNativeToolInner(name, args).also { OrionRunLog.finish(stepId, it, OrionReflexion.looksFailed(it)); OrionForesight.record(svc, if (OrionForgedTools.isForged(calledName)) calledName else name, forecast?.level ?: OrionForesight.Level.OK, it, System.currentTimeMillis() - t0) }
+                    .let { r -> r + OrionKilledScript.hint(name, r) }
                     .let { r -> forecast?.let { OrionForesight.note(it) }?.takeIf { it.isNotBlank() }?.let { r + "\n" + it } ?: r }
             } catch (e: Throwable) {
                 OrionRunLog.finish(stepId, "error: ${e.message ?: e.javaClass.simpleName}", true)
