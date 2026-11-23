@@ -11,8 +11,8 @@ internal object OrionScenes {
     private val scenes = listOf(
         Scene("coding",
             Regex("""(?i)\b(feel(ing)? like|want to|wanna|let'?s|lets|time to|gonna|going to|mood to)\s+(do some\s+)?(cod(e|ing)|build(ing)?|ship(ping)?|program(ming)?)\b|\bcoding (mode|time|session)\b"""),
-            listOf("devspace", "workspace_read", "shell", "github_account_read", "python_exec", "extension_forge"),
-            "SCENE coding: he wants to build. Open the code space with devspace, look at the active project and the repo's open PRs and CI, then give two lines on what is waiting and start on the most important item. Do not ask what to work on."),
+            listOf("devspace", "workspace_read", "shell", "github_account_read", "python_exec", "extension_forge", "play_media", "media_control", "show_file"),
+            "SCENE coding: he wants to build. Open the code space with devspace, look at the active project and the repo's open PRs and CI, then give two lines on what is waiting and start on the most important item. Start his coding music with play_media (recall his music taste first; otherwise a lofi coding mix) unless he said no, and stop it when he stops. Do not ask what to work on."),
         Scene("trading",
             Regex("""(?i)\b(trading (mode|time|session)|check the (market|markets|charts)|let'?s trade|time to trade|market (brief|check|open))\b"""),
             listOf("live_web_search", "recall", "calendar_events", "task_list"),

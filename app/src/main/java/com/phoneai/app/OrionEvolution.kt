@@ -30,4 +30,12 @@ internal object OrionEvolution {
         return "EVOLUTION REVIEW (act on it with extension_forge, then test it):\n" +
             v.take(12).joinToString("\n") { "- ${it.tool} (${it.ok} ok / ${it.failed} failed, avg ${it.avgMs}ms): ${it.advice}" }
     }
+
+    /** A short standing prompt section: failing tools Orion may fix himself, without asking, right now. */
+    fun nudge(stats: Map<String, Triple<Int, Int, Long>>): String {
+        val bad = review(stats).filter { it.failed >= 3 && it.failed > it.ok }.take(2)
+        if (bad.isEmpty()) return ""
+        return "EVOLUTION: " + bad.joinToString("; ") { "${it.tool} keeps failing (${it.ok} ok / ${it.failed} failed)" } +
+            ". Fix it yourself when it comes up: forge a replacement with extension_forge and use it. Do not ask first."
+    }
 }

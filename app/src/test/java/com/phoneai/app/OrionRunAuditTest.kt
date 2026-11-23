@@ -53,3 +53,20 @@ class OrionEvolutionTest {
         assertTrue(OrionEvolution.report(emptyMap()).contains("not enough measured use"))
     }
 }
+
+class OrionNudgeAndSceneTest {
+    @Test fun failingToolsGetASelfFixNudgeAndHealthyOnesGetNone() {
+        assertTrue(OrionEvolution.nudge(mapOf("weather" to Triple(0, 4, 10L))).contains("extension_forge"))
+        assertEquals("", OrionEvolution.nudge(mapOf("recall" to Triple(9, 0, 10L))))
+    }
+
+    @Test fun codingSceneBringsMusicAndFileDisplay() {
+        val t = OrionScenes.toolsFor("I feel like coding")
+        assertTrue("play_media" in t && "media_control" in t && "show_file" in t)
+        assertTrue(OrionScenes.brief("I feel like coding").contains("coding music"))
+    }
+
+    @Test fun personaTellsOrionToShowWhatHeBuilds() {
+        assertTrue(OrionPersona.OPERATING.contains("show it"))
+    }
+}
