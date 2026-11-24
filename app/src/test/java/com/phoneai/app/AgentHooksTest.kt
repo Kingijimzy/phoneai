@@ -18,11 +18,14 @@ class AgentHooksTest {
   assertNull(AgentHooks.scopeBlockReason("What's the weather in Lagos, Nigeria today?", "weather", JSONObject().put("location", "Lagos, Nigeria")))
  }
  @Test fun allowsExplicitSend(){assertNull(AgentHooks.scopeBlockReason("Send this message to Alex","click_text",JSONObject().put("text","Send")))}
- @Test fun consequentialUiActionRequiresApprovalButIsNotMisclassifiedAsUnavailable(){
+ @Test fun consequentialUiActionGetsAnAdvisoryNoteButRunsAutomatically(){
+  // Only deleting or wiping data pauses for owner approval now; a risky-looking click still gets
+  // a chat note (scopeWarning) and is never outright blocked (scopeBlockReason), but it is not held
+  // up waiting on the owner, same as any other ordinary write.
   val args=JSONObject().put("text","Transfer funds")
   assertNotNull(AgentHooks.scopeWarning("Open the banking app and inspect it","click_text",args))
   assertNull(AgentHooks.scopeBlockReason("Open the banking app and inspect it","click_text",args))
-  assertTrue(AgentHooks.requiresConfirmation("click_text",args))
+  assertFalse(AgentHooks.requiresConfirmation("click_text",args))
  }
  @Test fun negatedAndDraftOnlyRequestsNeverAuthorizeConsequentialActions(){
   listOf("Do not send this message to Alex","Don't send this message to Alex","Never send this message","Draft a message to Amma without sending","Prepare a reply but do not send it").forEach { request ->

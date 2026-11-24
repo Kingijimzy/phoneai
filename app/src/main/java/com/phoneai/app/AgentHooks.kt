@@ -146,10 +146,17 @@ internal object AgentHooks {
    (tool=="notification_action" && args.optString("action").equals("reply",true))
   return if(riskyTarget||riskyTool) "Owner approval is required before this consequential action for '$tool'${if(label.isBlank())"" else " ('$label')" } is dispatched." else null
  }
- /** True only for registered destructive data operations; ordinary settings never prompt. */
+ /**
+  * True only for registered destructive data operations; ordinary settings, sends and trades
+  * never prompt. This used to also gate on scopeWarning() — any write-tool whose argument text
+  * matched a "risky" word list (send, post, pay, trade, call...), plus update_memory and undo_last
+  * unconditionally — which silently reintroduced a second approval gate everywhere the single
+  * documented policy ("the only owner approval is for deleting or wiping data") was supposed to be
+  * the one source of truth. scopeWarning() still runs on its own as an advisory note shown in chat;
+  * it no longer pauses execution waiting on the owner.
+  */
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean =
-  IrreversibleActionConfirmationPolicy.ownerApprovalDescription(tool,args,targetLabel) != null ||
-   scopeWarning("",tool,args,targetLabel) != null
+  IrreversibleActionConfirmationPolicy.ownerApprovalDescription(tool,args,targetLabel) != null
  fun goalAuditUnavailableVerdict(): String = "CONTINUE: independent goal audit unavailable; task completion cannot be confirmed."
 
  fun completionDecision(request:String,proofs:List<Proof>):GateDecision =
