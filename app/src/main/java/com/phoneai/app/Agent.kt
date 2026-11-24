@@ -388,7 +388,11 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
         return true
     }
 
-    private val consequentialTools = setOf("telegram_send", "social", "google", "notion", "notification_action", "mcp_call", "sms")
+    // Used to force telegram_send/social/google/notion/notification_action/mcp_call/sms through an
+    // owner-approval pause unconditionally, regardless of what they actually did. Only deleting or
+    // wiping data asks first now (IrreversibleActionConfirmationPolicy); sending a message, posting,
+    // calling an MCP tool and so on run the moment Orion decides to, same as any other write.
+    private val consequentialTools = emptySet<String>()
 
     /** Evidence records retain only sanitized tool/outcome metadata, never private arguments or payloads. */
     private fun isNonLoggedAction(tool: String, args: JSONObject): Boolean = false
