@@ -13,6 +13,10 @@ internal object OrionRhythm {
     private const val PREFS = "orion_rhythm"
     private const val MAX_KEYS = 400
 
+    /** So Kingi can see this is only learned from what he types, and wipe it if he wants to. */
+    fun reset(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+    fun messageCount(c: Context): Int = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("msgs", 0)
+
     fun topic(request: String): String {
         OrionScenes.detect(request)?.let { return it.id }
         val r = request.lowercase()

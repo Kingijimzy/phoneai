@@ -149,6 +149,48 @@ class OrionMindActivity : Activity() {
             addView(single)
         }
 
+        card("YOUR RHYTHM", "Learned only from what you type to him here — no sensors, nothing leaves the phone. ${OrionRhythm.messageCount(this@OrionMindActivity)} message(s) counted so far.") {
+            val out = label(OrionRhythm.section(this@OrionMindActivity).ifBlank { "Not enough messages yet to see a pattern." }, 12f, Theme.MUTED)
+            gap(this, out)
+            gap(this, button("Forget my rhythm") {
+                OrionRhythm.reset(this@OrionMindActivity); out.text = "Not enough messages yet to see a pattern."; toast("Cleared")
+            })
+        }
+
+        card("WHAT HE BELIEVES", "Dated facts about the world, with a source and how long each stays true. STALE ones get rechecked before he states them.") {
+            fun refresh(container: LinearLayout) {
+                container.removeAllViews()
+                val facts = OrionWorldview.list(this@OrionMindActivity)
+                if (facts.isEmpty()) { container.addView(label("Nothing recorded yet.", 12f, Theme.MUTED)); return }
+                val now = System.currentTimeMillis()
+                facts.forEach { f ->
+                    val ageDays = ((now - f.learnedAt) / 86_400_000L).toInt()
+                    val stale = OrionWorldview.isStale(f, now)
+                    val row = LinearLayout(this@OrionMindActivity).apply { orientation = LinearLayout.HORIZONTAL }
+                    row.addView(label(
+                        f.text + "\n" + f.source + ", " + (if (ageDays == 0) "today" else "${ageDays}d ago") + if (stale) " · STALE" else "",
+                        12f, if (stale) Theme.WARN else Theme.MUTED
+                    ), LinearLayout.LayoutParams(0, -2, 1f))
+                    row.addView(button("Forget") {
+                        OrionWorldview.forget(this@OrionMindActivity, f.text.take(40)); refresh(container); toast("Forgotten")
+                    }, LinearLayout.LayoutParams(-2, -2))
+                    gap(container, row)
+                }
+            }
+            val list = LinearLayout(this@OrionMindActivity).apply { orientation = LinearLayout.VERTICAL }
+            refresh(list)
+            gap(this, list)
+            val box = editor("", 2, "Something true about your world, e.g. I live in Lagos, UTC+1")
+            gap(this, box)
+            gap(this, button("Learn this") {
+                val t = box.text.toString()
+                if (t.isNotBlank()) {
+                    OrionWorldview.learn(this@OrionMindActivity, t, "Kingi (mind page)", 365)
+                    box.setText(""); refresh(list); toast("Learned")
+                }
+            })
+        }
+
         card("RUN LOG", "What Orion actually did, with problems found (loops, wandering, slow steps) and what to forge next. Share it so a failure can be fixed from evidence.") {
             gap(this, button("Export run log") {
                 thread(name = "orion-run-export") {

@@ -14,6 +14,11 @@ internal object OrionWorldview {
     private const val MAX = 40
     private const val DAY = 86_400_000L
 
+    /** For the mind page: every fact newest first, so it can be shown and forgotten one at a time. */
+    fun list(c: Context): List<Fact> = load(c).sortedByDescending { it.learnedAt }
+
+    fun clearAll(c: Context) = save(c, emptyList())
+
     private fun load(c: Context): List<Fact> = runCatching {
         val a = JSONArray(c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("facts", "[]"))
         (0 until a.length()).map { a.getJSONObject(it).let { o -> Fact(o.optString("t"), o.optString("s"), o.optLong("at"), o.optInt("d", 30)) } }

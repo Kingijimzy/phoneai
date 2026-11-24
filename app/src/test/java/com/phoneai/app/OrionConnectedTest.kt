@@ -98,6 +98,22 @@ class OrionConnectedTest {
         assertEquals("", coach.discovery("capability_search"))
     }
 
+    @Test fun rhythmAndWorldviewAreVisibleAndEditableNotJustInternal() {
+        assertEquals(0, OrionRhythm.messageCount(c))
+        OrionRhythm.record(c, "check the bybit chart")
+        assertEquals(1, OrionRhythm.messageCount(c))
+        OrionRhythm.reset(c)
+        assertEquals(0, OrionRhythm.messageCount(c))
+
+        assertTrue(OrionWorldview.list(c).isEmpty())
+        OrionWorldview.learn(c, "Kingi lives in Lagos, UTC+1.", "Kingi", 3650)
+        OrionWorldview.learn(c, "BTC near 95k.", "web", 1)
+        assertEquals(2, OrionWorldview.list(c).size)
+        assertEquals("BTC near 95k.", OrionWorldview.list(c).first().text)
+        OrionWorldview.clearAll(c)
+        assertTrue(OrionWorldview.list(c).isEmpty())
+    }
+
     @Test fun brainActionsReachTheNewStores() {
         assertTrue(OrionWorldview.run(c, JSONObject().put("action", "world_learn").put("text", "Kingi lives in Lagos, UTC+1.").put("source", "Kingi").put("days", 3650)).startsWith("ok"))
         assertTrue(OrionWorldview.run(c, JSONObject().put("action", "world")).contains("Lagos"))
