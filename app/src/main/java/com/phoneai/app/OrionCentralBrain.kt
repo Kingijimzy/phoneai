@@ -140,6 +140,7 @@ internal object OrionCentralBrain {
         addObservedSection("self") { OrionSelf.section(app) }
         addObservedSection("rhythm") { OrionRhythm.section(app) }
         addObservedSection("worldview") { OrionWorldview.section(app) }
+        addObservedSection("known_failures") { OrionFailureMemory.section(app) }
         addObservedSection("situation") { OrionSituation.section(app) }
         addObservedSection("past_actions") { OrionActionLedger.section(app, request) }
         addObservedSection("evolution") { OrionEvolution.nudge(OrionForesight.stats()) }

@@ -1264,8 +1264,14 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 }
                 outcomes.forEach { outcome ->
                     ui.note(activityNote(outcome.call.name, outcome.call.arguments, outcome.content))
-                    val coached = outcome.content + retryCoach.after(outcome.call.name, OrionReflexion.looksFailed(outcome.content)) +
-                        retryCoach.discovery(outcome.call.name)
+                    val failed = OrionReflexion.looksFailed(outcome.content)
+                    var durableNote = ""
+                    if (failed) {
+                        val seenBefore = runCatching { OrionFailureMemory.record(svc, outcome.call.name, outcome.content) }.getOrDefault(0)
+                        if (seenBefore >= 2) durableNote = "\nCOACH: this exact failure on ${outcome.call.name} has now happened $seenBefore times, including in earlier sessions. Repeating the same call will not change the outcome — change the approach now."
+                    }
+                    val coached = outcome.content + retryCoach.after(outcome.call.name, failed) +
+                        retryCoach.discovery(outcome.call.name) + durableNote
                     messages.put(JSONObject()
                         .put("role", "tool")
                         .put("tool_call_id", outcome.call.id)
