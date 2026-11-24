@@ -99,7 +99,21 @@ internal object OrionContextualIntentInterpreter {
         val isStatusCheck = statusCheck.matches(raw)
         val isReferenceOnly = followUpOnly.matches(raw) || standaloneContextual.matches(raw)
         val isHistorical = explicitHistoricalLookup.containsMatchIn(raw)
-        val contextual = isContinue || isComplete || isCorrection || isTest || isStatusCheck || isReferenceOnly || isHistorical || historicalReference.containsMatchIn(raw)
+        var contextual = isContinue || isComplete || isCorrection || isTest || isStatusCheck || isReferenceOnly || isHistorical || historicalReference.containsMatchIn(raw)
+
+        // Topic-switch guard: a message that is long enough to carry its own subject, isn't a bare
+        // pronoun reference ("it", "that", "continue"), and names a clearly different topic than the
+        // active objective is a new thing to talk about, not a correction/completion of the old one.
+        // Without this, a generic phrase like "fix everything" or "test it" said about some unrelated
+        // subject re-dragged a stale coding/trading objective into the reply ("mission lock"): Orion
+        // stayed fixated on the last job instead of noticing the conversation had moved on.
+        if (contextual && !isReferenceOnly && !isStatusCheck && objective.isNotBlank() && raw.length >= 12) {
+            val rawTopic = OrionRhythm.topic(raw)
+            val objectiveTopic = OrionRhythm.topic(objective)
+            if (rawTopic != "general" && objectiveTopic != "general" && rawTopic != objectiveTopic && !namedTargetMatchesActive) {
+                contextual = false
+            }
+        }
 
         // A historical search names its own target. Never replace it with the latest active task.
         if (isHistorical) {
