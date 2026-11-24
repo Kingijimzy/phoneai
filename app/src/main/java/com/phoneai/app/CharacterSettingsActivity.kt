@@ -129,16 +129,15 @@ class CharacterSettingsActivity : Activity() {
                 addView(label(heading, 13f, Theme.TEXT, true).apply { setPadding(0, dp(9), 0, dp(2)) })
                 addView(label(detail, 11f, Theme.MUTED))
             }
-            val custom = Prefs.orionEntityPhilosophy(this@CharacterSettingsActivity)
+            // Same text as the Mind page's CHARACTER card, by design: one character, editable from
+            // either screen, instead of two fields that could quietly say different things.
+            val custom = OrionMindStore.character(this@CharacterSettingsActivity)
+            addView(label(custom, 12f, Theme.SILVER).apply { setPadding(0, dp(10), 0, dp(8)) })
+            addView(button("Edit Orion's character") { editIdentityField(
+                "Character", custom, 4000, true
+            ) { c, v -> OrionMindStore.setCharacter(c, v) } })
             addView(label(
-                custom.ifBlank { "No owner-defined philosophy yet. The core safety and evidence principles remain active." },
-                12f, Theme.SILVER
-            ).apply { setPadding(0, dp(10), 0, dp(8)) })
-            addView(button("Edit Orion's philosophy") { editIdentityField(
-                "Entity philosophy", custom, 2400, true, Prefs::setOrionEntityPhilosophy
-            ) })
-            addView(label(
-                "Your additions guide reasoning and values. They cannot override Android permissions, approval requirements, privacy boundaries or safety rules.",
+                "This is the exact text injected every reply (also editable from Orion's mind page). It guides reasoning and values and cannot override Android permissions, approval requirements, privacy boundaries or safety rules.",
                 11f, Theme.MUTED
             ).apply { setPadding(0, dp(8), 0, 0) })
         }

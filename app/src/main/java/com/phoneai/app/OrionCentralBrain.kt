@@ -77,7 +77,13 @@ internal object OrionCentralBrain {
         runCatching { OrionPlugins.promptBlock(app) }.getOrNull()?.takeIf { it.isNotBlank() }?.let { sections += it }
         // Canonical identity is injected into every executive context, independent of provider or UI surface.
         sections += OrionPrimeDirective.contextBlock()
-        sections += OrionEntityPhilosophy.doctrineBlock()
+        // OrionEntityPhilosophy.doctrineBlock() used to be injected here as a second, hardcoded
+        // "who Orion is" text alongside OrionMindStore.character() (the one editable CHARACTER
+        // block, assembled in Agent.kt) — the same prompt carried two identity blocks that could
+        // say different things, and only one of them was visible or editable anywhere in the app.
+        // Its load-bearing lines (failure ownership, decide-how-he-decides-what, the conflict
+        // order) are folded into OrionPersona.CHARACTER's default text instead, so there is one
+        // identity, and it is the one on the Identity and Mind pages.
         val contextLoadDiagnostics = mutableListOf<String>()
         fun <T> observed(label: String, fallback: T, block: () -> T): T {
             return try {
