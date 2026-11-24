@@ -907,11 +907,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             if (panel != null) closePanel(false)
             hideBubble()
             listener.onStatus(if (running) "Orion is working…" else "Ready when you are", currentMode())
-            if (transcript.isEmpty()) {
-                listener.onMessage("ai", "Hi. I’m Orion. What are we working on today?")
-            } else {
-                transcript.forEach { listener.onMessage(it.first, it.second) }
-            }
+            // Deliver one authoritative snapshot instead of replaying every message into
+            // the existing view. MainChatActivity can be detached/re-attached on activity
+            // navigation while its Compose transcript remains alive; incremental replay here
+            // duplicated the entire conversation on every return to chat.
+            listener.onTranscriptRestored(transcript.toList())
             listener.onChatEvents(activeChatEvents())
         }
     }
