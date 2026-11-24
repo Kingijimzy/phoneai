@@ -873,19 +873,21 @@ class Voice(private val ctx: Context) {
         main.post { onLevel?.invoke(0f) }
     }
 
+    /**
+     * Ends THIS instance's own listening/speaking. neuralWorker and the loaded neural engine live in
+     * the companion object — shared by every Voice() the app creates, because loading the on-device
+     * engine is expensive and screens come and go constantly (chat closed, settings dismissed, a voice
+     * preview cancelled, the floating bubble recreated). Shutting that shared executor down here used
+     * to kill it for the whole process the first time ANY screen tore down its Voice: every later
+     * instance's neuralWorker.execute(...) then threw RejectedExecutionException forever ("I couldn't
+     * reach the AI just now ... rejected from java.util.concurrent.ThreadPoolExecutor ... Shutting
+     * down"), which is what made Orion stop answering until the app was killed and restarted. The
+     * shared engine is simply left loaded; the OS reclaims it when the process actually dies.
+     */
     fun shutdown() {
         stopListening()
         stopSpeaking()
         tts?.shutdown()
         tts = null
-        try {
-            neuralWorker.execute {
-                try { neuralEngine?.release() } catch (_: Exception) {}
-                neuralEngine = null
-                neuralEnginePath = null
-            }
-            neuralWorker.shutdown()
-        } catch (_: Exception) {
-        }
     }
 }
