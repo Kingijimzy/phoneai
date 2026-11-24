@@ -538,7 +538,9 @@ internal fun OrionComposeChatScreen(
     val activeActivityEvent = activityEvents
         .filter { it.status == OrionActivityStatus.ACTIVE || it.status == OrionActivityStatus.WAITING }
         .maxByOrNull { it.timestampMs }
-    val displayStatus = activeActivityEvent?.let(::companionStatusForEvent) ?: status
+    // Persisted activity receipts describe historical work; they are not proof that a
+    // task is still running now. Runtime status is the only source for live composer controls.
+    val displayStatus = status
     val companionActivity = activeActivityEvent?.let(::companionActivityForEvent)
         ?: companionActivityForChatStatus(status)
     var menuExpanded by remember { mutableStateOf(false) }
@@ -552,10 +554,6 @@ internal fun OrionComposeChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val listState = rememberLazyListState()
     fun submitDraft() {
-        if (listOf("think", "work", "act", "brows", "build", "draw", "run", "delegat").any { displayStatus.contains(it, true) }) {
-            onStop()
-            return
-        }
         if (draft.isBlank() && selectedImages.isEmpty()) return
         val value = draft.trim()
         val original = editingOriginal
@@ -645,8 +643,9 @@ internal fun OrionComposeChatScreen(
             }
         }
     }
-    val busy = listOf("think", "work", "act", "brows", "build", "draw", "run", "delegat")
-        .any { displayStatus.contains(it, true) }
+    // Old ACTIVE/WAITING activity cards remain in history after a task ends. Never
+    // infer execution state from those cards or from human-readable status strings.
+    val busy = orionChatRuntimeBusy(PhoneAiService.instance?.isTaskRunning() == true, orbMode)
     var showTranscript by remember { mutableStateOf(false) }
     var showRunSheet by remember { mutableStateOf(false) }
     var showEverything by remember { mutableStateOf(false) }
