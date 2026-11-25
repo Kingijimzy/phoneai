@@ -195,7 +195,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private var runningSince = 0L
     private val RUNNING_STALE_MS = 180_000L
 
-    private fun markRunning() { running = true; runningSince = System.currentTimeMillis() }
+    private fun markRunning() { running = true; runningSince = System.currentTimeMillis(); stopWatchdogGen++ }
 
     /** Call before every `if (running)` gate that can block a user action. Self-heals a stuck flag instead of trusting it forever. */
     private fun clearIfStale() {
@@ -2373,6 +2373,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         stopAll()
     }
 
+    /**
+     * agent.stop() only flips a flag the running work is expected to notice on its own next checkpoint —
+     * a network read, a tool boundary. If that work is blocked somewhere that never checks it (a tool call
+     * with no cancellation point, a wedged thread), "Stop" sets the flag, says "Stopping...", and then
+     * nothing ever actually clears `running`: the owner is left staring at that forever with a button that
+     * visibly did nothing. This is the hard guarantee layered on top: however the stop attempt goes, the UI
+     * itself returns to idle within a few seconds — it does not wait on cooperation that may never come.
+     */
+    private var stopWatchdogGen = 0
+
     private fun stopAll() {
         handsActive = false
         agent.stop()
@@ -2383,6 +2393,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (running) {
             bubble?.contentDescription = "Orion is stopping. Tap to view progress."
             panelStatus?.text = "Stopping..."
+            val myGen = ++stopWatchdogGen
+            main.postDelayed({
+                if (myGen == stopWatchdogGen && running) {
+                    AgentPolicy.log(this, "stop_watchdog", "force_cleared", null,
+                        "running was still true 4s after Stop; the task did not notice its own cancellation. Forcing idle so the owner is never left staring at a stuck 'Stopping...'.")
+                    running = false
+                    finishRun()
+                }
+            }, 4000L)
         } else {
             hideStrip()
             showBubble()

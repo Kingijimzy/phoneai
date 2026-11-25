@@ -18,4 +18,14 @@ class OrionToolRouterTest {
         assertTrue(OrionToolRouter.reliability(9, 0) > OrionToolRouter.reliability(0, 0))
         assertTrue(OrionToolRouter.reliability(0, 9) < OrionToolRouter.reliability(0, 0))
     }
+    @Test fun aKnownRecurringFailureIsCrushedNotJustLowered() {
+        // the self_edit-vs-GitHub-API story: a tool whose own words lexically match the request
+        // ("check the source code") keeps ranking high on overlap alone unless something tells the
+        // ranker it has already, repeatedly, been the wrong answer for this.
+        val q = "generate an image of a cat"
+        val base = OrionToolRouter.rank(q, ToolRegistry.all, emptyMap()).first { it.tool == "image_generate" }.score
+        val suppressed = OrionToolRouter.rank(q, ToolRegistry.all, emptyMap(), knownFailingTools = setOf("image_generate"))
+            .firstOrNull { it.tool == "image_generate" }?.score ?: 0.0
+        assertTrue(suppressed < base * 0.2)
+    }
 }
