@@ -1059,6 +1059,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
         }
         researchCancelled.set(false)
         activeModel.resume()
+        // stop() cancels both models it can touch (commandNim AND talkNim) so a Stop press
+        // actually aborts whatever request is in flight, whichever one it is. Only commandNim
+        // was ever un-cancelled here, so after the very first Stop press, talkNim stayed
+        // permanently cancelled for the rest of the app's life: every later reaction phrase,
+        // spoken-line shaping, and voice-mode check silently failed (or threw) from then on,
+        // with nothing in the UI ever telling the owner why Orion's voice/reaction quality had
+        // quietly degraded. Resume it here too, on every new command, same as commandNim.
+        talkNim.resume()
 
         // A short explicit research continuation inherits the last substantive user request.
         // Skip previous follow-up phrases so chains like "research it" → "verify it" keep the topic.

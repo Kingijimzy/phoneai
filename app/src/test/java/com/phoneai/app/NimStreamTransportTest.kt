@@ -58,6 +58,45 @@ class NimStreamTransportTest {
         }
     }
 
+    /**
+     * stop() cancels every model client it can reach, including ones that are not mid-request.
+     * The whole point of cancel() being "sticky" (it blocks the *next* connection from ever
+     * attaching, not just the current one) is so a Stop press reliably aborts a request that is
+     * about to start, not only one already in flight. But that only works if every place that
+     * calls cancel() is paired with a resume() before the client is asked to do real work again -
+     * a client left cancelled stays permanently unable to make a request, with no further Stop
+     * press able to make things worse and no UI signal that it is now silently inert. This is the
+     * exact bug found in Agent: commandNim was resumed at the start of a new command, talkNim
+     * (cancelled by the same stop()) never was.
+     */
+    @Test fun cancelBlocksTheNextRequestAndResumeRestoresIt() {
+        val server = LoopbackSseServer(
+            listOf("""data: {"choices":[{"delta":{"content":"ok"}}]}"""),
+            pauseAfterFirstEvent = false
+        )
+        val nim = Nim(RuntimeEnvironment.getApplication() as Context)
+        try {
+            nim.cancel()
+            val blocked = runCatching {
+                nim.requestStream(testProvider(), server.url, "{}", "test-key", 4000) { }
+            }
+            assertTrue("a client left cancelled must refuse to attach a new connection",
+                blocked.isFailure)
+
+            nim.resume()
+            val emitted = mutableListOf<String>()
+            val afterResume = runCatching {
+                nim.requestStream(testProvider(), server.url, "{}", "test-key", 4000) { emitted.add(it) }
+            }
+            assertTrue("resume() must let the client attach and run a real request again",
+                afterResume.isSuccess)
+            assertEquals(listOf("ok"), emitted)
+        } finally {
+            nim.cancel()
+            server.close()
+        }
+    }
+
     @Test fun serverDisconnectAfterPartialTextDoesNotDuplicateOrAuthorizeFallback() {
         val emitted = mutableListOf<String>()
         val server = LoopbackSseServer(
