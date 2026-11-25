@@ -70,26 +70,32 @@ class NimStreamTransportTest {
      * (cancelled by the same stop()) never was.
      */
     @Test fun cancelBlocksTheNextRequestAndResumeRestoresIt() {
+        // Use an unreachable loopback port for the blocked half: cancel() must refuse the
+        // connection before any socket I/O happens at all, so what the port actually does
+        // (or whether anything is listening on it) must not matter.
+        val unreachablePort = ServerSocket(0).let { s -> val p = s.localPort; s.close(); p }
+        val nim = Nim(RuntimeEnvironment.getApplication() as Context)
+        nim.cancel()
+        val blocked = runCatching {
+            nim.requestStream(testProvider(), "http://127.0.0.1:$unreachablePort/stream", "{}", "test-key", 4000) { }
+        }
+        assertTrue("a client left cancelled must refuse to attach a new connection",
+            blocked.isFailure)
+
+        // A fresh server for the resume half: the blocked attempt above must have made no
+        // connection, but a separate single-shot server rules out any doubt either way.
         val server = LoopbackSseServer(
             listOf("""data: {"choices":[{"delta":{"content":"ok"}}]}"""),
             pauseAfterFirstEvent = false
         )
-        val nim = Nim(RuntimeEnvironment.getApplication() as Context)
         try {
-            nim.cancel()
-            val blocked = runCatching {
-                nim.requestStream(testProvider(), server.url, "{}", "test-key", 4000) { }
-            }
-            assertTrue("a client left cancelled must refuse to attach a new connection",
-                blocked.isFailure)
-
             nim.resume()
             val emitted = mutableListOf<String>()
             val afterResume = runCatching {
                 nim.requestStream(testProvider(), server.url, "{}", "test-key", 4000) { emitted.add(it) }
             }
-            assertTrue("resume() must let the client attach and run a real request again",
-                afterResume.isSuccess)
+            assertTrue("resume() must let the client attach and run a real request again: " +
+                afterResume.exceptionOrNull(), afterResume.isSuccess)
             assertEquals(listOf("ok"), emitted)
         } finally {
             nim.cancel()
