@@ -182,6 +182,30 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     @Volatile
     private var running = false
 
+    /**
+     * When the current `running = true` span started. One global flag is shared by every surface
+     * (chat, voice, autonomy, initiative); if a task thread dies between setting this and its own
+     * `finishRun()` — a crash inside `worker.execute`, the executor itself being in a bad state, the
+     * process getting frozen mid-task — nothing ever clears it, and every chat (old sessions included,
+     * since this is process-wide, not per-session) is stuck showing "another task is still running"
+     * until the app is killed and restarted. `submit()` uses this timestamp to self-heal: a span this
+     * old did not survive to tell anyone it finished, so it is treated as dead rather than trusted forever.
+     */
+    @Volatile
+    private var runningSince = 0L
+    private val RUNNING_STALE_MS = 180_000L
+
+    private fun markRunning() { running = true; runningSince = System.currentTimeMillis() }
+
+    /** Call before every `if (running)` gate that can block a user action. Self-heals a stuck flag instead of trusting it forever. */
+    private fun clearIfStale() {
+        if (running && System.currentTimeMillis() - runningSince > RUNNING_STALE_MS) {
+            AgentPolicy.log(this, "stuck_task_recovered", "auto_cleared", null,
+                "running flag was stuck for over ${RUNNING_STALE_MS / 1000}s with no finishRun(); a previous task likely died mid-run. Clearing it so chat can continue.")
+            running = false
+        }
+    }
+
     /** Entry surface for the active shared task; used only to return destructive confirmations to Telegram. */
     @Volatile
     private var activeRequestSource: String = "app"
@@ -1015,6 +1039,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     fun retryLastResponse(prompt: String) {
         main.post {
+            clearIfStale()
             if (running) {
                 mainChatListener?.onMessage("ai", "Stop the current response before retrying.")
                 return@post
@@ -1031,6 +1056,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val replacement = edited.trim()
         if (replacement.isEmpty()) return
         main.post {
+            clearIfStale()
             if (running) {
                 mainChatListener?.onMessage("ai", "Stop the current response before editing this message.")
                 return@post
@@ -1067,6 +1093,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val command = text.trim()
         if (command.isEmpty()) return
         main.post {
+            clearIfStale()
             if (running) {
                 if (waited < 60) {
                     if (waited == 0) mainChatListener?.onStatus("Queued behind the current task: ${command.take(50)}", currentMode())
@@ -1087,7 +1114,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             voice.stopSpeaking()
             voice.stopListening()
             listening = false
-            running = true
+            markRunning()
             phase = "thinking"
             refreshMode()
             worker.execute {
@@ -2046,6 +2073,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val t = text.trim()
         if (t.isEmpty()) return
         stopOfflineWakeDetector()
+        clearIfStale()
         if (running) {
             main.post {
                 mainChatListener?.onMessage("ai", "I'm already working on another task. Let that finish, then send this request again.")
@@ -2074,7 +2102,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             voice.stopListening()
             listening = false
             hideBubble()
-            running = true
+            markRunning()
             phase = "thinking"
             refreshMode()
             // Natural speech stays conversational. Phone actions in a live call need
@@ -2122,7 +2150,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (needsPhoneControl) closePanel(false)
         if (mainChatActive) mainChatListener?.onMessage("me", t)
         hideBubble()
-        running = true
+        markRunning()
         phase = "thinking"
         if (panel != null) {
             panelStatus?.text = "Thinking..."
@@ -2160,7 +2188,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         // Claim is persisted atomically before Agent starts; a process interruption will not
         // replay the same consequential goal immediately after service reconnection.
         val goal = AutonomyGoalStore.claimNextDue(this, System.currentTimeMillis()) ?: run { runInitiative(); return }
-        running = true
+        markRunning()
         try {
             OrionCoordinator.run(this, OrionCoordinator.Surface.AUTONOMY, goal.prompt) { agent.run("[ORION AUTONOMY GOAL — set earlier, not typed by Kingi] " + goal.prompt + " Your final reply is sent to Kingi on Telegram automatically: make it a clear report of what you did, found, built and decided.") }
             AutonomyGoalStore.recordResult(this, goal.id, "submitted_to_agent")
@@ -2183,7 +2211,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (!gate.open) { AgentPolicy.log(this, "proactive_gate", "closed", null, gate.reason); return }
         AgentPolicy.log(this, "proactive_gate", "open", null, gate.reason)
         OrionProactiveGate.recordAction(this)
-        running = true
+        markRunning()
         try {
             runCatching { OrionMissions.importFollowUps(this) }
             val mission = runCatching { OrionMissions.claimNext(this) }.getOrNull()
