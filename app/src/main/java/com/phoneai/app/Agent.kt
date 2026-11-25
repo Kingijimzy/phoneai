@@ -1214,6 +1214,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         var reflections = 0
         var autoNudges = 0
         var claimNudges = 0
+        var pushbackNudges = 0
         val retryCoach = OrionRetryCoach()
         var lastRoundResults: List<String> = emptyList()
         fun preserveToolTranscript(note: String) {
@@ -1303,6 +1304,13 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                             messages.put(msg("user", OrionClaimCheck.prompt(claim)))
                             turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
                         }
+                    }
+                    if (turn.toolCalls.isEmpty() && turn.toolCallingAvailable && pushbackNudges < 1 &&
+                        OrionCognitivePushback.isWeightyProposal(command) && OrionCognitivePushback.looksLikeBareAgreement(turn.text)) {
+                        pushbackNudges++
+                        messages.put(msg("assistant", turn.text))
+                        messages.put(msg("user", OrionCognitivePushback.PROMPT))
+                        turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
                     }
                     if (!turn.toolCallingAvailable) {
                         preserveToolTranscript("The provider lost native tool capability after partial execution. Inspect completed tool results before continuing; do not repeat side effects.")
