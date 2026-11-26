@@ -7,7 +7,7 @@ import org.json.JSONObject
  * No stock phrases: either he said something real, or we show the real action.
  */
 internal object OrionVoice {
-    private val stock = Regex("""(?i)^(on it|working on it|let me think|thinking|sure|okay|ok|got it|one moment|just a moment|i'?m working through that now)[.!…]*$""")
+    private val stock = Regex("""(?i)^(on it|working on it|let me think|thinking|sure|okay|ok|got it|one moment|just a moment|one second|one sec|doing it|i'?m (on|working through) (it|that)( now)?)[.!…]*$""")
 
     /** First sentence of what he wrote before calling tools, if it says something. */
     fun ownWords(turnText: String): String? {
