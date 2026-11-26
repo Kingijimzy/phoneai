@@ -799,7 +799,7 @@ class OrionConversationRepository private constructor(context: Context) :
         /** Messages, plus the result cards Orion made (previews, images, shell runs) so they survive closing the app. */
         internal fun persistable(kind: String, text: String): Boolean =
             text.isNotBlank() && (kind == "me" || kind == "ai" ||
-                (kind == "note" && (text.startsWith("[PREVIEW]") || text.startsWith("[IMAGE]") || text.startsWith("[SHELL:"))))
+                (kind == "note" && (text.startsWith("[PREVIEW]") || text.startsWith("[IMAGE]") || text.startsWith("[SHELL:") || text.startsWith("[CHART]"))))
 
         private const val PREFS = "orion_chat_history"
         private const val ACTIVE_KEY = "active_transcript"
