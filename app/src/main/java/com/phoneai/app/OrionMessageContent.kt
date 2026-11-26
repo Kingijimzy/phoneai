@@ -67,6 +67,8 @@ data class OrionMessageContent(
                         return OrionMessageContent(blocks = listOf(OrionMessageBlock.Preview(raw)))
                     raw.startsWith("[IMAGE]") ->
                         return OrionMessageContent(blocks = listOf(OrionMessageBlock.Image(raw)))
+                    raw.startsWith("[CHART]") ->
+                        return OrionMessageContent(blocks = listOf(parseChartLegacy(raw)))
                 }
                 return OrionMessageContent(blocks = listOf(OrionMessageBlock.Text(raw)))
             }
@@ -95,7 +97,25 @@ data class OrionMessageContent(
             "research" -> OrionMessageBlock.Research(json.optString("summary"), json.optJSONArray("sources").toStringList())
             "image" -> OrionMessageBlock.Image(json.optString("legacyPayload"))
             "preview" -> OrionMessageBlock.Preview(json.optString("legacyPayload"))
+            "chart" -> OrionMessageBlock.Chart(
+                json.optString("title"), json.optString("kind", "bar"),
+                json.optJSONArray("labels").toStringList(),
+                buildList { json.optJSONArray("values")?.let { arr -> for (i in 0 until arr.length()) add(arr.optDouble(i, 0.0)) } },
+                json.optString("unit")
+            )
             else -> null
+        }
+
+        /** Payload: "[CHART]\n<json: {title, kind, labels:[string], values:[number], unit?}>". */
+        private fun parseChartLegacy(raw: String): OrionMessageBlock {
+            return try {
+                val json = JSONObject(raw.removePrefix("[CHART]").trim())
+                val labels = json.optJSONArray("labels").toStringList()
+                val values = buildList { json.optJSONArray("values")?.let { arr -> for (i in 0 until arr.length()) add(arr.optDouble(i, 0.0)) } }
+                OrionMessageBlock.Chart(json.optString("title"), json.optString("kind", "bar"), labels, values, json.optString("unit"))
+            } catch (_: Exception) {
+                OrionMessageBlock.Text(raw)
+            }
         }
     }
 }
@@ -124,6 +144,8 @@ sealed interface OrionMessageBlock {
     data class Image(val legacyPayload: String) : OrionMessageBlock
     /** A page Orion built, shown running in the chat. Payload: "[PREVIEW]\n<absolute path>\n<title>". */
     data class Preview(val legacyPayload: String) : OrionMessageBlock
+    /** A small chart Orion chose to show instead of just describing numbers in prose. */
+    data class Chart(val title: String, val kind: String, val labels: List<String>, val values: List<Double>, val unit: String = "") : OrionMessageBlock
 }
 
 private fun OrionMessageBlock.toJsonObject(): JSONObject = JSONObject().apply {
@@ -150,6 +172,8 @@ private fun OrionMessageBlock.toJsonObject(): JSONObject = JSONObject().apply {
         is OrionMessageBlock.Research -> put("type", "research").put("summary", summary).put("sources", JSONArray(sources))
         is OrionMessageBlock.Image -> put("type", "image").put("legacyPayload", legacyPayload)
         is OrionMessageBlock.Preview -> put("type", "preview").put("legacyPayload", legacyPayload)
+        is OrionMessageBlock.Chart -> put("type", "chart").put("title", title).put("kind", kind)
+            .put("labels", JSONArray(labels)).put("values", JSONArray(values)).put("unit", unit)
     }
 }
 

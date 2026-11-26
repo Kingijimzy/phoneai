@@ -16,9 +16,32 @@ class OrionMessageContentTest {
             OrionMessageBlock.Thinking("verifying", "Checking output", 123L),
             OrionMessageBlock.ToolResult("Tool returned successfully"),
             OrionMessageBlock.Research("Two useful sources", listOf("https://example.com")),
-            OrionMessageBlock.Image("[IMAGE]")
+            OrionMessageBlock.Image("[IMAGE]"),
+            OrionMessageBlock.Chart("BTC vs ETH", "bar", listOf("BTC", "ETH"), listOf(61000.5, 3400.2), "USD")
         ))
         assertEquals(content, OrionMessageContent.fromJson(content.toJson()))
+    }
+
+    @Test fun presentChartLegacyPayloadBecomesAChartBlock() {
+        val raw = "[CHART]\n" + org.json.JSONObject()
+            .put("title", "Weekly active users")
+            .put("kind", "line")
+            .put("labels", org.json.JSONArray(listOf("Mon", "Tue", "Wed")))
+            .put("values", org.json.JSONArray(listOf(10.0, 14.0, 9.0)))
+            .put("unit", "users")
+            .toString()
+        val content = OrionMessageContent.fromLegacy("note", raw)
+        val chart = content.blocks.single() as OrionMessageBlock.Chart
+        assertEquals("Weekly active users", chart.title)
+        assertEquals("line", chart.kind)
+        assertEquals(listOf("Mon", "Tue", "Wed"), chart.labels)
+        assertEquals(listOf(10.0, 14.0, 9.0), chart.values)
+        assertEquals("users", chart.unit)
+    }
+
+    @Test fun malformedChartPayloadFallsBackToPlainTextInsteadOfCrashing() {
+        val content = OrionMessageContent.fromLegacy("note", "[CHART]\nnot json at all")
+        assertTrue(content.blocks.single() is OrionMessageBlock.Text)
     }
 
     @Test fun ordinaryReplyWithResearchWordsStaysPlainText() {

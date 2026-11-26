@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 internal object OrionUtilitiesCapabilityExecutor {
     private val supportedTools = setOf(
-        "settings", "alarm", "timer", "volume", "flashlight", "copy", "clipboard_read", "self_edit", "brain", "mesh", "a2a", "plugin", "web_api", "fact_add", "fact_query", "fact_forget", "show_file", "call_status", "call_place", "call_answer", "call_end", "battery",
+        "settings", "alarm", "timer", "volume", "flashlight", "copy", "clipboard_read", "self_edit", "brain", "mesh", "a2a", "plugin", "web_api", "fact_add", "fact_query", "fact_forget", "show_file", "present_chart", "call_status", "call_place", "call_answer", "call_end", "battery",
         "time", "wait", "device_info", "device_location"
     )
 
@@ -53,6 +53,7 @@ internal object OrionUtilitiesCapabilityExecutor {
             "web_api" -> tools.webApi(args)
             "fact_add", "fact_query", "fact_forget" -> tools.factTool(tool, args)
             "show_file" -> tools.showFile(args.optString("path"))
+            "present_chart" -> presentChart(args)
             "call_status" -> tools.callStatus()
             "call_place" -> tools.callPlace(args.optString("number"))
             "call_answer" -> tools.callAnswer()
@@ -64,6 +65,34 @@ internal object OrionUtilitiesCapabilityExecutor {
             "wait" -> waitBounded(args, stopped)
             else -> null
         }
+    }
+
+    /**
+     * Builds the chart payload activityNote() wraps as "[CHART]\n<json>" so OrionChatComponents
+     * can render it inline instead of making the model describe numbers as prose. Validated here
+     * (not just in the prompt contract) so a malformed call fails with a clear reason the model
+     * can act on, instead of silently rendering an empty or mismatched chart.
+     */
+    private fun presentChart(args: JSONObject): String {
+        val title = args.optString("title").trim()
+        if (title.isEmpty()) return "error: present_chart needs a title"
+        val kind = args.optString("kind", "bar").lowercase()
+        if (kind != "bar" && kind != "line") return "error: present_chart kind must be 'bar' or 'line'"
+        val labelsArr = args.optJSONArray("labels")
+        val valuesArr = args.optJSONArray("values")
+        if (labelsArr == null || valuesArr == null) return "error: present_chart needs labels and values arrays"
+        if (labelsArr.length() != valuesArr.length()) return "error: present_chart labels and values must be the same length"
+        if (labelsArr.length() < 2 || labelsArr.length() > 12) return "error: present_chart needs 2 to 12 points, got ${labelsArr.length()}"
+        val labels = (0 until labelsArr.length()).map { labelsArr.optString(it).take(24) }
+        val values = (0 until valuesArr.length()).map { valuesArr.optDouble(it, 0.0) }
+        if (values.any { !it.isFinite() }) return "error: present_chart values must be finite numbers"
+        val payload = JSONObject()
+            .put("title", title.take(80))
+            .put("kind", kind)
+            .put("labels", org.json.JSONArray(labels))
+            .put("values", org.json.JSONArray(values))
+            .put("unit", args.optString("unit").take(16))
+        return payload.toString()
     }
 
     private fun waitBounded(args: JSONObject, stopped: () -> Boolean): String {

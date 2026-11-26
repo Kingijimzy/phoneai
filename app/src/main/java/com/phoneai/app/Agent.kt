@@ -286,6 +286,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
     private fun activityNote(tool: String, args: JSONObject, rawResult: String): String {
         val result = OrionStripText.visible(rawResult)
         val failed = result.trimStart().startsWith("error", ignoreCase = true)
+        // present_chart's own result is already the validated {title,kind,labels,values} JSON;
+        // just tag it so OrionMessageContent renders it as a chart instead of raw JSON text.
+        if (!failed && tool == "present_chart") return "[CHART]\n$result"
         // Generated or shown images render inline in the chat instead of only opening an external viewer.
         if (!failed && (tool == "image_generate" || tool == "show_file")) {
             val name = Regex("images/([A-Za-z0-9_.-]+\\.(?:png|jpg|jpeg|webp))").find(result)?.groupValues?.get(1)

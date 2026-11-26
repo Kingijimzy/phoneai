@@ -11,6 +11,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -289,6 +290,7 @@ private fun OrionStructuredBlockCard(
         }
         is OrionMessageBlock.Image -> ImageResultCard(block.legacyPayload)
         is OrionMessageBlock.Preview -> PagePreviewCard(block.legacyPayload)
+        is OrionMessageBlock.Chart -> OrionChartCard(block)
     }
 }
 
@@ -382,7 +384,7 @@ internal fun ChatBubble(
     var openBlock by remember(item.id) { mutableStateOf(false) }
     // Only things that need attention stay boxed (approvals, files, images, diagrams, notes); ordinary replies flow as plain text.
     val framed = !mine && replyType != OrionReplyType.NORMAL && (replyType == OrionReplyType.DIAGRAM ||
-        primaryBlock is OrionMessageBlock.Approval || primaryBlock is OrionMessageBlock.GeneratedFile || primaryBlock is OrionMessageBlock.Image || primaryBlock is OrionMessageBlock.Preview)
+        primaryBlock is OrionMessageBlock.Approval || primaryBlock is OrionMessageBlock.GeneratedFile || primaryBlock is OrionMessageBlock.Image || primaryBlock is OrionMessageBlock.Preview || primaryBlock is OrionMessageBlock.Chart)
     // Terminal runs are already a one-line chip; they get no second frame, header or ORION tag.
     val bare = note && item.content.blocks.isNotEmpty() && item.content.blocks.all { it is OrionMessageBlock.Terminal }
     val collapsible = !mine && (framed || (note && !bare && !item.text.startsWith("[")))
@@ -456,6 +458,7 @@ internal fun ChatBubble(
                                 is OrionMessageBlock.Thinking -> "WORK STATUS"
                                 is OrionMessageBlock.Image -> "IMAGE RESULT"
                                 is OrionMessageBlock.Preview -> "LIVE PREVIEW"
+                                is OrionMessageBlock.Chart -> "CHART"
                                 is OrionMessageBlock.Code -> "CODE OUTPUT"
                                 else -> when (replyType) {
                                     OrionReplyType.RESEARCH -> "RESEARCH"
@@ -1065,6 +1068,75 @@ internal fun ImageResultCard(raw: String) {
             Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) { Text(if (java.io.File(path).exists()) "Loading image…" else "Image file not found: ${path.substringAfterLast('/')}", color = ChatMuted, fontSize = 12.sp) }
         }
         if (caption.isNotBlank()) Text(caption, color = ChatMuted, fontSize = 11.sp, modifier = Modifier.padding(10.dp))
+    }
+}
+
+/**
+ * A chart Orion chose to show instead of just describing numbers in prose — present_chart's
+ * whole point. Drawn natively (no charting library needed for a handful of points): a HUD-style
+ * card with a thin baseline grid, a sweep-in reveal the first time it appears, and bars/line in
+ * the app's own accent rather than a library's default palette, so it reads as part of this UI
+ * and not a dropped-in widget.
+ */
+@Composable
+internal fun OrionChartCard(block: OrionMessageBlock.Chart) {
+    val sweep = remember(block.title, block.values) { Animatable(0f) }
+    LaunchedEffect(block.title, block.values) { sweep.animateTo(1f, tween(650, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
+    val maxValue = (block.values.maxOrNull() ?: 0.0).let { if (it <= 0.0) 1.0 else it }
+    val minValue = (block.values.minOrNull() ?: 0.0).coerceAtMost(0.0)
+    val span = (maxValue - minValue).let { if (it <= 0.0) 1.0 else it }
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(OrionUiPalette.background)
+            .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(14.dp)).padding(13.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(block.title.uppercase(), color = OrionUiPalette.secondaryText, fontSize = 10.sp,
+                fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(1f))
+            if (block.unit.isNotBlank()) Text(block.unit, color = ChatMuted, fontSize = 9.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+        }
+        androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(120.dp)) {
+            val n = block.values.size
+            if (n == 0) return@Canvas
+            val baselineY = size.height - 2f
+            // Four faint horizontal gridlines, the one HUD touch this chart needs; everything
+            // else stays plain so a handful of points still reads clearly at phone width.
+            for (g in 1..3) {
+                val y = size.height * g / 4f
+                drawLine(ChatHairline, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), strokeWidth = 1f)
+            }
+            fun yFor(v: Double) = (baselineY - ((v - minValue) / span * (size.height - 6f)).toFloat()).coerceIn(2f, baselineY)
+            if (block.kind == "line") {
+                val points = block.values.mapIndexed { i, v ->
+                    androidx.compose.ui.geometry.Offset(size.width * (i + 0.5f) / n, yFor(v))
+                }
+                for (i in 1 until points.size) {
+                    val a = points[i - 1]; val b = points[i]
+                    val reveal = ((sweep.value * n) - (i - 1)).coerceIn(0f, 1f)
+                    if (reveal > 0f) drawLine(ChatMint, a, androidx.compose.ui.geometry.Offset(a.x + (b.x - a.x) * reveal, a.y + (b.y - a.y) * reveal), strokeWidth = 3f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                }
+                points.forEach { drawCircle(ChatMint, 3.5f, it) }
+            } else {
+                val slot = size.width / n
+                val barWidth = slot * 0.56f
+                block.values.forEachIndexed { i, v ->
+                    val top = yFor(v)
+                    val reveal = ((sweep.value * n) - i).coerceIn(0f, 1f)
+                    if (reveal <= 0f) return@forEachIndexed
+                    val x = slot * i + (slot - barWidth) / 2f
+                    val h = (baselineY - top) * reveal
+                    drawRoundRect(ChatMint, androidx.compose.ui.geometry.Offset(x, baselineY - h), androidx.compose.ui.geometry.Size(barWidth, h.coerceAtLeast(2f)),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f, 3f))
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            block.labels.forEach { label ->
+                Text(label, color = ChatMuted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f))
+            }
+        }
     }
 }
 
