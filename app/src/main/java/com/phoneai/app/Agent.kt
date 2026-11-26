@@ -1223,6 +1223,7 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         var autoNudges = 0
         var claimNudges = 0
         var pushbackNudges = 0
+        var bareAckNudges = 0
         val retryCoach = OrionRetryCoach()
         var lastRoundResults: List<String> = emptyList()
         fun preserveToolTranscript(note: String) {
@@ -1238,6 +1239,12 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             if (directActionRoute && !turn.toolCallingAvailable) {
                 ui.say("This selected model can chat, but its current connection does not expose Orion's native tools. No action was dispatched. Switch to a native-tool-capable provider or connect the account tool bridge.")
                 return
+            }
+            if (turn.toolCalls.isEmpty() && bareAckNudges < 1 && OrionBareAcknowledgmentCheck.isBareAcknowledgment(turn.text)) {
+                bareAckNudges++
+                messages.put(msg("assistant", turn.text))
+                messages.put(msg("user", OrionBareAcknowledgmentCheck.PROMPT))
+                turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
             }
             while (turn.toolCalls.isNotEmpty() && !stopped && toolRounds < OrionNativeToolDispatcher.MAX_ROUNDS_PER_COMMAND) {
                 toolRounds++
@@ -1289,6 +1296,12 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 }
                 if (!stopped) {
                     turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
+                    if (turn.toolCalls.isEmpty() && bareAckNudges < 1 && OrionBareAcknowledgmentCheck.isBareAcknowledgment(turn.text)) {
+                        bareAckNudges++
+                        messages.put(msg("assistant", turn.text))
+                        messages.put(msg("user", OrionBareAcknowledgmentCheck.PROMPT))
+                        turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
+                    }
                     if (turn.toolCalls.isEmpty() && OrionReflexion.shouldReflect(
                             OrionReflexion.roundFailed(lastRoundResults), reflections, true)) {
                         // Reflexion: diagnose and retry on a different route instead of stopping at a failure.
