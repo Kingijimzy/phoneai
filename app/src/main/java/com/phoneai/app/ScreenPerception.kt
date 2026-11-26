@@ -25,8 +25,15 @@ internal object ScreenPerception {
         val out = ArrayList<OcrItem>()
         for (block in result.textBlocks) {
             for (line in block.lines) {
-                val text = line.text.trim().replace(Regex("\\s+"), " ")
-                if (text.isBlank() || text.length > 100) continue
+                val raw = line.text.trim().replace(Regex("\\s+"), " ")
+                if (raw.isBlank()) continue
+                // A long line (a URL, a full sentence, a paragraph) used to be dropped entirely
+                // here instead of clipped, so anything on screen past 100 characters was simply
+                // invisible to Orion - not shortened, just gone, with nothing standing in for it.
+                // Clip it instead, the same way every other long value in this app is clipped
+                // (OrionVoice.action, tool receipts, etc), so Orion still sees that the text is
+                // there and roughly what it says, rather than perceiving nothing at all.
+                val text = if (raw.length > 100) raw.take(99).trimEnd() + "…" else raw
                 val box = line.boundingBox ?: continue
                 if (box.width() <= 0 || box.height() <= 0) continue
                 // Never surface OCR text from a protected rectangle.
