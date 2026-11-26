@@ -1059,6 +1059,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi, private va
         }
         researchCancelled.set(false)
         activeModel.resume()
+        // stop() cancels both models it can touch (commandNim AND talkNim) so a Stop press
+        // actually aborts whatever request is in flight, whichever one it is. Only commandNim
+        // was ever un-cancelled here, so after the very first Stop press, talkNim stayed
+        // permanently cancelled for the rest of the app's life: every later reaction phrase,
+        // spoken-line shaping, and voice-mode check silently failed (or threw) from then on,
+        // with nothing in the UI ever telling the owner why Orion's voice/reaction quality had
+        // quietly degraded. Resume it here too, on every new command, same as commandNim.
+        talkNim.resume()
 
         // A short explicit research continuation inherits the last substantive user request.
         // Skip previous follow-up phrases so chains like "research it" → "verify it" keep the topic.
@@ -1214,6 +1222,8 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
         var reflections = 0
         var autoNudges = 0
         var claimNudges = 0
+        var pushbackNudges = 0
+        var bareAckNudges = 0
         val retryCoach = OrionRetryCoach()
         var lastRoundResults: List<String> = emptyList()
         fun preserveToolTranscript(note: String) {
@@ -1229,6 +1239,12 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
             if (directActionRoute && !turn.toolCallingAvailable) {
                 ui.say("This selected model can chat, but its current connection does not expose Orion's native tools. No action was dispatched. Switch to a native-tool-capable provider or connect the account tool bridge.")
                 return
+            }
+            if (turn.toolCalls.isEmpty() && bareAckNudges < 1 && OrionBareAcknowledgmentCheck.isBareAcknowledgment(turn.text)) {
+                bareAckNudges++
+                messages.put(msg("assistant", turn.text))
+                messages.put(msg("user", OrionBareAcknowledgmentCheck.PROMPT))
+                turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
             }
             while (turn.toolCalls.isNotEmpty() && !stopped && toolRounds < OrionNativeToolDispatcher.MAX_ROUNDS_PER_COMMAND) {
                 toolRounds++
@@ -1264,8 +1280,14 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 }
                 outcomes.forEach { outcome ->
                     ui.note(activityNote(outcome.call.name, outcome.call.arguments, outcome.content))
-                    val coached = outcome.content + retryCoach.after(outcome.call.name, OrionReflexion.looksFailed(outcome.content)) +
-                        retryCoach.discovery(outcome.call.name)
+                    val failed = OrionReflexion.looksFailed(outcome.content)
+                    var durableNote = ""
+                    if (failed) {
+                        val seenBefore = runCatching { OrionFailureMemory.record(svc, outcome.call.name, outcome.content) }.getOrDefault(0)
+                        if (seenBefore >= 2) durableNote = "\nCOACH: this exact failure on ${outcome.call.name} has now happened $seenBefore times, including in earlier sessions. Repeating the same call will not change the outcome — change the approach now."
+                    }
+                    val coached = outcome.content + retryCoach.after(outcome.call.name, failed) +
+                        retryCoach.discovery(outcome.call.name) + durableNote
                     messages.put(JSONObject()
                         .put("role", "tool")
                         .put("tool_call_id", outcome.call.id)
@@ -1274,6 +1296,12 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                 }
                 if (!stopped) {
                     turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
+                    if (turn.toolCalls.isEmpty() && bareAckNudges < 1 && OrionBareAcknowledgmentCheck.isBareAcknowledgment(turn.text)) {
+                        bareAckNudges++
+                        messages.put(msg("assistant", turn.text))
+                        messages.put(msg("user", OrionBareAcknowledgmentCheck.PROMPT))
+                        turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
+                    }
                     if (turn.toolCalls.isEmpty() && OrionReflexion.shouldReflect(
                             OrionReflexion.roundFailed(lastRoundResults), reflections, true)) {
                         // Reflexion: diagnose and retry on a different route instead of stopping at a failure.
@@ -1297,6 +1325,13 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
                             messages.put(msg("user", OrionClaimCheck.prompt(claim)))
                             turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
                         }
+                    }
+                    if (turn.toolCalls.isEmpty() && turn.toolCallingAvailable && pushbackNudges < 1 &&
+                        OrionCognitivePushback.isWeightyProposal(command) && OrionCognitivePushback.looksLikeBareAgreement(turn.text)) {
+                        pushbackNudges++
+                        messages.put(msg("assistant", turn.text))
+                        messages.put(msg("user", OrionCognitivePushback.PROMPT))
+                        turn = continueAfterCallbackDiscovery(chatTurnWithNativeTools())
                     }
                     if (!turn.toolCallingAvailable) {
                         preserveToolTranscript("The provider lost native tool capability after partial execution. Inspect completed tool results before continuing; do not repeat side effects.")

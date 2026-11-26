@@ -140,10 +140,11 @@ internal object OrionCentralBrain {
         addObservedSection("self") { OrionSelf.section(app) }
         addObservedSection("rhythm") { OrionRhythm.section(app) }
         addObservedSection("worldview") { OrionWorldview.section(app) }
+        addObservedSection("known_failures") { OrionFailureMemory.section(app) }
         addObservedSection("situation") { OrionSituation.section(app) }
         addObservedSection("past_actions") { OrionActionLedger.section(app, request) }
         addObservedSection("evolution") { OrionEvolution.nudge(OrionForesight.stats()) }
-        addObservedSection("tool_routes") { OrionToolRouter.summary(request) }
+        addObservedSection("tool_routes") { OrionToolRouter.summary(app, request) }
         addObservedSection("mission_evidence") { OrionMissionControl.evidence(OrionMissionLock.goalFor(app, request), OrionMissionLock.activeGoal(app)).let { e -> OrionWorkers.liveSummary().let { w -> if (w.isBlank()) e else (e + "\n" + w).trim() } } }
         addObservedSection("execution_envelope") { OrionAdaptivePlan.render(OrionAdaptivePlan.assess(app)) + OrionMissionControl.summary().let { if (it.isBlank()) "" else "\n$it" } }
         addObservedSection("live_capability_registry") { OrionBrain.summary(OrionBrain.registry(app)) + "\n" + OrionProviderHealth.report(app).lineSequence().first() }

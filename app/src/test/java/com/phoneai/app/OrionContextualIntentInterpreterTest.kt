@@ -85,6 +85,16 @@ class OrionContextualIntentInterpreterTest {
         assertEquals("Complete the Telegram delivery verification implementation.", result.resolvedObjective)
     }
 
+    @Test fun unrelatedTopicIsNotDraggedIntoAStaleObjective() {
+        // "mission lock": a broadly-worded phrase ("finish the remaining ...") used to re-attach to
+        // whatever objective was active even when the message is plainly about something else.
+        val objective = "Scan Forex pairs for a valid trade setup."
+        val request = "finish the remaining github pr review"
+        val result = OrionContextualIntentInterpreter.resolve(request, emptyList(), objective)
+        assertEquals(OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE, result.kind)
+        assertEquals(request, result.resolvedObjective)
+    }
+
     @Test fun capabilityWordsInsideAnEngineeringRequestDoNotBecomeToolIntent() {
         val request = "Audit Python, weather, Telegram and GitHub integrations and fix their tests."
         val result = OrionContextualIntentInterpreter.resolve(request, emptyList(), "")
