@@ -563,30 +563,53 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     /** Raycast-style palette: type to filter every page in the platform and jump straight there. Orion can open the same pages itself (open_page). */
     private fun showCommandPalette() {
-        val input = android.widget.EditText(this).apply {
+        // Styled to match every other palette in this activity (showToolCatalog, etc): a dark
+        // glass card, a themed search field, and rounded custom rows — not a bare AlertDialog
+        // with a stock two-line list item, which renders in the system default style and reads
+        // as an unstyled dialog dropped into an otherwise custom dark UI.
+        val dialog = AlertDialog.Builder(this).setNegativeButton("CLOSE", null).create()
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(14), dp(16), dp(8))
+            background = GradientDrawable().apply { setColor(0xE51B1B1B.toInt()); cornerRadius = dp(20).toFloat(); setStroke(dp(1), 0x887F8995.toInt()) }
+        }
+        root.addView(label("Orion", 15f, 0xFFF0F0F0.toInt(), true).apply { setPadding(dp(2), 0, dp(2), dp(10)) })
+        val input = EditText(this).apply {
             hint = "Jump to a page or capability…"
             setSingleLine()
-            setTextColor(android.graphics.Color.WHITE)
-            setHintTextColor(android.graphics.Color.GRAY)
+            setTextColor(0xFFF4F4F4.toInt())
+            setHintTextColor(0xFF888888.toInt())
+            background = rounded(0xFF1B1B1B.toInt(), 12, 0xFF383838.toInt())
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            contentDescription = "Search Orion pages and capabilities"
         }
-        val list = android.widget.ListView(this)
+        root.addView(input, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+        val scroll = ScrollView(this).apply { isFillViewport = true }
+        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll.addView(rows)
+        root.addView(scroll, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.5).toInt()))
         var shown = OrionPages.all
         fun refresh() {
             shown = OrionPages.search(input.text.toString())
-            list.adapter = android.widget.ArrayAdapter(this, android.R.layout.simple_list_item_2, android.R.id.text1,
-                shown.map { it.title })
-        }
-        val box = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(32, 16, 32, 8)
-            addView(input)
-            addView(list, android.widget.LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.5).toInt()))
-        }
-        val dialog = AlertDialog.Builder(this).setTitle("Orion").setView(box).setNegativeButton("CLOSE", null).create()
-        list.setOnItemClickListener { _, _, index, _ ->
-            val page = shown.getOrNull(index) ?: return@setOnItemClickListener
-            dialog.dismiss()
-            if (page.id != "chat") startActivity(Intent(this, page.cls))
+            rows.removeAllViews()
+            if (shown.isEmpty()) {
+                rows.addView(label("No page or capability matches that search.", 13f, 0xFFAAAAAA.toInt()).apply { setPadding(dp(8), dp(18), dp(8), dp(18)) })
+                return
+            }
+            shown.forEach { page ->
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL; setPadding(dp(11), dp(9), dp(11), dp(9))
+                    background = rounded(0xFF191919.toInt(), 10, 0xFF303030.toInt())
+                    isClickable = true; isFocusable = true
+                    setOnClickListener {
+                        dialog.dismiss()
+                        if (page.id != "chat") startActivity(Intent(this@MainChatActivity, page.cls))
+                    }
+                }
+                row.addView(label(page.title, 13f, 0xFFF0F0F0.toInt(), true))
+                if (page.about.isNotBlank()) row.addView(label(page.about, 12f, 0xFFAAAAAA.toInt()).apply { setPadding(0, dp(4), 0, 0) })
+                rows.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
+            }
         }
         input.addTextChangedListener(object : android.text.TextWatcher {
             override fun afterTextChanged(s: android.text.Editable?) = refresh()
@@ -594,6 +617,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
         })
         refresh()
+        dialog.setView(root)
         dialog.show()
     }
 
