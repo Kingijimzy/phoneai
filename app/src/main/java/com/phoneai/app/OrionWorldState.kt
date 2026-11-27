@@ -88,7 +88,7 @@ internal object OrionWorldState {
 
     /** The prompt section: the JSON itself, plus how to treat it. */
     fun section(c: Context, request: String = ""): String =
-        "WORLD STATE (live JSON read from the device this turn; trust it over memory, and say so when a field is unreadable):\n" + runCatching { build(c, request = request).toString() }.getOrDefault("{\"unreadable\":[\"world_state\"]}") +
+        "WORLD STATE (fresh device snapshot; snapshot_observed_at_ms marks the read time, and volatile time/battery/network values carry observation timestamps. The persisted objective is included only when it matches the current request. Trust fresh observations over memory; unreadable fields are unknown, not false):\n" + runCatching { build(c, request = request).toString() }.getOrDefault("{\"unreadable\":[\"world_state\"]}") +
             "\nROUTES (ranked from measured outcomes this session; pick the top route for the kind of work, switch to the next when one fails; never switch the owner's screen to recover):\n" +
             runCatching { OrionStrategy.summary(build(c)) }.getOrDefault("unavailable") + "\n" + OrionTeam.summary(c) + "\n" + OrionForesight.routeRecord() + "\n" + runCatching { OrionJobLedger.current(c) }.getOrNull()?.let { OrionJobLedger.format(it) }.orEmpty()
 }
