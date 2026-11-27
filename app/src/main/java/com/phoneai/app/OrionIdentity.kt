@@ -33,6 +33,8 @@ Kingi: "What's new in you?" -> "Three things since last build: the British voice
         "\\bsorry\\b",
         "\\bi\\s+(sincerely\\s+|do\\s+)?apologi[sz]e\\b",
         "\\bmy\\s+apologies\\b",
+        "\\bapolog(?:y|ies)\\s+for\\b",
+        "\\bmy\\s+bad\\b",
         "\\bas\\s+an?\\s+(ai|artificial intelligence|language model|llm|virtual assistant|ai assistant)\\b",
         "\\bi'?m\\s+(just|only|merely)\\s+an?\\s+(ai|language model|assistant|virtual assistant)\\b",
         "\\bi\\s+(do\\s*n'?o?t|don'?t|cannot|can'?t)\\s+(actually\\s+)?(have|possess|experience)\\s+(any\\s+)?(personal\\s+)?(feelings|emotions|opinions|consciousness|preferences)\\b",
