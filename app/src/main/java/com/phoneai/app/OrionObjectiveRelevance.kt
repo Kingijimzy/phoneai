@@ -7,10 +7,6 @@ package com.phoneai.app
 internal object OrionObjectiveRelevance {
     const val STALE_MS = 6L * 60 * 60 * 1000
 
-    private val stop = setOf("the", "and", "for", "with", "that", "this", "you", "your", "what", "how", "are", "doing", "today", "have", "can", "please", "make", "from", "about", "just", "now", "hey", "bro", "how", "its", "was", "not", "did", "why", "who", "has", "had", "but", "too", "all", "one", "get", "got", "any", "see", "tell", "give", "want", "need", "know", "here", "there", "right", "okay")
-
-    private fun tokens(s: String) = Regex("[\\p{L}\\p{N}]{3,}").findAll(s.lowercase()).map { it.value }.filter { it !in stop }.toSet()
-
     /** True when [request] concerns [goal]: a follow-up form ("continue", "fix that", "status") or shared subject words. */
     fun related(goal: String, request: String, ageMs: Long): Boolean {
         if (goal.isBlank() || request.isBlank()) return false
