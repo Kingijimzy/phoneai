@@ -1579,17 +1579,13 @@ NATIVE TOOL RESULT AND OWNER-CONTROL POLICY:
      * natural and dynamic instead of the chat text read out. Short plain replies skip the model call.
      * Falls back to the plain speech filter if the model fails.
      */
-    /** Rewrites help-desk reflexes ("sorry", "as an AI") into Orion's voice once; unusable rewrites are discarded. */
-    private fun inOrionVoice(reply: String): String {
-        if (!OrionIdentity.needsRewrite(reply)) return reply
-        return runCatching {
-            val msgs = JSONArray()
-                .put(msg("system", OrionIdentity.REWRITE_SYSTEM))
-                .put(msg("user", reply))
-            val out = talkNim.chat(msgs, false, 500, 0.3).trim()
-            if (OrionIdentity.acceptable(reply, out)) out else reply
-        }.getOrDefault(reply)
-    }
+    /**
+     * Do not run a second model completion to police the wording of a finished answer.
+     * That extra provider round-trip delays delivery, can distort a contextually correct reply,
+     * and makes Orion sound less spontaneous. Character is established in the primary turn;
+     * this boundary intentionally preserves the model's actual conversational response.
+     */
+    private fun inOrionVoice(reply: String): String = reply
 
     fun composeSpoken(written: String): OrionSpokenLine.Line? {
         if (written.isBlank()) return null
