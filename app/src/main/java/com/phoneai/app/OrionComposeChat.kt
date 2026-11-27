@@ -353,7 +353,7 @@ internal fun OrionComposeActivityCard(event: OrionActivityEvent) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(6.dp).clip(CircleShape).background(accent.copy(alpha = if (active) alpha else 1f)))
             Spacer(Modifier.width(7.dp))
-            Text(event.title, color = OrionUiPalette.text, fontSize = 11.sp,
+            Text(displayTitle, color = OrionUiPalette.text, fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f))
             Text(
