@@ -189,8 +189,8 @@ internal object OrionCentralBrain {
             appendLine("EXTENSION: when no registered capability can achieve a reusable subtask, inspect the real extension lab and available workspace, create the smallest testable draft, run the supported sandbox tests, and report the exact promotion/runtime status. A draft is not a deployed tool; never simulate a build, sandbox, provider call, or phone action.")
         }
 
-        // SQLite executive state is authoritative when present; legacy checkpoints remain a recovery source.
-        runCatching { OrionExecutiveStore.contextBlock(app) }.getOrNull()?.takeIf { it.isNotBlank() }?.let { sections += it }
+        // Durable execution history is injected only after the current message is resolved.
+        // This prevents an unrelated greeting or new subject inheriting the previous mission.
 
         // Feed the real durable action checkpoint into the same brain. Deliberately expose
         // only progress metadata, never stored command text, arguments, or tool payloads.
@@ -259,6 +259,8 @@ internal object OrionCentralBrain {
             )
         )
         if (isFollowUp && continuityObjective.isNotBlank()) {
+            runCatching { OrionExecutiveStore.contextBlock(app, continuityObjective) }
+                .getOrNull()?.takeIf { it.isNotBlank() }?.let { sections += it }
             checkpointSummary?.let { sections += it }
             val resume = if (pendingTask != null) runCatching { AgentCheckpointStore.resumeInstruction(app) }.getOrNull() else null
             if (!resume.isNullOrBlank()) {
