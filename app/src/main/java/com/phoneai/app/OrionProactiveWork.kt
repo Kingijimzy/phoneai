@@ -47,7 +47,23 @@ internal class OrionProactiveWorker(
             if (!OrionMasterControl.isEnabled(applicationContext)) return@runCatching Result.success()
             val watcher = SoulEngineWatcher.run(applicationContext, allowUnpromptedInitiative = gate.open)
             val initiativeOccurred = living.isNotBlank() || inner.isNotBlank() || watcher.action == "chronos_review_suggestion"
-            if (gate.open && initiativeOccurred) OrionProactiveGate.recordAction(applicationContext)
+            val reportParts = buildList {
+                if (living.isNotBlank()) add("Reflection: $living")
+                if (inner.isNotBlank()) add("Inner-life bookkeeping: $inner")
+                add("Watcher readiness: ${watcher.status}; action: ${watcher.action}")
+                if (watcher.limitations.isNotEmpty()) add("Limitations: ${watcher.limitations.joinToString()}")
+                if (watcher.nextStep.isNotBlank()) add("Next: ${watcher.nextStep}")
+            }
+            val behaviourReport = reportParts.joinToString("\n")
+            OrionBehaviourLedger.record(applicationContext, "background_observation", "worker", behaviourReport,
+                if (watcher.status == "ready") "observed" else watcher.status,
+                "This heartbeat performs bounded local checks; it does not claim that queued goals were executed.")
+            if (gate.open && initiativeOccurred) {
+                OrionProactiveGate.recordAction(applicationContext)
+                OrionReports.report(applicationContext, "background behaviour", behaviourReport)
+            } else if (watcher.limitations.isNotEmpty()) {
+                OrionReports.report(applicationContext, "readiness warning", behaviourReport)
+            }
             Result.success()
         }.getOrElse {
             AgentPolicy.log(

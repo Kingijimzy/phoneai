@@ -17,6 +17,7 @@ class SoulEngineActivity : ComponentActivity() {
     private val statusState = mutableStateOf("Checking local readiness…")
     private val metricsState = mutableStateOf("")
     private val selfTestState = mutableStateOf("")
+    private val behaviourReportState = mutableStateOf("No behaviour report recorded yet.")
     private val coreEnabledState = mutableStateOf(false)
     private val masterPowerState = mutableStateOf(true)
     private val proposalsState = mutableStateOf<List<SoulEngineState.Proposal>>(emptyList())
@@ -35,6 +36,7 @@ class SoulEngineActivity : ComponentActivity() {
                         status = statusState.value,
                         metrics = metricsState.value,
                         selfTest = selfTestState.value,
+                        behaviourReport = behaviourReportState.value,
                         goal = goalState.value,
                         mode = modeState.value,
                         onSaveGoal = { goal, mode ->
@@ -154,6 +156,7 @@ class SoulEngineActivity : ComponentActivity() {
             goalState.value = soulState?.goal.orEmpty()
             modeState.value = soulState?.mode ?: SoulEngineState.Mode.TALK
             proposalsState.value = soulState?.proposals ?: emptyList()
+            behaviourReportState.value = runCatching { OrionBehaviourLedger.summary(this@SoulEngineActivity, 6) }.getOrDefault("Behaviour report unavailable.")
             val pendingProposals = soulState?.proposals?.count { it.status == SoulEngineState.ProposalStatus.PENDING } ?: 0
             val lessonCount = soulState?.lessons?.size ?: 0
             val serviceReady = PhoneAiService.instance != null

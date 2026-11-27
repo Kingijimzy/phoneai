@@ -122,9 +122,11 @@ internal object OrionCentralBrain {
         // same provider-neutral executive context used by every surface. This is additive
         // to the structured ExperienceStore recall below; it does not create another store.
         addObservedSection("living_loop_state") { OrionLivingLoop.promptBlock(app) }
+        // Durable owner-visible behaviour history: recorded outcomes only, never inferred inner states.
+        addObservedSection("behaviour_ledger") { OrionBehaviourLedger.summary(app, 8) }
         addObservedSection("chronos_awareness") { OrionChronosAwareness.summary(app) }
         addObservedSection("proactive_awareness") {
-            val item = OrionProactiveEngine.evaluate(app)
+            val item = OrionProactiveEngine.evaluate(app, commitInterruption = false)
             if (item == null) null else
                 "PROACTIVE AWARENESS (one item at most, throttled and quiet-period gated): ${item.kind} — ${item.body}"
         }
@@ -185,7 +187,7 @@ internal object OrionCentralBrain {
             appendLine("ROUTING: prefer an already registered, enabled, working capability; use compatible alternatives when one fails. Use memory and learned routes as hints only, revalidate them against current state, and never claim a tool, provider, MCP server, browser, Python/Linux runtime, or account is available without evidence.")
             appendLine("RECOVERY: do not repeat the same failed call unchanged. Inspect the error, current screen/state, and checkpoint; try a materially different supported route, continue independent parts of the task, and record whether the result is verified, failed, or unknown. Never report completion merely because a tool was invoked.")
             appendLine("REPAIR: use self_diagnose to gather current evidence before attempting a fix. repair_apply accepts only a registered repair_id; the app constructs the typed proposal, plan digest, preflight, approval decision, app-owned apply/rollback adapter and verification receipt. Never invent repair IDs or supply shell/source/path commands. Do not call a repair complete until its receipt is VERIFIED. Dangerous, suspicious, external or consequential repairs must wait for the owner-confirmation callback.")
-            appendLine("AUTONOMY: every registered tool is eligible for dispatch regardless of Orion-local DENY/ASK settings, presets or capability-pack switches. At execution, Android permissions, service availability, remote authentication, cancellation and operation-specific owner approval remain authoritative. Ask before private-data access, file writes/modifications, destructive deletion/wipe, and script/package installation/execution. Never apologize reflexively for an operational failure; diagnose, reroute and verify.")
+            appendLine("AUTONOMY: registered means discoverable, not authorized. Before dispatch, resolve the current user mode, capability-pack state, tool scope, consent, risk tier and operation-specific approval through the authoritative Gateway/policy path. DENY and ASK decisions, disabled packs, Android permissions, service availability, remote authentication and cancellation are binding; prompts never override them. Ask before private-data access, file writes/modifications, destructive deletion/wipe, and script/package installation/execution. Never claim an action happened until its observable postcondition is independently checked.")
             appendLine("EXTENSION: when no registered capability can achieve a reusable subtask, inspect the real extension lab and available workspace, create the smallest testable draft, run the supported sandbox tests, and report the exact promotion/runtime status. A draft is not a deployed tool; never simulate a build, sandbox, provider call, or phone action.")
         }
 

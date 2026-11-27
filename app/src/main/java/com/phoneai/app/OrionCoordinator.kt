@@ -66,13 +66,15 @@ internal object OrionCoordinator {
         OrionToolGuard.reset()
         val failedBefore = OrionRunLog.currentRun().count { it.status == OrionRunLog.Status.FAILED }
         OrionEntityLoop.begin(surface.name.lowercase())
-        OrionEntityLoop.mark(OrionEntityLoop.Stage.PLAN)
         var ok = false
         try {
             val out = OrionMissionControl.within(mission.id) {
-                // Retrieve before act: assemble the one shared context first; the turn then reuses this snapshot.
+                // Turn context performs recall before this block; reasoning and planning follow retrieval.
                 OrionTurnContext.withTurn(c, text.ifBlank { "turn" }) {
-                    OrionEntityLoop.mark(OrionEntityLoop.Stage.ACT); holdAwake(c, block)
+                    OrionEntityLoop.mark(OrionEntityLoop.Stage.REASON)
+                    OrionEntityLoop.mark(OrionEntityLoop.Stage.PLAN)
+                    OrionEntityLoop.mark(OrionEntityLoop.Stage.ACT)
+                    holdAwake(c, block)
                 }
             }
             ok = true
@@ -87,10 +89,16 @@ internal object OrionCoordinator {
                     if (goal.isNotBlank() && OrionObjectiveRelevance.related(goal, text, 0L)) OrionMissionLock.markDone(c)
                 }
             }
-            OrionEntityLoop.mark(OrionEntityLoop.Stage.LEARN); OrionEntityLoop.mark(OrionEntityLoop.Stage.REPORT)
+            val failedNow = OrionRunLog.currentRun().count { it.status == OrionRunLog.Status.FAILED } > failedBefore
+            val outcome = if (!ok || failedNow) "failed" else "completed_unverified"
+            val evidenceText = runCatching { evidence?.invoke().orEmpty() }.getOrDefault("").takeIf { it.isNotBlank() }
+                ?: if (ok && !failedNow) "request returned; no independent verifier supplied" else "execution failed or recorded a failed tool step"
+            OrionMissionControl.finish(mission.id, ok && !failedNow, verified = false, evidence = evidenceText)
+            OrionBehaviourLedger.record(c, "user_request", surface.name.lowercase(), text, outcome, evidenceText)
+            // Background work must report its outcome; user-initiated turns remain in the local ledger.
+            if (!surface.ownerInitiated) OrionReports.report(c, surface.name.lowercase(), text + "\nOutcome: " + outcome + "\n" + evidenceText)
+            OrionEntityLoop.mark(OrionEntityLoop.Stage.REPORT)
             OrionEntityLoop.end()
-            // The front door has no verifier of its own: finishing without evidence leaves the mission awaiting verification, never "done".
-            OrionMissionControl.finish(mission.id, ok, verified = false, evidence = runCatching { evidence?.invoke() }.getOrNull()?.takeIf { it.isNotBlank() } ?: if (ok) "reply produced; completion not independently verified" else "run ended with an error")
         }
     }
 

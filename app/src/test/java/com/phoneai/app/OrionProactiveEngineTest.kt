@@ -59,6 +59,18 @@ class OrionProactiveEngineTest {
         assertTrue(item == null || item.kind.isNotBlank())
     }
 
+    @Test fun contextPreviewDoesNotConsumeInterruptionBudget() {
+        val now = midnight(context) + 12 * 60 * 60 * 1000L
+        OrionFollowUpStore.add(context, "review the project plan", dueAt = now + 30 * 60_000L)
+        Prefs.setLastProactiveSpokenAt(context, 0L)
+        val item = OrionProactiveEngine.evaluate(context, now, commitInterruption = false)
+        assertNotNull(item)
+        assertEquals(0L, Prefs.lastProactiveSpokenAt(context))
+        val spoken = context.getSharedPreferences("orion_proactive_spoken_v1", Context.MODE_PRIVATE)
+            .getString("spoken_at", "[]")
+        assertEquals("[]", spoken)
+    }
+
     @Test fun throttlePreventsRepeatedSpokenInterruptions() {
         val now = midnight(context) + 12 * 60 * 60 * 1000L
         Prefs.setLastProactiveSpokenAt(context, now - 10 * 60_000L) // 10 min ago, below 20 min threshold
