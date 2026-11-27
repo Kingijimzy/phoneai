@@ -199,11 +199,18 @@ internal object OrionMissionControl {
     fun evidence(goal: String, background: String = ""): String =
         evidenceBlock(goal, active(), missions.values, if (goal.isBlank()) background else "")
 
-    fun summary(relevantTo: String = ""): String {
+    private fun renderSummary(missions: List<Mission>, label: String): String {
+        if (missions.isEmpty()) return ""
+        return "MISSIONS ($label; one lifecycle, one owner per mission): ${missions.size} active — " +
+            missions.take(5).joinToString("; ") { "${it.id} ${it.lifecycle.phase.name.lowercase()} \"${it.request.take(40)}\"" + (it.owner?.let { o -> " owned by ${o.id}" } ?: "") }
+    }
+
+    /** Existing unfiltered summary remains available to internal status surfaces. */
+    fun summary(): String = renderSummary(active(), "all active")
+
+    /** Conversational summary: only missions matching the current request are eligible. */
+    fun summary(relevantTo: String): String {
         if (relevantTo.isBlank()) return ""
-        val a = active().filter { belongsToObjective(it.request, relevantTo) }
-        if (a.isEmpty()) return ""
-        return "MISSIONS (relevant to the current objective; one lifecycle, one owner per mission): ${a.size} active — " +
-            a.take(5).joinToString("; ") { "${it.id} ${it.lifecycle.phase.name.lowercase()} \"${it.request.take(40)}\"" + (it.owner?.let { o -> " owned by ${o.id}" } ?: "") }
+        return renderSummary(active().filter { belongsToObjective(it.request, relevantTo) }, "relevant to the current objective")
     }
 }
