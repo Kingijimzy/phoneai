@@ -124,7 +124,11 @@ internal class OrionPythonCapabilityExecutor(
             return "error: extension_forge requires explicit test cases with expected results. A successful one-off run is not verification. Supply tests [{input, expect}] and retry; the draft remains disabled."
         }
         if (runCatching { extensionStore.enabled(id) }.getOrNull() == null) {
-            return "Forged $id and it passed, but it is not enabled because the owner turned auto-activation off. Call extension_enable to turn it on."
+            return if (extension.runtime == "python_full") {
+                "Forged and verified $id, but full CPython remains disabled until you explicitly approve extension_enable."
+            } else {
+                "Forged and verified $id, but activation did not complete. Check extension_policy and use extension_enable if owner auto-activation is off."
+            }
         }
         runCatching { OrionLessons.learn(context, "Forged tool '$id' (${extension.displayName}): ${extension.description.take(100)}. Reuse it via extension_run before building anything similar.") }
         return "FORGED and enabled $id. " + runExtension(JSONObject().put("id", id).put("input", input), stopped)
