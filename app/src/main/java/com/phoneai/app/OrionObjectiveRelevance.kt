@@ -16,10 +16,12 @@ internal object OrionObjectiveRelevance {
         if (goal.isBlank() || request.isBlank()) return false
         if (ageMs > STALE_MS) return false
         val r = OrionContextualIntentInterpreter.resolve(request, emptyList(), goal)
-        val followUp = !r.needsClarification &&
+        // Shared vocabulary is not proof of continuation: a new question can concern the
+        // same broad subject without resuming the old task. Only an explicitly contextual
+        // interpretation may attach a standing objective to the current turn.
+        return !r.needsClarification &&
             r.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE &&
             r.kind != OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP
-        return followUp || tokens(goal).intersect(tokens(request)).isNotEmpty()
     }
 
     /** A message becomes the standing mission only when it asks for work, not when it chats or asks how Orion is. */
