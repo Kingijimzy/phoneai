@@ -84,7 +84,7 @@ internal object OrionContextualIntentInterpreter {
         "fix", "test", "check", "make", "create", "build", "repair", "help", "look", "find",
         "get", "update", "change", "improve", "work", "thing", "issue", "problem", "task",
         "everything", "continue", "finish", "complete", "remaining", "run", "do", "try",
-        "site", "any", "works", "working", "please"
+        "site", "any", "works", "working", "please", "other", "new", "one"
     )
 
     fun resolve(
@@ -119,7 +119,7 @@ internal object OrionContextualIntentInterpreter {
             val objectiveTopic = OrionRhythm.topic(objective)
             val rawSubject = MemoryRanking.tokens(raw) - genericTopicWords
             val objectiveSubject = MemoryRanking.tokens(objective) - genericTopicWords
-            val clearlyDifferentSubject = rawSubject.size >= 2 && objectiveSubject.isNotEmpty() &&
+            val clearlyDifferentSubject = rawSubject.isNotEmpty() && objectiveSubject.isNotEmpty() &&
                 rawSubject.intersect(objectiveSubject).isEmpty()
             if (clearlyDifferentSubject ||
                 (rawTopic != "general" && objectiveTopic != "general" && rawTopic != objectiveTopic && !namedTargetMatchesActive)) {
