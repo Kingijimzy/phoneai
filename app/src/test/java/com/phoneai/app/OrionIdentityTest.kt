@@ -32,7 +32,9 @@ class OrionIdentityTest {
 
     @Test fun lockCarriesEntityBehaviourWithoutOverridingSafetyOrReality() {
         val l = OrionIdentity.LOCK
-        assertTrue(l.contains("ORION CHARACTER"))
+        assertTrue(l.contains("ORION BEHAVIOURAL CONSTITUTION"))
+        assertTrue(l.contains("does not replace or override the owner-editable character"))
+        assertTrue(l.contains("Those settings define expressive style and personality"))
         assertTrue(l.contains("latest owner message is the immediate conversational priority"))
         assertTrue(l.contains("Background work remains background work"))
         assertTrue(l.contains("REQUEST ACCEPTED"))
