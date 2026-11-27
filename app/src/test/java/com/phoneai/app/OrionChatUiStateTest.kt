@@ -12,6 +12,15 @@ class OrionChatUiStateTest {
         assertEquals("…", orionWorkingPhrase("  "))
     }
 
+    @Test fun terminalStatusClearsStaleRuntimeMode() {
+        for (terminal in listOf("DONE", "Completed", "Finished", "Ready", "Stopped", "Cancelled", "Interrupted")) {
+            assertEquals("$terminal must clear stale busy mode", OrbView.Mode.IDLE,
+                orionModeForStatus(terminal, OrbView.Mode.ACTING))
+            assertEquals("$terminal must clear stale thinking", OrbView.Mode.IDLE,
+                orionModeForStatus(terminal, OrbView.Mode.THINKING))
+        }
+    }
+
     @Test fun statusMapsToDistinctOrbStatesWithoutOverridingLiveRuntimeState() {
         assertEquals(OrbView.Mode.WAITING_APPROVAL, orionModeForStatus("Approval pending", OrbView.Mode.IDLE))
         assertEquals(OrbView.Mode.ERROR, orionModeForStatus("Execution failed", OrbView.Mode.IDLE))

@@ -263,6 +263,12 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
         fun latestChatCard(events: List<OrionActivityEvent>): OrionActivityEvent? =
             events.maxWithOrNull(compareBy<OrionActivityEvent> { it.timestampMs }.thenBy { it.eventId })
 
+        /** Only the newest task can drive the live composer state; older unfinished cards are history. */
+        fun latestActiveChatCard(events: List<OrionActivityEvent>): OrionActivityEvent? =
+            latestChatCard(events)?.takeIf {
+                it.status == OrionActivityStatus.ACTIVE || it.status == OrionActivityStatus.WAITING
+            }
+
         fun elapsedLabel(startedAtMs: Long, nowMs: Long): String {
             val seconds = ((nowMs - startedAtMs).coerceAtLeast(0L)) / 1000L
             return when {

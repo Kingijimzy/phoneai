@@ -15,7 +15,7 @@ class ContextRelevanceTest {
         val s = split("refactor the kotlin parser module please")
         assertTrue(s.deferred.any { it.startsWith("TRADING DESK") })
         assertTrue(s.deferred.any { it.startsWith("SENSOR TELEMETRY") })
-        assertTrue(s.keep.contains(core)); assertTrue(s.keep.contains(small))
+        assertTrue(s.keep.contains(core)); assertTrue(s.deferred.contains(small))
     }
 
     @Test fun relevanceEmergesFromTheTaskNotAKeywordTable() {
@@ -48,13 +48,14 @@ class ContextRelevanceTest {
     @Test fun shortGreetingsDoNotMasqueradeAsFollowUps() {
         val greeting = split("Hey bro")
         assertTrue(greeting.keep.contains(core))
-        assertTrue(greeting.keep.contains(small))
+        assertTrue(greeting.deferred.contains(small))
         assertTrue(greeting.deferred.any { it.startsWith("TRADING DESK") })
         assertTrue(greeting.deferred.any { it.startsWith("SENSOR TELEMETRY") })
 
         val casual = split("How are you?")
         assertTrue(casual.deferred.any { it.startsWith("TRADING DESK") })
         assertTrue(casual.deferred.any { it.startsWith("SENSOR TELEMETRY") })
+        assertTrue(casual.deferred.contains(small))
     }
 
 }

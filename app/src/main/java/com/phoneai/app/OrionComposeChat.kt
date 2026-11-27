@@ -534,10 +534,10 @@ internal fun OrionComposeChatScreen(
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
     var editingOriginal by rememberSaveable { mutableStateOf<String?>(null) }
-    val latestActivityEvent = activityEvents.maxByOrNull { it.timestampMs }
-    val activeActivityEvent = activityEvents
-        .filter { it.status == OrionActivityStatus.ACTIVE || it.status == OrionActivityStatus.WAITING }
-        .maxByOrNull { it.timestampMs }
+    // The newest task card is authoritative. Filtering ACTIVE first lets an older run
+    // override a newer DONE/CANCELLED event and leaves the composer stuck in Stop mode.
+    val latestActivityEvent = OrionActivityTimeline.latestChatCard(activityEvents)
+    val activeActivityEvent = OrionActivityTimeline.latestActiveChatCard(activityEvents)
     val displayStatus = activeActivityEvent?.let(::companionStatusForEvent) ?: status
     val companionActivity = activeActivityEvent?.let(::companionActivityForEvent)
         ?: companionActivityForChatStatus(status)

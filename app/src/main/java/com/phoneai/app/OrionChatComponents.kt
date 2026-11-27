@@ -951,8 +951,13 @@ internal fun orionWorkingPhrase(status: String): String {
 }
 
 internal fun orionModeForStatus(status: String, current: OrbView.Mode): OrbView.Mode {
+    val value = status.trim().lowercase()
+    // Explicit terminal states win over a stale animation/runtime mode.
+    if (listOf("done", "complete", "completed", "finished", "ready", "idle", "cancelled", "canceled", "stopped", "interrupted")
+            .any { value == it || value.startsWith("$it ") || value.startsWith("$it·") }) {
+        return OrbView.Mode.IDLE
+    }
     if (current != OrbView.Mode.IDLE) return current
-    val value = status.lowercase()
     return when {
         listOf("approval", "permission", "awaiting owner", "waiting for you").any { it in value } -> OrbView.Mode.WAITING_APPROVAL
         listOf("error", "failed", "blocked").any { it in value } -> OrbView.Mode.ERROR
