@@ -173,24 +173,37 @@ internal object OrionMissionControl {
     }
 
     /** Pure rendering: the current objective plus the last finished mission's evidence, so every context carries what is true now. */
+    private fun belongsToObjective(missionRequest: String, objective: String): Boolean {
+        if (missionRequest.isBlank() || objective.isBlank()) return false
+        val objectiveTokens = MemoryRanking.tokens(objective)
+        return objectiveTokens.isNotEmpty() && MemoryRanking.tokens(missionRequest).any { it in objectiveTokens }
+    }
+
     internal fun evidenceBlock(goal: String, activeList: List<Mission>, all: Collection<Mission>, background: String = ""): String {
-        val last = all.filter { !it.active && it.endedAt > 0L }.maxByOrNull { it.endedAt }
-        if (goal.isBlank() && activeList.isEmpty() && last == null && background.isBlank()) return ""
+        // Active/finished missions are execution history, not ambient conversation context.
+        // Only expose records that match the resolved current objective.
+        val relevantActive = if (goal.isBlank()) emptyList() else activeList.filter { belongsToObjective(it.request, goal) }
+        val last = if (goal.isBlank()) null else all
+            .filter { !it.active && it.endedAt > 0L && belongsToObjective(it.request, goal) }
+            .maxByOrNull { it.endedAt }
+        if (goal.isBlank() && relevantActive.isEmpty() && last == null && background.isBlank()) return ""
         return buildString {
-            append("MISSION AND EVIDENCE (one task identity: the mission id; objective and evidence follow it)\n")
-            if (goal.isNotBlank()) append("Objective: ").append(goal.take(160)).append('\n')
-            else if (background.isNotBlank()) append("Older open objective (background only, NOT the current request; do not resume unless the owner asks): ").append(background.take(120)).append('\n')
-            activeList.take(3).forEach { append("Active ${it.id} (${it.lifecycle.phase.name.lowercase()}, ${it.surface}): ").append(it.request.take(80)).append('\n') }
+            append("MISSION AND EVIDENCE (one task identity: the mission id; objective and evidence follow it)\\n")
+            if (goal.isNotBlank()) append("Objective: ").append(goal.take(160)).append('\\n')
+            else if (background.isNotBlank()) append("Older open objective (background only, NOT the current request; do not resume unless the owner asks): ").append(background.take(120)).append('\\n')
+            relevantActive.take(3).forEach { append("Active ${it.id} (${it.lifecycle.phase.name.lowercase()}, ${it.surface}): ").append(it.request.take(80)).append('\\n') }
             if (last != null) append("Last finished ${last.id}: ").append(last.outcome.ifBlank { "ended" }).append(" — evidence: ").append(last.evidence.ifBlank { "none recorded" }.take(160))
         }.trim()
     }
 
-    fun evidence(goal: String, background: String = ""): String = evidenceBlock(goal, active(), missions.values, if (goal.isBlank()) background else "")
+    fun evidence(goal: String, background: String = ""): String =
+        evidenceBlock(goal, active(), missions.values, if (goal.isBlank()) background else "")
 
-    fun summary(): String {
-        val a = active()
+    fun summary(relevantTo: String = ""): String {
+        if (relevantTo.isBlank()) return ""
+        val a = active().filter { belongsToObjective(it.request, relevantTo) }
         if (a.isEmpty()) return ""
-        return "MISSIONS (one lifecycle, one owner per mission): ${a.size} active — " +
+        return "MISSIONS (relevant to the current objective; one lifecycle, one owner per mission): ${a.size} active — " +
             a.take(5).joinToString("; ") { "${it.id} ${it.lifecycle.phase.name.lowercase()} \"${it.request.take(40)}\"" + (it.owner?.let { o -> " owned by ${o.id}" } ?: "") }
     }
 }
