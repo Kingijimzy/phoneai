@@ -188,10 +188,10 @@ internal object OrionMissionControl {
             .maxByOrNull { it.endedAt }
         if (goal.isBlank() && relevantActive.isEmpty() && last == null && background.isBlank()) return ""
         return buildString {
-            append("MISSION AND EVIDENCE (one task identity: the mission id; objective and evidence follow it)\\n")
-            if (goal.isNotBlank()) append("Objective: ").append(goal.take(160)).append('\\n')
-            else if (background.isNotBlank()) append("Older open objective (background only, NOT the current request; do not resume unless the owner asks): ").append(background.take(120)).append('\\n')
-            relevantActive.take(3).forEach { append("Active ${it.id} (${it.lifecycle.phase.name.lowercase()}, ${it.surface}): ").append(it.request.take(80)).append('\\n') }
+            append("MISSION AND EVIDENCE (one task identity: the mission id; objective and evidence follow it)\n")
+            if (goal.isNotBlank()) append("Objective: ").append(goal.take(160)).append('\n')
+            else if (background.isNotBlank()) append("Older open objective (background only, NOT the current request; do not resume unless the owner asks): ").append(background.take(120)).append('\n')
+            relevantActive.take(3).forEach { append("Active ${it.id} (${it.lifecycle.phase.name.lowercase()}, ${it.surface}): ").append(it.request.take(80)).append('\n') }
             if (last != null) append("Last finished ${last.id}: ").append(last.outcome.ifBlank { "ended" }).append(" — evidence: ").append(last.evidence.ifBlank { "none recorded" }.take(160))
         }.trim()
     }
