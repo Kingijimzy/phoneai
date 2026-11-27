@@ -168,13 +168,14 @@ private fun ModePill(label: String, selected: Boolean, modifier: Modifier = Modi
     }
 }
 
-private enum class OrionReplyType { NORMAL, RESEARCH, CODE, TASK, MCP, DIAGRAM }
+internal enum class OrionReplyType { NORMAL, RESEARCH, CODE, TASK, MCP, DIAGRAM, CHART }
 
-private fun classifyOrionReply(item: OrionChatLine): OrionReplyType {
+internal fun classifyOrionReply(item: OrionChatLine): OrionReplyType {
     if (item.kind == "note") return OrionReplyType.TASK
     // New messages carry explicit block types. Legacy text is adapted at restoration time;
     // ordinary prose is never promoted to a tool/task card because it contains a keyword.
     val blocks = item.content.blocks
+    if (blocks.any { it is OrionMessageBlock.Chart }) return OrionReplyType.CHART
     if (blocks.any { it is OrionMessageBlock.Code }) return OrionReplyType.CODE
     if (blocks.any { it is OrionMessageBlock.Terminal || it is OrionMessageBlock.Approval ||
             it is OrionMessageBlock.TaskReceipt || it is OrionMessageBlock.GeneratedFile }) return OrionReplyType.TASK
@@ -429,6 +430,7 @@ internal fun ChatBubble(
                                 OrionReplyType.TASK -> OrionUiPalette.panel
                                 OrionReplyType.MCP -> OrionUiPalette.panel
                                 OrionReplyType.DIAGRAM -> OrionUiPalette.panel
+                                OrionReplyType.CHART -> OrionUiPalette.panel
                                 else -> Color.Transparent
                             })
                             .border(1.dp, when (replyType) {
@@ -437,6 +439,7 @@ internal fun ChatBubble(
                                 OrionReplyType.TASK -> OrionUiPalette.borderStrong
                                 OrionReplyType.MCP -> OrionUiPalette.borderStrong
                                 OrionReplyType.DIAGRAM -> OrionUiPalette.borderStrong
+                                OrionReplyType.CHART -> OrionUiPalette.borderStrong
                                 else -> Color.Transparent
                             }, RoundedCornerShape(16.dp))
                         else Modifier
@@ -468,6 +471,7 @@ internal fun ChatBubble(
                                     OrionReplyType.TASK -> "TASK UPDATE"
                                     OrionReplyType.MCP -> "MCP TOOL RESULT"
                                     OrionReplyType.DIAGRAM -> "VISUAL EXPLANATION"
+                                    OrionReplyType.CHART -> "CHART"
                                     OrionReplyType.NORMAL -> "ACTIVITY"
                                 }
                             },

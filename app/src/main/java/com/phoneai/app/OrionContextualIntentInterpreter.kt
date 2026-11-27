@@ -104,7 +104,7 @@ internal object OrionContextualIntentInterpreter {
         val isCorrection = correction.containsMatchIn(raw) || broadCorrection.containsMatchIn(raw)
         val isTest = testRequest.containsMatchIn(raw) || testExistingWork.matches(raw)
         val isStatusCheck = statusCheck.matches(raw)
-        val isReferenceOnly = followUpOnly.matches(raw) || standaloneContextual.matches(raw) || continuation.matches(raw)
+        val isReferenceOnly = followUpOnly.matches(raw) || standaloneContextual.matches(raw)
         val isHistorical = explicitHistoricalLookup.containsMatchIn(raw)
         var contextual = isContinue || isComplete || isCorrection || isTest || isStatusCheck || isReferenceOnly || isHistorical || historicalReference.containsMatchIn(raw)
 

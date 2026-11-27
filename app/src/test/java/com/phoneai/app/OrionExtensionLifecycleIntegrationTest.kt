@@ -38,6 +38,7 @@ class OrionExtensionLifecycleIntegrationTest {
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
         ExtensionAutonomySettings.setAutoActivationEnabled(context, false)
+        ExperienceStore.clear(context)
         listOf(
             "orion_generated_extensions.json",
             "orion_extension_versions.json",
@@ -48,7 +49,9 @@ class OrionExtensionLifecycleIntegrationTest {
         // It sums INPUT.values and echoes INPUT.greeting, so the lifecycle can assert real data flow.
         val fakeSandbox: (String, String) -> String = { source, inputJson ->
             val input = JSONObject(inputJson)
-            if (source.contains("REJECT_ME")) {
+            if (input.optBoolean("force_failure")) {
+                JSONObject().put("ok", false).put("error", "simulated runtime failure").toString()
+            } else if (source.contains("REJECT_ME")) {
                 JSONObject().put("ok", false).put("error", "restricted operation detected").toString()
             } else if (source.contains("INPUT[\"values\"]") || source.contains("INPUT.get(\"values\"")) {
                 val values = input.optJSONArray("values") ?: JSONArray()
@@ -138,6 +141,17 @@ class OrionExtensionLifecycleIntegrationTest {
             runResult.contains("EXTENSION RESULT for $id"))
         assertTrue("extension_run result should contain the computed sum: $runResult",
             runResult.contains("15"))
+
+        // Failed live executions must feed the privacy-minimal persistent learning store.
+        val failedRun = runTool("extension_run", JSONObject()
+            .put("id", id)
+            .put("input", JSONObject().put("force_failure", true)))
+        assertTrue("failed extension execution should be surfaced: $failedRun", failedRun.startsWith("error:"))
+        val learnedFailure = ExperienceStore.all(context).firstOrNull { it.tool == "extension_run" }
+        assertNotNull("runtime failure category should persist", learnedFailure)
+        assertEquals("other_failure", learnedFailure?.category)
+        assertFalse("raw runtime error must not be retained in the learning gist",
+            learnedFailure?.task?.contains("simulated", ignoreCase = true) == true)
 
         // ── 5. Verify the result ──
         // The sandbox enforces input/output contracts: wrong input produces no wrong result.
