@@ -23,7 +23,9 @@ internal object OrionClaimCheck {
     private val numberWord = """(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thir(?:teen|ty)|four(?:teen|ty)|fif(?:teen|ty)|six(?:teen|ty)|seven(?:teen|ty)|eigh(?:teen|ty)|nine(?:teen|ty)|twenty|hundred)"""
     private val numberToken = """(?:\d{1,3}|$numberWord(?:[\s-]$numberWord)?)"""
     private val batteryFigureClaim = Regex(
-        """(?i)\b($numberToken)\s*(?:%|percent)\s*battery\b|\bbattery(?:'s| is)?\s*(?:at\s*)?($numberToken)\s*(?:%|percent)\b"""
+        // Note: no \b directly after "%" - a literal "%" is a non-word char, so a \b there never
+        // matches whatever follows (also non-word, usually a space), silently dropping "10%".
+        """(?i)\b($numberToken)\s*(?:%|percent\b)\s*battery\b|\bbattery(?:'s| is)?\s*(?:at\s*)?($numberToken)\s*(?:%|percent\b)"""
     )
     private val wordToNumber: Map<String, Int> = mapOf(
         "zero" to 0, "one" to 1, "two" to 2, "three" to 3, "four" to 4, "five" to 5, "six" to 6,
