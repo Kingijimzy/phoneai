@@ -55,4 +55,10 @@ class OrionIdentityTest {
         assertTrue(OrionIdentity.reflexesIn("Great question. Let me know if you need more.").isNotEmpty())
         assertTrue(OrionIdentity.reflexesIn("Rechecking the live price now.").isEmpty())
     }
+
+    @Test fun catchesApologyPhrasingTheOriginalListMissed() {
+        // "my apologies" was caught; a bare "apologies for ..." with no "my" was not.
+        assertTrue(OrionIdentity.needsRewrite("Apologies for the delay, the build is done."))
+        assertTrue(OrionIdentity.needsRewrite("My bad, that was the wrong file."))
+    }
 }
