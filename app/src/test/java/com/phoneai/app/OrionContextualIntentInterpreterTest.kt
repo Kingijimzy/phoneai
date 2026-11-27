@@ -188,4 +188,12 @@ class OrionContextualIntentInterpreterTest {
         assertEquals(request, result.resolvedObjective)
     }
 
+    @Test fun shortSpecificSubjectStillSwitchesAwayFromAnOldMission() {
+        val objective = "Repair Orion chat lifecycle restoration."
+        val request = "Test my camera."
+        val result = OrionContextualIntentInterpreter.resolve(request, emptyList(), objective)
+        assertEquals(OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE, result.kind)
+        assertEquals(request, result.resolvedObjective)
+    }
+
 }
