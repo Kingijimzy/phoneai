@@ -514,19 +514,28 @@ internal object OrionExecutiveStore {
         return true
     }
 
-    fun contextBlock(context: Context): String = runCatching {
+    fun contextBlock(context: Context, relevantObjective: String): String = runCatching {
+        val requestedTokens = MemoryRanking.tokens(relevantObjective)
+        if (requestedTokens.isEmpty()) return@runCatching ""
         Db(context.applicationContext).readableDatabase.use { db ->
-            val recentObjectives = db.rawQuery("""SELECT id,intent,phase,revision,plan_revision,recovery_cursor,blocker
-                FROM objectives ORDER BY updated_at DESC LIMIT 8""", null).use { cursor ->
+            val candidates = db.rawQuery("""SELECT id,intent,phase,revision,plan_revision,recovery_cursor,blocker,updated_at
+                FROM objectives ORDER BY updated_at DESC LIMIT 32""", null).use { cursor ->
                 buildList {
                     while (cursor.moveToNext()) add(
                         Objective(cursor.getString(0), cursor.getString(1), Phase.valueOf(cursor.getString(2)),
-                            cursor.getLong(3), cursor.getLong(4), cursor.getString(5), cursor.getString(6), 0L)
+                            cursor.getLong(3), cursor.getLong(4), cursor.getString(5), cursor.getString(6), cursor.getLong(7))
                     )
                 }
             }
+            // Keep only objective records that actually overlap the resolved current objective.
+            // The full durable ledger remains stored; unrelated records are not pushed into this turn.
+            val recentObjectives = candidates.mapNotNull { objective ->
+                val overlap = MemoryRanking.tokens(objective.intent).count { it in requestedTokens }
+                if (overlap == 0) null else objective to overlap
+            }.sortedWith(compareByDescending<Pair<Objective, Int>> { it.second }.thenByDescending { it.first.updatedAt })
+                .take(4).map { it.first }
             if (recentObjectives.isEmpty()) "" else buildString {
-                appendLine("SQLITE EXECUTIVE LEDGER — latest 8 durable dispatch/objective records, including terminal outcomes")
+                appendLine("SQLITE EXECUTIVE LEDGER — relevant durable objective records (filtered against the current resolved objective)")
                 recentObjectives.forEach { objective ->
                     appendLine("objective_id=${objective.id}; phase=${objective.phase}; revision=${objective.revision}; plan_revision=${objective.planRevision}")
                     appendLine("intent=${objective.intent.take(500)}; recovery_cursor=${objective.recoveryCursor}; blocker=${objective.blocker}")
