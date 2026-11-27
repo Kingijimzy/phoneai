@@ -263,6 +263,19 @@ class OrionExtensionLifecycleIntegrationTest {
     }
 
     @Test
+    fun forgeWithoutExpectedCasesNeverCreatesVerificationReceiptOrActivates() {
+        ExtensionAutonomySettings.setAutoActivationEnabled(context, true)
+        val id = "single_run_tool"
+        val result = runTool("extension_forge", JSONObject()
+            .put("id", id).put("name", "Single run tool").put("runtime", "python")
+            .put("source", extensionSource("echo_greeting")).put("description", "Echoes a greeting")
+            .put("input", JSONObject().put("greeting", "hello")))
+        assertTrue(result.startsWith("error: extension_forge requires explicit test cases"))
+        assertNull(SelfExtendingExtensionStore(context).enabled(id))
+        assertTrue(runTool("extension_enable", JSONObject().put("id", id)).startsWith("error"))
+    }
+
+    @Test
     fun failedTestNeverActivatesExtension() {
         val id = "broken_tool"
         val source = extensionSource("sum_values").replace("RESULT = 0", "RESULT = bad syntax here !!!")
