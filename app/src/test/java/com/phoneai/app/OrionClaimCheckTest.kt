@@ -38,6 +38,11 @@ class OrionClaimCheckTest {
         assertTrue(prompt.contains("Call the right tool"))
     }
 
+    @Test fun compoundWordNumberBatteryFigureIsParsedCorrectly() {
+        val claim = OrionClaimCheck.unbacked("Looks like battery is at twenty five percent.", emptyList())
+        assertEquals("the battery is at 25%", claim)
+    }
+
     @Test fun ordinaryTextWithNoClaimsIsUntouched() {
         assertNull(OrionClaimCheck.unbacked("Here's what I found in the logs.", emptyList()))
     }

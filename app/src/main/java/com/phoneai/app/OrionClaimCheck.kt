@@ -15,10 +15,34 @@ internal object OrionClaimCheck {
      * He must not invent a live device number either — a battery percentage stated as fact
      * without having actually checked it. Caught separately from the verb claims above because
      * there's no verb here, just a figure he had no business knowing.
+     *
+     * The real offending message said "Ten percent battery", spelled out, not "10%" — a plain
+     * digit-only regex misses exactly the case it exists for, so the number token here also
+     * accepts one or two number words ("ten", "twenty five") alongside digits.
      */
+    private val numberWord = """(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thir(?:teen|ty)|four(?:teen|ty)|fif(?:teen|ty)|six(?:teen|ty)|seven(?:teen|ty)|eigh(?:teen|ty)|nine(?:teen|ty)|twenty|hundred)"""
+    private val numberToken = """(?:\d{1,3}|$numberWord(?:[\s-]$numberWord)?)"""
     private val batteryFigureClaim = Regex(
-        """(?i)\b(\d{1,3})\s*(?:%|percent)\s*battery\b|\bbattery(?:'s| is)?\s*(?:at\s*)?(\d{1,3})\s*(?:%|percent)\b"""
+        """(?i)\b($numberToken)\s*(?:%|percent)\s*battery\b|\bbattery(?:'s| is)?\s*(?:at\s*)?($numberToken)\s*(?:%|percent)\b"""
     )
+    private val wordToNumber: Map<String, Int> = mapOf(
+        "zero" to 0, "one" to 1, "two" to 2, "three" to 3, "four" to 4, "five" to 5, "six" to 6,
+        "seven" to 7, "eight" to 8, "nine" to 9, "ten" to 10, "eleven" to 11, "twelve" to 12,
+        "thirteen" to 13, "fourteen" to 14, "fifteen" to 15, "sixteen" to 16, "seventeen" to 17,
+        "eighteen" to 18, "nineteen" to 19, "twenty" to 20, "thirty" to 30, "forty" to 40,
+        "fifty" to 50, "sixty" to 60, "seventy" to 70, "eighty" to 80, "ninety" to 90, "hundred" to 100
+    )
+
+    /** "10" -> 10, "ten" -> 10, "twenty five" -> 25, "twenty-five" -> 25. */
+    private fun numberTokenValue(token: String): Int? {
+        token.toIntOrNull()?.let { return it }
+        val parts = token.lowercase().split(Regex("[\\s-]+")).mapNotNull { wordToNumber[it] }
+        return when (parts.size) {
+            0 -> null
+            1 -> parts[0]
+            else -> parts[0] + parts[1]
+        }
+    }
 
     private fun named(tool: String, vararg parts: String) = parts.any { tool.contains(it) }
     private val shellish = setOf("shell", "devspace", "dev_shell", "termux_command", "python_exec", "dev_python")
@@ -55,8 +79,10 @@ internal object OrionClaimCheck {
             if (applies(verb, rest) && toolsCalled.none { backed(verb, rest, it) }) return (verb + rest).trim().take(60)
         }
         batteryFigureClaim.find(text)?.let { m ->
-            if (toolsCalled.none { named(it.lowercase(), "battery", "device_info") }) {
-                return "the battery is at " + (m.groupValues[1].ifBlank { m.groupValues[2] }) + "%"
+            val token = m.groupValues[1].ifBlank { m.groupValues[2] }
+            val value = numberTokenValue(token)
+            if (value != null && toolsCalled.none { named(it.lowercase(), "battery", "device_info") }) {
+                return "the battery is at $value%"
             }
         }
         return null
