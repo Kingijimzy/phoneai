@@ -38,7 +38,7 @@ internal object OrionActivityPresentation {
 
     /** "tool=shell; outcome=completed" is bookkeeping, not something to read. */
     private val keyValueOnly = Regex("^\\w+=[^;\\s]*(;\\s*\\w+=[^;\\s]*)*$")
-    private val friendlyTitles = mapOf("request accepted" to "Request received", "request completed" to "Request finished")
+    private val friendlyTitles = mapOf("request accepted" to "Looking into it", "request completed" to "Finished")
 
     fun clean(raw: String): String? {
         val value = raw.lineSequence()
@@ -146,9 +146,13 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
     companion object {
         /** Convert persisted lifecycle records into the exact event model used by live chat. */
         fun fromPersisted(events: List<OrionConversationRepository.ChatEvent>): List<OrionActivityEvent> =
-            events.map { event ->
+            events.mapNotNull { event ->
                 val type = event.type.lowercase()
                 val status = event.status.lowercase()
+                // A transport-level acknowledgement is not useful conversational activity.
+                // Showing it as a standalone card made ordinary messages look like workflow jobs.
+                if (type in setOf("interaction", "runtime") &&
+                    event.summary.trim().equals("request accepted", ignoreCase = true)) return@mapNotNull null
                 val kind = when {
                     type.contains("approval") -> OrionActivityKind.APPROVAL
                     type.contains("objective") && status == "verified" -> OrionActivityKind.COMPLETION
