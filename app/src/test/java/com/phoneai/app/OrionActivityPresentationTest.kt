@@ -33,6 +33,17 @@ class OrionActivityPresentationTest {
             createdAt = 2L
         )
         assertTrue(OrionActivityTimeline.fromPersisted(listOf(event)).isEmpty())
+
+        val meaningful = event.copy(
+            id = "e3",
+            type = "runtime",
+            status = "running",
+            summary = "Analysing the current project and checking its dependencies"
+        )
+        val visible = OrionActivityTimeline.fromPersisted(listOf(meaningful))
+        assertEquals(1, visible.size)
+        assertEquals(OrionActivityStatus.ACTIVE, visible.single().status)
+        assertEquals("Analysing the current project and checking its dependencies", visible.single().summary)
     }
 
 }
