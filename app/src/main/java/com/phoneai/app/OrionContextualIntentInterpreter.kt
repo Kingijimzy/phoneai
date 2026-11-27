@@ -80,6 +80,13 @@ internal object OrionContextualIntentInterpreter {
             historicalReference.containsMatchIn(value) ||
             (value.length < 48 && (completeRemaining.containsMatchIn(value) || correction.containsMatchIn(value)))
 
+    private val genericTopicWords = setOf(
+        "fix", "test", "check", "make", "create", "build", "repair", "help", "look", "find",
+        "get", "update", "change", "improve", "work", "thing", "issue", "problem", "task",
+        "everything", "continue", "finish", "complete", "remaining", "run", "do", "try",
+        "site", "any", "works", "working", "please"
+    )
+
     fun resolve(
         request: String,
         recentTurns: List<Pair<String, String>>,
@@ -110,7 +117,12 @@ internal object OrionContextualIntentInterpreter {
         if (contextual && !isReferenceOnly && !isStatusCheck && objective.isNotBlank() && raw.length >= 12) {
             val rawTopic = OrionRhythm.topic(raw)
             val objectiveTopic = OrionRhythm.topic(objective)
-            if (rawTopic != "general" && objectiveTopic != "general" && rawTopic != objectiveTopic && !namedTargetMatchesActive) {
+            val rawSubject = MemoryRanking.tokens(raw) - genericTopicWords
+            val objectiveSubject = MemoryRanking.tokens(objective) - genericTopicWords
+            val clearlyDifferentSubject = rawSubject.size >= 2 && objectiveSubject.isNotEmpty() &&
+                rawSubject.intersect(objectiveSubject).isEmpty()
+            if (clearlyDifferentSubject ||
+                (rawTopic != "general" && objectiveTopic != "general" && rawTopic != objectiveTopic && !namedTargetMatchesActive)) {
                 contextual = false
             }
         }
