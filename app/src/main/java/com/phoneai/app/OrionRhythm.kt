@@ -70,7 +70,7 @@ internal object OrionRhythm {
             append("HOW KINGI USES YOU: he writes ").append(avg).append(" words a message (").append(register).append("). ")
             predictFrom(counts, hour)?.let { (topic, n) ->
                 append("Around ").append(hour).append(":00 he usually asks about ").append(topic).append(" (")
-                append(n.first).append(" of ").append(n.second).append(" times near this hour); expect it, and if he opens without a task offer it first. ")
+                append(n.first).append(" of ").append(n.second).append(" times near this hour). This is a weak historical pattern, not current intent: never interrupt a greeting, hijack a new topic, or assume he wants this subject unless his current message makes it relevant. ")
             }
             val top = counts.filterKeys { it.startsWith("all|") }.entries.sortedByDescending { it.value }.take(3)
             if (top.isNotEmpty()) append("Overall he mostly asks about ").append(top.joinToString { it.key.substringAfter('|') }).append('.')
