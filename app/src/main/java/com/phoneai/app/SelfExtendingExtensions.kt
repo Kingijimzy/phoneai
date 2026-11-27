@@ -66,7 +66,7 @@ internal object SelfExtendingExtensionPolicy {
         runtime: String = ""
     ): Boolean =
         testPassed && sourceHash.isNotBlank() && sourceHash == testedHash &&
-            (userApproved || (autoActivateSafePython && runtime == "python"))
+            (userApproved || autoActivateSafePython)
 }
 
 /**
@@ -172,7 +172,7 @@ internal class SelfExtendingExtensionStore(context: Context) {
         persist(current.map { if (it.id == extension.id) extension.copy(enabled = false, verified = false) else it })
     }
 
-    /** Promote after hash-bound sandbox tests; safe restricted-Python transforms may auto-activate when owner policy allows. */
+    /** Promote any runtime after its exact source passes the expected-result test suite. */
     fun promote(id: String, report: ExtensionTestReport, userApproved: Boolean): Boolean = synchronized(lock) {
         val current = try { all() } catch (_: Exception) { return@synchronized false }
         val target = current.firstOrNull { it.id == id } ?: return@synchronized false
