@@ -220,9 +220,9 @@ internal object OrionCentralBrain {
                 }
             }
         }.getOrNull()
-        checkpointSummary?.let { sections += it }
-
-        // Resolve short follow-ups against the persisted objective before Talk or Command plans.
+        // Resolve the current message before injecting any persisted execution objective.
+        // A checkpoint is useful for an explicit continuation, but stale checkpoint text must
+        // not compete with greetings, corrections on another subject, or a genuinely new topic.
         // This joins the original request, transcript evidence, objective graph, checkpoint,
         // decisions and learned failure corrections into one provider-neutral continuity frame.
         val pendingTask = observedNullable("pending_checkpoint") { AgentCheckpointStore.pending(app) }
@@ -259,6 +259,7 @@ internal object OrionCentralBrain {
             )
         )
         if (isFollowUp && continuityObjective.isNotBlank()) {
+            checkpointSummary?.let { sections += it }
             val resume = if (pendingTask != null) runCatching { AgentCheckpointStore.resumeInstruction(app) }.getOrNull() else null
             if (!resume.isNullOrBlank()) {
                 sections += "TASK RESUME INSTRUCTIONS — EXISTING OBJECTIVE, DO NOT RESTART\n" + resume
