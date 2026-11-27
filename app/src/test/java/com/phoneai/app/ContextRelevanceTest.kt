@@ -45,4 +45,16 @@ class ContextRelevanceTest {
         assertTrue(full.contains("not_pushed_because_unrelated_to_this_request="))
         assertTrue(full.contains("brain {action:\"context\""))
     }
+    @Test fun shortGreetingsDoNotMasqueradeAsFollowUps() {
+        val greeting = split("Hey bro")
+        assertTrue(greeting.keep.contains(core))
+        assertTrue(greeting.keep.contains(small))
+        assertTrue(greeting.deferred.any { it.startsWith("TRADING DESK") })
+        assertTrue(greeting.deferred.any { it.startsWith("SENSOR TELEMETRY") })
+
+        val casual = split("How are you?")
+        assertTrue(casual.deferred.any { it.startsWith("TRADING DESK") })
+        assertTrue(casual.deferred.any { it.startsWith("SENSOR TELEMETRY") })
+    }
+
 }
