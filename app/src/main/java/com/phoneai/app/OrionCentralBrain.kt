@@ -249,7 +249,7 @@ internal object OrionCentralBrain {
         sections += OrionEntityPhilosophy.stateBlock(
             OrionEntityPhilosophy.State(
                 currentIntent = continuity?.resolvedObjective?.takeIf { it.isNotBlank() } ?: request,
-                activeObjective = continuityObjective.ifBlank { savedSoulGoal.takeIf { OrionObjectiveRelevance.related(it, request, 0L) }.orEmpty() },
+                activeObjective = continuityObjective,
                 registeredCapabilityCount = registered.size,
                 enabledSkillCount = enabledSkills.size,
                 memoryAvailable = recentTurns.isNotEmpty() ||
