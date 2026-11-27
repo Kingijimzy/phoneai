@@ -108,6 +108,17 @@ internal object OrionExecutiveStore {
 
     internal fun canTransition(from: Phase, to: Phase): Boolean = to in allowed[from].orEmpty()
 
+    /** Pure relevance filter: old objective records remain durable but only matching ones enter a turn. */
+    internal fun relevantObjectives(candidates: List<Objective>, relevantObjective: String, limit: Int = 4): List<Objective> {
+        val requestedTokens = MemoryRanking.tokens(relevantObjective)
+        if (requestedTokens.isEmpty() || limit <= 0) return emptyList()
+        return candidates.mapNotNull { objective ->
+            val overlap = MemoryRanking.tokens(objective.intent).count { it in requestedTokens }
+            if (overlap == 0) null else objective to overlap
+        }.sortedWith(compareByDescending<Pair<Objective, Int>> { it.second }.thenByDescending { it.first.updatedAt })
+            .take(limit).map { it.first }
+    }
+
     fun create(context: Context, id: String, intent: String): Objective? {
         val cleanId = id.trim().take(100)
         val cleanIntent = intent.trim().take(2_000)
@@ -515,8 +526,7 @@ internal object OrionExecutiveStore {
     }
 
     fun contextBlock(context: Context, relevantObjective: String): String = runCatching {
-        val requestedTokens = MemoryRanking.tokens(relevantObjective)
-        if (requestedTokens.isEmpty()) return@runCatching ""
+        if (MemoryRanking.tokens(relevantObjective).isEmpty()) return@runCatching ""
         Db(context.applicationContext).readableDatabase.use { db ->
             val candidates = db.rawQuery("""SELECT id,intent,phase,revision,plan_revision,recovery_cursor,blocker,updated_at
                 FROM objectives ORDER BY updated_at DESC LIMIT 32""", null).use { cursor ->
@@ -529,11 +539,7 @@ internal object OrionExecutiveStore {
             }
             // Keep only objective records that actually overlap the resolved current objective.
             // The full durable ledger remains stored; unrelated records are not pushed into this turn.
-            val recentObjectives = candidates.mapNotNull { objective ->
-                val overlap = MemoryRanking.tokens(objective.intent).count { it in requestedTokens }
-                if (overlap == 0) null else objective to overlap
-            }.sortedWith(compareByDescending<Pair<Objective, Int>> { it.second }.thenByDescending { it.first.updatedAt })
-                .take(4).map { it.first }
+            val recentObjectives = relevantObjectives(candidates, relevantObjective)
             if (recentObjectives.isEmpty()) "" else buildString {
                 appendLine("SQLITE EXECUTIVE LEDGER — relevant durable objective records (filtered against the current resolved objective)")
                 recentObjectives.forEach { objective ->
