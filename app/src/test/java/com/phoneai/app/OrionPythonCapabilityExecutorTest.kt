@@ -210,7 +210,8 @@ class OrionPythonCapabilityExecutorTest {
     private fun forge(extra: JSONObject.() -> Unit = {}) = executor.execute(
         "extension_forge",
         JSONObject().put("id", "forged_helper").put("name", "Forged helper").put("source", "RESULT = INPUT")
-            .put("description", "made in one step").put("input", JSONObject().put("x", 1)).apply(extra),
+            .put("description", "made in one step").put("input", JSONObject().put("x", 1))
+            .put("tests", JSONArray().put(JSONObject().put("input", JSONObject().put("x", 1)).put("expect", JSONObject().put("x", 1)))).apply(extra),
         { true }, { false }
     ).orEmpty()
 

@@ -127,7 +127,7 @@ internal class OrionPythonCapabilityExecutor(
             return if (extension.runtime == "python_full") {
                 "Forged and verified $id, but automatic activation did not complete. Retry extension_enable after checking the verification receipt."
             } else {
-                "Forged and verified $id, but activation did not complete. Check extension_policy and use extension_enable if owner auto-activation is off."
+                "Forged and verified $id, but activation did not complete. Check extension_policy and use extension_enable if automatic activation is off."
             }
         }
         runCatching { OrionLessons.learn(context, "Forged tool '$id' (${extension.displayName}): ${extension.description.take(100)}. Reuse it via extension_run before building anything similar.") }
@@ -213,8 +213,8 @@ internal class OrionPythonCapabilityExecutor(
             "$testLabel PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
         } else {
             "$testLabel PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} " +
-                if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use explicit extension_enable approval."
-                else "Next: extension_enable (requires an explicit extension_enable tool request)."
+                if (ownerAutoActivation) "Automatic promotion failed; inspect registry and retry extension_enable."
+                else "Next: extension_enable (no owner approval required)."
         }
     }
 
