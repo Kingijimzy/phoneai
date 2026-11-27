@@ -173,10 +173,17 @@ internal object OrionMissionControl {
     }
 
     /** Pure rendering: the current objective plus the last finished mission's evidence, so every context carries what is true now. */
+    private val genericObjectiveWords = setOf(
+        "fix", "test", "check", "make", "create", "build", "repair", "help", "look", "find",
+        "get", "update", "change", "improve", "work", "thing", "issue", "problem", "task",
+        "everything", "continue", "finish", "complete", "remaining", "run", "do", "please"
+    )
+
     private fun belongsToObjective(missionRequest: String, objective: String): Boolean {
         if (missionRequest.isBlank() || objective.isBlank()) return false
-        val objectiveTokens = MemoryRanking.tokens(objective)
-        return objectiveTokens.isNotEmpty() && MemoryRanking.tokens(missionRequest).any { it in objectiveTokens }
+        val objectiveTokens = MemoryRanking.tokens(objective) - genericObjectiveWords
+        val missionTokens = MemoryRanking.tokens(missionRequest) - genericObjectiveWords
+        return objectiveTokens.isNotEmpty() && missionTokens.any { it in objectiveTokens }
     }
 
     internal fun evidenceBlock(goal: String, activeList: List<Mission>, all: Collection<Mission>, background: String = ""): String {
