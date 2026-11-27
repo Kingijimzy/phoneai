@@ -180,4 +180,12 @@ class OrionContextualIntentInterpreterTest {
         assertEquals(OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE, result.kind)
         assertEquals("What is the weather in Lagos today?", result.resolvedObjective)
     }
+    @Test fun selfContainedNewSubjectDoesNotInheritGenericCorrectionVerbs() {
+        val objective = "Repair Orion chat lifecycle restoration and duplicate messages."
+        val request = "Fix my phone camera focus and exposure."
+        val result = OrionContextualIntentInterpreter.resolve(request, emptyList(), objective)
+        assertEquals(OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE, result.kind)
+        assertEquals(request, result.resolvedObjective)
+    }
+
 }
