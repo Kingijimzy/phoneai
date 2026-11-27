@@ -75,4 +75,21 @@ class OrionMissionControlTest {
         OrionMissionControl.cancel(w.id)
         assertNull(OrionMissionControl.attention())
     }
+    @Test fun unrelatedActiveMissionsStayOutOfNewConversationContext() {
+        val trading = OrionMissionControl.begin("chat", "Analyse BTCUSDT liquidity sweep", parentId = null)
+        val coding = OrionMissionControl.begin("chat", "Repair Android Compose chat restoration", parentId = null)
+
+        val evidence = OrionMissionControl.evidence("Continue BTCUSDT liquidity sweep analysis")
+        assertTrue(evidence.contains(trading.id))
+        assertFalse(evidence.contains(coding.id))
+
+        val summary = OrionMissionControl.summary("BTCUSDT liquidity sweep analysis")
+        assertTrue(summary.contains(trading.id))
+        assertFalse(summary.contains(coding.id))
+
+        assertEquals("", OrionMissionControl.evidence(""))
+        assertEquals("", OrionMissionControl.summary(""))
+        assertEquals("", OrionMissionControl.summary("Hey bro"))
+    }
+
 }
