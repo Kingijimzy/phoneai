@@ -43,12 +43,12 @@ internal class OrionPythonCapabilityExecutor(
             "extension_policy" -> extensionPolicy()
             "extension_auto_activation" -> setExtensionAutoActivation(args)
             "extension_history" -> extensionHistory(args)
-            "extension_rollback" -> rollbackExtension(args)
+            "extension_rollback" -> rollbackExtension(args, confirm)
             "extension_forge" -> forge(args, confirm, stopped)
             "extension_create" -> createDraft(args)
             "extension_update" -> updateDraft(args)
             "extension_test" -> testDraft(args, confirm, stopped)
-            "extension_enable" -> enable(args)
+            "extension_enable" -> enable(args, confirm)
             "extension_run" -> runExtension(args, stopped)
             "extension_disable" -> disable(args)
             else -> null
@@ -121,15 +121,7 @@ internal class OrionPythonCapabilityExecutor(
             val tested = testDraft(args, confirm, stopped)
             if (tested.startsWith("error")) return "FORGE STOPPED at test. $tested"
         } else {
-            if (stopped()) return "error: task stopped before the forge run."
-            val reply = extensionSandbox.execute(extension, input, emptySet())
-            if (!reply.optBoolean("ok", false)) {
-                return "FORGE STOPPED: the first run of $id failed: " + reply.optString("error").take(300) +
-                    " Fix the source and call extension_forge again with the same id."
-            }
-            val report = ExtensionTestReport(true, extension.sourceSha256, "first run succeeded on the given input")
-            if (!testReceipts.record(id, report)) return "error: first run worked but its receipt could not be saved; $id stays disabled"
-            if (ExtensionAutonomySettings.autoActivationEnabled(context)) activateVerifiedVersion(extension, report, approved = false)
+            return "error: extension_forge requires explicit test cases with expected results. A successful one-off run is not verification. Supply tests [{input, expect}] and retry; the draft remains disabled."
         }
         if (runCatching { extensionStore.enabled(id) }.getOrNull() == null) {
             return "Forged $id and it passed, but it is not enabled because the owner turned auto-activation off. Call extension_enable to turn it on."
@@ -189,6 +181,7 @@ internal class OrionPythonCapabilityExecutor(
         val array = args.optJSONArray("tests")
         val cases = if (array == null) emptyList() else
             (0 until array.length()).mapNotNull { array.optJSONObject(it) }
+        if (extension.runtime == "python_full" && !confirm("Run full CPython tests for $id? Generated code executes with the Android app UID and its available permissions.")) return "error: full CPython test was not approved by the owner; the draft remains disabled."
         if (stopped()) return "error: task stopped before extension tests began."
         val report = extensionSandbox.test(extension, cases)
         if (stopped()) return "error: task stopped during extension tests; no promotion was attempted."
@@ -207,7 +200,7 @@ internal class OrionPythonCapabilityExecutor(
         // Only the capability-free restricted interpreter may auto-promote. Full CPython
         // can access the app UID's permitted files and network from the PRoot guest, so it
         // requires a separate owner-approved extension_enable operation.
-        val safeRuntimeAutoActivation = ownerAutoActivation
+        val safeRuntimeAutoActivation = ownerAutoActivation && extension.runtime == "python"
         val autoActivated = safeRuntimeAutoActivation &&
             activateVerifiedVersion(extension, report, approved = false)
         AgentPolicy.log(
@@ -225,7 +218,7 @@ internal class OrionPythonCapabilityExecutor(
         }
     }
 
-    private fun enable(args: JSONObject): String {
+    private fun enable(args: JSONObject, confirm: (String) -> Boolean): String {
         val id = args.optString("id").trim()
         val extension = try { extensionStore.all().firstOrNull { it.id == id } } catch (_: Exception) { null }
             ?: return "error: extension draft not found or registry unreadable"
@@ -233,6 +226,7 @@ internal class OrionPythonCapabilityExecutor(
             return "Extension $id is enabled and its verified version is archived."
         val report = testReceipts.get(id, extension.sourceSha256)
             ?: return "error: no successful runtime sandbox test receipt matches the current source; run extension_test again"
+        if (extension.runtime == "python_full" && !confirm("Enable full CPython extension $id? It executes with the Android app UID and its available permissions.")) return "error: full CPython activation was not approved by the owner."
         return if (activateVerifiedVersion(extension, report, approved = true)) "Extension $id is enabled and its verified version is archived."
         else "error: extension promotion failed; verification or version history could not be committed"
     }
@@ -255,7 +249,7 @@ internal class OrionPythonCapabilityExecutor(
         }
     }
 
-    private fun rollbackExtension(args: JSONObject): String {
+    private fun rollbackExtension(args: JSONObject, confirm: (String) -> Boolean): String {
         val id = args.optString("id").trim()
         val active = try { extensionStore.enabled(id) } catch (_: Exception) { null }
             ?: return "error: extension is not currently enabled"
@@ -263,6 +257,7 @@ internal class OrionPythonCapabilityExecutor(
             ?: return "error: no previous activated version is archived"
         val receipt = testReceipts.get(id, previous.sourceSha256)
             ?: return "error: previous version has no passing sandbox receipt for its exact source; rollback refused"
+        if (previous.runtime == "python_full" && !confirm("Restore full CPython extension $id version ${previous.version}? It executes with the Android app UID.")) return "error: full CPython rollback was not approved by the owner."
         if (!versionHistory.record(active.copy(enabled = true, verified = true))) {
             return "error: could not preserve the current version before rollback"
         }
@@ -302,7 +297,7 @@ internal class OrionPythonCapabilityExecutor(
 
     companion object {
         /** PRoot runs under the app UID; direct CPython is trusted code until OS-level isolation exists. */
-        fun requiresExplicitApproval(tool: String): Boolean = false
+        fun requiresExplicitApproval(tool: String): Boolean = tool == "extension_test" || tool == "extension_enable" || tool == "extension_rollback"
 
         private val supportedTools = setOf(
             "python_exec", "workspace_list", "extension_list", "extension_policy", "extension_auto_activation", "extension_forge", "extension_create", "extension_update", "extension_test",

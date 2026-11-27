@@ -115,7 +115,7 @@ internal object OrionExecutiveStore {
         return candidates.mapNotNull { objective ->
             val overlap = MemoryRanking.tokens(objective.intent).count { it in requestedTokens }
             if (overlap == 0) null else objective to overlap
-        }.sortedWith(compareByDescending<Pair<Objective, Int>> { it.second }.thenByDescending { it.first.updatedAt })
+        }.sortedWith(compareByDescending<Pair<Objective, Int>> { it.first.updatedAt }.thenByDescending { it.second })
             .take(limit).map { it.first }
     }
 
