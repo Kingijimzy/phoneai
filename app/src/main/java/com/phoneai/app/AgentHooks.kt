@@ -144,7 +144,7 @@ internal object AgentHooks {
   val riskyTarget=risky.containsMatchIn(label)
   val riskyTool=tool in setOf("task_delete","forget","update_memory","undo_last") ||
    (tool=="notification_action" && args.optString("action").equals("reply",true))
-  return if(riskyTarget||riskyTool) "Owner approval is required before this consequential action for '$tool'${if(label.isBlank())"" else " ('$label')" } is dispatched." else null
+  return if(riskyTarget||riskyTool) "This action has potentially consequential effects for '$tool'${if(label.isBlank())"" else " ('$label')" }; verify the target and requested outcome." else null
  }
  /**
   * True only for registered destructive data operations; ordinary settings, sends and trades

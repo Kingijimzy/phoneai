@@ -23,7 +23,9 @@ class AgentHooksTest {
   // a chat note (scopeWarning) and is never outright blocked (scopeBlockReason), but it is not held
   // up waiting on the owner, same as any other ordinary write.
   val args=JSONObject().put("text","Transfer funds")
-  assertNotNull(AgentHooks.scopeWarning("Open the banking app and inspect it","click_text",args))
+  val warning=AgentHooks.scopeWarning("Open the banking app and inspect it","click_text",args)
+  assertNotNull(warning)
+  assertFalse("advisory warning must not claim an approval gate",warning!!.contains("approval",ignoreCase=true))
   assertNull(AgentHooks.scopeBlockReason("Open the banking app and inspect it","click_text",args))
   assertFalse(AgentHooks.requiresConfirmation("click_text",args))
  }
@@ -40,7 +42,8 @@ class AgentHooksTest {
  @Test fun onlyDestructiveDataOperationsRequireConfirmation(){
   assertFalse(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","restart")))
   assertTrue(AgentHooks.requiresConfirmation("task_delete",JSONObject().put("id","task-1")))
-  assertFalse("journaled delete acts first, undo after",AgentHooks.requiresConfirmation("workspace_delete",JSONObject().put("path","Downloads/report.txt")))
+  assertTrue("workspace deletion is stored-data deletion",AgentHooks.requiresConfirmation("workspace_delete",JSONObject().put("path","Downloads/report.txt")))
+  assertTrue("memory deletion is stored-data deletion",AgentHooks.requiresConfirmation("memory_delete",JSONObject().put("id","memory-1")))
   assertTrue(AgentHooks.requiresConfirmation("shell",JSONObject().put("command","rm -rf /sdcard/old")))
  }
  @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.recordVerified("open_app","WhatsApp opened\\nLOCAL VERIFY PASS: target app is visible");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}

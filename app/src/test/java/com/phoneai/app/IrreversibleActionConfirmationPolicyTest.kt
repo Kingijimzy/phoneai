@@ -36,9 +36,12 @@ class IrreversibleActionConfirmationPolicyTest {
             "shell", JSONObject().put("command", "printf hello > /workspace/note.txt")))
         assertNotNull(IrreversibleActionConfirmationPolicy.ownerApprovalDescription(
             "shell", JSONObject().put("command", "rm -rf /sdcard/Downloads/old")))
-        assertNull("journaled deletes act first and can be undone",
+        assertNotNull("workspace deletion is still stored-data deletion and requires approval",
             IrreversibleActionConfirmationPolicy.ownerApprovalDescription(
                 "workspace_delete", JSONObject().put("path", "Downloads/report.txt")))
+        assertNotNull("memory deletion requires approval",
+            IrreversibleActionConfirmationPolicy.ownerApprovalDescription(
+                "memory_delete", JSONObject().put("id", "memory-1")))
         assertNotNull(IrreversibleActionConfirmationPolicy.ownerApprovalDescription(
             "trash_empty", JSONObject()))
     }
