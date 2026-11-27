@@ -90,6 +90,7 @@ class OrionMissionControlTest {
         assertEquals("", OrionMissionControl.evidence(""))
         assertEquals("", OrionMissionControl.summary(""))
         assertEquals("", OrionMissionControl.summary("Hey bro"))
+        assertEquals("", OrionMissionControl.summary("Fix my phone camera focus"))
     }
 
 }
