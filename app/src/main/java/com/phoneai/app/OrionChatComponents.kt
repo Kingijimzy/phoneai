@@ -88,6 +88,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.sp
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -1082,9 +1084,14 @@ internal fun ImageResultCard(raw: String) {
 internal fun OrionChartCard(block: OrionMessageBlock.Chart) {
     val sweep = remember(block.title, block.values) { Animatable(0f) }
     LaunchedEffect(block.title, block.values) { sweep.animateTo(1f, tween(650, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
+    // Tap a bar or point to read its exact value — the first bit of interactivity on top of the
+    // static render, so the card is something to poke at, not just a picture.
+    var selected by remember(block.title, block.values) { mutableStateOf<Int?>(null) }
+    val n = block.values.size
     val maxValue = (block.values.maxOrNull() ?: 0.0).let { if (it <= 0.0) 1.0 else it }
     val minValue = (block.values.minOrNull() ?: 0.0).coerceAtMost(0.0)
     val span = (maxValue - minValue).let { if (it <= 0.0) 1.0 else it }
+    fun fmt(v: Double) = if (v == v.toLong().toDouble()) v.toLong().toString() else "%.2f".format(v)
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(OrionUiPalette.background)
             .border(1.dp, OrionUiPalette.borderStrong, RoundedCornerShape(14.dp)).padding(13.dp),
@@ -1093,11 +1100,23 @@ internal fun OrionChartCard(block: OrionMessageBlock.Chart) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(block.title.uppercase(), color = OrionUiPalette.secondaryText, fontSize = 10.sp,
                 fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(1f))
-            if (block.unit.isNotBlank()) Text(block.unit, color = ChatMuted, fontSize = 9.sp,
+            val readout = selected?.let { i ->
+                (block.labels.getOrNull(i)?.let { "$it  " } ?: "") + fmt(block.values[i]) + (if (block.unit.isNotBlank()) " ${block.unit}" else "")
+            } ?: block.unit.takeIf { it.isNotBlank() }
+            if (readout != null) Text(readout, color = ChatMint, fontSize = 9.sp,
+                fontWeight = if (selected != null) FontWeight.Bold else FontWeight.Normal,
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
         }
-        androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(120.dp)) {
-            val n = block.values.size
+        androidx.compose.foundation.Canvas(
+            Modifier.fillMaxWidth().height(120.dp).pointerInput(block.title, block.values) {
+                detectTapGestures { offset ->
+                    if (n == 0) return@detectTapGestures
+                    val slot = size.width / n.toFloat()
+                    val tapped = (offset.x / slot).toInt().coerceIn(0, n - 1)
+                    selected = if (selected == tapped) null else tapped
+                }
+            }
+        ) {
             if (n == 0) return@Canvas
             val baselineY = size.height - 2f
             // Four faint horizontal gridlines, the one HUD touch this chart needs; everything
@@ -1116,7 +1135,11 @@ internal fun OrionChartCard(block: OrionMessageBlock.Chart) {
                     val reveal = ((sweep.value * n) - (i - 1)).coerceIn(0f, 1f)
                     if (reveal > 0f) drawLine(ChatMint, a, androidx.compose.ui.geometry.Offset(a.x + (b.x - a.x) * reveal, a.y + (b.y - a.y) * reveal), strokeWidth = 3f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
                 }
-                points.forEach { drawCircle(ChatMint, 3.5f, it) }
+                points.forEachIndexed { i, p ->
+                    val isSelected = selected == i
+                    if (isSelected) drawCircle(ChatMint.copy(alpha = 0.25f), 8f, p)
+                    drawCircle(ChatMint, if (isSelected) 5f else 3.5f, p)
+                }
             } else {
                 val slot = size.width / n
                 val barWidth = slot * 0.56f
@@ -1124,17 +1147,22 @@ internal fun OrionChartCard(block: OrionMessageBlock.Chart) {
                     val top = yFor(v)
                     val reveal = ((sweep.value * n) - i).coerceIn(0f, 1f)
                     if (reveal <= 0f) return@forEachIndexed
+                    val isSelected = selected == i
                     val x = slot * i + (slot - barWidth) / 2f
                     val h = (baselineY - top) * reveal
-                    drawRoundRect(ChatMint, androidx.compose.ui.geometry.Offset(x, baselineY - h), androidx.compose.ui.geometry.Size(barWidth, h.coerceAtLeast(2f)),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f, 3f))
+                    drawRoundRect(
+                        if (isSelected) ChatCopy else ChatMint,
+                        androidx.compose.ui.geometry.Offset(x, baselineY - h), androidx.compose.ui.geometry.Size(barWidth, h.coerceAtLeast(2f)),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f, 3f)
+                    )
                 }
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            block.labels.forEach { label ->
-                Text(label, color = ChatMuted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f))
+            block.labels.forEachIndexed { i, label ->
+                Text(label, color = if (selected == i) ChatMint else ChatMuted, fontSize = 9.sp,
+                    fontWeight = if (selected == i) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             }
         }
     }
