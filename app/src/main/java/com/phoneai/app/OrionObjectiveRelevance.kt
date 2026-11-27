@@ -23,7 +23,7 @@ internal object OrionObjectiveRelevance {
         // A concrete imperative that modifies the same named subject is a genuine follow-up
         // ("make the cat look more serious"), unlike a question that merely mentions the same
         // broad topic ("how does Orion chat presentation work?").
-        val action = Regex("""(?i)^\\s*(?:please\\s+)?(?:make|change|add|remove|turn|keep|use|replace|adjust|modify|redesign|rewrite|regenerate|edit|update)\\b""")
+        val action = Regex("""(?i)^\s*(?:please\s+)?(?:make|change|add|remove|turn|keep|use|replace|adjust|modify|redesign|rewrite|regenerate|edit|update)\b""")
         if (!action.containsMatchIn(request)) return false
         val generic = setOf(
             "please", "make", "change", "add", "remove", "turn", "keep", "use", "replace",
