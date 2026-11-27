@@ -176,7 +176,7 @@ internal object OrionMissionControl {
     private val genericObjectiveWords = setOf(
         "fix", "test", "check", "make", "create", "build", "repair", "help", "look", "find",
         "get", "update", "change", "improve", "work", "thing", "issue", "problem", "task",
-        "everything", "continue", "finish", "complete", "remaining", "run", "do", "please"
+        "everything", "continue", "finish", "complete", "remaining", "run", "do", "please", "other", "new", "one"
     )
 
     private fun belongsToObjective(missionRequest: String, objective: String): Boolean {
