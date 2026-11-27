@@ -14,7 +14,12 @@ internal object ContextRelevance {
 
     const val CORE_PRIORITY = 90
     const val SMALL_SECTION_CHARS = 700
-    private const val SHORT_REFERENCE_TOKENS = 3
+    // Token count alone is not evidence of a follow-up. Greetings and casual chat are often
+    // one or two words; treating every short message as "continue" pushed stale mission,
+    // trading, sensor and task context into ordinary conversation.
+    private val shortReference = Regex(
+        "(?i)^\\s*(?:continue(?:\\s+(?:it|that|the task|where we left off))?|go ahead|proceed|do it|do that|fix it|fix that|test it|test that|finish(?: it| that| the rest)?|complete it|resume|pick up where we left off|where were we|what about it|same|again|yes|yeah|yep|no|nope|it|that|this)\\s*[.!?]*$"
+    )
 
     fun label(section: String): String = section.lineSequence().firstOrNull().orEmpty().replace(Regex("\\s+"), " ").trim().take(72).ifBlank { "unnamed section" }
 
@@ -26,7 +31,7 @@ internal object ContextRelevance {
 
     fun split(sections: List<String>, request: String): Split {
         val tokens = MemoryRanking.tokens(request)
-        val referenceOnly = tokens.size <= SHORT_REFERENCE_TOKENS
+        val referenceOnly = shortReference.matches(request.trim())
         val keep = ArrayList<String>(); val deferred = ArrayList<String>()
         sections.forEach { s ->
             val core = ContextWindowBudget.priority(s) >= CORE_PRIORITY
