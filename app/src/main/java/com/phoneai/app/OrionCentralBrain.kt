@@ -146,7 +146,7 @@ internal object OrionCentralBrain {
         addObservedSection("evolution") { OrionEvolution.nudge(OrionForesight.stats()) }
         addObservedSection("tool_routes") { OrionToolRouter.summary(app, request) }
         addObservedSection("mission_evidence") { OrionMissionControl.evidence(OrionMissionLock.goalFor(app, request)).let { e -> OrionWorkers.liveSummary().let { w -> if (w.isBlank()) e else (e + "\n" + w).trim() } } }
-        addObservedSection("execution_envelope") { OrionAdaptivePlan.render(OrionAdaptivePlan.assess(app)) + OrionMissionControl.summary(contextQuery).let { if (it.isBlank()) "" else "\n$it" } }
+        addObservedSection("execution_envelope") { OrionAdaptivePlan.render(OrionAdaptivePlan.assess(app)) + OrionMissionControl.summary(request).let { if (it.isBlank()) "" else "\n$it" } }
         addObservedSection("live_capability_registry") { OrionBrain.summary(OrionBrain.registry(app)) + "\n" + OrionProviderHealth.report(app).lineSequence().first() }
         val registered = observed("tool_registry", emptyList<String>()) { ToolRegistry.names().distinct().sorted() }
         val knownPacks = observed("capability_pack_catalog", emptyList<String>()) { AgentPolicy.packs.map { it.id }.sorted() }
