@@ -3,6 +3,7 @@ package com.phoneai.app
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OrionActivityPresentationTest {
@@ -13,7 +14,7 @@ class OrionActivityPresentationTest {
 
     @Test fun rawRequestTitlesGetPlainWords() {
         val e = OrionActivityEvent("e1", "t1", OrionActivityKind.TOOL, OrionActivityStatus.SUCCEEDED, "request accepted", "tool=shell; outcome=completed", 1L)
-        assertEquals("Request received", OrionActivityPresentation.title(e))
+        assertEquals("Looking into it", OrionActivityPresentation.title(e))
         assertFalse(OrionActivityPresentation.summary(e).contains("outcome="))
     }
 
