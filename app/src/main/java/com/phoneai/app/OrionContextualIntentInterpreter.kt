@@ -114,7 +114,7 @@ internal object OrionContextualIntentInterpreter {
         // Without this, a generic phrase like "fix everything" or "test it" said about some unrelated
         // subject re-dragged a stale coding/trading objective into the reply ("mission lock"): Orion
         // stayed fixated on the last job instead of noticing the conversation had moved on.
-        if (contextual && !isReferenceOnly && !isStatusCheck && objective.isNotBlank() && raw.length >= 12) {
+        if (contextual && !isReferenceOnly && !isStatusCheck && !isHistorical && !historicalReference.containsMatchIn(raw) && objective.isNotBlank() && raw.length >= 12) {
             val rawTopic = OrionRhythm.topic(raw)
             val objectiveTopic = OrionRhythm.topic(objective)
             val rawSubject = MemoryRanking.tokens(raw) - genericTopicWords
