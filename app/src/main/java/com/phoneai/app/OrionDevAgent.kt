@@ -11,7 +11,7 @@ import org.json.JSONObject
  * changes, executes tests, diagnoses build failures, repairs code, verifies changes and
  * generates project summaries. It is read-only-by-default on user workspaces: code edits
  * require an explicit workspace folder selection, and code execution uses the same
- * operation-specific owner approval and runtime policy as every other execution surface.
+ * the same stored-data deletion confirmation policy and Android OS permissions as every other execution surface.
  *
  * Honesty contract: the Dev Agent reports four distinct states — code written, code
  * compiled, tests passed, software installed — and never conflates one with another.
@@ -136,6 +136,10 @@ internal class OrionDevAgent(
         if (code.isBlank()) {
             return DevResult(action = "run_python_code", blocker = "empty Python code refused", summary = "No Python was executed.")
         }
+        val approval = IrreversibleActionConfirmationPolicy.ownerApprovalDescription("python_exec", JSONObject().put("code", code))
+        if (approval != null && !confirm(approval)) {
+            return DevResult(action = "run_python_code", blocker = "owner approval was not granted; destructive Python execution was not started.", summary = "No destructive Python code was executed.")
+        }
         val result = pythonExecutor.execute("python_exec", JSONObject().put("code", code), confirm, stopped)
         if (result == null || result.startsWith("error:")) {
             return DevResult(
@@ -175,9 +179,11 @@ internal class OrionDevAgent(
         if (command.isBlank()) {
             return DevResult(action = "run_shell_command", blocker = "shell command is required.", summary = "No shell command was executed.")
         }
-        val approval = "Orion is about to execute this $kind development command in the Alpine/PRoot workspace under the Android app UID. The guest is not an OS security boundary. Command: ${command.take(700)}. Allow this execution?"
-        if (!confirm(approval)) {
-            return DevResult(action = "run_shell_command", blocker = "owner approval was not granted; the Linux command was not executed.", summary = "No shell command was executed.")
+        val approval = IrreversibleActionConfirmationPolicy.ownerApprovalDescription(
+            "dev_shell", JSONObject().put("command", command)
+        )
+        if (approval != null && !confirm(approval)) {
+            return DevResult(action = "run_shell_command", blocker = "owner approval was not granted; the destructive Linux command was not executed.", summary = "No destructive shell command was executed.")
         }
         if (stopped()) {
             return DevResult(action = "run_shell_command", blocker = "shell command cancelled before launch.", summary = "No shell command was executed.")
@@ -253,7 +259,7 @@ internal class OrionDevAgent(
             appendLine("Proposed change: $proposedChange")
             appendLine("Current size: ${current.length} bytes")
             appendLine("Verification required: read-back the written file, run project build/tests, confirm install artifact.")
-            appendLine("Safety: this plan does not modify any file. Apply only through writeSourceFile after owner approval.")
+            appendLine("Safety: this plan does not modify any file. Apply through writeSourceFile when the owner has requested the code change; no separate approval is required.")
         }
         return DevResult(
             action = "plan_change",

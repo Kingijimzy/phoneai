@@ -63,12 +63,13 @@ class ScriptedConversationTest {
 
     @Test fun approvalsAreOnlyForIrreversibleLoss() {
         fun ask(tool: String, a: JSONObject) = IrreversibleActionConfirmationPolicy.ownerApprovalDescription(tool, a)
-        // runs at once
+        // Ordinary writes and requested development work run at once.
         assertNull(ask("workspace_write", JSONObject().put("path", "a.py")))
         assertNull(ask("shell", JSONObject().put("command", "git push origin HEAD")))
-        assertNull(ask("workspace_delete", JSONObject().put("path", "old.txt")))     // journaled, 'undo that'
-        assertNull(ask("memory_delete", JSONObject().put("id", 4)))
-        // asks first
+        // Deleting stored user data always asks first, even when an undo journal exists.
+        assertNotNull(ask("workspace_delete", JSONObject().put("path", "old.txt")))
+        assertNotNull(ask("memory_delete", JSONObject().put("id", 4)))
+        // Other destructive storage operations also ask first.
         assertNotNull(ask("shell", JSONObject().put("command", "rm -rf /sdcard/DCIM")))
         assertNotNull(ask("trash_empty", JSONObject()))
         assertNotNull(ask("wipe_data", JSONObject()))

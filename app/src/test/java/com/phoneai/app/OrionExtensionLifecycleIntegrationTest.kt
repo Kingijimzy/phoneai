@@ -38,6 +38,7 @@ class OrionExtensionLifecycleIntegrationTest {
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
         ExtensionAutonomySettings.setAutoActivationEnabled(context, false)
+        ExperienceStore.clear(context)
         listOf(
             "orion_generated_extensions.json",
             "orion_extension_versions.json",
@@ -48,7 +49,9 @@ class OrionExtensionLifecycleIntegrationTest {
         // It sums INPUT.values and echoes INPUT.greeting, so the lifecycle can assert real data flow.
         val fakeSandbox: (String, String) -> String = { source, inputJson ->
             val input = JSONObject(inputJson)
-            if (source.contains("REJECT_ME")) {
+            if (input.optBoolean("force_failure")) {
+                JSONObject().put("ok", false).put("error", "simulated runtime failure").toString()
+            } else if (source.contains("REJECT_ME")) {
                 JSONObject().put("ok", false).put("error", "restricted operation detected").toString()
             } else if (source.contains("INPUT[\"values\"]") || source.contains("INPUT.get(\"values\"")) {
                 val values = input.optJSONArray("values") ?: JSONArray()
@@ -139,6 +142,17 @@ class OrionExtensionLifecycleIntegrationTest {
         assertTrue("extension_run result should contain the computed sum: $runResult",
             runResult.contains("15"))
 
+        // Failed live executions must feed the privacy-minimal persistent learning store.
+        val failedRun = runTool("extension_run", JSONObject()
+            .put("id", id)
+            .put("input", JSONObject().put("force_failure", true)))
+        assertTrue("failed extension execution should be surfaced: $failedRun", failedRun.startsWith("error:"))
+        val learnedFailure = ExperienceStore.all(context).firstOrNull { it.tool == "extension_run" }
+        assertNotNull("runtime failure category should persist", learnedFailure)
+        assertEquals("other_failure", learnedFailure?.category)
+        assertFalse("raw runtime error must not be retained in the learning gist",
+            learnedFailure?.task?.contains("simulated", ignoreCase = true) == true)
+
         // ── 5. Verify the result ──
         // The sandbox enforces input/output contracts: wrong input produces no wrong result.
         val wrongRun = runTool("extension_run", JSONObject()
@@ -199,7 +213,7 @@ class OrionExtensionLifecycleIntegrationTest {
     }
 
     @Test
-    fun fullCpythonTestsWithoutApprovalAndAutoActivates() {
+    fun fullCpythonTestsAndActivatesWithoutOwnerApproval() {
         ExtensionAutonomySettings.setAutoActivationEnabled(context, true)
         val fullRuntimeSandbox = object : ExtensionSandbox {
             override fun test(extension: GeneratedExtension, testCases: List<JSONObject>) =
@@ -217,15 +231,14 @@ class OrionExtensionLifecycleIntegrationTest {
         val approvalRequests = mutableListOf<String>()
         val tested = guarded.execute("extension_test", JSONObject().put("id", id).put("tests", JSONArray().put(
             JSONObject().put("input", JSONObject()).put("expect", 4)
-        )), { question -> approvalRequests += question; true }, stopped)
+        )), { question -> approvalRequests += question; false }, stopped)
         assertEquals(0, approvalRequests.size)
         assertTrue(tested.orEmpty().contains("FULL CPYTHON TEST PASSED"))
         assertTrue(tested.orEmpty().contains("AUTO-ACTIVATED"))
         assertNotNull(SelfExtendingExtensionStore(context).enabled(id))
-
-        val enabled = guarded.execute("extension_enable", JSONObject().put("id", id), confirm, stopped)
-        assertTrue(enabled.orEmpty().contains("enabled"))
-        assertNotNull(SelfExtendingExtensionStore(context).enabled(id))
+        val enabled = guarded.execute("extension_enable", JSONObject().put("id", id), { question -> approvalRequests += question; false }, stopped)
+        assertTrue(enabled.orEmpty().contains("is enabled"))
+        assertEquals(0, approvalRequests.size)
     }
 
     @Test
@@ -245,6 +258,19 @@ class OrionExtensionLifecycleIntegrationTest {
         assertTrue(tested.orEmpty().contains("AUTO-ACTIVATED"))
         assertTrue(prompts.isEmpty())
         assertNotNull(SelfExtendingExtensionStore(context).enabled(id))
+    }
+
+    @Test
+    fun forgeWithoutExpectedCasesNeverCreatesVerificationReceiptOrActivates() {
+        ExtensionAutonomySettings.setAutoActivationEnabled(context, true)
+        val id = "single_run_tool"
+        val result = runTool("extension_forge", JSONObject()
+            .put("id", id).put("name", "Single run tool").put("runtime", "python")
+            .put("source", extensionSource("echo_greeting")).put("description", "Echoes a greeting")
+            .put("input", JSONObject().put("greeting", "hello")))
+        assertTrue(result.startsWith("error: extension_forge requires explicit test cases"))
+        assertNull(SelfExtendingExtensionStore(context).enabled(id))
+        assertTrue(runTool("extension_enable", JSONObject().put("id", id)).startsWith("error"))
     }
 
     @Test

@@ -11,7 +11,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class OrionDevAgentTest {
-    @Test fun devShellRequiresApprovalAndRoutesThroughLinuxWorkspace() {
+    @Test fun devShellRunsWithoutOwnerApprovalAndRoutesThroughLinuxWorkspace() {
         val context = RuntimeEnvironment.getApplication()
         var executedCommand = ""
         var executedBackend = ""
@@ -25,15 +25,24 @@ class OrionDevAgentTest {
             }
         )
 
-        val denied = agent.runShellCommand("python3 --version", confirm = { false })
-        assertTrue(denied.blocker.orEmpty().contains("owner approval was not granted"))
-        assertEquals("A denied command must never reach a shell backend", "", executedCommand)
-
-        val allowed = agent.runShellCommand("python3 --version", confirm = { true })
-        assertTrue(allowed.blocker.orEmpty().isEmpty())
+        val result = agent.runShellCommand("python3 --version", confirm = { false })
+        assertTrue(result.blocker.orEmpty().isBlank())
         assertEquals("linux", executedBackend)
         assertEquals("cd \"/workspace\" && python3 --version", executedCommand)
-        assertTrue(allowed.evidence.contains("Python 3.12.15"))
+        assertTrue(result.evidence.contains("Python 3.12.15"))
+    }
+
+    @Test fun devShellStillRequiresApprovalForStoredDataDeletion() {
+        val context = RuntimeEnvironment.getApplication()
+        var executed = false
+        val agent = OrionDevAgent(
+            context,
+            OrionPythonCapabilityExecutor(context, null),
+            shellRunner = { _, _, _ -> executed = true; "exit=0" }
+        )
+        val result = agent.runShellCommand("rm -rf /workspace/cache", confirm = { false })
+        assertTrue(result.blocker.orEmpty().contains("owner approval was not granted"))
+        assertFalse(executed)
     }
 
     @Test fun devShellDoesNotAskForApprovalAfterCancellation() {

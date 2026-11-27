@@ -110,6 +110,18 @@ class OrionActivityTimelineTest {
         assertEquals(setOf("task-stream-task-a", "task-stream-task-b"), cards.map { it.eventId }.toSet())
     }
 
+    @Test fun terminalLatestTaskCannotBeOverriddenByAnOlderActiveTask() {
+        val olderActive = OrionActivityEvent("old-active", "task-old", OrionActivityKind.TOOL,
+            OrionActivityStatus.ACTIVE, "Old task", "still marked active", 10)
+        val latestDone = OrionActivityEvent("new-done", "task-new", OrionActivityKind.COMPLETION,
+            OrionActivityStatus.SUCCEEDED, "Current task", "done", 20)
+        assertEquals("new-done", OrionActivityTimeline.latestChatCard(listOf(olderActive, latestDone))?.eventId)
+        assertNull(OrionActivityTimeline.latestActiveChatCard(listOf(olderActive, latestDone)))
+        assertEquals("old-active", OrionActivityTimeline.latestActiveChatCard(listOf(olderActive))?.eventId)
+        assertEquals("DONE", OrionActivityTimeline.latestTerminalChatStatus(listOf(olderActive, latestDone)))
+        assertNull(OrionActivityTimeline.latestTerminalChatStatus(listOf(olderActive)))
+    }
+
     @Test fun chatSurfaceShowsOnlyTheLatestTaskCardWhileHistoryRemainsInTimeline() {
         val older = OrionActivityEvent("old", "task-old", OrionActivityKind.TOOL,
             OrionActivityStatus.SUCCEEDED, "Old task", "completed", 10)

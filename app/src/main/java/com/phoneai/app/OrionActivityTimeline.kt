@@ -263,6 +263,22 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
         fun latestChatCard(events: List<OrionActivityEvent>): OrionActivityEvent? =
             events.maxWithOrNull(compareBy<OrionActivityEvent> { it.timestampMs }.thenBy { it.eventId })
 
+        /** Only the newest task can drive the live composer state; older unfinished cards are history. */
+        fun latestActiveChatCard(events: List<OrionActivityEvent>): OrionActivityEvent? =
+            latestChatCard(events)?.takeIf {
+                it.status == OrionActivityStatus.ACTIVE || it.status == OrionActivityStatus.WAITING
+            }
+
+        /** Terminal task state overrides a stale UI callback until the next task starts. */
+        fun latestTerminalChatStatus(events: List<OrionActivityEvent>): String? =
+            when (latestChatCard(events)?.status) {
+                OrionActivityStatus.SUCCEEDED -> "DONE"
+                OrionActivityStatus.FAILED -> "FAILED"
+                OrionActivityStatus.CANCELLED -> "CANCELLED"
+                OrionActivityStatus.INTERRUPTED -> "INTERRUPTED"
+                else -> null
+            }
+
         fun elapsedLabel(startedAtMs: Long, nowMs: Long): String {
             val seconds = ((nowMs - startedAtMs).coerceAtLeast(0L)) / 1000L
             return when {

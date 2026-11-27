@@ -35,7 +35,9 @@ internal object ContextRelevance {
         val keep = ArrayList<String>(); val deferred = ArrayList<String>()
         sections.forEach { s ->
             val core = ContextWindowBudget.priority(s) >= CORE_PRIORITY
-            if (s.isBlank() || core || referenceOnly || s.length <= SMALL_SECTION_CHARS || relevant(s, tokens)) keep += s else deferred += s
+            // Size is a packing concern, not a relevance signal. Small stale notes were
+            // previously injected into greetings simply because they were under 700 chars.
+            if (s.isBlank() || core || referenceOnly || relevant(s, tokens)) keep += s else deferred += s
         }
         return Split(keep, deferred)
     }
