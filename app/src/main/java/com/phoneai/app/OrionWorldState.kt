@@ -31,23 +31,25 @@ internal object OrionWorldState {
     private fun <T> read(block: () -> T): T? = runCatching(block).getOrNull()
 
     fun build(c: Context, now: ZonedDateTime = ZonedDateTime.now(ZoneId.systemDefault())): JSONObject {
-        val time = read { JSONObject().put("iso", now.toString().take(25)).put("zone", now.zone.id).put("part_of_day", partOfDay(now.hour)) }
+        val observedAt = now.toInstant().toEpochMilli()
+        val time = read { JSONObject().put("iso", now.toString().take(25)).put("zone", now.zone.id).put("part_of_day", partOfDay(now.hour)).put("observed_at_ms", observedAt) }
         val battery = read {
             val i = c.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))!!
             val level = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1); val scale = i.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
             val status = i.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
             JSONObject().put("percent", if (level >= 0) level * 100 / scale else JSONObject.NULL)
                 .put("charging", status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL)
+                .put("observed_at_ms", observedAt)
         }
         val network = read {
             val cm = c.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             val caps = cm.getNetworkCapabilities(cm.activeNetwork)
-            when {
+            JSONObject().put("type", when {
                 caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) -> "offline"
                 caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
                 caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
                 else -> "online"
-            }
+            }).put("observed_at_ms", observedAt)
         }
         val agents = read {
             JSONObject()
@@ -74,6 +76,7 @@ internal object OrionWorldState {
                 .put("accessibility", PhoneAiService.instance != null)
         }
         return assemble(linkedMapOf(
+            "snapshot_observed_at_ms" to observedAt,
             "time" to time, "battery" to battery, "network" to network, "agents" to agents, "missions" to missions,
             "tools" to tools, "providers" to providers, "permissions" to permissions
         ))
