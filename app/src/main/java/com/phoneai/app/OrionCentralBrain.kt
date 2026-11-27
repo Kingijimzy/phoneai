@@ -135,7 +135,7 @@ internal object OrionCentralBrain {
         // The brain observes the same registries the executor uses; names alone never imply
         // that a capability is enabled or that an external account is connected.
         addObservedSection("self_facts") { OrionSelfFacts.block(app) }
-        addObservedSection("world_state") { OrionWorldState.section(app) + "\n" + OrionMetacognition.INSTRUCTION }
+        addObservedSection("world_state") { OrionWorldState.section(app, request) + "\n" + OrionMetacognition.INSTRUCTION }
         addObservedSection("scene") { OrionScenes.brief(request) }
         addObservedSection("self") { OrionSelf.section(app) }
         addObservedSection("rhythm") { OrionRhythm.section(app) }
@@ -145,8 +145,8 @@ internal object OrionCentralBrain {
         addObservedSection("past_actions") { OrionActionLedger.section(app, request) }
         addObservedSection("evolution") { OrionEvolution.nudge(OrionForesight.stats()) }
         addObservedSection("tool_routes") { OrionToolRouter.summary(app, request) }
-        addObservedSection("mission_evidence") { OrionMissionControl.evidence(OrionMissionLock.goalFor(app, request), OrionMissionLock.activeGoal(app)).let { e -> OrionWorkers.liveSummary().let { w -> if (w.isBlank()) e else (e + "\n" + w).trim() } } }
-        addObservedSection("execution_envelope") { OrionAdaptivePlan.render(OrionAdaptivePlan.assess(app)) + OrionMissionControl.summary().let { if (it.isBlank()) "" else "\n$it" } }
+        addObservedSection("mission_evidence") { OrionMissionControl.evidence(OrionMissionLock.goalFor(app, request)).let { e -> OrionWorkers.liveSummary().let { w -> if (w.isBlank()) e else (e + "\n" + w).trim() } } }
+        addObservedSection("execution_envelope") { OrionAdaptivePlan.render(OrionAdaptivePlan.assess(app)) + OrionMissionControl.summary(contextQuery).let { if (it.isBlank()) "" else "\n$it" } }
         addObservedSection("live_capability_registry") { OrionBrain.summary(OrionBrain.registry(app)) + "\n" + OrionProviderHealth.report(app).lineSequence().first() }
         val registered = observed("tool_registry", emptyList<String>()) { ToolRegistry.names().distinct().sorted() }
         val knownPacks = observed("capability_pack_catalog", emptyList<String>()) { AgentPolicy.packs.map { it.id }.sorted() }
