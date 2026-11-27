@@ -11,6 +11,15 @@ internal object OrionClaimCheck {
     )
     private val fileish = Regex("""(?i)(file|script|folder|project|page|\.\w{2,4}\b|workspace|note)""")
 
+    /**
+     * He must not invent a live device number either — a battery percentage stated as fact
+     * without having actually checked it. Caught separately from the verb claims above because
+     * there's no verb here, just a figure he had no business knowing.
+     */
+    private val batteryFigureClaim = Regex(
+        """(?i)\b(\d{1,3})\s*(?:%|percent)\s*battery\b|\bbattery(?:'s| is)?\s*(?:at\s*)?(\d{1,3})\s*(?:%|percent)\b"""
+    )
+
     private fun named(tool: String, vararg parts: String) = parts.any { tool.contains(it) }
     private val shellish = setOf("shell", "devspace", "dev_shell", "termux_command", "python_exec", "dev_python")
 
@@ -45,14 +54,27 @@ internal object OrionClaimCheck {
             val verb = m.groupValues[1]; val rest = m.groupValues[2]
             if (applies(verb, rest) && toolsCalled.none { backed(verb, rest, it) }) return (verb + rest).trim().take(60)
         }
+        batteryFigureClaim.find(text)?.let { m ->
+            if (toolsCalled.none { named(it.lowercase(), "battery", "device_info") }) {
+                return "the battery is at " + (m.groupValues[1].ifBlank { m.groupValues[2] }) + "%"
+            }
+        }
         return null
     }
 
-    fun prompt(claim: String) =
+    /** True for a device-state figure (no "I ...") rather than a first-person action claim. */
+    private fun isFigureClaim(claim: String) = claim.startsWith("the ")
+
+    fun prompt(claim: String) = if (isFigureClaim(claim))
+        "You said $claim, but you never checked it with a tool this turn. Call the right tool to get the real figure, or drop the claim. Do not state a number you haven't actually read."
+    else
         "You said you $claim, but no tool call this turn did that. Do it now with the right tool, or say plainly that you did not. Do not claim it again without proof."
 
     fun annotate(text: String, toolsCalled: Collection<String>): String {
         val c = unbacked(text, toolsCalled) ?: return text
-        return text.trimEnd() + "\n(Check: I said I $c, but no tool did that this turn, so treat it as not done.)"
+        return text.trimEnd() + (if (isFigureClaim(c))
+            "\n(Check: I said $c, but never checked it this turn, so treat that figure as made up.)"
+        else
+            "\n(Check: I said I $c, but no tool did that this turn, so treat it as not done.)")
     }
 }
