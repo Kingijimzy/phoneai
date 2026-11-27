@@ -536,11 +536,13 @@ internal fun OrionComposeChatScreen(
     var editingOriginal by rememberSaveable { mutableStateOf<String?>(null) }
     // The newest task card is authoritative. Filtering ACTIVE first lets an older run
     // override a newer DONE/CANCELLED event and leaves the composer stuck in Stop mode.
-    val latestActivityEvent = OrionActivityTimeline.latestChatCard(activityEvents)
     val activeActivityEvent = OrionActivityTimeline.latestActiveChatCard(activityEvents)
-    val displayStatus = activeActivityEvent?.let(::companionStatusForEvent) ?: status
+    // A terminal task card is authoritative even if the callback status/OrbView mode
+    // arrived late. Never let a stale "Doing it" status keep the composer in Stop mode.
+    val terminalActivityStatus = OrionActivityTimeline.latestTerminalChatStatus(activityEvents)
+    val displayStatus = activeActivityEvent?.let(::companionStatusForEvent) ?: terminalActivityStatus ?: status
     val companionActivity = activeActivityEvent?.let(::companionActivityForEvent)
-        ?: companionActivityForChatStatus(status)
+        ?: companionActivityForChatStatus(displayStatus)
     var menuExpanded by remember { mutableStateOf(false) }
     var showModelSheet by remember { mutableStateOf(false) }
     var sheetTick by remember { mutableStateOf(0) }

@@ -118,6 +118,8 @@ class OrionActivityTimelineTest {
         assertEquals("new-done", OrionActivityTimeline.latestChatCard(listOf(olderActive, latestDone))?.eventId)
         assertNull(OrionActivityTimeline.latestActiveChatCard(listOf(olderActive, latestDone)))
         assertEquals("old-active", OrionActivityTimeline.latestActiveChatCard(listOf(olderActive))?.eventId)
+        assertEquals("DONE", OrionActivityTimeline.latestTerminalChatStatus(listOf(olderActive, latestDone)))
+        assertNull(OrionActivityTimeline.latestTerminalChatStatus(listOf(olderActive)))
     }
 
     @Test fun chatSurfaceShowsOnlyTheLatestTaskCardWhileHistoryRemainsInTimeline() {
