@@ -21,6 +21,17 @@ class OrionChatUiStateTest {
         assertEquals(OrbView.Mode.SPEAKING, orionModeForStatus("Approval pending", OrbView.Mode.SPEAKING))
     }
 
+    @Test fun historicalActivityCannotMakeAnIdleComposerLookBusy() {
+        assertFalse(orionChatRuntimeBusy(taskRunning = false, mode = OrbView.Mode.IDLE))
+    }
+
+    @Test fun liveTaskAndLiveExecutionModesKeepComposerStopAvailable() {
+        assertTrue(orionChatRuntimeBusy(taskRunning = true, mode = OrbView.Mode.IDLE))
+        assertTrue(orionChatRuntimeBusy(taskRunning = false, mode = OrbView.Mode.THINKING))
+        assertTrue(orionChatRuntimeBusy(taskRunning = false, mode = OrbView.Mode.ACTING))
+        assertFalse(orionChatRuntimeBusy(taskRunning = false, mode = OrbView.Mode.SPEAKING))
+    }
+
     @Test fun startsWithSafeChatDefaults() {
         val state = OrionChatUiState()
         assertTrue(state.lines.isEmpty())

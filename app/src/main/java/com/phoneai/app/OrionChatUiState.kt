@@ -54,3 +54,7 @@ internal class OrionChatUiState {
         lines.clear()
     }
 }
+
+/** Live execution state for composer controls; persisted activity history is deliberately excluded. */
+internal fun orionChatRuntimeBusy(taskRunning: Boolean, mode: OrbView.Mode): Boolean =
+    taskRunning || mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING
