@@ -44,12 +44,12 @@ internal object OrionWorldState {
         val network = read {
             val cm = c.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             val caps = cm.getNetworkCapabilities(cm.activeNetwork)
-            JSONObject().put("type", when {
+            when {
                 caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) -> "offline"
                 caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
                 caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
                 else -> "online"
-            }).put("observed_at_ms", observedAt)
+            }
         }
         val agents = read {
             JSONObject()
@@ -76,7 +76,7 @@ internal object OrionWorldState {
                 .put("accessibility", PhoneAiService.instance != null)
         }
         return assemble(linkedMapOf(
-            "snapshot_observed_at_ms" to observedAt,
+            "snapshot_observed_at_ms" to observedAt, "network_observed_at_ms" to if (network != null) observedAt else null,
             "time" to time, "battery" to battery, "network" to network, "agents" to agents, "missions" to missions,
             "tools" to tools, "providers" to providers, "permissions" to permissions
         ))
