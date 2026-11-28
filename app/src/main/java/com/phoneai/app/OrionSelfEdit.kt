@@ -23,6 +23,14 @@ internal object OrionSelfEdit {
     private val PROTECTED = listOf("trading", "tradedesk", "chaindesk", "bybit", "tradeapproval")
     private val BRANCH_OK = Regex("[A-Za-z0-9._/-]{1,120}")
 
+    /** Pure. The human-readable lesson text recorded for a self-edit attempt's terminal outcome. */
+    fun patchLesson(path: String, title: String, outcome: String, detail: String): String {
+        val where = path.ifBlank { "a repo file" }
+        val subject = title.ifBlank { where }.take(80)
+        val clue = detail.trim().lineSequence().firstOrNull().orEmpty().take(140)
+        return "Self-edit of $where ($subject): $outcome" + (if (clue.isBlank()) "." else " - $clue.")
+    }
+
     fun protectedPath(path: String): Boolean {
         val p = path.lowercase()
         return PROTECTED.any { p.contains(it) }
@@ -113,20 +121,35 @@ internal object OrionSelfEdit {
     /**
      * One call runs the whole sequence: validate, write to a branch, open the PR, wait for CI, merge only if green.
      * Every step is reported so a failure says exactly where it stopped.
+     *
+     * Every terminal outcome also records a human-readable lesson (OrionLessons), so it surfaces in the
+     * SELF-AWARENESS prompt block for later turns and later self-edit attempts. Before this, the Python
+     * extension-forging path (OrionPythonCapabilityExecutor) learned from what it built and the GitHub
+     * self-edit-and-rebuild path - Orion's deeper, more powerful form of self-extension - did not: a
+     * failed or successful rebuild left no trace beyond a generic hashed failure signature, so Orion could
+     * not recall what it had actually tried to build or why it failed.
      */
     private fun patchLoop(c: Context, a: JSONObject, repo: String, path: String, base: String, branch: String): String {
         val log = StringBuilder()
         fun step(s: String) { log.append(s).append('\n') }
+        val title = a.optString("title").ifBlank { path }
         val w = run(c, JSONObject(a.toString()).put("action", "write"))
         step("1 write: " + w.take(160))
-        if (w.startsWith("error")) return log.toString().trim()
+        if (w.startsWith("error")) {
+            OrionLessons.learn(c, patchLesson(path, title, "write rejected", w))
+            return log.toString().trim()
+        }
         val pr = run(c, JSONObject(a.toString()).put("action", "pr"))
         step("2 pr: " + pr.take(160))
         val number = Regex("#(\\d+)").find(pr)?.groupValues?.get(1)?.toIntOrNull()
             ?: run {
                 val (code, text) = call(c, "GET", "/repos/$repo/pulls?head=${enc(repo.substringBefore('/') + ":" + branch)}&state=open")
                 if (code in 200..299) runCatching { JSONArray(text).optJSONObject(0)?.optInt("number") }.getOrNull()?.takeIf { it > 0 } else null
-            } ?: return log.append("stopped: no pull request number found.").toString()
+            }
+        if (number == null) {
+            OrionLessons.learn(c, patchLesson(path, title, "no pull request number found", pr))
+            return log.append("stopped: no pull request number found.").toString()
+        }
         val deadline = System.currentTimeMillis() + a.optInt("wait_seconds", 480).coerceIn(30, 540) * 1000L
         var verdict = "no checks have run yet"
         while (System.currentTimeMillis() < deadline) {
@@ -136,9 +159,13 @@ internal object OrionSelfEdit {
             try { Thread.sleep(15_000) } catch (_: InterruptedException) { break }
         }
         step("3 ci: $verdict")
-        if (verdict != "OK") return log.append(if (verdict.startsWith("CI failed")) "stopped: fix the code and run patch again; nothing was merged." else "stopped: CI had not finished; run action=merge number=$number later.").toString()
+        if (verdict != "OK") {
+            OrionLessons.learn(c, patchLesson(path, title, "CI did not go green", "PR #$number: $verdict"))
+            return log.append(if (verdict.startsWith("CI failed")) "stopped: fix the code and run patch again; nothing was merged." else "stopped: CI had not finished; run action=merge number=$number later.").toString()
+        }
         val merged = run(c, JSONObject().put("action", "merge").put("number", number).put("repo", repo))
         step("4 merge: " + merged.take(160))
+        OrionLessons.learn(c, patchLesson(path, title, if (merged.startsWith("merged")) "merged successfully" else "merge failed", "PR #$number: $merged"))
         return log.toString().trim()
     }
 
