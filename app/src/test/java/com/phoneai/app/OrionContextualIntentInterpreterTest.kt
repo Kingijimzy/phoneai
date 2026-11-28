@@ -180,4 +180,32 @@ class OrionContextualIntentInterpreterTest {
         assertEquals(OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE, result.kind)
         assertEquals("What is the weather in Lagos today?", result.resolvedObjective)
     }
+    @Test fun selfContainedNewSubjectDoesNotInheritGenericCorrectionVerbs() {
+        val objective = "Repair Orion chat lifecycle restoration and duplicate messages."
+        val request = "Fix my phone camera focus and exposure."
+        val result = OrionContextualIntentInterpreter.resolve(request, emptyList(), objective)
+        assertEquals(OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE, result.kind)
+        assertEquals(request, result.resolvedObjective)
+    }
+
+    @Test fun shortSpecificSubjectStillSwitchesAwayFromAnOldMission() {
+        val objective = "Repair Orion chat lifecycle restoration."
+        val request = "Test my camera."
+        val result = OrionContextualIntentInterpreter.resolve(request, emptyList(), objective)
+        assertEquals(OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE, result.kind)
+        assertEquals(request, result.resolvedObjective)
+    }
+
+    @Test fun sameBroadSubjectDoesNotAutomaticallyResumeAnActiveMission() {
+        val objective = "Repair Orion chat presentation and activity restoration."
+        val request = "How does Orion's chat presentation work?"
+        assertFalse(OrionObjectiveRelevance.related(objective, request, 0L))
+        assertFalse(OrionObjectiveRelevance.related(
+            objective,
+            "Search our previous conversations about Orion chat presentation.",
+            0L
+        ))
+        assertTrue(OrionObjectiveRelevance.related(objective, "continue", 0L))
+    }
+
 }

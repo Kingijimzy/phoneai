@@ -117,4 +117,21 @@ class OrionExecutiveStoreTest {
         )
     }
 
+    @Test fun executiveHistoryOnlyIncludesObjectivesRelevantToTheResolvedCurrentGoal() {
+        fun objective(id: String, intent: String, updated: Long) = OrionExecutiveStore.Objective(
+            id = id, intent = intent, phase = OrionExecutiveStore.Phase.PERFORM,
+            revision = 1L, planRevision = 1L, recoveryCursor = "", blocker = "", updatedAt = updated
+        )
+        val candidates = listOf(
+            objective("btc-old", "Analyse BTCUSDT liquidity sweeps and market structure", 10L),
+            objective("chat", "Repair Android Compose chat lifecycle restoration", 30L),
+            objective("btc-new", "Validate BTCUSDT order block evidence", 20L)
+        )
+        val selected = OrionExecutiveStore.relevantObjectives(
+            candidates, "Continue the BTCUSDT market structure validation"
+        )
+        assertEquals(listOf("btc-new", "btc-old"), selected.map { it.id })
+        assertTrue(OrionExecutiveStore.relevantObjectives(candidates, "Hello, how are you?").isEmpty())
+    }
+
 }

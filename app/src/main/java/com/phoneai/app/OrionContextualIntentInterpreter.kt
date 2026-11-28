@@ -80,6 +80,13 @@ internal object OrionContextualIntentInterpreter {
             historicalReference.containsMatchIn(value) ||
             (value.length < 48 && (completeRemaining.containsMatchIn(value) || correction.containsMatchIn(value)))
 
+    private val genericTopicWords = setOf(
+        "fix", "test", "check", "make", "create", "build", "repair", "help", "look", "find",
+        "get", "update", "change", "improve", "work", "thing", "issue", "problem", "task",
+        "everything", "continue", "finish", "complete", "remaining", "run", "do", "try",
+        "site", "any", "works", "working", "please", "other", "new", "one"
+    )
+
     fun resolve(
         request: String,
         recentTurns: List<Pair<String, String>>,
@@ -97,7 +104,7 @@ internal object OrionContextualIntentInterpreter {
         val isCorrection = correction.containsMatchIn(raw) || broadCorrection.containsMatchIn(raw)
         val isTest = testRequest.containsMatchIn(raw) || testExistingWork.matches(raw)
         val isStatusCheck = statusCheck.matches(raw)
-        val isReferenceOnly = followUpOnly.matches(raw) || standaloneContextual.matches(raw)
+        val isReferenceOnly = followUpOnly.matches(raw) || standaloneContextual.matches(raw) || continuation.matches(raw)
         val isHistorical = explicitHistoricalLookup.containsMatchIn(raw)
         var contextual = isContinue || isComplete || isCorrection || isTest || isStatusCheck || isReferenceOnly || isHistorical || historicalReference.containsMatchIn(raw)
 
@@ -107,10 +114,15 @@ internal object OrionContextualIntentInterpreter {
         // Without this, a generic phrase like "fix everything" or "test it" said about some unrelated
         // subject re-dragged a stale coding/trading objective into the reply ("mission lock"): Orion
         // stayed fixated on the last job instead of noticing the conversation had moved on.
-        if (contextual && !isReferenceOnly && !isStatusCheck && objective.isNotBlank() && raw.length >= 12) {
+        if (contextual && !isReferenceOnly && !isStatusCheck && !isHistorical && !historicalReference.containsMatchIn(raw) && objective.isNotBlank() && raw.length >= 12) {
             val rawTopic = OrionRhythm.topic(raw)
             val objectiveTopic = OrionRhythm.topic(objective)
-            if (rawTopic != "general" && objectiveTopic != "general" && rawTopic != objectiveTopic && !namedTargetMatchesActive) {
+            val rawSubject = MemoryRanking.tokens(raw) - genericTopicWords
+            val objectiveSubject = MemoryRanking.tokens(objective) - genericTopicWords
+            val clearlyDifferentSubject = rawSubject.isNotEmpty() && objectiveSubject.isNotEmpty() &&
+                rawSubject.intersect(objectiveSubject).isEmpty()
+            if (clearlyDifferentSubject ||
+                (rawTopic != "general" && objectiveTopic != "general" && rawTopic != objectiveTopic && !namedTargetMatchesActive)) {
                 contextual = false
             }
         }

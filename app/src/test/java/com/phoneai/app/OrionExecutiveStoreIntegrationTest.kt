@@ -80,7 +80,7 @@ class OrionExecutiveStoreIntegrationTest {
             "evidence-voice-smoke-001", "Voice smoke test passed and output was observed"
         ))
 
-        val brainContext = OrionExecutiveStore.contextBlock(context)
+        val brainContext = OrionExecutiveStore.contextBlock(context, "Verify terminal receipt visibility")
         assertTrue(brainContext.contains("phase=COMPLETED"))
         assertTrue(brainContext.contains("outcome=VERIFIED"))
         assertTrue(brainContext.contains("evidence-voice-smoke-001"))

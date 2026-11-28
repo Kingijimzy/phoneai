@@ -30,14 +30,16 @@ internal object OrionWorldState {
 
     private fun <T> read(block: () -> T): T? = runCatching(block).getOrNull()
 
-    fun build(c: Context, now: ZonedDateTime = ZonedDateTime.now(ZoneId.systemDefault())): JSONObject {
-        val time = read { JSONObject().put("iso", now.toString().take(25)).put("zone", now.zone.id).put("part_of_day", partOfDay(now.hour)) }
+    fun build(c: Context, now: ZonedDateTime = ZonedDateTime.now(ZoneId.systemDefault()), request: String = ""): JSONObject {
+        val observedAt = now.toInstant().toEpochMilli()
+        val time = read { JSONObject().put("iso", now.toString().take(25)).put("zone", now.zone.id).put("part_of_day", partOfDay(now.hour)).put("observed_at_ms", observedAt) }
         val battery = read {
             val i = c.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))!!
             val level = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1); val scale = i.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
             val status = i.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
             JSONObject().put("percent", if (level >= 0) level * 100 / scale else JSONObject.NULL)
                 .put("charging", status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL)
+                .put("observed_at_ms", observedAt)
         }
         val network = read {
             val cm = c.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -58,7 +60,7 @@ internal object OrionWorldState {
         }
         val missions = read {
             JSONObject().put("active", OrionMissionControl.active().size)
-                .put("objective", OrionMissionLock.activeGoal(c).take(100))
+                .put("objective", request.takeIf { it.isNotBlank() }?.let { OrionMissionLock.goalFor(c, it) }.orEmpty().take(100))
         }
         val tools = read {
             val names = ToolRegistry.names()
@@ -74,6 +76,7 @@ internal object OrionWorldState {
                 .put("accessibility", PhoneAiService.instance != null)
         }
         return assemble(linkedMapOf(
+            "snapshot_observed_at_ms" to observedAt, "network_observed_at_ms" to if (network != null) observedAt else null,
             "time" to time, "battery" to battery, "network" to network, "agents" to agents, "missions" to missions,
             "tools" to tools, "providers" to providers, "permissions" to permissions
         ))
@@ -84,8 +87,8 @@ internal object OrionWorldState {
     fun pretty(c: Context): String = runCatching { build(c).toString(2) }.getOrDefault("World state could not be read.")
 
     /** The prompt section: the JSON itself, plus how to treat it. */
-    fun section(c: Context): String =
-        "WORLD STATE (live JSON read from the device this turn; trust it over memory, and say so when a field is unreadable):\n" + json(c) +
+    fun section(c: Context, request: String = ""): String =
+        "WORLD STATE (fresh device snapshot; snapshot_observed_at_ms marks the read time, and volatile time/battery/network values carry observation timestamps. The persisted objective is included only when it matches the current request. Trust fresh observations over memory; unreadable fields are unknown, not false):\n" + runCatching { build(c, request = request).toString() }.getOrDefault("{\"unreadable\":[\"world_state\"]}") +
             "\nROUTES (ranked from measured outcomes this session; pick the top route for the kind of work, switch to the next when one fails; never switch the owner's screen to recover):\n" +
             runCatching { OrionStrategy.summary(build(c)) }.getOrDefault("unavailable") + "\n" + OrionTeam.summary(c) + "\n" + OrionForesight.routeRecord() + "\n" + runCatching { OrionJobLedger.current(c) }.getOrNull()?.let { OrionJobLedger.format(it) }.orEmpty()
 }

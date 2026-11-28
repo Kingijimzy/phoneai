@@ -58,4 +58,21 @@ class OrionWorldModelTest {
         assertEquals(62, r.confidence)
         assertEquals("Do you mean the pipeline?", r.text)
     }
+    @Test fun worldSnapshotCarriesFreshnessWithoutChangingNetworkContract() {
+        val observedAt = 1_795_780_000_000L
+        val battery = JSONObject().put("percent", 85).put("charging", false).put("observed_at_ms", observedAt)
+        val time = JSONObject().put("iso", "2026-11-27T09:00:00Z").put("observed_at_ms", observedAt)
+        val o = OrionWorldState.assemble(linkedMapOf(
+            "snapshot_observed_at_ms" to observedAt,
+            "network_observed_at_ms" to observedAt,
+            "time" to time,
+            "battery" to battery,
+            "network" to "cellular"
+        ))
+        assertEquals(observedAt, o.getLong("snapshot_observed_at_ms"))
+        assertEquals(observedAt, o.getLong("network_observed_at_ms"))
+        assertEquals(observedAt, o.getJSONObject("battery").getLong("observed_at_ms"))
+        assertEquals("cellular", o.getString("network"))
+    }
+
 }

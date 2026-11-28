@@ -173,24 +173,51 @@ internal object OrionMissionControl {
     }
 
     /** Pure rendering: the current objective plus the last finished mission's evidence, so every context carries what is true now. */
+    private val genericObjectiveWords = setOf(
+        "fix", "test", "check", "make", "create", "build", "repair", "help", "look", "find",
+        "get", "update", "change", "improve", "work", "thing", "issue", "problem", "task",
+        "everything", "continue", "finish", "complete", "remaining", "run", "do", "please", "other", "new", "one"
+    )
+
+    private fun belongsToObjective(missionRequest: String, objective: String): Boolean {
+        if (missionRequest.isBlank() || objective.isBlank()) return false
+        val objectiveTokens = MemoryRanking.tokens(objective) - genericObjectiveWords
+        val missionTokens = MemoryRanking.tokens(missionRequest) - genericObjectiveWords
+        return objectiveTokens.isNotEmpty() && missionTokens.any { it in objectiveTokens }
+    }
+
     internal fun evidenceBlock(goal: String, activeList: List<Mission>, all: Collection<Mission>, background: String = ""): String {
-        val last = all.filter { !it.active && it.endedAt > 0L }.maxByOrNull { it.endedAt }
-        if (goal.isBlank() && activeList.isEmpty() && last == null && background.isBlank()) return ""
+        // Active/finished missions are execution history, not ambient conversation context.
+        // Only expose records that match the resolved current objective.
+        val relevantActive = if (goal.isBlank()) emptyList() else activeList.filter { belongsToObjective(it.request, goal) }
+        val last = if (goal.isBlank()) null else all
+            .filter { !it.active && it.endedAt > 0L && belongsToObjective(it.request, goal) }
+            .maxByOrNull { it.endedAt }
+        if (goal.isBlank() && relevantActive.isEmpty() && last == null && background.isBlank()) return ""
         return buildString {
             append("MISSION AND EVIDENCE (one task identity: the mission id; objective and evidence follow it)\n")
             if (goal.isNotBlank()) append("Objective: ").append(goal.take(160)).append('\n')
             else if (background.isNotBlank()) append("Older open objective (background only, NOT the current request; do not resume unless the owner asks): ").append(background.take(120)).append('\n')
-            activeList.take(3).forEach { append("Active ${it.id} (${it.lifecycle.phase.name.lowercase()}, ${it.surface}): ").append(it.request.take(80)).append('\n') }
+            relevantActive.take(3).forEach { append("Active ${it.id} (${it.lifecycle.phase.name.lowercase()}, ${it.surface}): ").append(it.request.take(80)).append('\n') }
             if (last != null) append("Last finished ${last.id}: ").append(last.outcome.ifBlank { "ended" }).append(" — evidence: ").append(last.evidence.ifBlank { "none recorded" }.take(160))
         }.trim()
     }
 
-    fun evidence(goal: String, background: String = ""): String = evidenceBlock(goal, active(), missions.values, if (goal.isBlank()) background else "")
+    fun evidence(goal: String, background: String = ""): String =
+        evidenceBlock(goal, active(), missions.values, if (goal.isBlank()) background else "")
 
-    fun summary(): String {
-        val a = active()
-        if (a.isEmpty()) return ""
-        return "MISSIONS (one lifecycle, one owner per mission): ${a.size} active — " +
-            a.take(5).joinToString("; ") { "${it.id} ${it.lifecycle.phase.name.lowercase()} \"${it.request.take(40)}\"" + (it.owner?.let { o -> " owned by ${o.id}" } ?: "") }
+    private fun renderSummary(missions: List<Mission>, label: String): String {
+        if (missions.isEmpty()) return ""
+        return "MISSIONS ($label; one lifecycle, one owner per mission): ${missions.size} active — " +
+            missions.take(5).joinToString("; ") { "${it.id} ${it.lifecycle.phase.name.lowercase()} \"${it.request.take(40)}\"" + (it.owner?.let { o -> " owned by ${o.id}" } ?: "") }
+    }
+
+    /** Existing unfiltered summary remains available to internal status surfaces. */
+    fun summary(): String = renderSummary(active(), "all active")
+
+    /** Conversational summary: only missions matching the current request are eligible. */
+    fun summary(relevantTo: String): String {
+        if (relevantTo.isBlank()) return ""
+        return renderSummary(active().filter { belongsToObjective(it.request, relevantTo) }, "relevant to the current objective")
     }
 }

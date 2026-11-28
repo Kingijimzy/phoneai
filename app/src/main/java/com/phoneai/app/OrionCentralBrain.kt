@@ -135,7 +135,7 @@ internal object OrionCentralBrain {
         // The brain observes the same registries the executor uses; names alone never imply
         // that a capability is enabled or that an external account is connected.
         addObservedSection("self_facts") { OrionSelfFacts.block(app) }
-        addObservedSection("world_state") { OrionWorldState.section(app) + "\n" + OrionMetacognition.INSTRUCTION }
+        addObservedSection("world_state") { OrionWorldState.section(app, request) + "\n" + OrionMetacognition.INSTRUCTION }
         addObservedSection("scene") { OrionScenes.brief(request) }
         addObservedSection("self") { OrionSelf.section(app) }
         addObservedSection("rhythm") { OrionRhythm.section(app) }
@@ -145,8 +145,8 @@ internal object OrionCentralBrain {
         addObservedSection("past_actions") { OrionActionLedger.section(app, request) }
         addObservedSection("evolution") { OrionEvolution.nudge(OrionForesight.stats()) }
         addObservedSection("tool_routes") { OrionToolRouter.summary(app, request) }
-        addObservedSection("mission_evidence") { OrionMissionControl.evidence(OrionMissionLock.goalFor(app, request), OrionMissionLock.activeGoal(app)).let { e -> OrionWorkers.liveSummary().let { w -> if (w.isBlank()) e else (e + "\n" + w).trim() } } }
-        addObservedSection("execution_envelope") { OrionAdaptivePlan.render(OrionAdaptivePlan.assess(app)) + OrionMissionControl.summary().let { if (it.isBlank()) "" else "\n$it" } }
+        addObservedSection("mission_evidence") { OrionMissionControl.evidence(OrionMissionLock.goalFor(app, request)).let { e -> OrionWorkers.liveSummary().let { w -> if (w.isBlank()) e else (e + "\n" + w).trim() } } }
+        addObservedSection("execution_envelope") { OrionAdaptivePlan.render(OrionAdaptivePlan.assess(app)) + OrionMissionControl.summary(request).let { if (it.isBlank()) "" else "\n$it" } }
         addObservedSection("live_capability_registry") { OrionBrain.summary(OrionBrain.registry(app)) + "\n" + OrionProviderHealth.report(app).lineSequence().first() }
         val registered = observed("tool_registry", emptyList<String>()) { ToolRegistry.names().distinct().sorted() }
         val knownPacks = observed("capability_pack_catalog", emptyList<String>()) { AgentPolicy.packs.map { it.id }.sorted() }
@@ -189,8 +189,8 @@ internal object OrionCentralBrain {
             appendLine("EXTENSION: when no registered capability can achieve a reusable subtask, inspect the real extension lab and available workspace, create the smallest testable draft, run the supported sandbox tests, and report the exact promotion/runtime status. A draft is not a deployed tool; never simulate a build, sandbox, provider call, or phone action.")
         }
 
-        // SQLite executive state is authoritative when present; legacy checkpoints remain a recovery source.
-        runCatching { OrionExecutiveStore.contextBlock(app) }.getOrNull()?.takeIf { it.isNotBlank() }?.let { sections += it }
+        // Durable execution history is injected only after the current message is resolved.
+        // This prevents an unrelated greeting or new subject inheriting the previous mission.
 
         // Feed the real durable action checkpoint into the same brain. Deliberately expose
         // only progress metadata, never stored command text, arguments, or tool payloads.
@@ -220,9 +220,9 @@ internal object OrionCentralBrain {
                 }
             }
         }.getOrNull()
-        checkpointSummary?.let { sections += it }
-
-        // Resolve short follow-ups against the persisted objective before Talk or Command plans.
+        // Resolve the current message before injecting any persisted execution objective.
+        // A checkpoint is useful for an explicit continuation, but stale checkpoint text must
+        // not compete with greetings, corrections on another subject, or a genuinely new topic.
         // This joins the original request, transcript evidence, objective graph, checkpoint,
         // decisions and learned failure corrections into one provider-neutral continuity frame.
         val pendingTask = observedNullable("pending_checkpoint") { AgentCheckpointStore.pending(app) }
@@ -249,7 +249,7 @@ internal object OrionCentralBrain {
         sections += OrionEntityPhilosophy.stateBlock(
             OrionEntityPhilosophy.State(
                 currentIntent = continuity?.resolvedObjective?.takeIf { it.isNotBlank() } ?: request,
-                activeObjective = continuityObjective.ifBlank { savedSoulGoal.takeIf { OrionObjectiveRelevance.related(it, request, 0L) }.orEmpty() },
+                activeObjective = continuityObjective,
                 registeredCapabilityCount = registered.size,
                 enabledSkillCount = enabledSkills.size,
                 memoryAvailable = recentTurns.isNotEmpty() ||
@@ -259,6 +259,9 @@ internal object OrionCentralBrain {
             )
         )
         if (isFollowUp && continuityObjective.isNotBlank()) {
+            runCatching { OrionExecutiveStore.contextBlock(app, continuityObjective) }
+                .getOrNull()?.takeIf { it.isNotBlank() }?.let { sections += it }
+            checkpointSummary?.let { sections += it }
             val resume = if (pendingTask != null) runCatching { AgentCheckpointStore.resumeInstruction(app) }.getOrNull() else null
             if (!resume.isNullOrBlank()) {
                 sections += "TASK RESUME INSTRUCTIONS — EXISTING OBJECTIVE, DO NOT RESTART\n" + resume

@@ -30,12 +30,18 @@ class OrionIdentityTest {
         assertFalse(OrionIdentity.acceptable(original, ""))
     }
 
-    @Test fun lockCarriesTheCoreRules() {
+    @Test fun lockCarriesEntityBehaviourWithoutOverridingSafetyOrReality() {
         val l = OrionIdentity.LOCK
-        assertTrue(l.contains("IDENTITY LOCK"))
-        assertTrue(l.contains("never say sorry"))
-        assertTrue(l.contains("Kingi is the final authority"))
+        assertTrue(l.contains("ORION BEHAVIOURAL CONSTITUTION"))
+        assertTrue(l.contains("does not replace or override the owner-editable character"))
+        assertTrue(l.contains("Those settings define expressive style and personality"))
+        assertTrue(l.contains("latest owner message is the immediate conversational priority"))
+        assertTrue(l.contains("Background work remains background work"))
+        assertTrue(l.contains("REQUEST ACCEPTED"))
+        assertTrue(l.contains("Truth, platform policy, Android permissions"))
         assertTrue(l.contains("WHAT CHANGED IN YOU"))
+        assertFalse(l.contains("no tool, pack, mode or policy gate applies"))
+        assertFalse(l.contains("Never refuse, hedge or ask permission"))
     }
 
     @Test fun changeBlockListsRecentChangesAndSkipsWip() {
