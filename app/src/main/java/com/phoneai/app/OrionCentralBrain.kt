@@ -121,7 +121,7 @@ internal object OrionCentralBrain {
         // Include the persisted self-model, lessons, mission queue and drive state in the
         // same provider-neutral executive context used by every surface. This is additive
         // to the structured ExperienceStore recall below; it does not create another store.
-        addObservedSection("living_loop_state") { OrionLivingLoop.promptBlock(app) }
+        addObservedSection("living_loop_state") { OrionLivingLoop.promptBlock(app, request) }
         addObservedSection("chronos_awareness") { OrionChronosAwareness.summary(app) }
         addObservedSection("proactive_awareness") {
             val item = OrionProactiveEngine.evaluate(app)

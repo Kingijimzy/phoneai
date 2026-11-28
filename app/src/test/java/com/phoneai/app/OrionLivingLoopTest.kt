@@ -60,4 +60,31 @@ class OrionLivingLoopTest {
         repeat(40) { OrionLessons.learn(c, "lesson $it") }
         assertEquals(30, OrionLessons.all(c).size)
     }
+
+    @Test fun lessonsAreShownRegardlessOfTheRequestsWordingBecauseTheListIsAlreadyCheapAndBounded() {
+        // A word-overlap pre-filter was tried and reverted: it is a lexical trick standing in for
+        // understanding, not understanding, and it hides a relevant lesson phrased in different words
+        // ("signal" vs "connectivity", say). For a list this small, the fix is to show it in full and
+        // trust the model's own judgment, not to bolt on a second heuristic beside the first one.
+        OrionLessons.learn(c, "the calendar sync keeps failing on weak signal")
+        OrionLessons.learn(c, "battery readings must come from the battery tool, never a guess")
+        val block = OrionLivingLoop.promptBlock(c, "wassup")
+        assertTrue(block.contains("battery"))
+        assertTrue(block.contains("calendar"))
+    }
+
+    @Test fun lessonsCarryProvenanceAndAnExplicitInstructionToJudgeRelevanceThemselves() {
+        OrionLessons.learn(c, "the calendar sync keeps failing on weak signal")
+        val block = OrionLivingLoop.promptBlock(c, "wassup")
+        assertTrue(block.contains("PROVENANCE"))
+        assertTrue(block.contains("not fetched or filtered for this message"))
+        assertTrue(block.contains("bring one up only when it actually bears on this reply"))
+    }
+
+    @Test fun failingToolsStayUnconditionalRegardlessOfTheRequest() {
+        // Operational state to route around, not memory recall: it is never filtered out, even when
+        // nothing in the message is about it.
+        repeat(2) { OrionSelfModel.record(c, "open_app", false, "error: not found") }
+        assertTrue(OrionLivingLoop.promptBlock(c, "wassup").contains("open_app"))
+    }
 }
