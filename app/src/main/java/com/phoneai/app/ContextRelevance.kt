@@ -20,12 +20,14 @@ internal object ContextRelevance {
 
     fun relevant(section: String, requestTokens: Set<String>): Boolean {
         if (requestTokens.isEmpty()) return false
-        val sectionTokens = MemoryRanking.tokens(section.take(6_000))
+        // Stemmed via OrionRelevance (shared with every other relevance decision), not raw word equality,
+        // so "building the feature" still finds a section about "builds" instead of missing it on a technicality.
+        val sectionTokens = OrionRelevance.tokens(section.take(6_000))
         return requestTokens.any { it.length >= 4 && it in sectionTokens }
     }
 
     fun split(sections: List<String>, request: String): Split {
-        val tokens = MemoryRanking.tokens(request)
+        val tokens = OrionRelevance.tokens(request)
         val referenceOnly = tokens.size <= SHORT_REFERENCE_TOKENS
         val keep = ArrayList<String>(); val deferred = ArrayList<String>()
         sections.forEach { s ->

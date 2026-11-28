@@ -40,7 +40,8 @@ internal object OrionExperience {
         return tool.trim().lowercase() + "|" + digest.joinToString("") { "%02x".format(it) }
     }
 
-    private fun tokens(s: String): Set<String> = Regex("[a-z0-9]{4,}").findAll(s.lowercase()).map { it.value }.toSet()
+    // Shared with every other relevance decision via OrionRelevance, instead of its own unstemmed regex.
+    private fun tokens(s: String): Set<String> = OrionRelevance.tokens(s)
 
     /** Failures that have not since been followed by a success of the same signature. Pure. */
     fun unresolvedFailures(records: List<Record>, now: Long): List<Record> =
