@@ -60,4 +60,36 @@ class OrionLivingLoopTest {
         repeat(40) { OrionLessons.learn(c, "lesson $it") }
         assertEquals(30, OrionLessons.all(c).size)
     }
+
+    @Test fun withNoRequestTextTheMostRecentLessonsAreShownRegardlessOfTopic() {
+        OrionLessons.learn(c, "the calendar sync keeps failing on weak signal")
+        OrionLessons.learn(c, "battery readings must come from the battery tool, never a guess")
+        // Old, recency-only behaviour for callers with no message to filter against (a background tick).
+        assertTrue(OrionLivingLoop.promptBlock(c).contains("battery"))
+        assertTrue(OrionLivingLoop.promptBlock(c).contains("calendar"))
+    }
+
+    @Test fun aRequestFiltersLessonsToOnesThatShareAWordWithIt() {
+        // The real bug this guards against: an unrelated lesson sitting in the list got recited to a
+        // casual message just because it was recent, because nothing checked it against what was asked.
+        OrionLessons.learn(c, "the calendar sync keeps failing on weak signal")
+        OrionLessons.learn(c, "battery readings must come from the battery tool, never a guess")
+        val block = OrionLivingLoop.promptBlock(c, "what's my battery at")
+        assertTrue(block.contains("battery"))
+        assertFalse(block.contains("calendar"))
+    }
+
+    @Test fun aCasualMessageThatMatchesNoLessonGetsNoLessonsAtAll() {
+        OrionLessons.learn(c, "the calendar sync keeps failing on weak signal")
+        OrionLessons.learn(c, "battery readings must come from the battery tool, never a guess")
+        val block = OrionLivingLoop.promptBlock(c, "wassup")
+        assertFalse(block.contains("Lessons you have learned"))
+    }
+
+    @Test fun failingToolsStayUnconditionalRegardlessOfRequestRelevance() {
+        // Operational state to route around, not memory recall: it is never filtered out, even when
+        // nothing in the message is about it.
+        repeat(2) { OrionSelfModel.record(c, "open_app", false, "error: not found") }
+        assertTrue(OrionLivingLoop.promptBlock(c, "wassup").contains("open_app"))
+    }
 }

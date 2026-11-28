@@ -100,9 +100,28 @@ object OrionLessons {
 }
 
 object OrionLivingLoop {
-    /** Newest lessons plus currently failing tools, ready for the system prompt. Empty when there is nothing to say. */
-    fun promptBlock(c: Context, maxLessons: Int = 5): String {
-        val lessons = OrionLessons.all(c).takeLast(maxLessons)
+    /**
+     * Newest lessons plus currently failing tools, ready for the system prompt. Empty when there is nothing to say.
+     *
+     * [request] is the message Orion is about to answer. When it is given, lessons are filtered to the ones that
+     * share a word with it — the same relevance check [OrionExperience.requestBlock] already applies to failures —
+     * instead of dumping the last few lessons regardless of topic. A casual message then carries none of them,
+     * where before a model anchored on whatever was most recently in this list and volunteered it unprompted.
+     * Missions and drives are left as-is: missions are standing commitments Orion is actively working through
+     * (the list is already short and state-filtered, not a recall dump), and drives already gate themselves on
+     * a meaningful change in pressure (see [OrionDrives.promptBlock]). Failing tools stay unconditional too:
+     * that is live operational state to route around, not memory recall, so it is not a candidate for the same
+     * filter. Callers with no request text yet (a background tick, not a reply to a message) get the old,
+     * recency-only behaviour by passing nothing.
+     */
+    fun promptBlock(c: Context, request: String = "", maxLessons: Int = 5): String {
+        val allLessons = OrionLessons.all(c)
+        val lessons = if (request.isBlank()) allLessons.takeLast(maxLessons) else {
+            val want = MemoryRanking.tokens(request)
+            val byRelevance = allLessons.filter { want.intersect(MemoryRanking.tokens(it)).isNotEmpty() }
+            // No lesson shares a word with this message: say nothing rather than reciting an unrelated one.
+            byRelevance.takeLast(maxLessons)
+        }
         val broken = OrionSelfModel.degraded(c).take(4)
         val missions = OrionMissions.promptBlock(c)
         val drives = OrionDrives.promptBlock(c)

@@ -30,7 +30,7 @@ internal object OrionMemoryLayers {
         val episodic = listOf(
             runCatching { ExperienceStore.promptBlock(c, q) }.getOrDefault(""),
             runCatching { OrionBrain.promptBlock(c, q) }.getOrDefault(""),
-            OrionLivingLoop.promptBlock(c)
+            OrionLivingLoop.promptBlock(c, q)
         ).filter { it.isNotBlank() }.joinToString("\n")
         if (episodic.isNotBlank()) layers += Layer("L3 EPISODIC", episodic, 4)
         // L4 context: body of the phone right now (mood, battery, motion, time).
