@@ -56,5 +56,17 @@ internal object OrionMemoryCompactor {
         true
     }.getOrDefault(false)
 
-    fun promptBlock(c: Context): String = summary(c).let { if (it.isBlank()) "" else "CORE SUMMARY OF YOUR LONG MEMORY (compacted hourly; trust it over guesses):\n$it" }
+    /**
+     * This block is in every single prompt turn, unconditionally - there is no per-message
+     * relevance filter before it's injected (unlike OrionExperience.requestBlock, which takes the
+     * query). Without an explicit instruction not to, a model anchors on whatever is most
+     * recently and prominently in its context and volunteers it: a casual "wassup" came back as a
+     * recitation of three known bugs and a battery reading, because that's what the core summary
+     * happened to hold that hour. Background recall, not a standing status report to lead with.
+     */
+    fun promptBlock(c: Context): String = summary(c).let {
+        if (it.isBlank()) "" else "CORE SUMMARY OF YOUR LONG MEMORY (compacted hourly; trust it over guesses, " +
+            "but it is background recall, not a report to recite - bring up a line from it only when this " +
+            "message actually calls for that fact; a casual message still gets a short, casual reply):\n$it"
+    }
 }
