@@ -46,4 +46,19 @@ class OrionMindLayersTest {
         assertTrue(out.indexOf("[L1]") < out.indexOf("[L2]"))
     }
     @Test fun emptyLayersGiveNothing() = assertEquals("", OrionMemoryLayers.assemble(emptyList()))
+
+    @Test fun layersWithoutAWhyRenderExactlyAsBefore() {
+        // Backward compatible: why defaults to blank, and a layer built the old way (positional args, no why)
+        // still renders with no "why:" tag.
+        val out = OrionMemoryLayers.assemble(listOf(OrionMemoryLayers.Layer("L1", "x", 1)))
+        assertFalse(out.contains("why:"))
+    }
+
+    @Test fun contextProvenanceNamesWhyALayerIsInContext() {
+        // Context Provenance: not just a category label, but the concrete reason this content entered
+        // the prompt for this turn — a search hit, a standing fact, a live read, open work.
+        val out = OrionMemoryLayers.assemble(listOf(
+            OrionMemoryLayers.Layer("L4 CONTEXT", "battery=80", 2, why = "read from the live device this turn, not remembered")))
+        assertTrue(out.contains("[L4 CONTEXT] why: read from the live device this turn, not remembered"))
+    }
 }

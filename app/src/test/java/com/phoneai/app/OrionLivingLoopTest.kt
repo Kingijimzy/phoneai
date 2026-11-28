@@ -61,32 +61,27 @@ class OrionLivingLoopTest {
         assertEquals(30, OrionLessons.all(c).size)
     }
 
-    @Test fun withNoRequestTextTheMostRecentLessonsAreShownRegardlessOfTopic() {
-        OrionLessons.learn(c, "the calendar sync keeps failing on weak signal")
-        OrionLessons.learn(c, "battery readings must come from the battery tool, never a guess")
-        // Old, recency-only behaviour for callers with no message to filter against (a background tick).
-        assertTrue(OrionLivingLoop.promptBlock(c).contains("battery"))
-        assertTrue(OrionLivingLoop.promptBlock(c).contains("calendar"))
-    }
-
-    @Test fun aRequestFiltersLessonsToOnesThatShareAWordWithIt() {
-        // The real bug this guards against: an unrelated lesson sitting in the list got recited to a
-        // casual message just because it was recent, because nothing checked it against what was asked.
-        OrionLessons.learn(c, "the calendar sync keeps failing on weak signal")
-        OrionLessons.learn(c, "battery readings must come from the battery tool, never a guess")
-        val block = OrionLivingLoop.promptBlock(c, "what's my battery at")
-        assertTrue(block.contains("battery"))
-        assertFalse(block.contains("calendar"))
-    }
-
-    @Test fun aCasualMessageThatMatchesNoLessonGetsNoLessonsAtAll() {
+    @Test fun lessonsAreShownRegardlessOfTheRequestsWordingBecauseTheListIsAlreadyCheapAndBounded() {
+        // A word-overlap pre-filter was tried and reverted: it is a lexical trick standing in for
+        // understanding, not understanding, and it hides a relevant lesson phrased in different words
+        // ("signal" vs "connectivity", say). For a list this small, the fix is to show it in full and
+        // trust the model's own judgment, not to bolt on a second heuristic beside the first one.
         OrionLessons.learn(c, "the calendar sync keeps failing on weak signal")
         OrionLessons.learn(c, "battery readings must come from the battery tool, never a guess")
         val block = OrionLivingLoop.promptBlock(c, "wassup")
-        assertFalse(block.contains("Lessons you have learned"))
+        assertTrue(block.contains("battery"))
+        assertTrue(block.contains("calendar"))
     }
 
-    @Test fun failingToolsStayUnconditionalRegardlessOfRequestRelevance() {
+    @Test fun lessonsCarryProvenanceAndAnExplicitInstructionToJudgeRelevanceThemselves() {
+        OrionLessons.learn(c, "the calendar sync keeps failing on weak signal")
+        val block = OrionLivingLoop.promptBlock(c, "wassup")
+        assertTrue(block.contains("PROVENANCE"))
+        assertTrue(block.contains("not fetched or filtered for this message"))
+        assertTrue(block.contains("bring one up only when it actually bears on this reply"))
+    }
+
+    @Test fun failingToolsStayUnconditionalRegardlessOfTheRequest() {
         // Operational state to route around, not memory recall: it is never filtered out, even when
         // nothing in the message is about it.
         repeat(2) { OrionSelfModel.record(c, "open_app", false, "error: not found") }

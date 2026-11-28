@@ -103,25 +103,21 @@ object OrionLivingLoop {
     /**
      * Newest lessons plus currently failing tools, ready for the system prompt. Empty when there is nothing to say.
      *
-     * [request] is the message Orion is about to answer. When it is given, lessons are filtered to the ones that
-     * share a word with it — the same relevance check [OrionExperience.requestBlock] already applies to failures —
-     * instead of dumping the last few lessons regardless of topic. A casual message then carries none of them,
-     * where before a model anchored on whatever was most recently in this list and volunteered it unprompted.
-     * Missions and drives are left as-is: missions are standing commitments Orion is actively working through
-     * (the list is already short and state-filtered, not a recall dump), and drives already gate themselves on
-     * a meaningful change in pressure (see [OrionDrives.promptBlock]). Failing tools stay unconditional too:
-     * that is live operational state to route around, not memory recall, so it is not a candidate for the same
-     * filter. Callers with no request text yet (a background tick, not a reply to a message) get the old,
-     * recency-only behaviour by passing nothing.
+     * An earlier version of this tried to pre-filter lessons by literal word-overlap with the request before
+     * showing any of them at all. That is a lexical trick standing in for understanding, not understanding: it
+     * hides a genuinely relevant lesson phrased in different words, and it can just as easily keep a coincidentally
+     * word-matching but irrelevant one. For a list this small (at most [maxLessons], each capped to 220 characters —
+     * see [OrionLessons.learn]) an algorithmic pre-filter buys nothing: the content is already cheap to show in
+     * full. So every lesson is shown, tagged with PROVENANCE explaining what it is and why it's here (standing
+     * self-knowledge, not something fetched for this message) and an explicit instruction to judge for itself,
+     * from the actual content and the actual request, whether a given lesson bears on this reply — the same
+     * trust-the-model's-own-judgment approach already used for the long-memory core summary (see
+     * [OrionMemoryCompactor.promptBlock]), instead of a second keyword heuristic bolted on beside it.
+     * [request] is accepted for parity with other context providers and for future provenance logging, but does
+     * not filter anything here.
      */
     fun promptBlock(c: Context, request: String = "", maxLessons: Int = 5): String {
-        val allLessons = OrionLessons.all(c)
-        val lessons = if (request.isBlank()) allLessons.takeLast(maxLessons) else {
-            val want = MemoryRanking.tokens(request)
-            val byRelevance = allLessons.filter { want.intersect(MemoryRanking.tokens(it)).isNotEmpty() }
-            // No lesson shares a word with this message: say nothing rather than reciting an unrelated one.
-            byRelevance.takeLast(maxLessons)
-        }
+        val lessons = OrionLessons.all(c).takeLast(maxLessons)
         val broken = OrionSelfModel.degraded(c).take(4)
         val missions = OrionMissions.promptBlock(c)
         val drives = OrionDrives.promptBlock(c)
@@ -134,7 +130,11 @@ object OrionLivingLoop {
                 append("\nCurrently failing tools — avoid or work around: ").append(broken.joinToString("; ") { "${it.tool} (${it.consecutive}x: ${it.lastReason})" })
                 append("\nSELF-REPAIR: you may fix these yourself. Diagnose with a read-only call, then build the missing piece — a script via python_exec/shell for anything touching files, network or the phone, or extension_create + extension_test (tested drafts activate automatically) for pure data transforms — run it, and call the original goal again. Do not just report the failure.")
             }
-            if (lessons.isNotEmpty()) append("\nLessons you have learned: ").append(lessons.joinToString(" | "))
+            if (lessons.isNotEmpty()) {
+                append("\nPROVENANCE: standing self-knowledge, always carried — not fetched or filtered for this message.")
+                append("\nLessons you have learned (read each on its own merits; bring one up only when it actually bears on this reply, never as a recitation): ")
+                    .append(lessons.joinToString(" | "))
+            }
         }
     }
 
