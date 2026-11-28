@@ -95,31 +95,15 @@ internal object ExperiencePolicy {
     fun prune(list: List<Experience>, now: Long, max: Int = MAX): List<Experience> =
         if (list.size <= max) list else list.sortedByDescending { value(it, now) }.take(max).sortedByDescending { it.lastAt }
 
-    private fun stem(w: String): String {
-        val word = w.lowercase()
-        return when {
-            word.length > 5 && word.endsWith("ies") -> word.dropLast(3) + "y"
-            word.length > 5 && word.endsWith("ing") -> {
-                val root = word.dropLast(3)
-                if (root.length > 2 && root.last() == root[root.lastIndex - 1] &&
-                    root.last() !in "lsz") root.dropLast(1) else root
-            }
-            word.length > 5 && word.endsWith("ed") -> word.dropLast(2)
-            word.length > 5 && (word.endsWith("ches") || word.endsWith("shes") ||
-                word.endsWith("xes") || word.endsWith("zes")) -> word.dropLast(2)
-            // Most English plurals add only "s": messages -> message, not messag.
-            word.length > 4 && word.endsWith("s") && !word.endsWith("ss") -> word.dropLast(1)
-            else -> word
-        }
-    }
-
     /**
      * Recall similarity that does not collapse when the stored gist is longer than the new request: word forms are
      * stemmed ("sending"/"sends"/"send") and an overlap measure lets a short request find a longer lesson.
+     * The stemming and tokenizing live in [OrionRelevance] now, shared with every other place that makes this
+     * same "same word, different form" judgment, instead of a copy of the stemmer kept only here.
      */
     fun recallSimilarity(stored: String, request: String): Double {
-        val a = MemoryRanking.tokens(stored).map(::stem).toSet()
-        val b = MemoryRanking.tokens(request).map(::stem).toSet()
+        val a = OrionRelevance.tokens(stored)
+        val b = OrionRelevance.tokens(request)
         if (a.isEmpty() || b.isEmpty()) return 0.0
         val inter = a.intersect(b).size.toDouble()
         if (inter == 0.0) return 0.0

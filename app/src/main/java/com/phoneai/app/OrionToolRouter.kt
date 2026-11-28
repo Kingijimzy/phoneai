@@ -17,18 +17,14 @@ import android.content.Context
 internal object OrionToolRouter {
     data class Route(val tool: String, val score: Double)
 
-    private val stop = setOf("the", "and", "for", "with", "that", "this", "from", "into", "your", "you", "can", "use", "using", "get", "make", "please", "then", "when", "what", "how", "have", "has", "all", "any", "out", "about", "need", "want", "just", "like", "also", "its", "are", "not", "but", "does", "tool", "tools", "orion")
+    // Ranking-specific noise words on top of MemoryRanking's generic stop list: these are common enough in a
+    // *request about tools* ("use", "tool", "please"...) to spuriously overlap with many tool descriptions,
+    // without being generic enough for the shared stop list every other relevance decision also uses.
+    private val extraStop = setOf("use", "using", "get", "make", "please", "then", "need", "want", "just", "like", "also", "does", "tool", "tools", "orion")
 
-    internal fun tokens(text: String): List<String> =
-        Regex("[a-z0-9]+").findAll(text.lowercase()).map { it.value }.filter { it.length >= 3 && it !in stop }.map { stem(it) }.toList()
-
-    private fun stem(w: String): String = when {
-        w.length > 5 && w.endsWith("ing") -> w.dropLast(3)
-        w.length > 4 && w.endsWith("ed") -> w.dropLast(2)
-        w.length > 4 && w.endsWith("es") -> w.dropLast(2)
-        w.length > 3 && w.endsWith("s") -> w.dropLast(1)
-        else -> w
-    }
+    /** Tokenizing and stemming are shared with every other relevance decision via [OrionRelevance]; only the
+     * extra tool-ranking-specific noise words are filtered here. */
+    internal fun tokens(text: String): List<String> = OrionRelevance.tokens(text).filterNot { it in extraStop }.toList()
 
     private class Index(val docs: Map<String, Map<String, Double>>, val idf: Map<String, Double>)
 
